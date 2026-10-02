@@ -167,6 +167,53 @@ public class MainActivity extends Activity {
     String filterOrg = null;    // org 代码 / null
     String filterStatus = null; // "在发" / "已停发" / null
 
+    // 特点与发卡行（Phase 2a-2，对照 app.js 的 FEATS/featMatch 与 state.bank）
+    java.util.Set<String> filterFeats = new java.util.LinkedHashSet<>(); // feat key，多选且 AND（每项都要满足）；保序与标签栏一致
+    String filterBank = null; // 发卡行，单选切换（同 chipRow 对 bank 的语义）
+    LinearLayout activeFilterBar = null;
+
+    static final String[][] FEATS = {
+        {"3ds", "3DS"}, {"online", "可网付"}, {"noftf", "无货币转换费"},
+        {"autofx", "自动购汇"}, {"applepay", "Apple Pay"}
+    };
+
+    // 与混合版 featMatch 逐项同口径（读 specs 中文字段）
+    static boolean featMatch(Card c, String k) {
+        String v3 = c.spec("3DS").trim();
+        switch (k) {
+            case "3ds": return "有".equals(v3);
+            case "online": { String x = c.spec("网付").trim(); return !x.isEmpty() && !"不支持".equals(x); }
+            case "noftf": return "无".equals(c.spec("货币转换费（FTF）").trim());
+            case "autofx": { String x = c.spec("自动购汇").trim(); return x.startsWith("有") || x.startsWith("支持"); }
+            case "applepay": return c.spec("Apple Pay").trim().startsWith("支持");
+            default: return false;
+        }
+    }
+
+    static String featLabel(String k) {
+        for (String[] f : FEATS) if (f[0].equals(k)) return f[1];
+        return k;
+    }
+
+    int activeFilterCount() {
+        int n = filterFeats.size();
+        if (filterType != null) n++;
+        if (filterOrg != null) n++;
+        if (filterStatus != null) n++;
+        if (filterBank != null) n++;
+        return n;
+    }
+
+    // 发卡行：去重后排序（同 app.js renderFilters 的 banks 取法）
+    List<String> distinctBanks() {
+        List<String> out = new ArrayList<>();
+        for (Card c : Store.all) {
+            if (c.bank != null && !c.bank.isEmpty() && !out.contains(c.bank)) out.add(c.bank);
+        }
+        java.util.Collections.sort(out);
+        return out;
+    }
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -351,6 +398,17 @@ public class MainActivity extends Activity {
         filterBtn.setOnClickListener(v -> openFilterSheet());
         frow.addView(filterBtn, new LinearLayout.LayoutParams(dp(this, 92), dp(this, 34)));
 
+        // 已选标签栏（Phase 2a-2，对照 renderActiveFilters：点标签即移除该项筛选）
+        android.widget.HorizontalScrollView afScroll = new android.widget.HorizontalScrollView(this);
+        afScroll.setHorizontalScrollBarEnabled(false);
+        activeFilterBar = new LinearLayout(this);
+        activeFilterBar.setOrientation(LinearLayout.HORIZONTAL);
+        activeFilterBar.setPadding(0, dp(this, 8), 0, dp(this, 2));
+        afScroll.addView(activeFilterBar);
+        afScroll.setVisibility(View.GONE);
+        page.addView(afScroll, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        activeFilterBar.setTag(afScroll);
+
         // 卡库总览（与混合版同款深蓝卡）
         LinearLayout hero = new LinearLayout(this);
         hero.setOrientation(LinearLayout.VERTICAL);
@@ -412,6 +470,10 @@ public class MainActivity extends Activity {
             if (filterType != null && !filterType.equals(ct)) continue;
             if (filterOrg != null && !filterOrg.equals(c.org == null ? "" : c.org)) continue;
             if (filterStatus != null && !filterStatus.equals(c.status == null ? "" : c.status)) continue;
+            if (filterBank != null && !filterBank.equals(c.bank == null ? "" : c.bank)) continue;
+            boolean featOk = true;
+            for (String f : filterFeats) if (!featMatch(c, f)) { featOk = false; break; }
+            if (!featOk) continue;
             if (q.isEmpty()) { out.add(c); continue; }
             String bin = c.spec("BIN");
             if (c.name.toLowerCase().contains(q) || c.bank.toLowerCase().contains(q)
@@ -426,9 +488,35 @@ public class MainActivity extends Activity {
         homeAdapter.notifyDataSetChanged();
         if (homeCount != null) homeCount.setText("共 " + homeAdapter.data.size() + " 张");
         if (filterBtn != null) {
-            int n = (filterType != null ? 1 : 0) + (filterOrg != null ? 1 : 0) + (filterStatus != null ? 1 : 0);
+            int n = activeFilterCount();
             filterBtn.setText(n == 0 ? "筛选" : "筛选 · " + n);
         }
+        renderActiveFilters();
+    }
+
+    // 已选标签栏：顺序与混合版 renderActiveFilters 一致（银行/组织/状态/特点/类型），点标签删除该项
+    void renderActiveFilters() {
+        if (activeFilterBar == null) return;
+        activeFilterBar.removeAllViews();
+        if (filterBank != null) activeFilterBar.addView(afPill(filterBank, () -> { filterBank = null; refreshHome(); }));
+        if (filterOrg != null) activeFilterBar.addView(afPill(orgLabel(filterOrg), () -> { filterOrg = null; refreshHome(); }));
+        if (filterStatus != null) activeFilterBar.addView(afPill(filterStatus, () -> { filterStatus = null; refreshHome(); }));
+        for (final String f : new ArrayList<>(filterFeats))
+            activeFilterBar.addView(afPill(featLabel(f), () -> { filterFeats.remove(f); refreshHome(); }));
+        if (filterType != null) activeFilterBar.addView(afPill("credit".equals(filterType) ? "信用卡" : "借记卡", () -> { filterType = null; refreshHome(); }));
+        View wrap = (View) activeFilterBar.getParent();
+        if (wrap != null) wrap.setVisibility(activeFilterBar.getChildCount() == 0 ? View.GONE : View.VISIBLE);
+    }
+
+    TextView afPill(String label, final Runnable onRemove) {
+        TextView t = tv(this, label + "  ✕", 11.5f, Color.rgb(0x0A, 0x5C, 0xD6), true);
+        t.setBackground(roundRect(Color.rgb(0xE8, 0xF1, 0xFD), 999, this));
+        t.setPadding(dp(this, 10), dp(this, 5), dp(this, 10), dp(this, 5));
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        lp.rightMargin = dp(this, 7);
+        t.setLayoutParams(lp);
+        t.setOnClickListener(v -> onRemove.run());
+        return t;
     }
 
     // ---------- 筛选面板（Phase 2a-1） ----------
@@ -445,9 +533,14 @@ public class MainActivity extends Activity {
         panel.setBackground(pg);
         panel.setPadding(dp(this, 16), dp(this, 14), dp(this, 16), dp(this, 18));
         panel.setOnClickListener(v -> {});
-        FrameLayout.LayoutParams plp = new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        plp.gravity = Gravity.BOTTOM;
-        sheet.addView(panel, plp);
+        ScrollView panelScroll = new ScrollView(this);
+        panelScroll.setBackgroundColor(Color.TRANSPARENT);
+        panelScroll.setFillViewport(true);
+        int maxH = (int) (getResources().getDisplayMetrics().heightPixels * 0.78);
+        FrameLayout.LayoutParams splp = new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, maxH);
+        splp.gravity = Gravity.BOTTOM;
+        panelScroll.addView(panel, new ScrollView.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        sheet.addView(panelScroll, splp);
         rebuildFilterPanel(panel);
         content.addView(sheet);
         filterSheet = sheet;
@@ -471,6 +564,7 @@ public class MainActivity extends Activity {
         clear.setBackground(roundRect(Color.rgb(0xF5, 0xF6, 0xF8), 10, this));
         clear.setOnClickListener(v -> {
             filterType = null; filterOrg = null; filterStatus = null;
+            filterFeats.clear(); filterBank = null;
             rebuildFilterPanel(panel); refreshHome();
         });
         head.addView(clear, new LinearLayout.LayoutParams(dp(this, 64), dp(this, 32)));
@@ -500,6 +594,41 @@ public class MainActivity extends Activity {
         panel.addView(filterSectionTitle("状态"));
         panel.addView(filterOpt("在发", "在发".equals(filterStatus), () -> { filterStatus = "在发".equals(filterStatus) ? null : "在发"; rebuildFilterPanel(panel); refreshHome(); }));
         panel.addView(filterOpt("已停发", "已停发".equals(filterStatus), () -> { filterStatus = "已停发".equals(filterStatus) ? null : "已停发"; rebuildFilterPanel(panel); refreshHome(); }));
+
+        panel.addView(filterSectionTitle("特点（可多选，须同时满足）"));
+        for (final String[] f : FEATS) {
+            panel.addView(filterOpt(f[1], filterFeats.contains(f[0]), () -> {
+                if (filterFeats.contains(f[0])) {
+                    filterFeats.remove(f[0]);
+                } else {
+                    // 同混合版 chipRow：加上后若没有任何卡能同时满足全部已选特点，拒绝并提示
+                    java.util.Set<String> test = new java.util.LinkedHashSet<>(filterFeats);
+                    test.add(f[0]);
+                    boolean any = false;
+                    for (Card c : Store.all) {
+                        boolean ok = true;
+                        for (String k : test) if (!featMatch(c, k)) { ok = false; break; }
+                        if (ok) { any = true; break; }
+                    }
+                    if (!any) {
+                        StringBuilder names = new StringBuilder();
+                        for (String k : test) { if (names.length() > 0) names.append("」+「"); names.append(featLabel(k)); }
+                        Toast.makeText(this, "「" + names + "」没有卡同时满足，不能一起选", Toast.LENGTH_SHORT).show();
+                        return;
+                    }
+                    filterFeats.add(f[0]);
+                }
+                rebuildFilterPanel(panel); refreshHome();
+            }));
+        }
+
+        panel.addView(filterSectionTitle("发卡行"));
+        for (final String bankName : distinctBanks()) {
+            panel.addView(filterOpt(bankName, bankName.equals(filterBank), () -> {
+                filterBank = bankName.equals(filterBank) ? null : bankName;
+                rebuildFilterPanel(panel); refreshHome();
+            }));
+        }
     }
 
     TextView filterSectionTitle(String s) {
@@ -714,7 +843,7 @@ public class MainActivity extends Activity {
 
     View buildSettingsPage() {
         LinearLayout page = basePage("设置");
-        page.addView(settingRow("版本", "0.2-native（Phase 2）"));
+        page.addView(settingRow("版本", "0.3-native（Phase 2）"));
         page.addView(settingRow("关于卡盒", "原生版：纯 Java 手写界面，数据与现行版共用同一份卡库"));
         page.addView(settingRow("迁移进度", "全部卡片 / 详情 / 我的卡片 / 学生推荐 已迁移；筛选、情景选卡、资讯、字体与界面大小在后续阶段"));
         return page;

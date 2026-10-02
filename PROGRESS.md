@@ -29,7 +29,7 @@
 ## 待办（按序推进，一次一段）
 - [ ] Phase 2a 筛选（拆小段推进，每段独立编译提交）：
   - [x] 2a-1 筛选面板：底部弹出，类型/卡组织/状态三组单选切换行（与混合版 chipRow 同语义，点已选项再点取消），点选即时过滤网格；顶部「共 N 张」计数与「筛选 · 已选数」；含清空/完成。
-  - [ ] 2a-2 特点 chips（3DS/可网付/无转换费/自动购汇/Apple Pay，对照 featMatch）+ 发卡行多选 + 已选标签栏（可点删）+ 筛选计数。
+  - [x] 2a-2 特点 chips + 发卡行 + 已选标签栏：特点五项（3DS/可网付/无货币转换费/自动购汇/Apple Pay，featMatch 同混合版口径）多选 AND，叠加后无卡可满足时拒绝并 toast；发卡行 17 家按混合版 chipRow 单选切换（PROGRESS 原写「多选」，以混合版行为标准为准，已改单选）；筛选面板改限高可滚动；已选标签栏按 银行/组织/状态/特点/类型 顺序展示、点标签即删；「筛选 · N」计数含特点与银行。版本 0.3-native（versionCode 3）。
   - [ ] 2a-3 排序（评分/名称/银行）+ 列数 1/2/3 + 显示方式（平铺/按银行折叠，分组展开收起，对照 groupBank/renderAllHtml）。
 - [ ] Phase 2b 学生页补全：顶部白底明亮统计卡（学生卡数/在发/最高分）+「挑卡只看三件事」条+每卡推荐理由（对照 app.js studentReason/studentFit 生成）。
 - [ ] Phase 2c 资讯页：读 assets/data/news.json（先从 ~/workspace/cardapp/site/news.json 同步进 assets，无则联网拉混合版同源），列表+详情展开。
