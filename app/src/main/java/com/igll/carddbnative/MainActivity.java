@@ -84,6 +84,8 @@ public class MainActivity extends Activity {
         String scoreLabel;
         JSONObject specs;
         JSONArray variants;
+        boolean studentPick;
+        int studentOrder;
         String spec(String key) {
             if (specs == null) return "";
             String v = specs.optString(key, "");
@@ -116,6 +118,9 @@ public class MainActivity extends Activity {
                     cd.score = o.optDouble("score", 0); cd.scoreLabel = o.optString("score_label");
                     cd.specs = o.optJSONObject("specs");
                     cd.variants = o.optJSONArray("variants");
+                    JSONObject sp = o.optJSONObject("student_pick");
+                    cd.studentPick = sp != null;
+                    cd.studentOrder = sp != null ? sp.optInt("order", 999) : 999;
                     all.add(cd); byId.put(cd.id, cd);
                 }
             } catch (Exception e) { /* 数据读不到就空列表，界面有空状态 */ }
@@ -962,26 +967,192 @@ public class MainActivity extends Activity {
         b.setBackground(roundRect(in ? Color.rgb(0xE6, 0xF6, 0xEC) : Color.rgb(0x0A, 0x5C, 0xD6), 14, this));
     }
 
-    // ---------- 学生推荐 ----------
+    // ---------- 学生推荐（Phase 2b，对照 app.js studentReason/studentFit/studentPageHtml） ----------
+    static String cleanPromo(String t) {
+        if (t == null) return "";
+        String x = t.replaceAll("（[^）]*）", "").replaceAll("有效期.*$", "").replaceAll("[、；，,]+$", "").trim();
+        return x;
+    }
+
+    static String studentReason(Card c) {
+        java.util.List<String> parts = new ArrayList<>();
+        String curTxt = c.spec("币种支持");
+        java.util.regex.Matcher mCur = java.util.regex.Pattern.compile("共\\s*(\\d+)\\s*币种").matcher(curTxt);
+        if (mCur.find()) parts.add(mCur.group(1) + " 个币种一卡走天下");
+        else if (curTxt.contains("多币种")) parts.add("人民币 + 外币多币种");
+        if (featMatch(c, "noftf")) parts.add("无货币转换费");
+        String promo = c.spec("优惠政策");
+        java.util.regex.Matcher mAtm = java.util.regex.Pattern.compile("[^，。；]*ATM[^，。；]*免[^，。；]*笔[^，。；]*").matcher(promo);
+        if (mAtm.find() && parts.size() < 3) parts.add(cleanPromo(mAtm.group()));
+        java.util.regex.Matcher mCash = java.util.regex.Pattern.compile("境外消费[^，。；]*返现[^，。；]*").matcher(promo);
+        if (mCash.find() && java.util.regex.Pattern.compile("\\d").matcher(mCash.group()).find()
+            && !parts.toString().contains("返现") && parts.size() < 3) parts.add(cleanPromo(mCash.group()));
+        if (java.util.regex.Pattern.compile("AI|算力").matcher((c.name == null ? "" : c.name) + promo).find()) parts.add("开卡达标送 AI 算力套餐和积分权益");
+        if (java.util.regex.Pattern.compile("哔哩哔哩|2233").matcher(c.name == null ? "" : c.name).find()) parts.add("联名卡面，免年费免管理费、境内 ATM 免费");
+        boolean hasFree = false; for (String p : parts) if (p.contains("免年费")) hasFree = true;
+        if ("无".equals(c.spec("年费").trim()) && !hasFree && parts.size() < 3) parts.add("免年费");
+        String autofx = c.spec("自动购汇").trim();
+        if ((autofx.startsWith("有") || autofx.startsWith("支持")) && parts.size() < 3) parts.add("自动购汇，刷完自动换汇");
+        String issued = c.spec("发行情况");
+        if (issued.contains("网申") && !issued.contains("仅限线下") && parts.size() < 3) parts.add("网申就能办不用跑网点");
+        if (parts.isEmpty()) parts.add("门槛低、费用省，学生党友好");
+        java.util.List<String> top = parts.subList(0, Math.min(3, parts.size()));
+        return android.text.TextUtils.join("，", top) + "。";
+    }
+
+    static java.util.List<String> studentFit(Card c) {
+        java.util.LinkedHashSet<String> fit = new java.util.LinkedHashSet<>();
+        String curTxt = c.spec("币种支持");
+        java.util.regex.Matcher mCur = java.util.regex.Pattern.compile("共\\s*(\\d+)\\s*币种").matcher(curTxt);
+        boolean manyCur = false;
+        if (mCur.find()) { try { manyCur = Integer.parseInt(mCur.group(1)) >= 5; } catch (Exception e) {} }
+        if (manyCur || "visa".equals(c.org)) fit.add("留学生");
+        if (featMatch(c, "noftf") && featMatch(c, "online")) fit.add("海淘党");
+        String autofx = c.spec("自动购汇").trim();
+        if (autofx.startsWith("有") || autofx.startsWith("支持")) fit.add("出境旅游");
+        String issued = c.spec("发行情况");
+        if (issued.contains("网申") && !issued.contains("仅限线下")) fit.add("第一次办卡");
+        if (java.util.regex.Pattern.compile("AI|算力").matcher(c.name == null ? "" : c.name).find()) fit.add("AI 工具党");
+        if (java.util.regex.Pattern.compile("哔哩哔哩|2233").matcher(c.name == null ? "" : c.name).find()) fit.add("二次元");
+        if ("unionpay".equals(c.org) || featMatch(c, "online")) fit.add("日常党");
+        java.util.List<String> out = new ArrayList<>(fit);
+        return out.subList(0, Math.min(3, out.size()));
+    }
+
     View buildStudentPage() {
         LinearLayout page = basePage("学生推荐");
         List<Card> stu = new ArrayList<>();
-        for (Card c : Store.all) {
-            if ("已停发".equals(c.status)) continue;
-            String hay = (c.name + " " + (c.keywords == null ? "" : c.keywords));
-            if (hay.contains("学生") || hay.contains("留学") || hay.contains("校园")) stu.add(c);
+        for (Card c : Store.all) if (c.studentPick) stu.add(c);
+        stu.sort((a, b2) -> {
+            int r = Integer.compare(a.studentOrder, b2.studentOrder);
+            return r != 0 ? r : Double.compare(b2.score, a.score);
+        });
+        java.util.Set<String> banks = new HashSet<>();
+        int nFree = 0, nFtf = 0, n3ds = 0;
+        for (Card c : stu) {
+            if (c.bank != null && !c.bank.isEmpty()) banks.add(c.bank);
+            if ("无".equals(c.spec("年费").trim())) nFree++;
+            if (featMatch(c, "noftf")) nFtf++;
+            if (featMatch(c, "3ds")) n3ds++;
         }
-        stu.sort((a, b2) -> Double.compare(b2.score, a.score));
-        page.addView(tv(this, stu.size() + " 张适合学生的卡（按评分排）", 12.5f, Color.rgb(0x8E, 0x8E, 0x93), false));
-        GridView g = new GridView(this);
-        g.setNumColumns(1);
-        g.setVerticalSpacing(dp(this, 10));
-        g.setPadding(0, dp(this, 10), 0, dp(this, 16));
-        final CardAdapter ad = new CardAdapter(stu);
-        g.setAdapter(ad);
-        g.setOnItemClickListener((p, v, i, id) -> openDetail(ad.data.get(i)));
-        page.addView(g, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
+
+        // 顶部白底明亮统计卡（对照 .stu-hero：左大数字 + 右三色点统计）
+        LinearLayout hero = new LinearLayout(this);
+        hero.setOrientation(LinearLayout.HORIZONTAL);
+        hero.setBackground(roundRect(Color.WHITE, 18, this));
+        hero.setPadding(dp(this, 16), dp(this, 14), dp(this, 16), dp(this, 14));
+        LinearLayout.LayoutParams hlp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        hlp.topMargin = dp(this, 12);
+        page.addView(hero, hlp);
+        LinearLayout left = new LinearLayout(this);
+        left.setOrientation(LinearLayout.VERTICAL);
+        hero.addView(left, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+        left.addView(tv(this, stu.size() + " 张精选卡", 26, Color.rgb(0x1C, 0x1C, 0x1E), true));
+        TextView sub = tv(this, "学生精选 · 覆盖 " + banks.size() + " 家银行", 12, Color.rgb(0x8E, 0x8E, 0x93), false);
+        LinearLayout.LayoutParams subLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        subLp.topMargin = dp(this, 4);
+        left.addView(sub, subLp);
+        LinearLayout stats = new LinearLayout(this);
+        stats.setOrientation(LinearLayout.VERTICAL);
+        hero.addView(stats, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        stats.addView(stuStatLine(Color.rgb(0x34, 0xC7, 0x59), "免年费", nFree));
+        stats.addView(stuStatLine(Color.rgb(0x0A, 0x84, 0xFF), "无转换费", nFtf));
+        stats.addView(stuStatLine(Color.rgb(0xFF, 0x9F, 0x0A), "支持 3DS", n3ds));
+
+        // 「挑卡只看三件事」条（对照 .stu-quote，数字按当前精选与全库动态生成）
+        TextView quote = tv(this, "挑卡只看三件事：别交年费、境外别被收转换费、网购能过 3DS。这 "
+            + stu.size() + " 张就是按这个标准从 " + Store.all.size() + " 张里筛出来的。",
+            12.5f, Color.rgb(0x3A, 0x3A, 0x3C), false);
+        quote.setBackground(roundRect(Color.rgb(0xE8, 0xF1, 0xFD), 12, this));
+        quote.setPadding(dp(this, 12), dp(this, 10), dp(this, 12), dp(this, 10));
+        LinearLayout.LayoutParams qlp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        qlp.topMargin = dp(this, 10);
+        page.addView(quote, qlp);
+
+        TextView sect = tv(this, "为什么推荐这些卡", 15, Color.rgb(0x1C, 0x1C, 0x1E), true);
+        LinearLayout.LayoutParams sectLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        sectLp.topMargin = dp(this, 14);
+        page.addView(sect, sectLp);
+
+        ScrollView sv = new ScrollView(this);
+        LinearLayout listBox = new LinearLayout(this);
+        listBox.setOrientation(LinearLayout.VERTICAL);
+        listBox.setPadding(0, dp(this, 10), 0, dp(this, 16));
+        sv.addView(listBox);
+        page.addView(sv, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
+
+        for (final Card c : stu) {
+            LinearLayout cardBox = new LinearLayout(this);
+            cardBox.setOrientation(LinearLayout.VERTICAL);
+            cardBox.setBackground(roundRect(Color.WHITE, 14, this));
+            cardBox.setPadding(dp(this, 12), dp(this, 10), dp(this, 12), dp(this, 12));
+            LinearLayout.LayoutParams clp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            clp.topMargin = dp(this, 10);
+            listBox.addView(cardBox, clp);
+            cardBox.setOnClickListener(v -> openDetail(c));
+
+            LinearLayout top = new LinearLayout(this);
+            top.setOrientation(LinearLayout.HORIZONTAL);
+            top.setGravity(Gravity.CENTER_VERTICAL);
+            cardBox.addView(top);
+            ImageView iv = new ImageView(this);
+            iv.setScaleType(ImageView.ScaleType.CENTER_CROP);
+            iv.setBackground(roundRect(Color.rgb(0xE9, 0xEE, 0xF5), 9, this));
+            top.addView(iv, new LinearLayout.LayoutParams(dp(this, 72), dp(this, 44)));
+            Bitmap b = Img.get(this, c.image);
+            if (b != null) iv.setImageBitmap(b);
+            LinearLayout tx = new LinearLayout(this);
+            tx.setOrientation(LinearLayout.VERTICAL);
+            LinearLayout.LayoutParams txLp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+            txLp.leftMargin = dp(this, 10);
+            top.addView(tx, txLp);
+            TextView nm = tv(this, c.name, 14, Color.rgb(0x1C, 0x1C, 0x1E), true);
+            nm.setMaxLines(2);
+            tx.addView(nm);
+            tx.addView(tv(this, c.bank + " · " + (c.isCredit() ? "信用卡" : "借记卡"), 11, Color.rgb(0x8E, 0x8E, 0x93), false));
+            TextView sc = tv(this, c.score > 0 ? String.format(java.util.Locale.US, "%.1f分", c.score) : "新卡",
+                11, Color.rgb(0x0A, 0x5C, 0xD6), true);
+            sc.setBackground(roundRect(Color.rgb(0xE8, 0xF1, 0xFD), 999, this));
+            sc.setPadding(dp(this, 8), dp(this, 3), dp(this, 8), dp(this, 3));
+            top.addView(sc);
+
+            TextView why = tv(this, "推荐理由：" + studentReason(c), 12.5f, Color.rgb(0x3A, 0x3A, 0x3C), false);
+            LinearLayout.LayoutParams wlp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            wlp.topMargin = dp(this, 8);
+            cardBox.addView(why, wlp);
+
+            java.util.List<String> fit = studentFit(c);
+            if (!fit.isEmpty()) {
+                LinearLayout fitRow = new LinearLayout(this);
+                fitRow.setOrientation(LinearLayout.HORIZONTAL);
+                fitRow.setGravity(Gravity.CENTER_VERTICAL);
+                LinearLayout.LayoutParams flp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+                flp.topMargin = dp(this, 8);
+                cardBox.addView(fitRow, flp);
+                TextView fl = tv(this, "适合 ", 11.5f, Color.rgb(0x8E, 0x8E, 0x93), true);
+                fitRow.addView(fl);
+                for (String f : fit) fitRow.addView(chip(f, Color.rgb(0xF5, 0xF6, 0xF8), Color.rgb(0x3A, 0x3A, 0x3C)));
+            }
+        }
+
+        TextView note = tv(this, "推荐理由按卡库资料整理，仅供参考", 11, Color.rgb(0x8E, 0x8E, 0x93), false);
+        note.setGravity(Gravity.CENTER);
+        LinearLayout.LayoutParams nlp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        nlp.topMargin = dp(this, 12);
+        listBox.addView(note, nlp);
         return page;
+    }
+
+    LinearLayout stuStatLine(int dotColor, String label, int n) {
+        LinearLayout row = new LinearLayout(this);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        row.setGravity(Gravity.CENTER_VERTICAL);
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        lp.topMargin = dp(this, 2);
+        row.setLayoutParams(lp);
+        row.addView(tv(this, "●", 11, dotColor, true));
+        row.addView(tv(this, " " + label + "  " + n + " 张", 12, Color.rgb(0x3A, 0x3A, 0x3C), false));
+        return row;
     }
 
     // ---------- 我的卡片 ----------
