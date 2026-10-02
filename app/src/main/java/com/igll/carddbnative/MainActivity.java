@@ -158,6 +158,14 @@ public class MainActivity extends Activity {
     GridView homeGrid;
     CardAdapter homeAdapter;
     String query = "";
+    TextView homeCount;
+    Button filterBtn;
+    View filterSheet = null;
+
+    // 筛选状态（Phase 2a-1：与混合版 chipRow 相同的单选切换语义，点已选项再点一次取消）
+    String filterType = null;   // "debit" / "credit" / null
+    String filterOrg = null;    // org 代码 / null
+    String filterStatus = null; // "在发" / "已停发" / null
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -326,6 +334,23 @@ public class MainActivity extends Activity {
         stlp.topMargin = dp(this, 10);
         page.addView(stats, stlp);
 
+        LinearLayout frow = new LinearLayout(this);
+        frow.setOrientation(LinearLayout.HORIZONTAL);
+        frow.setGravity(Gravity.CENTER_VERTICAL);
+        LinearLayout.LayoutParams frowLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        frowLp.topMargin = dp(this, 8);
+        page.addView(frow, frowLp);
+        homeCount = tv(this, "", 12.5f, Color.rgb(0x8E, 0x8E, 0x93), false);
+        frow.addView(homeCount, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+        filterBtn = new Button(this);
+        filterBtn.setText("筛选");
+        filterBtn.setTextSize(12.5f);
+        filterBtn.setAllCaps(false);
+        filterBtn.setMinWidth(0);
+        filterBtn.setBackground(roundRect(Color.WHITE, 11, this));
+        filterBtn.setOnClickListener(v -> openFilterSheet());
+        frow.addView(filterBtn, new LinearLayout.LayoutParams(dp(this, 92), dp(this, 34)));
+
         // 卡库总览（与混合版同款深蓝卡）
         LinearLayout hero = new LinearLayout(this);
         hero.setOrientation(LinearLayout.VERTICAL);
@@ -362,6 +387,7 @@ public class MainActivity extends Activity {
             public void onItemClick(AdapterView<?> p, View v, int i, long id) { openDetail(homeAdapter.data.get(i)); }
         });
         page.addView(homeGrid, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
+        refreshHome();
         return page;
     }
 
@@ -382,6 +408,10 @@ public class MainActivity extends Activity {
         List<Card> out = new ArrayList<>();
         String q = query.toLowerCase();
         for (Card c : Store.all) {
+            String ct = (c.type == null || c.type.isEmpty()) ? "debit" : c.type;
+            if (filterType != null && !filterType.equals(ct)) continue;
+            if (filterOrg != null && !filterOrg.equals(c.org == null ? "" : c.org)) continue;
+            if (filterStatus != null && !filterStatus.equals(c.status == null ? "" : c.status)) continue;
             if (q.isEmpty()) { out.add(c); continue; }
             String bin = c.spec("BIN");
             if (c.name.toLowerCase().contains(q) || c.bank.toLowerCase().contains(q)
@@ -394,6 +424,101 @@ public class MainActivity extends Activity {
         if (homeAdapter == null) return;
         homeAdapter.data = filteredHome();
         homeAdapter.notifyDataSetChanged();
+        if (homeCount != null) homeCount.setText("共 " + homeAdapter.data.size() + " 张");
+        if (filterBtn != null) {
+            int n = (filterType != null ? 1 : 0) + (filterOrg != null ? 1 : 0) + (filterStatus != null ? 1 : 0);
+            filterBtn.setText(n == 0 ? "筛选" : "筛选 · " + n);
+        }
+    }
+
+    // ---------- 筛选面板（Phase 2a-1） ----------
+    void openFilterSheet() {
+        closeFilterSheet();
+        final FrameLayout sheet = new FrameLayout(this);
+        sheet.setBackgroundColor(Color.argb(90, 10, 16, 28));
+        sheet.setOnClickListener(v -> closeFilterSheet());
+        LinearLayout panel = new LinearLayout(this);
+        panel.setOrientation(LinearLayout.VERTICAL);
+        GradientDrawable pg = new GradientDrawable();
+        pg.setColor(Color.WHITE);
+        pg.setCornerRadii(new float[]{dp(this, 18), dp(this, 18), dp(this, 18), dp(this, 18), 0, 0, 0, 0});
+        panel.setBackground(pg);
+        panel.setPadding(dp(this, 16), dp(this, 14), dp(this, 16), dp(this, 18));
+        panel.setOnClickListener(v -> {});
+        FrameLayout.LayoutParams plp = new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        plp.gravity = Gravity.BOTTOM;
+        sheet.addView(panel, plp);
+        rebuildFilterPanel(panel);
+        content.addView(sheet);
+        filterSheet = sheet;
+    }
+
+    void closeFilterSheet() {
+        if (filterSheet != null && filterSheet.getParent() != null)
+            ((ViewGroup) filterSheet.getParent()).removeView(filterSheet);
+        filterSheet = null;
+    }
+
+    void rebuildFilterPanel(final LinearLayout panel) {
+        panel.removeAllViews();
+        LinearLayout head = new LinearLayout(this);
+        head.setOrientation(LinearLayout.HORIZONTAL);
+        head.setGravity(Gravity.CENTER_VERTICAL);
+        TextView ttl = tv(this, "筛选", 16, Color.rgb(0x1C, 0x1C, 0x1E), true);
+        head.addView(ttl, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+        Button clear = new Button(this);
+        clear.setText("清空"); clear.setTextSize(12.5f); clear.setAllCaps(false); clear.setMinWidth(0);
+        clear.setBackground(roundRect(Color.rgb(0xF5, 0xF6, 0xF8), 10, this));
+        clear.setOnClickListener(v -> {
+            filterType = null; filterOrg = null; filterStatus = null;
+            rebuildFilterPanel(panel); refreshHome();
+        });
+        head.addView(clear, new LinearLayout.LayoutParams(dp(this, 64), dp(this, 32)));
+        Button done = new Button(this);
+        done.setText("完成"); done.setTextSize(12.5f); done.setAllCaps(false); done.setMinWidth(0);
+        done.setTextColor(Color.WHITE);
+        done.setBackground(roundRect(Color.rgb(0x0A, 0x5C, 0xD6), 10, this));
+        LinearLayout.LayoutParams dlp = new LinearLayout.LayoutParams(dp(this, 64), dp(this, 32));
+        dlp.leftMargin = dp(this, 8);
+        done.setOnClickListener(v -> closeFilterSheet());
+        head.addView(done, dlp);
+        panel.addView(head);
+
+        panel.addView(filterSectionTitle("卡片类型"));
+        panel.addView(filterOpt("借记卡", "debit".equals(filterType), () -> { filterType = "debit".equals(filterType) ? null : "debit"; rebuildFilterPanel(panel); refreshHome(); }));
+        panel.addView(filterOpt("信用卡", "credit".equals(filterType), () -> { filterType = "credit".equals(filterType) ? null : "credit"; rebuildFilterPanel(panel); refreshHome(); }));
+
+        panel.addView(filterSectionTitle("卡组织"));
+        String[][] orgs = {{"visa", "VISA"}, {"mastercard", "万事达"}, {"mastercard-nucc", "万事达-网联"}, {"amex-cn", "运通-人民币"}, {"unionpay", "银联"}, {"jcb", "JCB"}};
+        for (final String[] o : orgs) {
+            panel.addView(filterOpt(o[1], o[0].equals(filterOrg), () -> {
+                filterOrg = o[0].equals(filterOrg) ? null : o[0];
+                rebuildFilterPanel(panel); refreshHome();
+            }));
+        }
+
+        panel.addView(filterSectionTitle("状态"));
+        panel.addView(filterOpt("在发", "在发".equals(filterStatus), () -> { filterStatus = "在发".equals(filterStatus) ? null : "在发"; rebuildFilterPanel(panel); refreshHome(); }));
+        panel.addView(filterOpt("已停发", "已停发".equals(filterStatus), () -> { filterStatus = "已停发".equals(filterStatus) ? null : "已停发"; rebuildFilterPanel(panel); refreshHome(); }));
+    }
+
+    TextView filterSectionTitle(String s) {
+        TextView t = tv(this, s, 12, Color.rgb(0x8E, 0x8E, 0x93), true);
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        lp.topMargin = dp(this, 14);
+        t.setLayoutParams(lp);
+        return t;
+    }
+
+    View filterOpt(String label, boolean on, final Runnable act) {
+        TextView t = tv(this, (on ? "✓ " : "　 ") + label, 13.5f, on ? Color.rgb(0x0A, 0x5C, 0xD6) : Color.rgb(0x1C, 0x1C, 0x1E), on);
+        t.setBackground(roundRect(on ? Color.rgb(0xE8, 0xF1, 0xFD) : Color.rgb(0xF5, 0xF6, 0xF8), 10, this));
+        t.setPadding(dp(this, 12), dp(this, 9), dp(this, 12), dp(this, 9));
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        lp.topMargin = dp(this, 6);
+        t.setLayoutParams(lp);
+        t.setOnClickListener(v -> act.run());
+        return t;
     }
 
     // ---------- 详情页 ----------
@@ -589,7 +714,7 @@ public class MainActivity extends Activity {
 
     View buildSettingsPage() {
         LinearLayout page = basePage("设置");
-        page.addView(settingRow("版本", "0.1-native（Phase 1）"));
+        page.addView(settingRow("版本", "0.2-native（Phase 2）"));
         page.addView(settingRow("关于卡盒", "原生版：纯 Java 手写界面，数据与现行版共用同一份卡库"));
         page.addView(settingRow("迁移进度", "全部卡片 / 详情 / 我的卡片 / 学生推荐 已迁移；筛选、情景选卡、资讯、字体与界面大小在后续阶段"));
         return page;
