@@ -172,6 +172,52 @@ public class MainActivity extends Activity {
     String filterBank = null; // 发卡行，单选切换（同 chipRow 对 bank 的语义）
     LinearLayout activeFilterBar = null;
 
+    // 排序 / 列数 / 显示方式（Phase 2a-3，对照 app.js applySort/colsNowVal/groupBank+bankOpen）
+    String sortMode = null; // null=默认 / score-desc / score-asc / name / bank
+    int cols = 2; // 1/2/3
+    boolean groupBank = false;
+    java.util.Set<String> bankOpen = new java.util.HashSet<>();
+    LinearLayout homeList = null;
+    ScrollView homeScroll = null;
+
+    static String sortLabel(String v) {
+        if ("score-desc".equals(v)) return "评分由高到低";
+        if ("score-asc".equals(v)) return "评分由低到高";
+        if ("name".equals(v)) return "名称";
+        if ("bank".equals(v)) return "银行";
+        return v;
+    }
+
+    void applySort(List<Card> list) {
+        final java.text.Collator zh = java.text.Collator.getInstance(java.util.Locale.CHINA);
+        java.util.Comparator<Card> byScoreDesc = (a, b) -> Double.compare(b.score, a.score);
+        if (groupBank) {
+            // 混合版：分组时先银行中文序，组内按评分（选了升序则升序，否则默认降序）
+            list.sort((a, b) -> {
+                int r = zh.compare(a.bank == null ? "" : a.bank, b.bank == null ? "" : b.bank);
+                if (r != 0) return r;
+                return "score-asc".equals(sortMode) ? Double.compare(a.score, b.score) : Double.compare(b.score, a.score);
+            });
+        } else if ("score-asc".equals(sortMode)) {
+            list.sort((a, b) -> Double.compare(a.score, b.score));
+        } else if ("score-desc".equals(sortMode)) {
+            list.sort(byScoreDesc);
+        } else if ("name".equals(sortMode)) {
+            list.sort((a, b) -> { int r = zh.compare(a.name == null ? "" : a.name, b.name == null ? "" : b.name); return r != 0 ? r : Double.compare(b.score, a.score); });
+        } else if ("bank".equals(sortMode)) {
+            list.sort((a, b) -> { int r = zh.compare(a.bank == null ? "" : a.bank, b.bank == null ? "" : b.bank); return r != 0 ? r : Double.compare(b.score, a.score); });
+        }
+    }
+
+    void persistViewPrefs() {
+        SharedPreferences.Editor e = prefs.edit();
+        if (sortMode == null) e.remove("sort_mode"); else e.putString("sort_mode", sortMode);
+        e.putInt("cols", cols);
+        e.putBoolean("group_bank", groupBank);
+        e.putStringSet("bank_open", new HashSet<>(bankOpen));
+        e.apply();
+    }
+
     static final String[][] FEATS = {
         {"3ds", "3DS"}, {"online", "可网付"}, {"noftf", "无货币转换费"},
         {"autofx", "自动购汇"}, {"applepay", "Apple Pay"}
@@ -224,6 +270,10 @@ public class MainActivity extends Activity {
 
         prefs = getSharedPreferences("cardbox_native", MODE_PRIVATE);
         try { mine = new HashSet<>(prefs.getStringSet("mine_ids", new HashSet<String>())); } catch (Exception e) { mine = new HashSet<>(); }
+        sortMode = prefs.getString("sort_mode", null);
+        cols = prefs.getInt("cols", 2); if (cols != 1 && cols != 2 && cols != 3) cols = 2;
+        groupBank = prefs.getBoolean("group_bank", false);
+        try { bankOpen = new HashSet<>(prefs.getStringSet("bank_open", new HashSet<String>())); } catch (Exception e) { bankOpen = new HashSet<>(); }
         Store.load(this);
 
         LinearLayout root = new LinearLayout(this);
@@ -433,18 +483,13 @@ public class MainActivity extends Activity {
         tiles.addView(heroTile((Store.all.size() - debit) + " 张", "信用卡"), new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
         tiles.addView(heroTile(stopped + " 张", "已停发"), new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
 
-        homeGrid = new GridView(this);
-        homeGrid.setNumColumns(2);
-        homeGrid.setHorizontalSpacing(dp(this, 10));
-        homeGrid.setVerticalSpacing(dp(this, 10));
-        homeGrid.setPadding(0, dp(this, 10), 0, dp(this, 16));
-        homeGrid.setClipToPadding(false);
-        homeAdapter = new CardAdapter(filteredHome());
-        homeGrid.setAdapter(homeAdapter);
-        homeGrid.setOnItemClickListener(new AdapterView.OnItemClickListener() {
-            public void onItemClick(AdapterView<?> p, View v, int i, long id) { openDetail(homeAdapter.data.get(i)); }
-        });
-        page.addView(homeGrid, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
+        homeScroll = new ScrollView(this);
+        homeScroll.setFillViewport(true);
+        homeList = new LinearLayout(this);
+        homeList.setOrientation(LinearLayout.VERTICAL);
+        homeList.setPadding(0, dp(this, 10), 0, dp(this, 16));
+        homeScroll.addView(homeList, new ScrollView.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        page.addView(homeScroll, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
         refreshHome();
         return page;
     }
@@ -483,15 +528,128 @@ public class MainActivity extends Activity {
     }
 
     void refreshHome() {
-        if (homeAdapter == null) return;
-        homeAdapter.data = filteredHome();
-        homeAdapter.notifyDataSetChanged();
-        if (homeCount != null) homeCount.setText("共 " + homeAdapter.data.size() + " 张");
+        if (homeList == null) return;
+        List<Card> list = filteredHome();
+        applySort(list);
+        if (homeCount != null) homeCount.setText("共 " + list.size() + " 张");
         if (filterBtn != null) {
             int n = activeFilterCount();
             filterBtn.setText(n == 0 ? "筛选" : "筛选 · " + n);
         }
         renderActiveFilters();
+        renderHomeList(list);
+    }
+
+    void renderHomeList(List<Card> list) {
+        homeList.removeAllViews();
+        if (list.isEmpty()) {
+            homeList.addView(tv(this, "没有符合条件的卡", 13.5f, Color.rgb(0x8E, 0x8E, 0x93), false));
+            return;
+        }
+        if (!groupBank) {
+            addCardRows(homeList, list);
+            return;
+        }
+        // 按银行折叠：组按卡数降序、同数按银行中文序（同混合版 renderGrid 分组）
+        Map<String, List<Card>> groups = new java.util.LinkedHashMap<>();
+        for (Card c : list) {
+            String b = (c.bank == null || c.bank.isEmpty()) ? "其他" : c.bank;
+            if (!groups.containsKey(b)) groups.put(b, new ArrayList<>());
+            groups.get(b).add(c);
+        }
+        List<Map.Entry<String, List<Card>>> order = new ArrayList<>(groups.entrySet());
+        final java.text.Collator zh = java.text.Collator.getInstance(java.util.Locale.CHINA);
+        order.sort((x, y) -> { int r = Integer.compare(y.getValue().size(), x.getValue().size()); return r != 0 ? r : zh.compare(x.getKey(), y.getKey()); });
+        int maxN = 1;
+        for (Map.Entry<String, List<Card>> e : order) maxN = Math.max(maxN, e.getValue().size());
+        boolean forceOpen = !query.isEmpty() || filterOrg != null || filterStatus != null || filterType != null || !filterFeats.isEmpty();
+        for (Map.Entry<String, List<Card>> e : order) {
+            final String bank = e.getKey();
+            List<Card> cs = e.getValue();
+            boolean open = forceOpen || bankOpen.contains(bank);
+            homeList.addView(bankHead(bank, cs, open, maxN, () -> {
+                if (bankOpen.contains(bank)) bankOpen.remove(bank); else bankOpen.add(bank);
+                persistViewPrefs();
+                refreshHome();
+            }));
+            if (open) addCardRows(homeList, cs);
+        }
+    }
+
+    void addCardRows(LinearLayout container, List<Card> list) {
+        for (int i = 0; i < list.size(); i += cols) {
+            LinearLayout row = new LinearLayout(this);
+            row.setOrientation(LinearLayout.HORIZONTAL);
+            LinearLayout.LayoutParams rlp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            rlp.topMargin = dp(this, 10);
+            row.setLayoutParams(rlp);
+            container.addView(row);
+            for (int j = 0; j < cols; j++) {
+                if (i + j < list.size()) {
+                    final Card c = list.get(i + j);
+                    View tile = cardTile(c, row);
+                    LinearLayout.LayoutParams tlp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+                    if (j > 0) tlp.leftMargin = dp(this, 10);
+                    tile.setLayoutParams(tlp);
+                    tile.setOnClickListener(v -> openDetail(c));
+                    row.addView(tile);
+                } else {
+                    View spacer = new View(this);
+                    LinearLayout.LayoutParams slp2 = new LinearLayout.LayoutParams(0, 1, 1f);
+                    if (j > 0) slp2.leftMargin = dp(this, 10);
+                    spacer.setLayoutParams(slp2);
+                    row.addView(spacer);
+                }
+            }
+        }
+    }
+
+    View bankHead(final String bank, List<Card> cs, boolean open, int maxN, final Runnable onToggle) {
+        int nd = 0;
+        for (Card c : cs) if (!c.isCredit()) nd++;
+        LinearLayout box = new LinearLayout(this);
+        box.setOrientation(LinearLayout.VERTICAL);
+        box.setBackground(roundRect(Color.WHITE, 14, this));
+        box.setPadding(dp(this, 12), dp(this, 10), dp(this, 12), dp(this, 10));
+        LinearLayout.LayoutParams blp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        blp.topMargin = dp(this, 10);
+        box.setLayoutParams(blp);
+        LinearLayout top = new LinearLayout(this);
+        top.setOrientation(LinearLayout.HORIZONTAL);
+        top.setGravity(Gravity.CENTER_VERTICAL);
+        box.addView(top);
+        TextView letter = tv(this, bank.isEmpty() ? "卡" : bank.substring(0, 1), 16, Color.rgb(0x0A, 0x5C, 0xD6), true);
+        letter.setGravity(Gravity.CENTER);
+        letter.setBackground(roundRect(Color.rgb(0xE8, 0xF1, 0xFD), 10, this));
+        top.addView(letter, new LinearLayout.LayoutParams(dp(this, 38), dp(this, 38)));
+        LinearLayout tx = new LinearLayout(this);
+        tx.setOrientation(LinearLayout.VERTICAL);
+        LinearLayout.LayoutParams txlp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+        txlp.leftMargin = dp(this, 10);
+        top.addView(tx, txlp);
+        tx.addView(tv(this, bank, 14.5f, open ? Color.rgb(0x0A, 0x5C, 0xD6) : Color.rgb(0x1C, 0x1C, 0x1E), true));
+        tx.addView(tv(this, "借记 " + nd + " · 信用 " + (cs.size() - nd), 11, Color.rgb(0x8E, 0x8E, 0x93), false));
+        TextView cnt = tv(this, cs.size() + " 张", 11, Color.rgb(0x0A, 0x5C, 0xD6), true);
+        cnt.setBackground(roundRect(Color.rgb(0xE8, 0xF1, 0xFD), 999, this));
+        cnt.setPadding(dp(this, 8), dp(this, 3), dp(this, 8), dp(this, 3));
+        top.addView(cnt);
+        TextView arrow = tv(this, open ? " ▾" : " ▸", 14, Color.rgb(0x8E, 0x8E, 0x93), false);
+        top.addView(arrow);
+        // 占比条：按本轮最大组归一（同混合版 bbar）
+        LinearLayout bar = new LinearLayout(this);
+        bar.setOrientation(LinearLayout.HORIZONTAL);
+        bar.setBackground(roundRect(Color.rgb(0xE9, 0xEE, 0xF5), 999, this));
+        LinearLayout.LayoutParams barLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(this, 4));
+        barLp.topMargin = dp(this, 8);
+        bar.setLayoutParams(barLp);
+        View fill = new View(this);
+        fill.setBackground(roundRect(Color.rgb(0x0A, 0x5C, 0xD6), 999, this));
+        bar.addView(fill, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, (float) cs.size()));
+        View rest = new View(this);
+        bar.addView(rest, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, (float) Math.max(0, maxN - cs.size())));
+        box.addView(bar);
+        box.setOnClickListener(v -> onToggle.run());
+        return box;
     }
 
     // 已选标签栏：顺序与混合版 renderActiveFilters 一致（银行/组织/状态/特点/类型），点标签删除该项
@@ -504,6 +662,7 @@ public class MainActivity extends Activity {
         for (final String f : new ArrayList<>(filterFeats))
             activeFilterBar.addView(afPill(featLabel(f), () -> { filterFeats.remove(f); refreshHome(); }));
         if (filterType != null) activeFilterBar.addView(afPill("credit".equals(filterType) ? "信用卡" : "借记卡", () -> { filterType = null; refreshHome(); }));
+        if (sortMode != null) activeFilterBar.addView(afPill(sortLabel(sortMode), () -> { sortMode = null; persistViewPrefs(); refreshHome(); }));
         View wrap = (View) activeFilterBar.getParent();
         if (wrap != null) wrap.setVisibility(activeFilterBar.getChildCount() == 0 ? View.GONE : View.VISIBLE);
     }
@@ -565,6 +724,7 @@ public class MainActivity extends Activity {
         clear.setOnClickListener(v -> {
             filterType = null; filterOrg = null; filterStatus = null;
             filterFeats.clear(); filterBank = null;
+            sortMode = null; groupBank = false; persistViewPrefs();
             rebuildFilterPanel(panel); refreshHome();
         });
         head.addView(clear, new LinearLayout.LayoutParams(dp(this, 64), dp(this, 32)));
@@ -626,6 +786,36 @@ public class MainActivity extends Activity {
         for (final String bankName : distinctBanks()) {
             panel.addView(filterOpt(bankName, bankName.equals(filterBank), () -> {
                 filterBank = bankName.equals(filterBank) ? null : bankName;
+                rebuildFilterPanel(panel); refreshHome();
+            }));
+        }
+
+        panel.addView(filterSectionTitle("排序"));
+        String[][] sorts = {{"score-desc", "评分由高到低"}, {"score-asc", "评分由低到高"}, {"name", "名称"}, {"bank", "银行"}};
+        for (final String[] so : sorts) {
+            panel.addView(filterOpt(so[1], so[0].equals(sortMode), () -> {
+                sortMode = so[0].equals(sortMode) ? null : so[0];
+                persistViewPrefs();
+                rebuildFilterPanel(panel); refreshHome();
+            }));
+        }
+
+        panel.addView(filterSectionTitle("显示方式"));
+        panel.addView(filterOpt("显示全部", !groupBank, () -> {
+            groupBank = false; persistViewPrefs();
+            rebuildFilterPanel(panel); refreshHome();
+        }));
+        panel.addView(filterOpt("按银行折叠", groupBank, () -> {
+            groupBank = true; persistViewPrefs();
+            rebuildFilterPanel(panel); refreshHome();
+        }));
+
+        panel.addView(filterSectionTitle("列数"));
+        String[][] colOpts = {{"1", "单列"}, {"2", "双列"}, {"3", "三列"}};
+        for (final String[] co : colOpts) {
+            final int nCols = Integer.parseInt(co[0]);
+            panel.addView(filterOpt(co[1], cols == nCols, () -> {
+                cols = nCols; persistViewPrefs();
                 rebuildFilterPanel(panel); refreshHome();
             }));
         }
@@ -843,7 +1033,7 @@ public class MainActivity extends Activity {
 
     View buildSettingsPage() {
         LinearLayout page = basePage("设置");
-        page.addView(settingRow("版本", "0.3-native（Phase 2）"));
+        page.addView(settingRow("版本", "0.4-native（Phase 2）"));
         page.addView(settingRow("关于卡盒", "原生版：纯 Java 手写界面，数据与现行版共用同一份卡库"));
         page.addView(settingRow("迁移进度", "全部卡片 / 详情 / 我的卡片 / 学生推荐 已迁移；筛选、情景选卡、资讯、字体与界面大小在后续阶段"));
         return page;
