@@ -1318,6 +1318,7 @@ public class MainActivity extends Activity {
             srlp.leftMargin = dp(this, 6);
             meta.addView(sr, srlp);
             TextView arrow = tv(this, open ? "收起 ‹" : "展开 ›", 11, Color.rgb(0x0A, 0x5C, 0xD6), true);
+            arrow.setGravity(Gravity.RIGHT);
             meta.addView(arrow, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
 
             TextView ttl = tv(this, n.title == null ? "" : n.title, 15, Color.rgb(0x1C, 0x1C, 0x1E), true);
