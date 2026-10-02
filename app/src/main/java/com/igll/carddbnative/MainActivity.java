@@ -2,7 +2,9 @@ package com.igll.carddbnative;
 
 import android.app.Activity;
 import android.content.Context;
+import android.content.Intent;
 import android.content.SharedPreferences;
+import android.net.Uri;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.Color;
@@ -34,6 +36,8 @@ import org.json.JSONObject;
 
 import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
+import java.net.HttpURLConnection;
+import java.net.URL;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -1195,17 +1199,201 @@ public class MainActivity extends Activity {
     }
 
     // ---------- 资讯 / 设置 ----------
+    // ---------- 资讯（Phase 2c，对照 app.js renderNews/loadNews/checkNewsUpdate） ----------
+    static class NewsItem {
+        String id, title, tag, date, source, summary, url;
+    }
+    List<NewsItem> newsItems = null; // null = 还没读；空 = 读过但确实没有
+    java.util.Set<String> newsOpen = new java.util.HashSet<>(); // 展开的资讯 id（点开看详情）
+    boolean newsFetchStarted = false;
+    LinearLayout newsListBox = null;
+    TextView newsMeta = null;
+
+    List<NewsItem> parseNews(String json) {
+        try {
+            JSONObject root = new JSONObject(json);
+            JSONArray arr = root.getJSONArray("items");
+            List<NewsItem> out = new ArrayList<>();
+            for (int i = 0; i < arr.length(); i++) {
+                JSONObject o = arr.getJSONObject(i);
+                NewsItem n = new NewsItem();
+                n.id = o.optString("id"); n.title = o.optString("title");
+                n.tag = o.optString("tag"); n.date = o.optString("date");
+                n.source = o.optString("source"); n.summary = o.optString("summary");
+                n.url = o.optString("url");
+                out.add(n);
+            }
+            return out;
+        } catch (Exception e) { return null; }
+    }
+
+    String readAssetText(String path) {
+        try {
+            InputStream in = getAssets().open(path);
+            ByteArrayOutputStream bos = new ByteArrayOutputStream();
+            byte[] buf = new byte[8192]; int n;
+            while ((n = in.read(buf)) > 0) bos.write(buf, 0, n);
+            in.close();
+            return new String(bos.toByteArray(), "UTF-8");
+        } catch (Exception e) { return null; }
+    }
+
+    void ensureNews() {
+        if (newsItems != null) return;
+        // 先缓存（上次联网拿到的）没有才用内置种子，保证断网/首次都能看
+        String cached = prefs == null ? null : prefs.getString("news_cache", null);
+        List<NewsItem> c = cached == null ? null : parseNews(cached);
+        if (c != null && !c.isEmpty()) { newsItems = c; return; }
+        String seed = readAssetText("data/news.json");
+        List<NewsItem> s = seed == null ? null : parseNews(seed);
+        newsItems = s == null ? new ArrayList<NewsItem>() : s;
+    }
+
+    void fetchNewsUpdate() {
+        if (newsFetchStarted) return;
+        newsFetchStarted = true;
+        final String[] urls = {
+            "https://cdn.jsdelivr.net/gh/dimlogue/cardbox-data@main/news.json",
+            "https://raw.githubusercontent.com/dimlogue/cardbox-data/main/news.json"
+        };
+        new Thread(() -> {
+            for (String u : urls) {
+                try {
+                    HttpURLConnection conn = (HttpURLConnection) new URL(u + "?t=" + System.currentTimeMillis()).openConnection();
+                    conn.setConnectTimeout(6000); conn.setReadTimeout(6000);
+                    conn.setRequestProperty("Cache-Control", "no-cache");
+                    if (conn.getResponseCode() != 200) { conn.disconnect(); continue; }
+                    InputStream in = conn.getInputStream();
+                    ByteArrayOutputStream bos = new ByteArrayOutputStream();
+                    byte[] buf = new byte[8192]; int n;
+                    while ((n = in.read(buf)) > 0) bos.write(buf, 0, n);
+                    in.close(); conn.disconnect();
+                    String json = new String(bos.toByteArray(), "UTF-8");
+                    List<NewsItem> fresh = parseNews(json);
+                    if (fresh == null || fresh.isEmpty()) continue;
+                    boolean changed = newsItems == null || newsItems.size() != fresh.size()
+                        || (fresh.size() > 0 && newsItems.size() > 0 && !fresh.get(0).id.equals(newsItems.get(0).id));
+                    if (prefs != null) prefs.edit().putString("news_cache", json).apply();
+                    newsItems = fresh;
+                    if (changed) runOnUiThread(() -> { if ("news".equals(tab) && newsListBox != null) renderNews(); });
+                    return;
+                } catch (Exception e) { /* 换下一条线路，失败就保持内置/缓存 */ }
+            }
+        }).start();
+    }
+
+    void renderNews() {
+        if (newsListBox == null) return;
+        newsListBox.removeAllViews();
+        if (newsItems == null || newsItems.isEmpty()) {
+            newsListBox.addView(tv(this, "暂时还没有资讯，过段时间再来看看。", 13.5f, Color.rgb(0x8E, 0x8E, 0x93), false));
+            return;
+        }
+        if (newsMeta != null) newsMeta.setText("共 " + newsItems.size() + " 条 · 公开信息整理，仅供参考");
+        for (final NewsItem n : newsItems) {
+            final boolean open = newsOpen.contains(n.id);
+            LinearLayout card = new LinearLayout(this);
+            card.setOrientation(LinearLayout.VERTICAL);
+            card.setBackground(roundRect(Color.WHITE, 16, this));
+            card.setPadding(dp(this, 14), dp(this, 12), dp(this, 14), dp(this, 12));
+            LinearLayout.LayoutParams clp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            clp.topMargin = dp(this, 10);
+            newsListBox.addView(card, clp);
+
+            LinearLayout meta = new LinearLayout(this);
+            meta.setOrientation(LinearLayout.HORIZONTAL);
+            meta.setGravity(Gravity.CENTER_VERTICAL);
+            card.addView(meta);
+            String tag = n.tag == null || n.tag.isEmpty() ? "资讯" : n.tag;
+            TextView tg = tv(this, tag, 10.5f, Color.rgb(0x0A, 0x5C, 0xD6), true);
+            tg.setBackground(roundRect(Color.rgb(0xE8, 0xF1, 0xFD), 999, this));
+            tg.setPadding(dp(this, 8), dp(this, 3), dp(this, 8), dp(this, 3));
+            meta.addView(tg);
+            TextView dt = tv(this, n.date == null ? "" : n.date, 11, Color.rgb(0x8E, 0x8E, 0x93), false);
+            LinearLayout.LayoutParams dtlp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            dtlp.leftMargin = dp(this, 8);
+            meta.addView(dt, dtlp);
+            TextView sr = tv(this, n.source == null ? "" : n.source, 11, Color.rgb(0x8E, 0x8E, 0x93), false);
+            LinearLayout.LayoutParams srlp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            srlp.leftMargin = dp(this, 6);
+            meta.addView(sr, srlp);
+            TextView arrow = tv(this, open ? "收起 ‹" : "展开 ›", 11, Color.rgb(0x0A, 0x5C, 0xD6), true);
+            meta.addView(arrow, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+
+            TextView ttl = tv(this, n.title == null ? "" : n.title, 15, Color.rgb(0x1C, 0x1C, 0x1E), true);
+            LinearLayout.LayoutParams ttlp2 = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            ttlp2.topMargin = dp(this, 7);
+            card.addView(ttl, ttlp2);
+            if (!open) ttl.setMaxLines(2);
+
+            if (n.summary != null && !n.summary.isEmpty()) {
+                TextView sm = tv(this, n.summary, 13, Color.rgb(0x3A, 0x3A, 0x3C), false);
+                sm.setLineSpacing(dp(this, 2), 1f);
+                LinearLayout.LayoutParams smlp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+                smlp.topMargin = dp(this, 5);
+                card.addView(sm, smlp);
+                if (!open) { sm.setMaxLines(2); sm.setEllipsize(android.text.TextUtils.TruncateAt.END); }
+            }
+
+            if (open) {
+                LinearLayout det = new LinearLayout(this);
+                det.setOrientation(LinearLayout.VERTICAL);
+                det.setBackground(roundRect(Color.rgb(0xF5, 0xF6, 0xF8), 10, this));
+                det.setPadding(dp(this, 10), dp(this, 8), dp(this, 10), dp(this, 8));
+                LinearLayout.LayoutParams dlp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+                dlp.topMargin = dp(this, 9);
+                card.addView(det, dlp);
+                det.addView(tv(this, "来源：" + (n.source == null || n.source.isEmpty() ? "—" : n.source)
+                    + " · 日期：" + (n.date == null || n.date.isEmpty() ? "—" : n.date), 11.5f, Color.rgb(0x3A, 0x3A, 0x3C), false));
+                if (n.url != null && !n.url.isEmpty()) {
+                    TextView link = tv(this, "查看原文 ›", 13, Color.rgb(0x0A, 0x5C, 0xD6), true);
+                    LinearLayout.LayoutParams llp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+                    llp.topMargin = dp(this, 6);
+                    det.addView(link, llp);
+                    link.setOnClickListener(v -> {
+                        try { startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(n.url))); }
+                        catch (Exception e) { Toast.makeText(this, "打不开这个链接", Toast.LENGTH_SHORT).show(); }
+                    });
+                } else {
+                    det.addView(tv(this, "暂无原文链接", 11.5f, Color.rgb(0x8E, 0x8E, 0x93), false));
+                }
+            }
+
+            card.setOnClickListener(v -> {
+                if (newsOpen.contains(n.id)) newsOpen.remove(n.id); else newsOpen.add(n.id);
+                renderNews();
+            });
+        }
+    }
+
     View buildNewsPage() {
-        LinearLayout page = basePage("资讯");
-        page.addView(tv(this, "新卡发布、权益调整、停发换卡——这一页正在从网页版迁移过来，下一阶段补上。", 13.5f, Color.rgb(0x8E, 0x8E, 0x93), false));
+        ensureNews();
+        fetchNewsUpdate();
+        LinearLayout page = basePage("卡片资讯");
+        TextView sub = tv(this, "新卡发布、权益调整、停发换卡——公开信息整理，仅供参考", 12.5f, Color.rgb(0x8E, 0x8E, 0x93), false);
+        LinearLayout.LayoutParams subLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        subLp.topMargin = dp(this, 4);
+        page.addView(sub, subLp);
+        newsMeta = tv(this, "", 11.5f, Color.rgb(0x8E, 0x8E, 0x93), false);
+        LinearLayout.LayoutParams mLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        mLp.topMargin = dp(this, 6);
+        page.addView(newsMeta, mLp);
+
+        ScrollView sv = new ScrollView(this);
+        newsListBox = new LinearLayout(this);
+        newsListBox.setOrientation(LinearLayout.VERTICAL);
+        newsListBox.setPadding(0, dp(this, 2), 0, dp(this, 16));
+        sv.addView(newsListBox);
+        page.addView(sv, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
+        renderNews();
         return page;
     }
 
     View buildSettingsPage() {
         LinearLayout page = basePage("设置");
-        page.addView(settingRow("版本", "0.4-native（Phase 2）"));
+        page.addView(settingRow("版本", "0.6-native（Phase 2c）"));
         page.addView(settingRow("关于卡盒", "原生版：纯 Java 手写界面，数据与现行版共用同一份卡库"));
-        page.addView(settingRow("迁移进度", "全部卡片 / 详情 / 我的卡片 / 学生推荐 已迁移；筛选（含排序/列数/按银行折叠）、情景选卡、资讯、字体与界面大小在后续阶段"));
+        page.addView(settingRow("迁移进度", "全部卡片 / 详情 / 我的卡片 / 学生推荐 / 筛选 / 资讯 已迁移；情景选卡、自定义卡、字体与界面大小在后续阶段"));
         return page;
     }
 
