@@ -27,7 +27,10 @@
 - [x] Phase 1（2026-10-03 04:27，commit 870ea7e，APK 0.1-native）：五页骨架+底部导航；全部卡片（搜索+卡库总览英雄卡+双列瓷砖+点击详情）；详情（图/子版本/点评/加减收藏/参数表）；我的卡片（收藏网格+总数/组织覆盖/无转换费统计条）；学生推荐（学生/留学关键词+评分排序）；设置基础行；系统返回键关详情。收藏存 SharedPreferences(cardbox_native/mine_ids)。
 
 ## 待办（按序推进，一次一段）
-- [ ] Phase 2a 筛选：首页加筛选入口与面板（卡片类型/卡组织/状态/特点3DS·可网付·无转换费·自动购汇·Apple Pay/发卡行/排序/列数1-2-3/显示方式平铺+按银行折叠），规则对照 app.js 的 filtered/applySort/chipRow；银行折叠用可展开分组列表实现。
+- [ ] Phase 2a 筛选（拆小段推进，每段独立编译提交）：
+  - [ ] 2a-1 筛选状态模型 + 底部弹出面板骨架：卡片类型（全部/借记/信用）、卡组织、状态三组 chips，点选即过滤首页网格（对照 app.js chipRow/filtered 的类型/组织/状态部分）。
+  - [ ] 2a-2 特点 chips（3DS/可网付/无转换费/自动购汇/Apple Pay，对照 featMatch）+ 发卡行多选 + 已选标签栏（可点删）+ 筛选计数。
+  - [ ] 2a-3 排序（评分/名称/银行）+ 列数 1/2/3 + 显示方式（平铺/按银行折叠，分组展开收起，对照 groupBank/renderAllHtml）。
 - [ ] Phase 2b 学生页补全：顶部白底明亮统计卡（学生卡数/在发/最高分）+「挑卡只看三件事」条+每卡推荐理由（对照 app.js studentReason/studentFit 生成）。
 - [ ] Phase 2c 资讯页：读 assets/data/news.json（先从 ~/workspace/cardapp/site/news.json 同步进 assets，无则联网拉混合版同源），列表+详情展开。
 - [ ] Phase 3a 情景选卡：对照 app.js WIZ_SCENARIOS/wizQs/scoreWizard 完整移植（四场景+档次+卡种，向导 UI：轨迹行可回改、结果理由 chips、＋收藏、进详情返回保留进度、打开时背景不可滚——原生天然满足）。
