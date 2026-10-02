@@ -155,8 +155,6 @@ public class MainActivity extends Activity {
 
     // 首页控件（切页回来保持搜索词）
     EditText searchBox;
-    GridView homeGrid;
-    CardAdapter homeAdapter;
     String query = "";
     TextView homeCount;
     Button filterBtn;
@@ -329,6 +327,7 @@ public class MainActivity extends Activity {
             pages.put(key, page);
         }
         content.addView(page);
+        if ("home".equals(key) && homeList != null) refreshHome();
         for (Map.Entry<String, Button> e : navBtns.entrySet()) {
             boolean on = e.getKey().equals(key);
             e.getValue().setTextColor(on ? Color.rgb(0x0A, 0x5C, 0xD6) : Color.rgb(0x8E, 0x8E, 0x93));
@@ -1035,7 +1034,7 @@ public class MainActivity extends Activity {
         LinearLayout page = basePage("设置");
         page.addView(settingRow("版本", "0.4-native（Phase 2）"));
         page.addView(settingRow("关于卡盒", "原生版：纯 Java 手写界面，数据与现行版共用同一份卡库"));
-        page.addView(settingRow("迁移进度", "全部卡片 / 详情 / 我的卡片 / 学生推荐 已迁移；筛选、情景选卡、资讯、字体与界面大小在后续阶段"));
+        page.addView(settingRow("迁移进度", "全部卡片 / 详情 / 我的卡片 / 学生推荐 已迁移；筛选（含排序/列数/按银行折叠）、情景选卡、资讯、字体与界面大小在后续阶段"));
         return page;
     }
 
