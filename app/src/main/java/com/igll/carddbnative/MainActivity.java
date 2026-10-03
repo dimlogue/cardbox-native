@@ -2204,6 +2204,13 @@ public class MainActivity extends Activity {
         LinearLayout.LayoutParams hlp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         hlp.topMargin = dp(this, 12);
         cardBox.addView(hint, hlp);
+        TextView glossLink = tv(this, "查看卡片常识 ›", 12.5f, Color.rgb(0x0A, 0x5C, 0xD6), true);
+        LinearLayout.LayoutParams glp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        glp.topMargin = dp(this, 8);
+        glossLink.setLayoutParams(glp);
+        glossLink.setPadding(0, dp(this, 4), dp(this, 8), dp(this, 4));
+        cardBox.addView(glossLink);
+        glossLink.setOnClickListener(v -> { haptic(); closeAcctClassPicker(); openGlossaryTerm("acct1"); });
         if (manage) {
             TextView rm = tv(this, "移除已有（全部 " + entriesForCard(c.id).size() + " 张）", 14, Color.rgb(0xE0, 0x31, 0x31), true);
             rm.setGravity(Gravity.CENTER);
@@ -9009,6 +9016,17 @@ public class MainActivity extends Activity {
     LinearLayout newsListBox = null;
     TextView newsMeta = null;
 
+    // Q66 卡片常识：资讯页下半组词条，数据源与资讯同走 assets 种子 + prefs 缓存 + OTA 双线（glossary.json），不写死在代码
+    static class GlossaryItem {
+        String id, term, aka, category, body;
+    }
+    List<GlossaryItem> glossaryItems = null;
+    java.util.Set<String> glossaryOpen = new java.util.HashSet<>();
+    boolean glossaryFetchStarted = false;
+    LinearLayout glossaryBox = null;
+    TextView glossaryMeta = null;
+    String pendingGlossaryId = null;
+
     List<NewsItem> parseNews(String json) {
         try {
             JSONObject root = new JSONObject(json);
@@ -9025,6 +9043,154 @@ public class MainActivity extends Activity {
             }
             return out;
         } catch (Exception e) { return null; }
+    }
+
+    List<GlossaryItem> parseGlossary(String json) {
+        try {
+            JSONObject root = new JSONObject(json);
+            JSONArray arr = root.getJSONArray("items");
+            List<GlossaryItem> out = new ArrayList<>();
+            for (int i = 0; i < arr.length(); i++) {
+                JSONObject o = arr.getJSONObject(i);
+                GlossaryItem g = new GlossaryItem();
+                g.id = o.optString("id"); g.term = o.optString("term");
+                g.aka = o.optString("aka"); g.category = o.optString("category");
+                g.body = o.optString("body");
+                if (g.id == null || g.id.isEmpty() || g.term == null || g.term.isEmpty()) continue;
+                out.add(g);
+            }
+            return out;
+        } catch (Exception e) { return null; }
+    }
+
+    void ensureGlossary() {
+        if (glossaryItems != null) return;
+        String cached = prefs == null ? null : prefs.getString("glossary_cache", null);
+        List<GlossaryItem> c = cached == null ? null : parseGlossary(cached);
+        if (c != null && !c.isEmpty()) { glossaryItems = c; return; }
+        String seed = readAssetText("data/glossary.json");
+        List<GlossaryItem> s = seed == null ? null : parseGlossary(seed);
+        glossaryItems = s == null ? new ArrayList<GlossaryItem>() : s;
+    }
+
+    void fetchGlossaryUpdate() {
+        if (glossaryFetchStarted) return;
+        glossaryFetchStarted = true;
+        final String[] urls = {
+            "https://cdn.jsdelivr.net/gh/dimlogue/cardbox-data@main/glossary.json",
+            "https://raw.githubusercontent.com/dimlogue/cardbox-data/main/glossary.json"
+        };
+        new Thread(() -> {
+            for (String u : urls) {
+                try {
+                    HttpURLConnection conn = (HttpURLConnection) new URL(u + "?t=" + System.currentTimeMillis()).openConnection();
+                    conn.setConnectTimeout(6000); conn.setReadTimeout(6000);
+                    conn.setRequestProperty("Cache-Control", "no-cache");
+                    if (conn.getResponseCode() != 200) { conn.disconnect(); continue; }
+                    InputStream in = conn.getInputStream();
+                    ByteArrayOutputStream bos = new ByteArrayOutputStream();
+                    byte[] buf = new byte[8192]; int n;
+                    while ((n = in.read(buf)) > 0) bos.write(buf, 0, n);
+                    in.close(); conn.disconnect();
+                    String json = new String(bos.toByteArray(), "UTF-8");
+                    List<GlossaryItem> fresh = parseGlossary(json);
+                    if (fresh == null || fresh.isEmpty()) continue;
+                    boolean changed = glossaryItems == null || glossaryItems.size() != fresh.size()
+                        || (!fresh.isEmpty() && !glossaryItems.isEmpty() && !fresh.get(0).id.equals(glossaryItems.get(0).id));
+                    if (prefs != null) prefs.edit().putString("glossary_cache", json).apply();
+                    glossaryItems = fresh;
+                    if (changed) runOnUiThread(() -> { if ("news".equals(tab) && glossaryBox != null) renderGlossary(); });
+                    return;
+                } catch (Exception e) { /* 换下一条，失败保持内置/缓存 */ }
+            }
+        }).start();
+    }
+
+    void openGlossaryTerm(String id) {
+        if (id == null) return;
+        pendingGlossaryId = id;
+        glossaryOpen.add(id);
+        if (!"news".equals(tab)) showTab("news");
+        else if (glossaryBox != null) renderGlossary();
+    }
+
+    void renderGlossary() {
+        if (glossaryBox == null) return;
+        glossaryBox.removeAllViews();
+        if (glossaryItems == null || glossaryItems.isEmpty()) {
+            glossaryBox.addView(emptyState("暂时还没有常识词条\n过段时间再来看看"));
+            return;
+        }
+        if (glossaryMeta != null) glossaryMeta.setText("共 " + glossaryItems.size() + " 条 · 概念说明，仅供参考");
+        String jumpId = pendingGlossaryId;
+        View jumpView = null;
+        for (final GlossaryItem g : glossaryItems) {
+            final boolean open = glossaryOpen.contains(g.id);
+            LinearLayout card = new LinearLayout(this);
+            card.setOrientation(LinearLayout.VERTICAL);
+            card.setBackground(rippleBg(Color.WHITE, 14));
+            card.setClipToOutline(true);
+            card.setPadding(dp(this, 14), dp(this, 11), dp(this, 14), dp(this, 11));
+            LinearLayout.LayoutParams clp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            clp.topMargin = dp(this, 8);
+            glossaryBox.addView(card, clp);
+
+            LinearLayout meta = new LinearLayout(this);
+            meta.setOrientation(LinearLayout.HORIZONTAL);
+            meta.setGravity(Gravity.CENTER_VERTICAL);
+            card.addView(meta);
+            String cat = g.category == null || g.category.isEmpty() ? "常识" : g.category;
+            TextView cg = tv(this, cat, 10.5f, Color.rgb(0x0A, 0x5C, 0xD6), true);
+            cg.setBackground(roundRect(Color.rgb(0xE8, 0xF1, 0xFD), 999, this));
+            cg.setPadding(dp(this, 8), dp(this, 3), dp(this, 8), dp(this, 3));
+            meta.addView(cg);
+            TextView arrow = tv(this, open ? "收起 ‹" : "展开 ›", 11, Color.rgb(0x0A, 0x5C, 0xD6), true);
+            arrow.setGravity(Gravity.RIGHT);
+            meta.addView(arrow, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+
+            TextView ttl = tv(this, g.term == null ? "" : g.term, 15, Color.rgb(0x1C, 0x1C, 0x1E), true);
+            LinearLayout.LayoutParams ttlp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            ttlp.topMargin = dp(this, 7);
+            card.addView(ttl, ttlp);
+            if (g.aka != null && !g.aka.isEmpty()) {
+                TextView aka = tv(this, g.aka, 12, Color.rgb(0x8E, 0x8E, 0x93), false);
+                LinearLayout.LayoutParams akp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+                akp.topMargin = dp(this, 2);
+                card.addView(aka, akp);
+            }
+            if (g.body != null && !g.body.isEmpty()) {
+                TextView bd = tv(this, g.body, 13, Color.rgb(0x3A, 0x3A, 0x3C), false);
+                bd.setLineSpacing(dp(this, 2), 1f);
+                LinearLayout.LayoutParams bdp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+                bdp.topMargin = dp(this, 6);
+                card.addView(bd, bdp);
+                if (!open) { bd.setMaxLines(2); bd.setEllipsize(android.text.TextUtils.TruncateAt.END); }
+                else {
+                    TextView note = tv(this, "具体规则以发卡行与卡组织现行说明为准。", 11.5f, Color.rgb(0x8E, 0x8E, 0x93), false);
+                    LinearLayout.LayoutParams nlp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+                    nlp.topMargin = dp(this, 8);
+                    card.addView(note, nlp);
+                }
+            }
+            card.setOnClickListener(v -> {
+                haptic();
+                if (glossaryOpen.contains(g.id)) glossaryOpen.remove(g.id); else glossaryOpen.add(g.id);
+                renderGlossary();
+            });
+            if (jumpId != null && jumpId.equals(g.id)) jumpView = card;
+        }
+        if (jumpView != null && newsScroll != null) {
+            final View target = jumpView;
+            newsScroll.post(() -> {
+                try {
+                    int y = 0;
+                    View cur = target;
+                    while (cur != null && cur != newsScroll.getChildAt(0)) { y += cur.getTop(); cur = (View) cur.getParent(); }
+                    newsScroll.smoothScrollTo(0, Math.max(0, y - dp(MainActivity.this, 12)));
+                } catch (Throwable ignored) {}
+            });
+            pendingGlossaryId = null;
+        }
     }
 
     String readAssetText(String path) {
@@ -9176,6 +9342,8 @@ public class MainActivity extends Activity {
     View buildNewsPage() {
         ensureNews();
         fetchNewsUpdate();
+        ensureGlossary();
+        fetchGlossaryUpdate();
         LinearLayout page = basePage("卡片资讯");
         TextView sub = tv(this, "新卡发布、权益调整、停发换卡——公开信息整理，仅供参考", 12.5f, Color.rgb(0x8E, 0x8E, 0x93), false);
         LinearLayout.LayoutParams subLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
@@ -9191,12 +9359,37 @@ public class MainActivity extends Activity {
         sv.setClipToPadding(false);
         newsScroll = sv;
         if (Build.VERSION.SDK_INT >= 23) sv.setOnScrollChangeListener((v, sx, sy, ox, oy) -> { pageScrollSaveY.put("news", sy); updateTopFabVisibility(sy); });
+        LinearLayout scrollContent = new LinearLayout(this);
+        scrollContent.setOrientation(LinearLayout.VERTICAL);
         newsListBox = new LinearLayout(this);
         newsListBox.setOrientation(LinearLayout.VERTICAL);
-        newsListBox.setPadding(0, dp(this, 2), 0, dockPad());
-        sv.addView(newsListBox);
+        newsListBox.setPadding(0, dp(this, 2), 0, 0);
+        scrollContent.addView(newsListBox);
+
+        // Q66 卡片常识：与资讯同页，独立分区；结构对齐资讯白卡（分类 chip + 词条标题 + 可展开正文）
+        LinearLayout gHead = new LinearLayout(this);
+        gHead.setOrientation(LinearLayout.VERTICAL);
+        LinearLayout.LayoutParams ghp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        ghp.topMargin = dp(this, 18);
+        gHead.setLayoutParams(ghp);
+        gHead.addView(tvW(this, "卡片常识", 18, Color.rgb(0x1C, 0x1C, 0x1E), 800));
+        TextView gSub = tv(this, "账户分类、支付验证与费用等常见概念的简短说明", 12.5f, Color.rgb(0x8E, 0x8E, 0x93), false);
+        LinearLayout.LayoutParams gSubLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        gSubLp.topMargin = dp(this, 4);
+        gHead.addView(gSub, gSubLp);
+        glossaryMeta = tv(this, "", 11.5f, Color.rgb(0x8E, 0x8E, 0x93), false);
+        LinearLayout.LayoutParams gmLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        gmLp.topMargin = dp(this, 6);
+        gHead.addView(glossaryMeta, gmLp);
+        scrollContent.addView(gHead);
+        glossaryBox = new LinearLayout(this);
+        glossaryBox.setOrientation(LinearLayout.VERTICAL);
+        glossaryBox.setPadding(0, 0, 0, dockPad());
+        scrollContent.addView(glossaryBox);
+        sv.addView(scrollContent);
         page.addView(sv, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
         renderNews();
+        renderGlossary();
         restorePageScroll("news", sv);
         return page;
     }
