@@ -89,10 +89,67 @@ public class MainActivity extends Activity {
     static final DecelerateInterpolator ANIM_ENTER = new DecelerateInterpolator(2.2f);
     static final DecelerateInterpolator ANIM_EXIT = new DecelerateInterpolator(1.6f);
     static final OvershootInterpolator ANIM_SPRING = new OvershootInterpolator(1.4f);
+    static final OvershootInterpolator ANIM_MENU_SPRING = new OvershootInterpolator(1.15f);
     static final int ANIM_DUR_PAGE = 260;    // 切页 淡入+上移
-    static final int ANIM_DUR_SHEET_IN = 280; // 悬浮窗升起
-    static final int ANIM_DUR_SHEET_OUT = 190; // 悬浮窗收起
+    static final int ANIM_DUR_SHEET_IN = 280; // 悬浮窗升起（Q74 统一）
+    static final int ANIM_DUR_SHEET_OUT = 190; // 悬浮窗收起（Q74 统一）
     static final int ANIM_DUR_FADE = 220;    // 普通淡入/步骤切换
+    // Q74 弹窗动画精加工统一：同类窗同参数，遮罩与窗体同曲线同起止，不许一段一个节奏。
+    static final int ANIM_DUR_SHADE_IN = ANIM_DUR_SHEET_IN;
+    static final int ANIM_DUR_SHADE_OUT = ANIM_DUR_SHEET_OUT;
+    static final int ANIM_DUR_MENU_IN = 260;
+    static final int ANIM_DUR_MENU_OUT = 160;
+    static final int ANIM_DUR_TOAST_IN = 250;
+    static final int ANIM_DUR_TOAST_OUT = 180;
+    static final int ANIM_DUR_CARDMENU_IN = 160;
+    static final int ANIM_DUR_CARDMENU_OUT = 140;
+    static final float SHEET_RISE_DP = 42f;
+    /** Q74：遮罩淡入与窗体升起同曲线同步启动（ANIM_ENTER + SHEET_IN）。 */
+    void animShadeIn(View shade) {
+        if (shade == null) return;
+        shade.setAlpha(0f);
+        shade.animate().cancel();
+        shade.animate().alpha(1f).setDuration(ANIM_DUR_SHADE_IN).setInterpolator(ANIM_ENTER).start();
+    }
+    /** Q74：遮罩淡出与窗体收起同曲线同步（ANIM_EXIT + SHEET_OUT）。 */
+    void animShadeOut(View shade) {
+        if (shade == null) return;
+        shade.animate().cancel();
+        shade.animate().alpha(0f).setDuration(ANIM_DUR_SHADE_OUT).setInterpolator(ANIM_EXIT).start();
+    }
+    /** Q74：贴底窗升起——轻微上浮 42dp + 淡入，ANIM_ENTER/SHEET_IN。 */
+    void animSheetIn(View wrap) {
+        if (wrap == null) return;
+        wrap.setAlpha(0f);
+        wrap.setTranslationY(dp(this, SHEET_RISE_DP));
+        wrap.animate().cancel();
+        wrap.animate().alpha(1f).translationY(0f).setDuration(ANIM_DUR_SHEET_IN).setInterpolator(ANIM_ENTER).start();
+    }
+    /** Q74：悬浮卡升起——.94 放大 + 上浮 14dp + 淡入，同 SHEET_IN 曲线。 */
+    void animCardIn(View card) {
+        if (card == null) return;
+        card.setAlpha(0f);
+        card.setScaleX(0.94f); card.setScaleY(0.94f);
+        card.setTranslationY(dp(this, 14));
+        card.animate().cancel();
+        card.animate().alpha(1f).scaleX(1f).scaleY(1f).translationY(0f)
+            .setDuration(ANIM_DUR_SHEET_IN).setInterpolator(ANIM_ENTER).start();
+    }
+    /** Q74：窗体收起——顺势下沉 42dp + 淡出，ANIM_EXIT/SHEET_OUT，落定回调。 */
+    void animSheetOut(View wrap, Runnable end) {
+        if (wrap == null) { if (end != null) end.run(); return; }
+        wrap.animate().cancel();
+        wrap.animate().alpha(0f).translationY(dp(this, SHEET_RISE_DP))
+            .setDuration(ANIM_DUR_SHEET_OUT).setInterpolator(ANIM_EXIT)
+            .withEndAction(end).start();
+    }
+    void animCardOut(View card, Runnable end) {
+        if (card == null) { if (end != null) end.run(); return; }
+        card.animate().cancel();
+        card.animate().alpha(0f).scaleX(0.96f).scaleY(0.96f).translationY(dp(this, 10))
+            .setDuration(ANIM_DUR_SHEET_OUT).setInterpolator(ANIM_EXIT)
+            .withEndAction(end).start();
+    }
     /** 通用按压反馈：按下 90ms 缩到 .92，松手 260ms 弹簧回弹到 1.0（微 overshoot）。 */
     static void pressBounce(View v, boolean down) {
         if (v == null) return;
@@ -163,16 +220,45 @@ public class MainActivity extends Activity {
         topFab = null; topFabShown = false;
     }
     void hideChrome() {
-        if (navWrap != null) { navWrap.animate().cancel(); navWrap.setVisibility(View.GONE); }
-        hideFabsNow();
+        // Q74：窗体升起时悬浮件退场与窗体同曲线同步——dock 淡出下沉、悬浮钮缩放淡出，
+        // 不许硬切 GONE 与窗体升起打架。落定后才 GONE/摘除，避免白杠与残影。
+        if (navWrap != null && navWrap.getVisibility() == View.VISIBLE) {
+            navWrap.animate().cancel();
+            final View nw = navWrap;
+            nw.animate().alpha(0f).translationY(dp(this, 8))
+                .setDuration(ANIM_DUR_SHEET_OUT).setInterpolator(ANIM_EXIT)
+                .withEndAction(() -> { nw.setVisibility(View.GONE); nw.setAlpha(1f); nw.setTranslationY(0f); })
+                .start();
+        } else if (navWrap != null) {
+            navWrap.animate().cancel();
+            navWrap.setVisibility(View.GONE);
+            navWrap.setAlpha(1f); navWrap.setTranslationY(0f);
+        }
+        // 悬浮钮同步缩放淡出后摘除（与 hideTopFab 既有 170ms 口径收敛到 SHEET_OUT）
+        animateFabOut(searchFab); animateFabOut(filterFab); animateFabOut(addFab); animateFabOut(topFab);
+        // 动画进行中先清引用，防 sync* 在窗在场时把钮又挂回来；实际摘除由动画结束或 200ms 兜底完成
+        searchFab = null; filterFab = null; filterFabBadge = null; addFab = null; topFab = null; topFabShown = false;
+        cancelTopFabShow();
+    }
+    void animateFabOut(final View fab) {
+        if (fab == null || fab.getParent() == null) return;
+        fab.animate().cancel();
+        fab.animate().alpha(0f).scaleX(0.85f).scaleY(0.85f)
+            .setDuration(ANIM_DUR_SHEET_OUT).setInterpolator(ANIM_EXIT)
+            .withEndAction(() -> { if (fab.getParent() instanceof ViewGroup) ((ViewGroup) fab.getParent()).removeView(fab); })
+            .start();
+        // 兜底：动画被打断时 220ms 后强制摘除，防残留挡窗
+        fab.postDelayed(() -> { if (fab.getParent() instanceof ViewGroup) ((ViewGroup) fab.getParent()).removeView(fab); }, ANIM_DUR_SHEET_OUT + 30);
     }
     void restoreChrome() {
         if (suppressNextChromeRestore) { suppressNextChromeRestore = false; hideChrome(); return; }
         if (isChromeCovered()) { hideChrome(); return; }
         if (navWrap != null && navWrap.getVisibility() != View.VISIBLE) {
+            navWrap.animate().cancel();
             navWrap.setVisibility(View.VISIBLE);
             navWrap.setAlpha(0f);
-            navWrap.animate().alpha(1f).setDuration(180).setInterpolator(ANIM_ENTER).start();
+            navWrap.setTranslationY(dp(this, 8));
+            navWrap.animate().alpha(1f).translationY(0f).setDuration(ANIM_DUR_FADE).setInterpolator(ANIM_ENTER).start();
         }
         syncSearchFab(); syncAddFab(); syncTopFab();
     }
