@@ -7593,7 +7593,7 @@ public class MainActivity extends Activity {
         return page;
     }
 
-    // 我的卡片网格：双列；长按拖动排序（对照 app.js startMineDrag/endMineDrag 的落位换序与 450ms 点击锁）
+    // 我的卡片网格：列数随全局 cols（Q75）；长按拖动排序（对照 app.js startMineDrag/endMineDrag 的落位换序与 450ms 点击锁）
     void addMineCardRows(LinearLayout container, final List<MineRow> list, final ScrollView sv) {
         // Q75：我的卡片网格同步走全局列数体系（1/2/3/4），列间距与 cardTile 测算一致；拖动换算下方同取此值
         final int mineCols = (cols >= 1 && cols <= 4) ? cols : 2;
