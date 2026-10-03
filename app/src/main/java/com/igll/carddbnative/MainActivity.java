@@ -446,6 +446,9 @@ public class MainActivity extends Activity {
     ScrollView filterScroll = null; // P2e：筛选窗内滚动区（窗框固定不滚，四角不被内容切掉）
     // P2 悬浮搜索圆钮（首页右下，点了回顶聚焦顶部搜索框）
     View searchFab = null;
+    // P2c 悬浮筛选钮（与搜索钮同排同浮感，有已选条件时带角标计数）
+    View filterFab = null;
+    TextView filterFabBadge = null;
     // P-searchfix：首页悬浮搜索栏本体与显隐状态（滚动时收起/失焦，不再赖在视角上）
     View homeSearchBar = null;
     boolean homeSearchBarShown = true;
@@ -820,7 +823,7 @@ public class MainActivity extends Activity {
         }
     }
 
-    // ---------- P2 悬浮搜索圆钮 ----------
+    // ---------- P2 悬浮搜索圆钮 / P2c 悬浮筛选钮 ----------
     // 细线放大镜（Canvas 线条，与导航图标同语言，禁用 emoji）
     class SearchIconView extends View {
         int iconColor = Color.WHITE;
@@ -837,28 +840,130 @@ public class MainActivity extends Activity {
             cv.drawLine(15.2f * sx, 15.2f * sy, 20.5f * sx, 20.5f * sy, p);
         }
     }
+    // P2c 细线漏斗（与搜索钮同一线条语言）
+    class FilterIconView extends View {
+        int iconColor = Color.WHITE;
+        FilterIconView(Context c) { super(c); }
+        @Override protected void onDraw(Canvas cv) {
+            Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);
+            p.setStyle(Paint.Style.STROKE);
+            p.setStrokeCap(Paint.Cap.ROUND);
+            p.setStrokeJoin(Paint.Join.ROUND);
+            p.setStrokeWidth(dp(getContext(), 2.0f));
+            p.setColor(iconColor);
+            float w = getWidth(), h = getHeight();
+            float sx = w / 24f, sy = h / 24f;
+            // 漏斗：上宽下窄 + 柄
+            cv.drawLine(4.5f * sx, 5.0f * sy, 19.5f * sx, 5.0f * sy, p);
+            cv.drawLine(4.5f * sx, 5.0f * sy, 9.8f * sx, 12.2f * sy, p);
+            cv.drawLine(19.5f * sx, 5.0f * sy, 14.2f * sx, 12.2f * sy, p);
+            cv.drawLine(9.8f * sx, 12.2f * sy, 9.8f * sx, 18.6f * sy, p);
+            cv.drawLine(14.2f * sx, 12.2f * sy, 14.2f * sx, 18.6f * sy, p);
+            cv.drawLine(9.8f * sx, 18.6f * sy, 14.2f * sx, 18.6f * sy, p);
+        }
+    }
 
     // 只在首页、且没有整屏覆盖层时出现；覆盖层（详情/向导/欢迎/日志）都会
     // content.removeAllViews()，天然把它清掉，回到首页时 showTab 会再挂回来。
     void syncSearchFab() {
-        boolean want = "home".equals(tab) && detailCard == null && !wizardOpen && !welcomeOpen && !changelogOpen && filterSheet == null; // P2e：筛选窗开着时搜索钮退场
+        boolean want = "home".equals(tab) && detailCard == null && !wizardOpen && !welcomeOpen && !changelogOpen && filterSheet == null; // P2e：筛选窗开着时双钮退场
         if (!want) {
             if (searchFab != null && searchFab.getParent() != null)
                 ((ViewGroup) searchFab.getParent()).removeView(searchFab);
             searchFab = null;
+            if (filterFab != null && filterFab.getParent() != null)
+                ((ViewGroup) filterFab.getParent()).removeView(filterFab);
+            filterFab = null;
+            filterFabBadge = null;
             return;
         }
-        if (searchFab != null && searchFab.getParent() == content) return;
-        searchFab = buildSearchFab();
-        FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(dp(this, 54), dp(this, 54));
-        lp.gravity = Gravity.END | Gravity.BOTTOM;
-        lp.rightMargin = dp(this, 16);
-        lp.bottomMargin = dp(this, 96); // 悬在底栏 dock 之上
-        content.addView(searchFab, lp);
-        searchFab.setAlpha(0f);
-        searchFab.setScaleX(0.8f);
-        searchFab.setScaleY(0.8f);
-        searchFab.animate().alpha(1f).scaleX(1f).scaleY(1f).setDuration(160).start();
+        // 搜索钮
+        if (searchFab == null || searchFab.getParent() != content) {
+            if (searchFab != null && searchFab.getParent() != null)
+                ((ViewGroup) searchFab.getParent()).removeView(searchFab);
+            searchFab = buildSearchFab();
+            FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(dp(this, 54), dp(this, 54));
+            lp.gravity = Gravity.END | Gravity.BOTTOM;
+            lp.rightMargin = dp(this, 16);
+            lp.bottomMargin = dp(this, 96); // 悬在底栏 dock 之上
+            content.addView(searchFab, lp);
+            searchFab.setAlpha(0f);
+            searchFab.setScaleX(0.8f);
+            searchFab.setScaleY(0.8f);
+            searchFab.animate().alpha(1f).scaleX(1f).scaleY(1f).setDuration(160).start();
+        }
+        // P2c 筛选钮（左邻搜索钮，同浮感）
+        if (filterFab == null || filterFab.getParent() != content) {
+            if (filterFab != null && filterFab.getParent() != null)
+                ((ViewGroup) filterFab.getParent()).removeView(filterFab);
+            filterFab = buildFilterFab();
+            FrameLayout.LayoutParams flp = new FrameLayout.LayoutParams(dp(this, 54), dp(this, 54));
+            flp.gravity = Gravity.END | Gravity.BOTTOM;
+            flp.rightMargin = dp(this, 80); // 16 + 54 + 10 间隔
+            flp.bottomMargin = dp(this, 96);
+            content.addView(filterFab, flp);
+            filterFab.setAlpha(0f);
+            filterFab.setScaleX(0.8f);
+            filterFab.setScaleY(0.8f);
+            filterFab.animate().alpha(1f).scaleX(1f).scaleY(1f).setDuration(160).start();
+        } else {
+            updateFilterFabBadge();
+        }
+    }
+
+    void updateFilterFabBadge() {
+        if (filterFabBadge == null || filterFab == null) return;
+        int n = activeFilterCount();
+        if (n <= 0) {
+            filterFabBadge.setVisibility(View.GONE);
+        } else {
+            filterFabBadge.setVisibility(View.VISIBLE);
+            filterFabBadge.setText(n > 9 ? "9+" : String.valueOf(n));
+        }
+    }
+
+    View buildFilterFab() {
+        FrameLayout fab = new FrameLayout(this);
+        GradientDrawable bg = new GradientDrawable();
+        bg.setShape(GradientDrawable.OVAL);
+        bg.setColor(Color.WHITE);
+        bg.setStroke(dp(this, 1), Color.argb(38, 20, 30, 60));
+        fab.setBackground(bg);
+        if (Build.VERSION.SDK_INT >= 21) fab.setElevation(dp(this, 12));
+        FilterIconView icon = new FilterIconView(this);
+        icon.iconColor = Color.rgb(0x0A, 0x5C, 0xD6);
+        int pad = dp(this, 13);
+        icon.setPadding(pad, pad, pad, pad);
+        fab.addView(icon, new FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        // 角标
+        TextView badge = tv(this, "", 10, Color.WHITE, true);
+        badge.setGravity(Gravity.CENTER);
+        GradientDrawable bbg = new GradientDrawable();
+        bbg.setShape(GradientDrawable.OVAL);
+        bbg.setColor(Color.rgb(0xFF, 0x3B, 0x30));
+        bbg.setStroke(dp(this, 1), Color.WHITE);
+        badge.setBackground(bbg);
+        FrameLayout.LayoutParams blp = new FrameLayout.LayoutParams(dp(this, 18), dp(this, 18));
+        blp.gravity = Gravity.END | Gravity.TOP;
+        blp.topMargin = dp(this, 1);
+        blp.rightMargin = dp(this, 1);
+        fab.addView(badge, blp);
+        filterFabBadge = badge;
+        int n = activeFilterCount();
+        if (n <= 0) badge.setVisibility(View.GONE);
+        else { badge.setVisibility(View.VISIBLE); badge.setText(n > 9 ? "9+" : String.valueOf(n)); }
+        fab.setOnClickListener(v -> {
+            haptic();
+            openFilterSheet();
+        });
+        fab.setOnTouchListener((v, e) -> {
+            if (e.getAction() == MotionEvent.ACTION_DOWN) v.animate().scaleX(0.9f).scaleY(0.9f).setDuration(90).start();
+            else if (e.getAction() == MotionEvent.ACTION_UP || e.getAction() == MotionEvent.ACTION_CANCEL)
+                v.animate().scaleX(1f).scaleY(1f).setDuration(120).start();
+            return false;
+        });
+        return fab;
     }
 
     View buildSearchFab() {
@@ -1294,6 +1399,7 @@ public class MainActivity extends Activity {
         }
         renderActiveFilters();
         renderHomeList(list);
+        updateFilterFabBadge();
         if (keepY > 0 && homeScroll != null) homeScroll.post(() -> homeScroll.scrollTo(0, keepY));
     }
 
@@ -1439,10 +1545,14 @@ public class MainActivity extends Activity {
     // ---------- 筛选面板（Phase 2a-1；P2 改悬浮卡窗：左右/底部留空、四角全圆+描边+投影、开合动画） ----------
     void openFilterSheet() {
         closeFilterSheetNow();
-        // P2e：右下搜索钮退场，不与筛选窗叠压
+        // P2e/P2c：右下双钮退场，不与筛选窗叠压
         if (searchFab != null && searchFab.getParent() != null)
             ((ViewGroup) searchFab.getParent()).removeView(searchFab);
         searchFab = null;
+        if (filterFab != null && filterFab.getParent() != null)
+            ((ViewGroup) filterFab.getParent()).removeView(filterFab);
+        filterFab = null;
+        filterFabBadge = null;
         final FrameLayout sheet = new FrameLayout(this);
         sheet.setBackgroundColor(Color.argb(38, 18, 22, 36)); // 轻遮罩（混合版 .dlg-backdrop.light）
         sheet.setOnClickListener(v -> closeFilterSheet());
