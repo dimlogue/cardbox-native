@@ -7417,7 +7417,7 @@ public class MainActivity extends Activity {
         clp.leftMargin = dp(this, 12); clp.rightMargin = dp(this, 12);
         clp.bottomMargin = 0; // Q45：窗底直达屏底，动作行靠卡内底部留白（含手势避让）抬起
         // Q45：玻璃与窗体同装贴底容器，玻璃高出 22dp、底圆角沉出容器被裁，与窗体同升同降；
-        // closeBinQuery 取最后一层即此容器，动画口径不变
+        // closeBinQuery 取最后一层即此容器，动画口径不变；Q43 结果变高时由 resizeBinSheetToFit 跟随重定高
         FrameLayout binWrap = new FrameLayout(this);
         View binGlass = glassLayer(card, 22, false);
         topSheetClip(binGlass, 22, this); // Q54：玻璃轮廓与窗体同（顶圆底直），不得在窗外露面发雾
@@ -7440,6 +7440,29 @@ public class MainActivity extends Activity {
         if (sheet == null) return;
         binSheet = null;
         if (sheet.getParent() != null) ((ViewGroup) sheet.getParent()).removeView(sheet);
+    }
+
+    // Q43：结果行变多后重定窗高——openBinQuery 开窗时按空结果测高冻结，补全字段（可达 10 行+命中行）
+    // 会把动作行裁出窗外；查完按新内容重测（封顶 82vh），玻璃同步高出 22dp，binScroll 在窗内滚。
+    void resizeBinSheetToFit() {
+        try {
+            if (binSheet == null || !(binSheet instanceof ViewGroup)) return;
+            ViewGroup sheet = (ViewGroup) binSheet;
+            if (sheet.getChildCount() < 2) return;
+            View wrap = sheet.getChildAt(sheet.getChildCount() - 1);
+            if (!(wrap instanceof ViewGroup) || ((ViewGroup) wrap).getChildCount() < 2) return;
+            View card = ((ViewGroup) wrap).getChildAt(1);
+            int sw = getResources().getDisplayMetrics().widthPixels;
+            int maxH = (int) (getResources().getDisplayMetrics().heightPixels * 0.82);
+            card.measure(View.MeasureSpec.makeMeasureSpec(sw - dp(this, 24), View.MeasureSpec.EXACTLY),
+                View.MeasureSpec.makeMeasureSpec(maxH, View.MeasureSpec.AT_MOST));
+            int h = Math.min(card.getMeasuredHeight(), maxH);
+            ViewGroup.LayoutParams wlp = wrap.getLayoutParams();
+            if (wlp != null && wlp.height != h) { wlp.height = h; wrap.setLayoutParams(wlp); }
+            View glass = ((ViewGroup) wrap).getChildAt(0);
+            ViewGroup.LayoutParams glp = glass.getLayoutParams();
+            if (glp != null) { glp.height = h + dp(this, 22); glass.setLayoutParams(glp); }
+        } catch (Throwable ignored) {}
     }
 
     void closeBinQuery() {
@@ -7511,6 +7534,7 @@ public class MainActivity extends Activity {
                 if (!fOk) {
                     resultBox.addView(tv(MainActivity.this, "查不到这个 BIN 的信息，换个试试。", 13.5f, Color.rgb(0x8E, 0x8E, 0x93), false));
                     addBtn.setVisibility(View.GONE);
+                    resultBox.post(() -> resizeBinSheetToFit());
                     return;
                 }
                 lastBin = bin; lastBinScheme = fScheme; lastBinType = fType; lastBinBrand = fBrand; lastBinBank = fBank; lastBinCountry = fCountry;
@@ -7536,6 +7560,7 @@ public class MainActivity extends Activity {
                     resultBox.addView(hit, hLp);
                 }
                 addBtn.setVisibility(View.VISIBLE);
+                resultBox.post(() -> resizeBinSheetToFit());
             });
         }).start();
     }
