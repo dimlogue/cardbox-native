@@ -610,17 +610,29 @@ public class MainActivity extends Activity {
             android.graphics.Matrix m = new android.graphics.Matrix();
             m.setTranslate(-left * s, -top * s);
             cv.drawBitmap(full, m, pt);
-            // Q37：live 面换帧交叉淡入 220ms（治用户 20:03 批的停稳硬跳色）——旧帧作底、新帧淡入，
-            // 不许 setImageBitmap 硬切；frozen 浮窗升起只 apply 一次、沿用直切。Q21 纪律：旧图只解引用不 recycle。
-            if ("live".equals(iv.getTag()) && iv.getDrawable() != null) {
-                android.graphics.drawable.BitmapDrawable nd = new android.graphics.drawable.BitmapDrawable(iv.getResources(), out);
+            // Q37：live 面换帧交叉淡入 220ms（治用户 20:03 批的停稳硬跳色），不许 setImageBitmap 硬切；
+            // frozen 浮窗升起只 apply 一次、沿用直切。Q21 纪律：旧图只解引用不 recycle。
+            // Q41：live 面优先走条带画布——停稳这一帧先把条带按当前 scrollY 绘进复用画布，
+            // 再交叉淡入到画布帧；滚动期 followBandScroll 只平移重绘同一画布、底色实时跟随。
+            Bitmap frameBmp = out;
+            if ("live".equals(iv.getTag()) && glassBand != null && bandSv == bandScroll()) {
+                if (drawBandFrame(iv)) {
+                    Bitmap cb = bandCanvases.get(iv);
+                    if (cb != null && !cb.isRecycled()) frameBmp = cb;
+                }
+            }
+            android.graphics.drawable.Drawable prevD = iv.getDrawable();
+            boolean prevIsFrame = prevD instanceof android.graphics.drawable.BitmapDrawable
+                && ((android.graphics.drawable.BitmapDrawable) prevD).getBitmap() == frameBmp;
+            if ("live".equals(iv.getTag()) && prevD != null && !prevIsFrame) {
+                android.graphics.drawable.BitmapDrawable nd = new android.graphics.drawable.BitmapDrawable(iv.getResources(), frameBmp);
                 android.graphics.drawable.TransitionDrawable td = new android.graphics.drawable.TransitionDrawable(
-                    new android.graphics.drawable.Drawable[]{ iv.getDrawable(), nd });
+                    new android.graphics.drawable.Drawable[]{ prevD, nd });
                 td.setCrossFadeEnabled(true);
                 iv.setImageDrawable(td);
                 td.startTransition(220);
-            } else {
-                iv.setImageBitmap(out);
+            } else if (!prevIsFrame) {
+                iv.setImageBitmap(frameBmp);
             }
             glassCrops.put(iv, out); // Q21：旧裁片只解引用不 recycle（黑匣子定案：显示列表在用时 recycle 必崩，见 noteGlassFailure）
             if (Build.VERSION.SDK_INT >= 31) {
@@ -648,6 +660,7 @@ public class MainActivity extends Activity {
         if (cardMenuPop != null || filterSheet != null || wizardOpen || aboutOpen
             || detailCard != null || welcomeOpen || changelogOpen) return;
         captureGlassSnapshot();
+        rebuildBand(); // Q41：停稳/切页帧顺带生成条带，滚动期靠它平移跟随（失败自动回落静态帧）
         for (ImageView iv : new java.util.ArrayList<>(glassViews)) {
             if ("live".equals(iv.getTag()) && iv.isAttachedToWindow()) applyGlass(iv);
         }
@@ -660,6 +673,130 @@ public class MainActivity extends Activity {
         if (navDragging || navSpringRunning) return;
         mainHandler.removeCallbacks(glassRefreshTask);
         mainHandler.postDelayed(glassRefreshTask, 650);
+    }
+
+    // ---------- Q41 条带跟随（底栏玻璃底色滑动实时跟随） ----------
+    /** 跟随源：当前页长列表；详情/更新日志覆盖层在场时 chrome 已退场，不跟随。 */
+    ScrollView bandScroll() {
+        if (detailCard != null || changelogOpen) return null;
+        switch (tab) {
+            case "mine": return mineScrollView;
+            case "student": return studentScroll;
+            case "news": return newsScroll;
+            case "settings": return settingsScroll;
+            default: return homeScroll;
+        }
+    }
+
+    /**
+     * 生成条带快照：把当前页滚动内容在「chrome 带身后文档区 ± 行程裕量」范围内按 0.2 降采样
+     * 渲染成一条低清带（高约 420dp，覆盖约 3 倍 dock 高加上下裕量）。只画滚动内容本体，
+     * 不含 dock/悬浮钮等 chrome。只在停稳/切页（refreshLiveGlass）与覆盖将尽校准时调用，
+     * 滚动跟随期绝不调用。失败即 glassBand=null 回落 Q37。
+     */
+    void rebuildBand() {
+        try {
+            if (glassDisabled || rootView == null || rootView.getWidth() <= 0 || rootView.getHeight() <= 0) { glassBand = null; return; }
+            ScrollView sv = bandScroll();
+            if (sv == null || sv.getChildCount() == 0) { glassBand = null; bandSv = null; return; }
+            View inner = sv.getChildAt(0);
+            int contentH = inner.getHeight();
+            if (contentH <= 0) { glassBand = null; bandSv = null; return; }
+            int bandH = Math.min(dp(this, 420), contentH);
+            // chrome 带（dock+悬浮钮列）身后的文档行：以屏幕底部上方约 260dp 为带心，上下留行程裕量
+            int zoneDocY = sv.getScrollY() + rootView.getHeight() - dp(this, 260);
+            int top = Math.max(0, Math.min(zoneDocY - dp(this, 90), Math.max(0, contentH - bandH)));
+            int bw = Math.max(1, Math.round(rootView.getWidth() * bandScale));
+            int bh = Math.max(1, Math.round(bandH * bandScale));
+            Bitmap b = Bitmap.createBitmap(bw, bh, Bitmap.Config.ARGB_8888);
+            Canvas cv = new Canvas(b);
+            cv.scale(bandScale, bandScale);
+            cv.translate(0, -top);
+            cv.clipRect(0, top, rootView.getWidth(), top + bandH);
+            inner.draw(cv);
+            glassBand = b; // Q21：旧带只解引用不 recycle
+            bandDocTopPx = top;
+            bandHeightPx = bandH;
+            bandSv = sv;
+            bandLastBuildMs = android.os.SystemClock.uptimeMillis();
+        } catch (Throwable t) {
+            glassBand = null; bandSv = null; // 回落 Q37 静态帧
+        }
+    }
+
+    /**
+     * 把条带按当前 scrollY 平移绘制进某层 live 玻璃的复用画布（只 Canvas 平移、不触发排版）。
+     * 返回 false = 条带已覆盖不到本层（覆盖将尽），调用方决定是否校准。
+     */
+    boolean drawBandFrame(ImageView iv) {
+        try {
+            if (iv == null || !iv.isAttachedToWindow() || glassBand == null || glassBand.isRecycled()
+                || rootView == null || rootView.getWidth() <= 0) return false;
+            ScrollView sv = bandScroll();
+            if (sv == null || sv != bandSv) return false;
+            int wpx = iv.getWidth(), hpx = iv.getHeight();
+            if (wpx <= 0 || hpx <= 0) return false;
+            int cw = Math.max(1, Math.round(wpx * bandScale));
+            int ch = Math.max(1, Math.round(hpx * bandScale));
+            Bitmap cvs = bandCanvases.get(iv);
+            if (cvs == null || cvs.isRecycled() || cvs.getWidth() != cw || cvs.getHeight() != ch) {
+                cvs = Bitmap.createBitmap(cw, ch, Bitmap.Config.ARGB_8888);
+                bandCanvases.put(iv, cvs); // Q21：旧画布只解引用不 recycle
+            }
+            int[] rl = new int[2]; rootView.getLocationOnScreen(rl);
+            int[] il = new int[2]; iv.getLocationOnScreen(il);
+            // 本层身后内容在文档中的行 → 换算到条带内行（降采样 px）
+            int docTop = sv.getScrollY() + (il[1] - rl[1]);
+            int srcTop = Math.round((docTop - bandDocTopPx) * bandScale);
+            if (srcTop < 0 || srcTop + ch > Math.round(bandHeightPx * bandScale)) return false; // 覆盖将尽
+            int srcLeft = Math.round((il[0] - rl[0]) * bandScale);
+            Canvas cv = new Canvas(cvs);
+            cv.drawColor(Color.TRANSPARENT, android.graphics.PorterDuff.Mode.CLEAR);
+            Paint pt = new Paint(Paint.FILTER_BITMAP_FLAG);
+            ColorMatrix cm = new ColorMatrix();
+            cm.setSaturation(1.65f); // 与 applyGlass 同口径（往 saturate(2) 靠的彩色毛玻璃）
+            pt.setColorFilter(new ColorMatrixColorFilter(cm));
+            cv.drawBitmap(glassBand, -srcLeft, -srcTop, pt);
+            android.graphics.drawable.Drawable d = iv.getDrawable();
+            if (d instanceof android.graphics.drawable.BitmapDrawable
+                && ((android.graphics.drawable.BitmapDrawable) d).getBitmap() == cvs) {
+                iv.invalidate(); // 同一画布已在显示：只重绘，零 drawable 切换
+            } else if (d instanceof android.graphics.drawable.TransitionDrawable) {
+                iv.invalidate(); // 停稳交叉淡入进行中：其终帧即本画布，内容已更新，不抢
+            } else {
+                iv.setImageBitmap(cvs);
+            }
+            return true;
+        } catch (Throwable t) {
+            return false; // 跟随坏一帧不许拖死页面；停稳帧仍走 applyGlass
+        }
+    }
+
+    /** 滚动事件入口：只平移条带绘制，绝不重采样；覆盖将尽时节流排一次校准。 */
+    void followBandScroll() {
+        if (glassDisabled || glassBand == null || bandSv == null) return;
+        if (navDragging || navSpringRunning) return; // Q21：底栏手势优先
+        if (isChromeCovered()) return;               // 浮窗在场 chrome 退场，不跟随
+        boolean exhausted = false;
+        for (ImageView iv : new java.util.ArrayList<>(glassViews)) {
+            if (!"live".equals(iv.getTag())) continue;
+            if (!iv.isAttachedToWindow() || iv.getVisibility() != View.VISIBLE) continue;
+            View host = glassHosts.get(iv);
+            if (host != null && host.getVisibility() != View.VISIBLE) continue;
+            if (!drawBandFrame(iv)) exhausted = true;
+        }
+        if (exhausted && !bandRecalibPending
+            && android.os.SystemClock.uptimeMillis() - bandLastBuildMs > 180) {
+            bandRecalibPending = true;
+            mainHandler.post(() -> {
+                bandRecalibPending = false;
+                if (glassDisabled || isChromeCovered() || navDragging || navSpringRunning) return;
+                rebuildBand(); // 覆盖将尽校准一帧（当前 scrollY 重新定带）
+                for (ImageView iv2 : new java.util.ArrayList<>(glassViews)) {
+                    if ("live".equals(iv2.getTag())) drawBandFrame(iv2);
+                }
+            });
+        }
     }
 
     // P5 空状态：对照混合版 .empty（居中、灰字、上下 36px 留白），包进白卡（圆角 14）不裸贴页面底
@@ -1133,6 +1270,17 @@ public class MainActivity extends Activity {
     final Runnable glassRefreshTask = new Runnable() { public void run() { refreshLiveGlass(); } };
     // Q29：旧 Q16 的滚动中 140ms 节流实时重采样（liveGlassTask/lastLiveGlassMs）整套删除——滚动零截图。
     final java.util.Map<ImageView, Integer> glassRetry = new java.util.HashMap<>(); // Q16: layout retry cap per glass layer
+    // Q41 底栏玻璃底色滑动实时跟随：条带快照（文档空间）+滚动期 Canvas 平移绘制。
+    // 纪律：滚动中零重采样（不 capture/不全屏抓图）、禁止 Bitmap.recycle()（Q21）、只动绘制层不触发排版；
+    // 任一环节失败 glassBand=null，行为完整回落 Q37 静态帧，绝不拖死页面。
+    Bitmap glassBand = null;              // 当前条带（0.2 降采样，文档空间渲染）
+    int bandDocTopPx = 0;                 // 条带顶在文档中的 y（屏幕 px，未降采样）
+    int bandHeightPx = 0;                 // 条带实际高度（屏幕 px，未降采样）
+    float bandScale = 0.20f;              // 条带降采样比（与 glassSnap 同口径）
+    ScrollView bandSv = null;             // 条带所属滚动视图（实例变了即作废）
+    final java.util.Map<ImageView, Bitmap> bandCanvases = new java.util.HashMap<>(); // 每层复用画布位图
+    long bandLastBuildMs = 0;             // 上次条带校准时刻（覆盖将尽校准节流）
+    boolean bandRecalibPending = false;
     // Q18: glass consecutive-failure auto-disable + crash trace
     int glassFailCount = 0;
     boolean glassDisabled = false;
@@ -1361,7 +1509,8 @@ public class MainActivity extends Activity {
         buildNav(root);
         setContentView(root);
         // Q29：滚动只重置停稳计时、滚动中零截图（scheduleGlassRefresh 内 650ms 防抖，见其注释）
-        root.getViewTreeObserver().addOnScrollChangedListener(() -> scheduleGlassRefresh());
+        // Q41：滚动期条带平移跟随（只 Canvas 绘制、不重采样，与停稳计时互不干扰）
+        root.getViewTreeObserver().addOnScrollChangedListener(() -> { scheduleGlassRefresh(); followBandScroll(); });
 
         showTab("home");
         checkDataUpdate(false);
