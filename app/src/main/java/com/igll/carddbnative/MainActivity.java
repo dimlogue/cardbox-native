@@ -69,6 +69,12 @@ public class MainActivity extends Activity {
 
     // ---------- 小工具 ----------
     static int dp(Context c, float v) { return (int) (v * c.getResources().getDisplayMetrics().density + 0.5f); }
+
+    // 沉浸式状态栏高度（各页顶部留白与首页悬浮栏定位用）
+    int statusBarH() {
+        int id = getResources().getIdentifier("status_bar_height", "dimen", "android");
+        return id > 0 ? getResources().getDimensionPixelSize(id) : dp(this, 24);
+    }
     static GradientDrawable roundRect(int color, float radiusDp, Context c) {
         GradientDrawable g = new GradientDrawable();
         g.setColor(color); g.setCornerRadius(dp(c, radiusDp));
@@ -450,8 +456,11 @@ public class MainActivity extends Activity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         Window w = getWindow();
-        w.setStatusBarColor(Color.WHITE);
-        w.getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR);
+        // P2d 沉浸式状态栏：透明，内容顶到状态栏底下；各页顶部留白按 statusBarH() 补齐
+        w.setStatusBarColor(Color.TRANSPARENT);
+        w.getDecorView().setSystemUiVisibility(
+            View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN | View.SYSTEM_UI_FLAG_LAYOUT_STABLE
+            | View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR);
         w.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE);
 
         prefs = getSharedPreferences("cardbox_native", MODE_PRIVATE);
@@ -698,13 +707,14 @@ public class MainActivity extends Activity {
     // ---------- P2 悬浮搜索圆钮 ----------
     // 细线放大镜（Canvas 线条，与导航图标同语言，禁用 emoji）
     class SearchIconView extends View {
+        int iconColor = Color.WHITE;
         SearchIconView(Context c) { super(c); }
         @Override protected void onDraw(Canvas cv) {
             Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);
             p.setStyle(Paint.Style.STROKE);
             p.setStrokeCap(Paint.Cap.ROUND);
             p.setStrokeWidth(dp(getContext(), 2.1f));
-            p.setColor(Color.WHITE);
+            p.setColor(iconColor);
             float w = getWidth(), h = getHeight();
             float sx = w / 24f, sy = h / 24f;
             cv.drawCircle(10.8f * sx, 10.8f * sy, 5.6f * sx, p);
@@ -835,27 +845,33 @@ public class MainActivity extends Activity {
     }
 
     // ---------- 首页 ----------
+    // P2d：毛玻璃白悬浮搜索栏（圆角 + 淡描边 + 投影，半透近似混合版 backdrop blur）
+    GradientDrawable glassPillBg() {
+        GradientDrawable g = new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
+            new int[]{Color.argb(238, 255, 255, 255), Color.argb(218, 246, 247, 250)});
+        g.setCornerRadius(dp(this, 999));
+        g.setStroke(dp(this, 1), Color.argb(70, 20, 30, 60));
+        return g;
+    }
+
+    // P2d：整页改单 ScrollView 流，内容从悬浮栏底下滚过；英雄卡与网格同流 10dp 间隔，不再压首排
     View buildHomePage() {
-        LinearLayout page = new LinearLayout(this);
-        page.setOrientation(LinearLayout.VERTICAL);
-        page.setPadding(dp(this, 14), dp(this, 12), dp(this, 14), 0);
+        FrameLayout page = new FrameLayout(this);
 
-        page.addView(tv(this, "卡盒", 24, Color.rgb(0x1C, 0x1C, 0x1E), true));
+        homeScroll = new ScrollView(this);
+        homeScroll.setFillViewport(true);
+        homeScroll.setClipToPadding(false);
+        page.addView(homeScroll, new FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
 
-        searchBox = new EditText(this);
-        searchBox.setHint("搜索卡名 / 银行 / BIN…");
-        searchBox.setTextSize(14);
-        searchBox.setSingleLine(true);
-        searchBox.setBackground(roundRect(Color.WHITE, 14, this));
-        searchBox.setPadding(dp(this, 14), dp(this, 11), dp(this, 14), dp(this, 11));
-        LinearLayout.LayoutParams slp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        slp.topMargin = dp(this, 10);
-        page.addView(searchBox, slp);
-        searchBox.addTextChangedListener(new TextWatcher() {
-            public void beforeTextChanged(CharSequence s, int a, int b, int c) {}
-            public void onTextChanged(CharSequence s, int a, int b, int c) { query = s.toString().trim(); refreshHome(); }
-            public void afterTextChanged(Editable s) {}
-        });
+        LinearLayout col = new LinearLayout(this);
+        col.setOrientation(LinearLayout.VERTICAL);
+        // 顶部让出悬浮栏（状态栏 + 栏高约 50 + 间距），底部留白让最后一项滚出悬浮底栏
+        col.setPadding(dp(this, 14), statusBarH() + dp(this, 70), dp(this, 14), dp(this, 104));
+        homeScroll.addView(col, new ScrollView.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+
+        col.addView(tv(this, "卡盒", 24, Color.rgb(0x1C, 0x1C, 0x1E), true));
 
         Set<String> banks = new HashSet<>();
         for (Card c : Store.all) banks.add(c.bank);
@@ -864,15 +880,15 @@ public class MainActivity extends Activity {
 
         TextView stats = tv(this, Store.all.size() + " 张卡 · " + banks.size() + " 家银行", 12, Color.rgb(0x8E, 0x8E, 0x93), false);
         LinearLayout.LayoutParams stlp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        stlp.topMargin = dp(this, 10);
-        page.addView(stats, stlp);
+        stlp.topMargin = dp(this, 8);
+        col.addView(stats, stlp);
 
         LinearLayout frow = new LinearLayout(this);
         frow.setOrientation(LinearLayout.HORIZONTAL);
         frow.setGravity(Gravity.CENTER_VERTICAL);
         LinearLayout.LayoutParams frowLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         frowLp.topMargin = dp(this, 8);
-        page.addView(frow, frowLp);
+        col.addView(frow, frowLp);
         homeCount = tv(this, "", 12.5f, Color.rgb(0x8E, 0x8E, 0x93), false);
         frow.addView(homeCount, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
         filterBtn = new Button(this);
@@ -892,10 +908,10 @@ public class MainActivity extends Activity {
         activeFilterBar.setPadding(0, dp(this, 8), 0, dp(this, 2));
         afScroll.addView(activeFilterBar);
         afScroll.setVisibility(View.GONE);
-        page.addView(afScroll, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        col.addView(afScroll, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
         activeFilterBar.setTag(afScroll);
 
-        // 卡库总览（与混合版同款深蓝卡）
+        // 卡库总览（与混合版同款深蓝卡）：与网格同在一条滚动流里，间距 10dp，结构上不可能遮挡
         LinearLayout hero = new LinearLayout(this);
         hero.setOrientation(LinearLayout.VERTICAL);
         GradientDrawable hg = new GradientDrawable(GradientDrawable.Orientation.TL_BR,
@@ -905,7 +921,7 @@ public class MainActivity extends Activity {
         hero.setPadding(dp(this, 18), dp(this, 16), dp(this, 18), dp(this, 16));
         LinearLayout.LayoutParams hlp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         hlp.topMargin = dp(this, 10);
-        page.addView(hero, hlp);
+        col.addView(hero, hlp);
         hero.addView(tv(this, "卡库总览", 13, Color.argb(200, 255, 255, 255), false));
         TextView big = tv(this, Store.all.size() + " 张卡", 34, Color.WHITE, true);
         hero.addView(big);
@@ -919,14 +935,39 @@ public class MainActivity extends Activity {
         tiles.addView(heroTile((Store.all.size() - debit) + " 张", "信用卡"), new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
         tiles.addView(heroTile(stopped + " 张", "已停发"), new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
 
-        homeScroll = new ScrollView(this);
-        homeScroll.setFillViewport(true);
-        homeScroll.setClipToPadding(false);
         homeList = new LinearLayout(this);
         homeList.setOrientation(LinearLayout.VERTICAL);
-        homeList.setPadding(0, dp(this, 10), 0, dp(this, 104));
-        homeScroll.addView(homeList, new ScrollView.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
-        page.addView(homeScroll, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
+        col.addView(homeList, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+
+        // 悬浮搜索栏：左右留 12dp、浮在列表之上，内容从栏下滚过（对照混合版 .float-search / #search 玻璃胶囊）
+        LinearLayout bar = new LinearLayout(this);
+        bar.setOrientation(LinearLayout.HORIZONTAL);
+        bar.setGravity(Gravity.CENTER_VERTICAL);
+        bar.setBackground(glassPillBg());
+        bar.setPadding(dp(this, 16), dp(this, 5), dp(this, 12), dp(this, 5));
+        if (Build.VERSION.SDK_INT >= 21) bar.setElevation(dp(this, 10));
+        SearchIconView sicon = new SearchIconView(this);
+        sicon.iconColor = Color.rgb(0x63, 0x63, 0x66);
+        bar.addView(sicon, new LinearLayout.LayoutParams(dp(this, 20), dp(this, 20)));
+        searchBox = new EditText(this);
+        searchBox.setHint("搜索卡名 / 银行 / BIN…");
+        searchBox.setTextSize(15);
+        searchBox.setSingleLine(true);
+        searchBox.setBackground(null);
+        searchBox.setPadding(dp(this, 8), dp(this, 7), dp(this, 4), dp(this, 7));
+        bar.addView(searchBox, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+        searchBox.addTextChangedListener(new TextWatcher() {
+            public void beforeTextChanged(CharSequence s, int a, int b, int c) {}
+            public void onTextChanged(CharSequence s, int a, int b, int c) { query = s.toString().trim(); refreshHome(); }
+            public void afterTextChanged(Editable s) {}
+        });
+        FrameLayout.LayoutParams blp = new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        blp.gravity = Gravity.TOP;
+        blp.leftMargin = dp(this, 12);
+        blp.rightMargin = dp(this, 12);
+        blp.topMargin = statusBarH() + dp(this, 8);
+        page.addView(bar, blp);
+
         refreshHome();
         return page;
     }
@@ -3415,7 +3456,7 @@ public class MainActivity extends Activity {
     LinearLayout basePage(String title) {
         LinearLayout page = new LinearLayout(this);
         page.setOrientation(LinearLayout.VERTICAL);
-        page.setPadding(dp(this, 14), dp(this, 12), dp(this, 14), 0);
+        page.setPadding(dp(this, 14), statusBarH() + dp(this, 12), dp(this, 14), 0);
         page.addView(tv(this, title, 24, Color.rgb(0x1C, 0x1C, 0x1E), true));
         return page;
     }
