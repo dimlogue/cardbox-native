@@ -8190,30 +8190,32 @@ public class MainActivity extends Activity {
         spTx.setGravity(Gravity.CENTER);
         sponsor.addView(spTx, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
 
-        Bitmap qr = loadAssetBitmap("data/images/sponsor-qr.png");
+        // Q46：赞助码换真码——整图圆角卡片（白底+柔影、四角同圆、等比完整不裁不抻），废虚线占位
+        Bitmap qr = loadAssetBitmap("sponsor_alipay.jpg");
         if (qr != null) {
+            FrameLayout qrCard = new FrameLayout(this);
+            qrCard.setBackground(roundRect(Color.WHITE, 16, this));
+            roundClip(qrCard, 16, this);
+            if (Build.VERSION.SDK_INT >= 21) qrCard.setElevation(dp(this, 6));
+            qrCard.setPadding(dp(this, 10), dp(this, 10), dp(this, 10), dp(this, 10));
             ImageView qrIv = new ImageView(this);
             qrIv.setScaleType(ImageView.ScaleType.FIT_CENTER);
-            qrIv.setClipToOutline(true);
-            qrIv.setImageBitmap(qr);
-            LinearLayout.LayoutParams qlp = new LinearLayout.LayoutParams(dp(this, 180), dp(this, 180));
+            qrIv.setAdjustViewBounds(true);
+            float qrR = cardRadiusDp(240);
+            qrIv.setImageBitmap(roundBitmap(qr, dp(this, qrR) * ((float) qr.getWidth() / dp(this, 240))));
+            roundClip(qrIv, qrR, this);
+            qrCard.addView(qrIv, new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+            LinearLayout.LayoutParams qlp = new LinearLayout.LayoutParams(dp(this, 240), ViewGroup.LayoutParams.WRAP_CONTENT);
             qlp.topMargin = dp(this, 10); qlp.bottomMargin = dp(this, 12);
             qlp.gravity = Gravity.CENTER_HORIZONTAL;
-            sponsor.addView(qrIv, qlp);
+            sponsor.addView(qrCard, qlp);
         } else {
-            FrameLayout qrBox = new FrameLayout(this);
-            qrBox.setBackground(roundRect(Color.WHITE, 12, this));
-            qrBox.addView(new DashedQrView(this), new FrameLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
-            TextView ph = tv(this, "赞助二维码位\n（把收款码发我，即刻放上）", 12, Color.rgb(0x8E, 0x8E, 0x93), false);
+            TextView ph = tv(this, "收款码加载失败", 12, Color.rgb(0x8E, 0x8E, 0x93), false);
             ph.setGravity(Gravity.CENTER);
-            ph.setLineSpacing(0, 1.4f);
-            qrBox.addView(ph, new FrameLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
-            LinearLayout.LayoutParams qlp = new LinearLayout.LayoutParams(dp(this, 150), dp(this, 150));
+            LinearLayout.LayoutParams qlp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
             qlp.topMargin = dp(this, 10); qlp.bottomMargin = dp(this, 12);
-            qlp.gravity = Gravity.CENTER_HORIZONTAL;
-            sponsor.addView(qrBox, qlp);
+            sponsor.addView(ph, qlp);
         }
 
         Button save = new Button(this);
@@ -8259,7 +8261,7 @@ public class MainActivity extends Activity {
     void saveSponsorQr() {
         byte[] data;
         try {
-            InputStream in = getAssets().open("data/images/sponsor-qr.png");
+            InputStream in = getAssets().open("sponsor_alipay.jpg");
             ByteArrayOutputStream bos = new ByteArrayOutputStream();
             byte[] buf = new byte[8192]; int n;
             while ((n = in.read(buf)) > 0) bos.write(buf, 0, n);
@@ -8267,7 +8269,7 @@ public class MainActivity extends Activity {
             data = bos.toByteArray();
             if (data.length == 0) throw new Exception("empty");
         } catch (Exception e) {
-            showFloatToast("收款码还没放上，放上后就能保存了");
+            showFloatToast("保存失败，请稍后再试");
             return;
         }
         if (Build.VERSION.SDK_INT < 29
@@ -8284,8 +8286,8 @@ public class MainActivity extends Activity {
         try {
             if (Build.VERSION.SDK_INT >= 29) {
                 android.content.ContentValues cv = new android.content.ContentValues();
-                cv.put(android.provider.MediaStore.Images.Media.DISPLAY_NAME, "cardbox-sponsor-qr.png");
-                cv.put(android.provider.MediaStore.Images.Media.MIME_TYPE, "image/png");
+                cv.put(android.provider.MediaStore.Images.Media.DISPLAY_NAME, "cardbox-sponsor-qr.jpg");
+                cv.put(android.provider.MediaStore.Images.Media.MIME_TYPE, "image/jpeg");
                 cv.put(android.provider.MediaStore.Images.Media.RELATIVE_PATH, "Pictures/卡盒");
                 Uri uri = getContentResolver().insert(android.provider.MediaStore.Images.Media.EXTERNAL_CONTENT_URI, cv);
                 if (uri == null) throw new Exception("insert failed");
@@ -8296,11 +8298,11 @@ public class MainActivity extends Activity {
                 File dir = new File(android.os.Environment.getExternalStoragePublicDirectory(
                     android.os.Environment.DIRECTORY_PICTURES), "卡盒");
                 if (!dir.exists()) dir.mkdirs();
-                File f = new File(dir, "cardbox-sponsor-qr.png");
+                File f = new File(dir, "cardbox-sponsor-qr.jpg");
                 FileOutputStream out = new FileOutputStream(f);
                 out.write(data); out.close();
                 android.media.MediaScannerConnection.scanFile(this,
-                    new String[]{f.getAbsolutePath()}, new String[]{"image/png"}, null);
+                    new String[]{f.getAbsolutePath()}, new String[]{"image/jpeg"}, null);
             }
             showFloatToast("赞助二维码已保存到相册");
         } catch (Exception e) {
