@@ -1247,6 +1247,7 @@ public class MainActivity extends Activity {
     static final String[] CUSTOM_ORGS = {"Visa", "万事达", "美国运通", "银联", "JCB"};
     java.util.List<CustomCard> customCards = new ArrayList<>();
     boolean customOpen = false;
+    boolean mineOpen = true; // Q22：混合版 mineOpen（cardbox_mine_open）对应原生 prefs mine_open，默认展开
     LinearLayout customTilesBox = null; // Q56：展开态色带容器，就地重排/重衔接用，不整页重建
     View customFormSheet = null; // Q8：表单改为根层浮卡（原 Dialog 全宽平纸已废）
     View delConfirmSheet = null; // Q52：删卡确认贴底小窗（废系统 AlertDialog）
@@ -5902,54 +5903,70 @@ public class MainActivity extends Activity {
         r2lp.topMargin = dp(this, 10);
         hero.addView(row1, r1lp);
         hero.addView(row2, r2lp);
-        row1.addView(mineHeroTile(owned.size() + " 张卡", "我的卡包 · " + verdict, null), mineTileLp(true));
-        row1.addView(mineHeroTile(TIER_NAMES[topTier], "最高档次", null), mineTileLp(false));
-        row2.addView(mineHeroTile(hasOrgs.size() + " / " + ORG_LIST.length, "组织覆盖",
-            hasOrgs.isEmpty() ? null : joinCn(hasOrgs)), mineTileLp(true));
-        row2.addView(mineHeroTile(nNoFtf + " 张", "无转换费",
-            missOrgs.isEmpty() ? "组织全覆盖了" : "还差 " + joinCn(missOrgs)), mineTileLp(false));
+        row1.addView(mineHeroTile(String.valueOf(owned.size()), " 张卡", "我的卡包 · " + verdict, null, false), mineTileLp(1.25f, true));
+        row1.addView(mineHeroTile(TIER_NAMES[topTier], null, "最高档次", null, true), mineTileLp(1f, false));
+        row2.addView(mineHeroTile(hasOrgs.size() + " / " + ORG_LIST.length, null, "组织覆盖",
+            hasOrgs.isEmpty() ? null : joinCn(hasOrgs), false), mineTileLp(1.25f, true));
+        row2.addView(mineHeroTile(nNoFtf + " 张", null, "无转换费",
+            missOrgs.isEmpty() ? "组织全覆盖了" : "还差 " + joinCn(missOrgs), false), mineTileLp(1f, false));
 
-        // 境外能力白卡：四条进度 + 最通用 + 短板
-        TextView sect = tv(this, "境外能力", 15, Color.rgb(0x1C, 0x1C, 0x1E), true);
+        // 境外能力白卡（Q22 对照 .dash-sect/.dash-card/.drow：分节 1.02rem/700、白卡圆角 16 内边距 4/16/12、行内图标+不截断标签+渐变条）
+        TextView sect = tvW(this, "境外能力", 16, Color.rgb(0x1C, 0x1C, 0x1E), 700);
         LinearLayout.LayoutParams sectLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        sectLp.topMargin = dp(this, 16);
+        sectLp.topMargin = dp(this, 22);
+        sectLp.leftMargin = dp(this, 2);
         wrap.addView(sect, sectLp);
         LinearLayout card = new LinearLayout(this);
         card.setOrientation(LinearLayout.VERTICAL);
         card.setBackground(roundRect(Color.WHITE, 16, this));
-        card.setPadding(dp(this, 14), dp(this, 12), dp(this, 14), dp(this, 12));
+        card.setPadding(dp(this, 16), dp(this, 4), dp(this, 16), dp(this, 12));
         LinearLayout.LayoutParams clp2 = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        clp2.topMargin = dp(this, 8);
+        clp2.topMargin = dp(this, 10);
         wrap.addView(card, clp2);
-        card.addView(mineProgRow("无货币转换费", nNoFtf, owned.size()));
-        card.addView(mineProgRow("3DS 验证", n3ds, owned.size()));
-        card.addView(mineProgRow("自动购汇", nFx, owned.size()));
-        card.addView(mineProgRow("境外 ATM 免发卡行费", nAtm, owned.size()));
+        card.addView(mineProgRow("percent", "无货币转换费", nNoFtf, owned.size(), true));
+        card.addView(mineProgRow("shield", "3DS 验证", n3ds, owned.size(), false));
+        card.addView(mineProgRow("swap", "自动购汇", nFx, owned.size(), false));
+        card.addView(mineProgRow("atm", "境外 ATM 免发卡行费", nAtm, owned.size(), false));
         if (best != null) {
             final Card bestF = best;
+            card.addView(mineDivider());
             LinearLayout brow = new LinearLayout(this);
             brow.setOrientation(LinearLayout.HORIZONTAL);
             brow.setGravity(Gravity.CENTER_VERTICAL);
-            LinearLayout.LayoutParams blp2 = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-            blp2.topMargin = dp(this, 10);
-            card.addView(brow, blp2);
-            brow.addView(tv(this, "最通用", 12.5f, Color.rgb(0x0A, 0x5C, 0xD6), true));
-            TextView bn = tv(this, best.name, 12.5f, Color.rgb(0x1C, 0x1C, 0x1E), false);
+            brow.setPadding(0, dp(this, 11), 0, dp(this, 11));
+            card.addView(brow, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+            DrowIconView bic = new DrowIconView(this); bic.kind = "gem";
+            brow.addView(bic, new LinearLayout.LayoutParams(dp(this, 22), dp(this, 22)));
+            TextView bk = tv(this, "最通用", 13.5f, Color.rgb(0x1C, 0x1C, 0x1E), false);
+            bk.setSingleLine(true);
+            LinearLayout.LayoutParams bklp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            bklp.leftMargin = dp(this, 10);
+            brow.addView(bk, bklp);
+            TextView bn = tvW(this, best.name, 13.5f, Color.rgb(0x3A, 0x3A, 0x3C), 600);
+            bn.setSingleLine(true);
+            bn.setEllipsize(android.text.TextUtils.TruncateAt.END);
+            bn.setGravity(Gravity.RIGHT);
             LinearLayout.LayoutParams bnlp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
             bnlp.leftMargin = dp(this, 10);
             brow.addView(bn, bnlp);
-            brow.addView(tv(this, "›", 16, Color.rgb(0x8E, 0x8E, 0x93), false));
+            TextView bch = tv(this, "›", 16, Color.rgb(0xC7, 0xC7, 0xCC), true);
+            LinearLayout.LayoutParams bchlp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            bchlp.leftMargin = dp(this, 4);
+            brow.addView(bch, bchlp);
             brow.setOnClickListener(v -> openDetail(bestF));
         }
         if (!gaps.isEmpty()) {
-            TextView g = tv(this, "短板：" + gaps.get(0), 12, Color.rgb(0xB0, 0x5A, 0x1B), false);
+            TextView g = tv(this, "短板：" + gaps.get(0), 13, Color.rgb(0xB2, 0x6A, 0x00), false);
+            g.setBackground(roundRect(Color.rgb(0xFF, 0xF8, 0xEC), 10, this));
+            g.setPadding(dp(this, 12), dp(this, 10), dp(this, 12), dp(this, 10));
+            g.setLineSpacing(0, 1.5f);
             LinearLayout.LayoutParams glp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
             glp.topMargin = dp(this, 10);
             card.addView(g, glp);
         }
-        TextView note = tv(this, "按卡库资料粗算，仅供参考", 10.5f, Color.rgb(0x8E, 0x8E, 0x93), false);
+        TextView note = tv(this, "按卡库资料粗算，仅供参考", 11, Color.rgb(0xAE, 0xAE, 0xB2), false);
         LinearLayout.LayoutParams nlp2 = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        nlp2.topMargin = dp(this, 8);
+        nlp2.topMargin = dp(this, 10);
         card.addView(note, nlp2);
         return wrap;
     }
@@ -5960,58 +5977,156 @@ public class MainActivity extends Activity {
         return sb.toString();
     }
 
-    LinearLayout.LayoutParams mineTileLp(boolean left) {
-        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+    LinearLayout.LayoutParams mineTileLp(float w, boolean left) {
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, w);
         if (left) lp.rightMargin = dp(this, 5); else lp.leftMargin = dp(this, 5);
         return lp;
     }
 
-    View mineHeroTile(String value, String label, String sub) {
+    // Q22 对照混合版 .bn-tile/.bn-v/.bn-k/.bn-s：玻璃底 rgba .08+描边 .1、值 1.55rem/800（首格带 .78rem 小字）、最高档次金字 #ffd60a 1.12rem
+    View mineHeroTile(String value, String small, String label, String sub, boolean gold) {
         LinearLayout t = new LinearLayout(this);
         t.setOrientation(LinearLayout.VERTICAL);
-        // 对照混合版 .bn-tile：玻璃底+圆角 14+内边距 13，四格同高同底，内容绝不裸贴深蓝底
-        t.setBackground(roundRect(Color.argb(38, 255, 255, 255), 14, this));
+        GradientDrawable tg = new GradientDrawable();
+        tg.setColor(Color.argb(20, 255, 255, 255));
+        tg.setCornerRadius(dp(this, 14));
+        tg.setStroke(Math.max(1, dp(this, 1)), Color.argb(26, 255, 255, 255));
+        t.setBackground(tg);
         t.setPadding(dp(this, 13), dp(this, 13), dp(this, 13), dp(this, 13));
         t.setMinimumHeight(dp(this, 64));
-        // Q39: .bn-v 1.55rem/800/行高1.1
-        TextView bv = tvW(this, value, 23, Color.WHITE, 800); bv.setLineSpacing(0, 1.1f);
+        TextView bv;
+        if (gold) {
+            bv = tvW(this, value, 18, Color.rgb(0xFF, 0xD6, 0x0A), 800);
+            bv.setPadding(0, dp(this, 5), 0, 0);
+        } else if (small != null) {
+            bv = tvW(this, "", 25, Color.WHITE, 800);
+            android.text.SpannableString ss = new android.text.SpannableString(value + small);
+            ss.setSpan(new android.text.style.RelativeSizeSpan(0.52f), value.length(), ss.length(), 0);
+            ss.setSpan(new android.text.style.StyleSpan(android.graphics.Typeface.BOLD), 0, ss.length(), 0);
+            bv.setText(ss);
+        } else {
+            bv = tvW(this, value, 25, Color.WHITE, 800);
+        }
+        bv.setLineSpacing(0, 1.1f);
         t.addView(bv);
-        TextView l = tv(this, label, 10.5f, Color.argb(205, 255, 255, 255), false);
+        TextView l = tv(this, label, 11, Color.argb(184, 255, 255, 255), false);
         LinearLayout.LayoutParams llp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        llp.topMargin = dp(this, 3);
+        llp.topMargin = dp(this, 4);
         t.addView(l, llp);
         if (sub != null && !sub.isEmpty()) {
-            TextView s = tv(this, sub, 10.5f, Color.argb(170, 255, 255, 255), false);
+            TextView s = tv(this, sub, 11, Color.argb(166, 255, 255, 255), false);
+            s.setLineSpacing(0, 1.5f);
             LinearLayout.LayoutParams slp3 = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-            slp3.topMargin = dp(this, 2);
+            slp3.topMargin = dp(this, 4);
             t.addView(s, slp3);
         }
         return t;
     }
 
-    View mineProgRow(String label, int n, int total) {
+    // Q22 .drow 分隔线：左缩 32dp（图标 22+间隙 10）、1px #f1f1f4
+    View mineDivider() {
+        View d = new View(this);
+        d.setBackgroundColor(Color.rgb(0xF1, 0xF1, 0xF4));
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, Math.max(1, dp(this, 1)));
+        lp.leftMargin = dp(this, 32);
+        d.setLayoutParams(lp);
+        return d;
+    }
+
+    // Q22 对照 .drow：22dp 细线图标 + .9rem 标签（nowrap 绝不截断）+ 6dp 渐变进度条（flex 可缩）+ n/total
+    View mineProgRow(String icon, String label, int n, int total, boolean first) {
+        LinearLayout col = new LinearLayout(this);
+        col.setOrientation(LinearLayout.VERTICAL);
+        if (!first) col.addView(mineDivider());
         LinearLayout row = new LinearLayout(this);
         row.setOrientation(LinearLayout.HORIZONTAL);
         row.setGravity(Gravity.CENTER_VERTICAL);
-        LinearLayout.LayoutParams rlp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        rlp.topMargin = dp(this, 7);
-        row.setLayoutParams(rlp);
-        TextView k = tv(this, label, 12.5f, Color.rgb(0x3A, 0x3A, 0x3C), false);
-        row.addView(k, new LinearLayout.LayoutParams(dp(this, 118), ViewGroup.LayoutParams.WRAP_CONTENT));
+        row.setPadding(0, dp(this, 11), 0, dp(this, 11));
+        col.addView(row, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        DrowIconView ic = new DrowIconView(this); ic.kind = icon;
+        row.addView(ic, new LinearLayout.LayoutParams(dp(this, 22), dp(this, 22)));
+        TextView k = tv(this, label, 13.5f, Color.rgb(0x1C, 0x1C, 0x1E), false);
+        k.setSingleLine(true);
+        LinearLayout.LayoutParams klp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        klp.leftMargin = dp(this, 10);
+        row.addView(k, klp);
         LinearLayout bar = new LinearLayout(this);
         bar.setOrientation(LinearLayout.HORIZONTAL);
-        bar.setBackground(roundRect(Color.rgb(0xE9, 0xEE, 0xF5), 999, this));
-        row.addView(bar, new LinearLayout.LayoutParams(0, dp(this, 6), 1f));
+        bar.setMinimumWidth(dp(this, 24));
+        bar.setBackground(roundRect(Color.rgb(0xEE, 0xF0, 0xF3), 999, this));
+        LinearLayout.LayoutParams barLp = new LinearLayout.LayoutParams(0, dp(this, 6), 1f);
+        barLp.leftMargin = dp(this, 10);
+        row.addView(bar, barLp);
         View fill = new View(this);
-        fill.setBackground(roundRect(Color.rgb(0x0A, 0x5C, 0xD6), 999, this));
+        GradientDrawable fg = new GradientDrawable(GradientDrawable.Orientation.LEFT_RIGHT,
+            new int[]{Color.rgb(0x0A, 0x84, 0xFF), Color.rgb(0x00, 0xA3, 0xC8)});
+        fg.setCornerRadius(dp(this, 999));
+        fill.setBackground(fg);
         bar.addView(fill, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, (float) Math.max(0, n)));
         View rest = new View(this);
         bar.addView(rest, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, (float) Math.max(0, total - n) + 0.0001f));
-        TextView v = tv(this, n + " / " + total, 11.5f, Color.rgb(0x8E, 0x8E, 0x93), true);
-        LinearLayout.LayoutParams vlp = new LinearLayout.LayoutParams(dp(this, 44), ViewGroup.LayoutParams.WRAP_CONTENT);
-        vlp.leftMargin = dp(this, 8);
+        TextView v = tv(this, n + " / " + total, 12.5f, Color.rgb(0x8E, 0x8E, 0x93), false);
+        v.setSingleLine(true);
+        LinearLayout.LayoutParams vlp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        vlp.leftMargin = dp(this, 10);
         row.addView(v, vlp);
-        return row;
+        return col;
+    }
+
+    // Q22 境外能力细线图标（24 网格、1.7dp 蓝线 #0a5cff，对照 .drow-ic；percent/shield/swap/atm/gem，禁用 emoji）
+    class DrowIconView extends View {
+        String kind = "percent";
+        DrowIconView(Context c) { super(c); }
+        @Override protected void onDraw(Canvas cv) {
+            Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);
+            p.setStyle(Paint.Style.STROKE);
+            p.setStrokeCap(Paint.Cap.ROUND);
+            p.setStrokeJoin(Paint.Join.ROUND);
+            p.setColor(Color.rgb(0x0A, 0x5C, 0xFF));
+            float sx = getWidth() / 24f, sy = getHeight() / 24f;
+            p.setStrokeWidth(1.7f * sx);
+            if ("shield".equals(kind)) {
+                android.graphics.Path ph = new android.graphics.Path();
+                ph.moveTo(12f * sx, 3f * sy);
+                ph.lineTo(19f * sx, 5.5f * sy);
+                ph.lineTo(19f * sx, 11f * sy);
+                ph.cubicTo(19f * sx, 16f * sy, 16f * sx, 19.5f * sy, 12f * sx, 21f * sy);
+                ph.cubicTo(8f * sx, 19.5f * sy, 5f * sx, 16f * sy, 5f * sx, 11f * sy);
+                ph.lineTo(5f * sx, 5.5f * sy);
+                ph.close();
+                cv.drawPath(ph, p);
+                cv.drawLine(9f * sx, 11.5f * sy, 11.2f * sx, 13.8f * sy, p);
+                cv.drawLine(11.2f * sx, 13.8f * sy, 15.2f * sx, 9.2f * sy, p);
+            } else if ("swap".equals(kind)) {
+                cv.drawLine(4f * sx, 8f * sy, 19f * sx, 8f * sy, p);
+                cv.drawLine(15.5f * sx, 4.5f * sy, 19f * sx, 8f * sy, p);
+                cv.drawLine(19f * sx, 8f * sy, 15.5f * sx, 11.5f * sy, p);
+                cv.drawLine(20f * sx, 16f * sy, 5f * sx, 16f * sy, p);
+                cv.drawLine(8.5f * sx, 12.5f * sy, 5f * sx, 16f * sy, p);
+                cv.drawLine(5f * sx, 16f * sy, 8.5f * sx, 19.5f * sy, p);
+            } else if ("atm".equals(kind)) {
+                RectF r = new RectF(3.5f * sx, 5f * sy, 20.5f * sx, 19f * sy);
+                cv.drawRoundRect(r, 2.5f * sx, 2.5f * sy, p);
+                cv.drawLine(3.5f * sx, 9.5f * sy, 20.5f * sx, 9.5f * sy, p);
+                cv.drawLine(6.5f * sx, 15f * sy, 11f * sx, 15f * sy, p);
+            } else if ("gem".equals(kind)) {
+                android.graphics.Path ph = new android.graphics.Path();
+                ph.moveTo(7f * sx, 4f * sy);
+                ph.lineTo(17f * sx, 4f * sy);
+                ph.lineTo(21f * sx, 9f * sy);
+                ph.lineTo(12f * sx, 20f * sy);
+                ph.lineTo(3f * sx, 9f * sy);
+                ph.close();
+                cv.drawPath(ph, p);
+                cv.drawLine(3f * sx, 9f * sy, 21f * sx, 9f * sy, p);
+                cv.drawLine(8.5f * sx, 9f * sy, 12f * sx, 20f * sy, p);
+                cv.drawLine(15.5f * sx, 9f * sy, 12f * sx, 20f * sy, p);
+            } else { // percent
+                cv.drawCircle(7f * sx, 7f * sy, 2.6f * sx, p);
+                cv.drawCircle(17f * sx, 17f * sy, 2.6f * sx, p);
+                cv.drawLine(18f * sx, 6f * sy, 6f * sx, 18f * sy, p);
+            }
+        }
     }
 
     View buildMinePage() {
@@ -6041,25 +6156,47 @@ public class MainActivity extends Activity {
         page.addView(sv, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
         // P-deck ③：重建后恢复上次滚动位置（换序/展开收起不跳顶）
         if (mineScrollSaveY > 0) sv.post(() -> sv.scrollTo(0, mineScrollSaveY));
-        if (!mineCards.isEmpty()) inner.addView(buildMineAnalysis(mineCards));
+        // Q22 页级构成对照混合版：自定义区在前（index.html #customSec 先于 #grid），其后卡包分析，再「我的卡片」折叠条+瓷砖
         inner.addView(buildCustomSection());
+        if (!mineCards.isEmpty()) inner.addView(buildMineAnalysis(mineCards));
 
         if (mineCards.isEmpty()) {
-            LinearLayout.LayoutParams elp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-            elp.topMargin = dp(this, 12);
-            inner.addView(emptyState("还没有从卡库收藏的卡\n去「全部卡片」点开任意一张，加入我的卡片"), elp);
+            // 混合版 #empty 口径：居中灰字、上下 36dp 留白，不包白卡
+            TextView em = tv(this, "没有符合条件的卡，换个筛选试试。", 13.5f, Color.rgb(0x8E, 0x8E, 0x93), false);
+            em.setGravity(Gravity.CENTER);
+            em.setPadding(dp(this, 20), dp(this, 36), dp(this, 20), dp(this, 36));
+            inner.addView(em, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
             return page;
         }
 
-        TextView sect = tv(this, "卡库收藏", 15, Color.rgb(0x1C, 0x1C, 0x1E), true);
-        LinearLayout.LayoutParams sectLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        sectLp.topMargin = dp(this, 16);
-        inner.addView(sect, sectLp);
-        TextView hint = tv(this, "长按任意一张卡拖动即可调整顺序，松手自动保存。", 11.5f, Color.rgb(0x8E, 0x8E, 0x93), false);
-        LinearLayout.LayoutParams hlp3 = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        hlp3.topMargin = dp(this, 3);
-        inner.addView(hint, hlp3);
-        addMineCardRows(inner, mineCards, sv);
+        // Q22 折叠条对照 #mineBar/.ios-sect.dash-sectbtn：「我的卡片」+「N 张」+›（展开旋转 90°），状态存 prefs；废常驻拖动教学行（Q7 口径）
+        mineOpen = prefs.getBoolean("mine_open", true);
+        LinearLayout barRow = new LinearLayout(this);
+        barRow.setOrientation(LinearLayout.HORIZONTAL);
+        barRow.setGravity(Gravity.CENTER_VERTICAL);
+        barRow.setPadding(dp(this, 4), dp(this, 4), dp(this, 4), dp(this, 4));
+        LinearLayout.LayoutParams barLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        barLp.topMargin = dp(this, 22);
+        barLp.bottomMargin = dp(this, 10);
+        inner.addView(barRow, barLp);
+        barRow.addView(tvW(this, "我的卡片", 14.5f, Color.rgb(0x3A, 0x3A, 0x3C), 600));
+        TextView cnt = tv(this, mineCards.size() + " 张", 13, Color.rgb(0x8E, 0x8E, 0x93), false);
+        LinearLayout.LayoutParams cntLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        cntLp.leftMargin = dp(this, 8);
+        barRow.addView(cnt, cntLp);
+        View sp = new View(this);
+        barRow.addView(sp, new LinearLayout.LayoutParams(0, 1, 1f));
+        TextView chev = tv(this, "›", 19, Color.rgb(0xC7, 0xC7, 0xCC), true);
+        chev.setGravity(Gravity.CENTER);
+        chev.setRotation(mineOpen ? 90 : 0);
+        barRow.addView(chev, new LinearLayout.LayoutParams(dp(this, 24), dp(this, 24)));
+        barRow.setOnClickListener(v -> {
+            haptic();
+            mineOpen = !mineOpen;
+            try { prefs.edit().putBoolean("mine_open", mineOpen).commit(); } catch (Throwable ignored) {}
+            refreshMineKeepScroll();
+        });
+        if (mineOpen) addMineCardRows(inner, mineCards, sv);
         return page;
     }
 
