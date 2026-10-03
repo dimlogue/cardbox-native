@@ -1167,11 +1167,13 @@ public class MainActivity extends Activity {
             Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);
             p.setStyle(Paint.Style.STROKE);
             p.setStrokeCap(Paint.Cap.ROUND);
-            float sx = getWidth() / 24f, sy = getHeight() / 24f;
+            float ox = getPaddingLeft(), oy = getPaddingTop();
+            float sx = (getWidth() - getPaddingLeft() - getPaddingRight()) / 24f;
+            float sy = (getHeight() - getPaddingTop() - getPaddingBottom()) / 24f;
             p.setStrokeWidth(1.8f * sx);
             p.setColor(iconColor);
-            cv.drawCircle(11f * sx, 11f * sy, 6.5f * sx, p);
-            cv.drawLine(15.8f * sx, 15.8f * sy, 20.5f * sx, 20.5f * sy, p);
+            cv.drawCircle(ox + 11f * sx, oy + 11f * sy, 6.5f * sx, p);
+            cv.drawLine(ox + 15.8f * sx, oy + 15.8f * sy, ox + 20.5f * sx, oy + 20.5f * sy, p);
         }
     }
     // Q3 滑杆图标（对照混合版 qfFilter svg：两横线+两圆钮，废除旧漏斗）
@@ -1183,15 +1185,17 @@ public class MainActivity extends Activity {
             p.setStyle(Paint.Style.STROKE);
             p.setStrokeCap(Paint.Cap.ROUND);
             p.setStrokeJoin(Paint.Join.ROUND);
-            float sx = getWidth() / 24f, sy = getHeight() / 24f;
+            float ox = getPaddingLeft(), oy = getPaddingTop();
+            float sx = (getWidth() - getPaddingLeft() - getPaddingRight()) / 24f;
+            float sy = (getHeight() - getPaddingTop() - getPaddingBottom()) / 24f;
             p.setStrokeWidth(1.8f * sx);
             p.setColor(iconColor);
-            cv.drawLine(4f * sx, 8f * sy, 13f * sx, 8f * sy, p);
-            cv.drawLine(19f * sx, 8f * sy, 20f * sx, 8f * sy, p);
-            cv.drawLine(4f * sx, 16f * sy, 7f * sx, 16f * sy, p);
-            cv.drawLine(13f * sx, 16f * sy, 20f * sx, 16f * sy, p);
-            cv.drawCircle(16f * sx, 8f * sy, 2.2f * sx, p);
-            cv.drawCircle(10f * sx, 16f * sy, 2.2f * sx, p);
+            cv.drawLine(ox + 4f * sx, oy + 8f * sy, ox + 13f * sx, oy + 8f * sy, p);
+            cv.drawLine(ox + 19f * sx, oy + 8f * sy, ox + 20f * sx, oy + 8f * sy, p);
+            cv.drawLine(ox + 4f * sx, oy + 16f * sy, ox + 7f * sx, oy + 16f * sy, p);
+            cv.drawLine(ox + 13f * sx, oy + 16f * sy, ox + 20f * sx, oy + 16f * sy, p);
+            cv.drawCircle(ox + 16f * sx, oy + 8f * sy, 2.2f * sx, p);
+            cv.drawCircle(ox + 10f * sx, oy + 16f * sy, 2.2f * sx, p);
         }
     }
 
