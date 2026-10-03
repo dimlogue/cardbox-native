@@ -503,6 +503,12 @@ public class MainActivity extends Activity {
         } catch (Exception e) { /* 个别机型不支持就静默 */ }
     }
 
+    // 当前安装包版本号（设置页展示用，避免写死过期）
+    String appVersion() {
+        try { return getPackageManager().getPackageInfo(getPackageName(), 0).versionName; }
+        catch (Exception e) { return ""; }
+    }
+
     void haptic() {
         if (!hapticOn) return;
         try {
@@ -602,7 +608,7 @@ public class MainActivity extends Activity {
         GradientDrawable g = new GradientDrawable();
         g.setColor(Color.argb(255, 255, 255, 255));
         g.setCornerRadius(dp(this, 18));
-        g.setStroke(dp(this, 1), Color.argb(18, 20, 30, 60));
+        g.setStroke(dp(this, 1), Color.argb(40, 20, 30, 60));
         return g;
     }
 
@@ -3189,7 +3195,7 @@ public class MainActivity extends Activity {
         page.addView(updRow);
 
         sectionHead(page, "关于");
-        page.addView(settingRow("版本", "0.12-native（Phase 4c）"));
+        page.addView(settingRow("版本", appVersion() + "（原生版）"));
         View logRow = settingRow("更新日志", "每个版本改了什么 ›");
         logRow.setOnClickListener(v -> { haptic(); showChangelog(); });
         page.addView(logRow);
