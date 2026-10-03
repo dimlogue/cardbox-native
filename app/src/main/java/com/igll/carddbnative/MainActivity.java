@@ -5871,6 +5871,12 @@ public class MainActivity extends Activity {
             FrameLayout tile = (FrameLayout) child;
             CustomCard c = customCards.get(i);
             boolean last = i == customCards.size() - 1;
+            // Q56 ②：重排后交界上叠量按新位置归位（首带不叠、其余 -1dp），重衔接后仍无缝
+            if (tile.getLayoutParams() instanceof LinearLayout.LayoutParams) {
+                LinearLayout.LayoutParams tlp = (LinearLayout.LayoutParams) tile.getLayoutParams();
+                int want = i == 0 ? 0 : -dp(this, 1);
+                if (tlp.topMargin != want) { tlp.topMargin = want; tile.setLayoutParams(tlp); }
+            }
             tile.setBackground(customBandGradient(c.style, i == 0, last));
             // 衔接层：非末带底部 48dp 淡接下一张顶色，末带移除
             if (!last) {
@@ -6000,8 +6006,8 @@ public class MainActivity extends Activity {
 
     void finishCustomDrag(View tile, int fromIdx, float dy) {
         tile.setOnTouchListener(null);
-        tile.setTranslationY(0);
-        tile.setScaleX(1f); tile.setScaleY(1f); tile.setAlpha(1f);
+        // Q56：落位不瞬跳——保留当前平移量，待物理子序定稿后 140ms 滑入槽位（见下）
+        tile.animate().scaleX(1f).scaleY(1f).alpha(1f).setDuration(140).setInterpolator(ANIM_EXIT).start();
         Object tag = tile.getTag();
         if (tag instanceof Drawable) setCustomTileDragFrame(tile, false, (Drawable) tag);
         tile.setTag(null);
@@ -6029,12 +6035,16 @@ public class MainActivity extends Activity {
             ViewGroup box = (tile.getParent() instanceof ViewGroup) ? (ViewGroup) tile.getParent() : null;
             if (box != null && customTilesBox == box) {
                 int cur = box.indexOfChild(tile);
+                boolean liveSettled = cur == toIdx;
                 if (cur >= 0 && cur != toIdx) { box.removeView(tile); box.addView(tile, Math.min(toIdx, box.getChildCount())); }
                 restyleCustomTilesInPlace();
+                if (liveSettled) tile.animate().translationY(0f).setDuration(140).setInterpolator(ANIM_EXIT).start();
+                else tile.setTranslationY(0);
             } else {
+                tile.setTranslationY(0);
                 refreshMineKeepScroll();
             }
-        } catch (Throwable ignored) { refreshMineKeepScroll(); }
+        } catch (Throwable ignored) { tile.setTranslationY(0); refreshMineKeepScroll(); }
     }
 
     Button customActBtn(String label, boolean disabled, View.OnClickListener onClick) {
