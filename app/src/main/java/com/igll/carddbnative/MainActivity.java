@@ -615,7 +615,7 @@ public class MainActivity extends Activity {
             new int[]{Color.argb(172, 255, 255, 255), Color.argb(150, 247, 250, 255),
                 Color.argb(138, 228, 236, 246)});
         g.setCornerRadius(dp(this, 26));
-        g.setStroke(dp(this, 1), Color.argb(120, 205, 218, 235));
+        g.setStroke(dp(this, 1), Color.argb(140, 255, 255, 255));
         return g;
     }
 
@@ -644,6 +644,11 @@ public class MainActivity extends Activity {
         navBar.setBackground(floatingBarBg());
         navBar.setPadding(dp(this, 8), dp(this, 8), dp(this, 8), dp(this, 8));
         if (Build.VERSION.SDK_INT >= 21) navBar.setElevation(dp(this, 24));
+        if (Build.VERSION.SDK_INT >= 28) {
+            // 大扩散柔影：阴影色压到混合版 rgba(20,30,60,.14) 量级，不让默认黑影发死
+            navBar.setOutlineAmbientShadowColor(Color.argb(36, 20, 30, 60));
+            navBar.setOutlineSpotShadowColor(Color.argb(36, 20, 30, 60));
+        }
         navBar.setClipToOutline(false);
         String[][] tabs = {
             {"home", "全部卡片"}, {"student", "学生推荐"}, {"mine", "我的卡片"}, {"news", "资讯"}, {"settings", "设置"}
@@ -698,6 +703,10 @@ public class MainActivity extends Activity {
             boolean on = e.getKey().equals(key);
             e.getValue().setBackground(on ? navPillBg() : null);
             if (Build.VERSION.SDK_INT >= 21) e.getValue().setElevation(on ? dp(this, 3) : 0);
+            if (Build.VERSION.SDK_INT >= 28) {
+                e.getValue().setOutlineAmbientShadowColor(Color.argb(26, 20, 30, 60));
+                e.getValue().setOutlineSpotShadowColor(Color.argb(26, 20, 30, 60));
+            }
             NavIconView ic = navIcons.get(e.getKey());
             if (ic != null) ic.setOn(on);
             TextView lb = navLabels.get(e.getKey());
