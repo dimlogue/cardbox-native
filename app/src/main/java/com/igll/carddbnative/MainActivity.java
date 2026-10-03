@@ -803,6 +803,7 @@ public class MainActivity extends Activity {
     void clearLiveGlassForTabSwitch() {
         glassTabGen++;
         glassSnapStale = true;
+        glassTabSwitchMs = android.os.SystemClock.uptimeMillis();
         try { mainHandler.removeCallbacks(glassRefreshTask); } catch (Throwable ignored) {}
         glassBand = null; bandSv = null; bandRecalibPending = false; // 旧页条带作废，滚动跟随自然停摆
         for (ImageView iv : new java.util.ArrayList<>(glassViews)) {
@@ -818,6 +819,8 @@ public class MainActivity extends Activity {
         // 糊一帧定住、滚动中绝不调用本函数换帧；只在停稳（scheduleGlassRefresh 650ms 防抖跑完）与切页两个时刻更新，
         // 换帧经 applyGlass 的 220ms 交叉淡入，不许硬跳色。浮窗在场不刷（浮窗用各自冻结帧）。
         if (glassDisabled || glassCapturing || rootView == null || rootView.getWidth() <= 0) return;
+        // Q63：切页淡入窗（280ms）内让路——此刻抓图必混入正在淡出的旧页，等 showTab 的代次守卫延迟刷新抓定格帧。
+        if (glassSnapStale && android.os.SystemClock.uptimeMillis() - glassTabSwitchMs < 280) return;
         // Q21 ③：底栏拖动/弹簧进行中不做整屏抓图——capture 是全树 draw，正是滑动发卡与 MOVE 被饿死的主因之一；落稳后防抖任务会补上最终帧。
         if (navDragging || navSpringRunning) return;
         if (cardMenuPop != null || filterSheet != null || wizardOpen || aboutOpen
@@ -1531,6 +1534,7 @@ public class MainActivity extends Activity {
     // 代次守卫的一次 refreshLiveGlass 抓干净新帧（抓图时旧页已摘除，不再混帧烤出残影）。
     boolean glassSnapStale = false;
     int glassTabGen = 0;
+    long glassTabSwitchMs = 0; // Q63：切页时刻，280ms 淡入窗内其他路径的 refresh 一律让路给代次守卫的那一次
     final Runnable glassRefreshTask = new Runnable() { public void run() { refreshLiveGlass(); } };
     // Q29：旧 Q16 的滚动中 140ms 节流实时重采样（liveGlassTask/lastLiveGlassMs）整套删除——滚动零截图。
     final java.util.Map<ImageView, Integer> glassRetry = new java.util.HashMap<>(); // Q16: layout retry cap per glass layer
