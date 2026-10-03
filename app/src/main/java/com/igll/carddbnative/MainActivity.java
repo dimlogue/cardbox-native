@@ -810,28 +810,42 @@ public class MainActivity extends Activity {
         box.addView(t, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
         return box;
     }
-    // ---------- 显示偏好（Phase 4a：字体三档/界面大小/高刷/触感） ----------
-    static String fontMode = "default"; // default=软件默认栈 / system=本机 / serif=内置宋体
+    // ---------- 显示偏好（字体/界面大小/高刷/触感） ----------
+    // Q42 内置清爽黑体：苹方/PingFang 为苹果专有字体不可打包，改内置免费可商用（SIL OFL）
+    // Noto Sans SC 可变字体实例化三档（400/500/700）并子集化（GB2312 一级字+卡库/资讯/
+    // 更新日志/界面实际用字+常用标点，共 3940 码位，每档约 1.1MB，合计约 3.4MB）。
+    // 缺字由安卓字体回落链自动落系统无衬线，不出豆腐块；资产加载失败整段回落系统无衬线。
+    // fontMode：builtin=软件字体（默认，内置 Noto Sans SC）/ system=系统字体。
+    // 旧值 default/serif 一律迁移为 builtin——UI 全面禁用衬线（serif），杜绝整窗落宋体。
+    static String fontMode = "builtin";
     static float uiScale = 1f;          // 界面大小：0.9 紧凑 / 1 标准 / 1.12 大号（作用于 sp）
     static int hapticLevel = 2; // P3 触感分档：0 关 / 1 轻(10ms) / 2 中(20ms) / 3 强(40ms)，存 prefs haptic_level（旧 boolean haptic 自动迁移）
-    static android.graphics.Typeface serifTf = null;
+    static android.graphics.Typeface sansRegularTf = null, sansMediumTf = null, sansBoldTf = null;
+    static boolean sansLoadTried = false;
 
-    static android.graphics.Typeface serifTypeface(Context c, boolean bold) {
-        if (serifTf == null) {
-            try { serifTf = android.graphics.Typeface.createFromAsset(c.getAssets(), "fonts/serif.ttf"); }
-            catch (Exception e) { serifTf = android.graphics.Typeface.SERIF; }
-        }
-        return bold ? android.graphics.Typeface.create(serifTf, android.graphics.Typeface.BOLD) : serifTf;
+    static void ensureSansLoaded(Context c) {
+        if (sansLoadTried) return;
+        sansLoadTried = true;
+        try { sansRegularTf = android.graphics.Typeface.createFromAsset(c.getAssets(), "fonts/sans-regular.ttf"); } catch (Throwable e) { sansRegularTf = null; }
+        try { sansMediumTf = android.graphics.Typeface.createFromAsset(c.getAssets(), "fonts/sans-medium.ttf"); } catch (Throwable e) { sansMediumTf = null; }
+        try { sansBoldTf = android.graphics.Typeface.createFromAsset(c.getAssets(), "fonts/sans-bold.ttf"); } catch (Throwable e) { sansBoldTf = null; }
     }
 
-    // Q39 排字：对照混合版 styles.css body 栈（-apple-system/PingFang SC/HarmonyOS Sans/
-    // HarmonyOS Sans SC/MiSans/Noto Sans SC/sans-serif）与字重分级。原生无内置鸿蒙/米字
-    // 字体文件，default 走系统 SANS_SERIF（国产 ROM 上即厂商同栈字体，与混合版回落同路）。
+    static android.graphics.Typeface builtinSansTypeface(Context c, int weight) {
+        ensureSansLoaded(c);
+        android.graphics.Typeface base = weight >= 600 ? sansBoldTf : (weight >= 450 ? sansMediumTf : sansRegularTf);
+        if (base == null) base = sansRegularTf != null ? sansRegularTf : android.graphics.Typeface.SANS_SERIF;
+        if (android.os.Build.VERSION.SDK_INT >= 28) {
+            int w = Math.max(100, Math.min(1000, weight));
+            try { return android.graphics.Typeface.create(base, w, false); } catch (Throwable e) { return base; }
+        }
+        return weight >= 600 ? android.graphics.Typeface.create(base, android.graphics.Typeface.BOLD) : base;
+    }
+
+    // Q39 排字字距/行高口径不变；字形来源按 Q42：软件字体=内置 Noto Sans SC 三档，系统字体=系统无衬线。
     static android.graphics.Typeface weightTypeface(Context c, int weight) {
-        android.graphics.Typeface base;
-        if ("serif".equals(fontMode)) return serifTypeface(c, weight >= 600);
-        if ("system".equals(fontMode)) base = android.graphics.Typeface.SANS_SERIF;
-        else base = android.graphics.Typeface.SANS_SERIF;
+        if (!"system".equals(fontMode)) return builtinSansTypeface(c, weight);
+        android.graphics.Typeface base = android.graphics.Typeface.SANS_SERIF;
         if (android.os.Build.VERSION.SDK_INT >= 28) {
             int w = Math.max(100, Math.min(1000, weight));
             return android.graphics.Typeface.create(base, w, false);
@@ -843,6 +857,8 @@ public class MainActivity extends Activity {
     static TextView tv(Context c, String s, float sp, int color, boolean bold) {
         return tvW(c, s, sp, color, bold ? 700 : 400);
     }
+    // Q42：输入框/系统按钮等不走 tv() 的文字控件统一挂当前无衬线，禁衬线落点
+    void applyUiFont(TextView t, int weight) { try { t.setTypeface(weightTypeface(t.getContext(), weight)); } catch (Throwable ignored) {} }
     static TextView tvW(Context c, String s, float sp, int color, int weight) {
         TextView t = new TextView(c);
         t.setText(s); t.setTextSize(sp * uiScale); t.setTextColor(color);
@@ -1478,7 +1494,8 @@ public class MainActivity extends Activity {
         try { glassDisabled = prefs.getBoolean("glass_disabled", false); } catch (Throwable ignored) {}
         loadCrashLog();
         installCrashHandler();
-        fontMode = prefs.getString("font_mode", "default");
+        fontMode = prefs.getString("font_mode", "builtin");
+        if (!"system".equals(fontMode)) fontMode = "builtin"; // Q42 迁移：旧 default/serif 统一落软件字体（无衬线）
         uiScale = prefs.getFloat("ui_scale", 1f);
         if (uiScale != 0.9f && uiScale != 1f && uiScale != 1.12f) uiScale = 1f;
         if (prefs.contains("haptic_level")) hapticLevel = prefs.getInt("haptic_level", 2);
@@ -3106,6 +3123,7 @@ public class MainActivity extends Activity {
         sicon.iconColor = Color.rgb(0x63, 0x63, 0x66);
         inlineRow.addView(sicon, new LinearLayout.LayoutParams(dp(this, 20), dp(this, 20)));
         searchBox = new EditText(this);
+        applyUiFont(searchBox, 400);
         searchBox.setHint("搜索卡名 / 银行 / BIN…");
         searchBox.setTextSize(15);
         searchBox.setSingleLine(true);
@@ -3164,6 +3182,7 @@ public class MainActivity extends Activity {
         ficon.iconColor = Color.rgb(0x63, 0x63, 0x66);
         floatRow.addView(ficon, new LinearLayout.LayoutParams(dp(this, 20), dp(this, 20)));
         floatSearchBox = new EditText(this);
+        applyUiFont(floatSearchBox, 400);
         floatSearchBox.setHint("搜索卡名 / 银行 / BIN…");
         floatSearchBox.setTextSize(15);
         floatSearchBox.setSingleLine(true);
@@ -5968,6 +5987,7 @@ public class MainActivity extends Activity {
     // 聚焦边转 #007AFF 且底转纯白（废原 F5F6F8 无边灰石板面）。
     EditText customInput(String hint, String value, int maxLen) {
         final EditText e = new EditText(this);
+        applyUiFont(e, 400);
         e.setHint(hint);
         e.setText(value == null ? "" : value);
         e.setTextSize(15);
@@ -6667,7 +6687,7 @@ public class MainActivity extends Activity {
             g.setStroke(dp(this, 1), Color.argb(13, 20, 30, 60));
             t.setBackground(g);
             t.setTextColor(Color.rgb(0x1C, 0x1C, 0x1E));
-            try { t.setTypeface(android.graphics.Typeface.DEFAULT, android.graphics.Typeface.NORMAL); } catch (Throwable ignored) {}
+            try { t.setTypeface(weightTypeface(this, 400)); } catch (Throwable ignored) {}
         }
     }
 
@@ -7814,7 +7834,7 @@ public class MainActivity extends Activity {
         page.addView(wizEntry);
 
         sectionHead(page, "显示");
-        segRow(page, "字体", new String[][]{{"default","软件默认"},{"system","本机字体"},{"serif","内置宋体"}}, fontMode, v -> {
+        segRow(page, "字体", new String[][]{{"builtin","软件字体"},{"system","系统字体"}}, fontMode, v -> {
             fontMode = v; prefs.edit().putString("font_mode", v).apply(); haptic(); rebuildPages();
         });
         segRow(page, "界面大小", new String[][]{{"0.9","紧凑"},{"1","标准"},{"1.12","大号"}}, String.valueOf(uiScale), v -> {
