@@ -715,6 +715,7 @@ public class MainActivity extends Activity {
         if (out != null) {
             // Q21：换快照只换引用——旧图可能仍被某玻璃层显示列表引用，主动 recycle 即触发黑匣子同签名闪退；0.2 降采样小图交系统回收。
             glassSnap = out;
+            glassSnapStale = false; // Q63：新帧已落地，live 层可重新垫图
             noteGlassSuccess();
         }
         return glassSnap;
@@ -734,6 +735,9 @@ public class MainActivity extends Activity {
                 return;
             }
             glassRetry.remove(iv);
+            // Q63：切页后新帧未落地前，live 层不许把旧页快照再垫回来（那正是旧页文字在新页胶囊/钮位置糊出残影的来源）；
+            // 保持已清空的染色兜底，等 refreshLiveGlass 抓到新页定格帧再垫。frozen 浮窗升起时已自抓当前帧，不受此限。
+            if (glassSnapStale && "live".equals(iv.getTag())) return;
             if (glassSnap == null || glassSnap.isRecycled()) captureGlassSnapshot();
             Bitmap full = glassSnap;
             if (full == null || full.isRecycled()) return;
@@ -787,6 +791,23 @@ public class MainActivity extends Activity {
         } catch (Throwable t) {
             noteGlassFailure();
             try { iv.setImageBitmap(null); if (Build.VERSION.SDK_INT >= 31) iv.setRenderEffect(null); } catch (Throwable ignored) {}
+        }
+    }
+
+    /**
+     * Q63 切页清旧帧：showTab 一进来先执行——live 玻璃层（底栏/悬浮钮/回顶/搜索胶囊）全部
+     * 清空图像退回各自的半透染色兜底，旧快照打 stale，条带（Q41）一并作废防 followBandScroll
+     * 把旧页条带平移绘回新页；待决的停稳刷新任务摘除，改由 showTab 末尾代次守卫的一次
+     * 延迟刷新在新页淡入落定（旧页已摘除）后抓干净新帧。Q21 纪律：只解引用不 recycle。
+     */
+    void clearLiveGlassForTabSwitch() {
+        glassTabGen++;
+        glassSnapStale = true;
+        try { mainHandler.removeCallbacks(glassRefreshTask); } catch (Throwable ignored) {}
+        glassBand = null; bandSv = null; bandRecalibPending = false; // 旧页条带作废，滚动跟随自然停摆
+        for (ImageView iv : new java.util.ArrayList<>(glassViews)) {
+            if (!"live".equals(iv.getTag())) continue;
+            try { iv.setImageDrawable(null); } catch (Throwable ignored) {}
         }
     }
 
@@ -1505,6 +1526,11 @@ public class MainActivity extends Activity {
     final java.util.Map<ImageView, Bitmap> glassCrops = new java.util.HashMap<>();
     Bitmap glassSnap = null;
     boolean glassCapturing = false;
+    // Q63：切页瞬间旧页帧作废标记 + 切页代次。切页时 live 玻璃层先清空退回染色兜底，
+    // 旧快照打 stale——applyGlass 对 live 层见 stale 不许再垫旧帧；新页淡入落定后由
+    // 代次守卫的一次 refreshLiveGlass 抓干净新帧（抓图时旧页已摘除，不再混帧烤出残影）。
+    boolean glassSnapStale = false;
+    int glassTabGen = 0;
     final Runnable glassRefreshTask = new Runnable() { public void run() { refreshLiveGlass(); } };
     // Q29：旧 Q16 的滚动中 140ms 节流实时重采样（liveGlassTask/lastLiveGlassMs）整套删除——滚动零截图。
     final java.util.Map<ImageView, Integer> glassRetry = new java.util.HashMap<>(); // Q16: layout retry cap per glass layer
@@ -2436,6 +2462,7 @@ public class MainActivity extends Activity {
         if (floatSearchOpen) closeFloatSearch(); else blurSearchBoxes();
         dismissCardMenu();
         dismissMoreMenuNow(); // Q58：切页前菜单即刻退场，不许残留到新页
+        clearLiveGlassForTabSwitch(); // Q63：切页瞬间清 live 玻璃旧帧，不许旧页文字在新页玻璃面糊出残影
         tab = key;
         sCrashTab = key;
         // Q38: page switch crossfades in about 220ms and keeps cached pages alive (no rebuild).
@@ -2493,7 +2520,13 @@ public class MainActivity extends Activity {
                 }).start();
         }
         // Q21：弹簧/拖动未落稳时不抓玻璃全图（整屏 draw 会抢主线程、拖动随之发卡）；落稳后由滚动停稳防抖补刷。
-        if (rootView != null && !navSpringRunning && !navDragging) rootView.post(() -> refreshLiveGlass()); // Q11：切页后按新页画面刷新玻璃
+        // Q63：不再切页即刻抓图——旧版 post 立即抓，抓到的是旧页淡出+新页淡入的混帧，旧页文字被烤进
+        // 玻璃帧直到下一次停稳刷新才消失（残影 1–2 秒的定案来源）。改延迟到 280ms（220ms 交叉淡入已落定、
+        // 旧页已摘除）再抓干净新帧，且代次守卫防连切时过期任务抓到半路画面；延迟窗内 live 层走染色兜底。
+        if (rootView != null && !navSpringRunning && !navDragging) {
+            final int gen63 = glassTabGen;
+            mainHandler.postDelayed(() -> { if (gen63 == glassTabGen) refreshLiveGlass(); }, 280);
+        }
         // P4：切页淡入 + 轻微上移（220ms 减速曲线，与全 App 开合手感同一语言）
         page.animate().cancel();
         page.setAlpha(0f);
