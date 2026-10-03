@@ -712,8 +712,7 @@ public class MainActivity extends Activity {
             Canvas cv = new Canvas(b);
             cv.scale(bandScale, bandScale);
             cv.translate(0, -top);
-            cv.clipRect(0, top, rootView.getWidth(), top + bandH);
-            inner.draw(cv);
+            inner.draw(cv); // 位图设备边界天然裁剪，只画带内行
             glassBand = b; // Q21：旧带只解引用不 recycle
             bandDocTopPx = top;
             bandHeightPx = bandH;
