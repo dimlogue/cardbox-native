@@ -436,6 +436,13 @@ public class MainActivity extends Activity {
     ScrollView changelogScroll = null;
     boolean settingsLogOpen = false;
     ScrollView settingsLogScroll = null;
+    // P-about：关于卡盒悬浮窗（对照混合版 aboutDlg）
+    boolean aboutOpen = false;
+    View aboutSheet = null;
+    View aboutSponsorBody = null;
+    TextView aboutSponsorArrow = null;
+    boolean aboutSponsorOpen = false;
+    boolean sponsorSavePending = false;
 
     FrameLayout content;
     LinearLayout navBar;
@@ -3966,6 +3973,343 @@ public class MainActivity extends Activity {
         return page;
     }
 
+    // ---------- P-about 关于卡盒（对照混合版 aboutDlg：图标+名称+版本/简介/数据来源/赞助展开） ----------
+    // 细线咖啡杯图标（Canvas 线条，对照混合版 sponsor SVG，禁用 emoji）
+    class CoffeeIconView extends View {
+        CoffeeIconView(Context c) { super(c); }
+        @Override protected void onDraw(Canvas cv) {
+            Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);
+            p.setStyle(Paint.Style.STROKE);
+            p.setStrokeCap(Paint.Cap.ROUND);
+            p.setStrokeJoin(Paint.Join.ROUND);
+            p.setStrokeWidth(dp(getContext(), 1.7f));
+            p.setColor(Color.rgb(0x0A, 0x5C, 0xD6));
+            float sx = getWidth() / 24f, sy = getHeight() / 24f;
+            RectF cup = new RectF(4f * sx, 10f * sy, 17f * sx, 15.5f * sy);
+            cv.drawRoundRect(cup, 2.2f * sx, 2.2f * sy, p);
+            cv.drawLine(4f * sx, 15.5f * sy, 4f * sx, 16f * sy, p);
+            cv.drawArc(new RectF(16.2f * sx, 10.8f * sy, 21.4f * sx, 16.4f * sy), -80, 180, false, p);
+            cv.drawLine(8f * sx, 7f * sy, 8.8f * sx, 4.8f * sy, p);
+            cv.drawLine(12f * sx, 7f * sy, 12.8f * sx, 4.8f * sy, p);
+        }
+    }
+
+    // 赞助二维码虚线占位框（对照混合版 .sponsor-qr 的 dashed 边）
+    class DashedQrView extends View {
+        DashedQrView(Context c) { super(c); }
+        @Override protected void onDraw(Canvas cv) {
+            Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);
+            p.setStyle(Paint.Style.STROKE);
+            p.setStrokeWidth(dp(getContext(), 1.5f));
+            p.setColor(Color.rgb(0xD1, 0xD1, 0xD6));
+            p.setPathEffect(new android.graphics.DashPathEffect(new float[]{dp(getContext(), 6), dp(getContext(), 4)}, 0));
+            float inset = dp(getContext(), 1);
+            cv.drawRoundRect(new RectF(inset, inset, getWidth() - inset, getHeight() - inset), dp(getContext(), 12), dp(getContext(), 12), p);
+        }
+    }
+
+    Bitmap loadAssetBitmap(String path) {
+        try {
+            InputStream in = getAssets().open(path);
+            Bitmap b = BitmapFactory.decodeStream(in);
+            try { in.close(); } catch (Exception e) {}
+            return b;
+        } catch (Exception e) { return null; }
+    }
+
+    void openAbout() {
+        captureCurrentPageScroll();
+        aboutOpen = true;
+        aboutSponsorOpen = false;
+        navBar.setVisibility(View.GONE);
+        if (aboutSheet != null && aboutSheet.getParent() != null)
+            ((ViewGroup) aboutSheet.getParent()).removeView(aboutSheet);
+        final FrameLayout sheet = new FrameLayout(this);
+        View shade = new View(this);
+        shade.setBackgroundColor(Color.argb(102, 0, 0, 0));
+        shade.setOnClickListener(v -> closeAbout());
+        sheet.addView(shade, new FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+
+        LinearLayout card = new LinearLayout(this);
+        card.setOrientation(LinearLayout.VERTICAL);
+        GradientDrawable cg = new GradientDrawable();
+        cg.setColor(Color.argb(219, 255, 255, 255));
+        cg.setStroke(dp(this, 1), Color.argb(140, 255, 255, 255));
+        cg.setCornerRadius(dp(this, 22));
+        card.setBackground(cg);
+        if (Build.VERSION.SDK_INT >= 21) {
+            card.setElevation(dp(this, 24));
+            card.setClipToOutline(true);
+        }
+        card.setOnClickListener(v -> {}); // 窗体吃掉点击，防穿透遮罩误关
+        ScrollView sv = new ScrollView(this);
+        sv.setFillViewport(false);
+        LinearLayout body = buildAboutBody();
+        sv.addView(body);
+        card.addView(sv, new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+
+        int sw = getResources().getDisplayMetrics().widthPixels;
+        int maxH = (int) (getResources().getDisplayMetrics().heightPixels * 0.88);
+        card.measure(View.MeasureSpec.makeMeasureSpec(sw - dp(this, 24), View.MeasureSpec.EXACTLY),
+            View.MeasureSpec.makeMeasureSpec(maxH, View.MeasureSpec.AT_MOST));
+        FrameLayout.LayoutParams clp = new FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, Math.min(card.getMeasuredHeight(), maxH));
+        clp.gravity = Gravity.BOTTOM;
+        clp.leftMargin = dp(this, 12); clp.rightMargin = dp(this, 12);
+        clp.bottomMargin = dp(this, 12) + statusBarH() / 4;
+        sheet.addView(card, clp);
+        content.addView(sheet);
+        aboutSheet = sheet;
+        sheet.setAlpha(0f);
+        sheet.animate().alpha(1f).setDuration(200).setInterpolator(new DecelerateInterpolator()).start();
+        card.setTranslationY(dp(this, 42));
+        card.animate().translationY(0f).setDuration(260)
+            .setInterpolator(new DecelerateInterpolator(1.8f)).start();
+    }
+
+    void closeAbout() {
+        aboutOpen = false;
+        final View sheet = aboutSheet;
+        aboutSheet = null; aboutSponsorBody = null; aboutSponsorArrow = null;
+        if (sheet != null && sheet.getParent() != null) {
+            View card = sheet instanceof ViewGroup && ((ViewGroup) sheet).getChildCount() > 1
+                ? ((ViewGroup) sheet).getChildAt(1) : null;
+            if (card != null) {
+                card.animate().translationY(dp(this, 42)).alpha(0f)
+                    .setDuration(180).setInterpolator(new DecelerateInterpolator())
+                    .withEndAction(() -> {
+                        if (sheet.getParent() != null) ((ViewGroup) sheet.getParent()).removeView(sheet);
+                        navBar.setVisibility(View.VISIBLE);
+                        syncSearchFab();
+                    }).start();
+                sheet.animate().alpha(0f).setDuration(180).start();
+                return;
+            }
+            ((ViewGroup) sheet.getParent()).removeView(sheet);
+        }
+        navBar.setVisibility(View.VISIBLE);
+        syncSearchFab();
+    }
+
+    LinearLayout buildAboutBody() {
+        LinearLayout page = new LinearLayout(this);
+        page.setOrientation(LinearLayout.VERTICAL);
+        page.setPadding(dp(this, 18), dp(this, 18), dp(this, 18), dp(this, 18));
+
+        // hero：图标 + 卡盒 + 版本（对照 .about-hero）
+        LinearLayout hero = new LinearLayout(this);
+        hero.setOrientation(LinearLayout.HORIZONTAL);
+        hero.setGravity(Gravity.CENTER_VERTICAL);
+        GradientDrawable hg = new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
+            new int[]{Color.rgb(0xF7, 0xFA, 0xFD), Color.rgb(0xEE, 0xF4, 0xFA)});
+        hg.setCornerRadius(dp(this, 16));
+        hg.setStroke(dp(this, 1), Color.rgb(0xDB, 0xE7, 0xF3));
+        hero.setBackground(hg);
+        hero.setPadding(dp(this, 16), dp(this, 14), dp(this, 16), dp(this, 14));
+        page.addView(hero, new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        ImageView icon = new ImageView(this);
+        icon.setScaleType(ImageView.ScaleType.FIT_CENTER);
+        icon.setClipToOutline(true);
+        Bitmap iconBmp = loadAssetBitmap("data/images/about-icon.png");
+        if (iconBmp != null) icon.setImageBitmap(iconBmp);
+        hero.addView(icon, new LinearLayout.LayoutParams(dp(this, 56), dp(this, 56)));
+        LinearLayout heroTx = new LinearLayout(this);
+        heroTx.setOrientation(LinearLayout.VERTICAL);
+        LinearLayout.LayoutParams htlp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+        htlp.leftMargin = dp(this, 14);
+        hero.addView(heroTx, htlp);
+        heroTx.addView(tv(this, "卡盒", 19, Color.rgb(0x1C, 0x1C, 0x1E), true));
+        TextView ver = tv(this, "版本 " + appVersion(), 12.5f, Color.rgb(0x8E, 0x8E, 0x93), false);
+        LinearLayout.LayoutParams vlp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        vlp.topMargin = dp(this, 2);
+        heroTx.addView(ver, vlp);
+
+        TextView desc = tv(this, "银行借记卡资料库：收录国内主要银行发行的借记卡，支持按卡组织、发卡行、特点筛选，数据内置、离线可用。你也可以收藏「我的卡片」，或添加自定义卡片。", 14.5f, Color.rgb(0x1C, 0x1C, 0x1E), false);
+        desc.setLineSpacing(0, 1.45f);
+        LinearLayout.LayoutParams dlp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        dlp.topMargin = dp(this, 10);
+        page.addView(desc, dlp);
+
+        TextView src = tv(this, "数据来源为各银行公开资料整理，部分字段标注「待核实」，仅供参考，不构成办卡建议。", 12, Color.rgb(0x8E, 0x8E, 0x93), false);
+        src.setLineSpacing(0, 1.45f);
+        LinearLayout.LayoutParams slp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        slp.topMargin = dp(this, 8);
+        page.addView(src, slp);
+
+        // 赞助展开行（对照 #sponsorToggle）
+        LinearLayout toggle = new LinearLayout(this);
+        toggle.setOrientation(LinearLayout.HORIZONTAL);
+        toggle.setGravity(Gravity.CENTER_VERTICAL);
+        toggle.setBackground(rippleBg(Color.rgb(0xF7, 0xF8, 0xFA), 14));
+        toggle.setClipToOutline(true);
+        GradientDrawable tg = new GradientDrawable();
+        tg.setColor(Color.rgb(0xF7, 0xF8, 0xFA)); tg.setCornerRadius(dp(this, 14));
+        tg.setStroke(dp(this, 1), Color.argb(18, 20, 30, 60));
+        toggle.setBackground(new RippleDrawable(ColorStateList.valueOf(Color.argb(38, 10, 92, 214)), tg, null));
+        toggle.setPadding(dp(this, 16), dp(this, 13), dp(this, 16), dp(this, 13));
+        LinearLayout.LayoutParams tolp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        tolp.topMargin = dp(this, 14);
+        page.addView(toggle, tolp);
+        toggle.addView(new CoffeeIconView(this), new LinearLayout.LayoutParams(dp(this, 19), dp(this, 19)));
+        TextView sponsorTx = tv(this, "请作者喝杯咖啡", 13.5f, Color.rgb(0x1C, 0x1C, 0x1E), true);
+        LinearLayout.LayoutParams stlp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+        stlp.leftMargin = dp(this, 8);
+        toggle.addView(sponsorTx, stlp);
+        aboutSponsorArrow = tv(this, "›", 18, Color.rgb(0x8E, 0x8E, 0x93), false);
+        aboutSponsorArrow.setGravity(Gravity.CENTER);
+        toggle.addView(aboutSponsorArrow, new LinearLayout.LayoutParams(dp(this, 20), dp(this, 20)));
+
+        // 赞助内容（对照 #sponsorBody，初始收起）
+        final LinearLayout sponsor = new LinearLayout(this);
+        sponsor.setOrientation(LinearLayout.VERTICAL);
+        sponsor.setGravity(Gravity.CENTER_HORIZONTAL);
+        sponsor.setBackground(roundRect(Color.rgb(0xF7, 0xF8, 0xFA), 14, this));
+        sponsor.setPadding(dp(this, 14), dp(this, 14), dp(this, 14), dp(this, 14));
+        LinearLayout.LayoutParams splp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        splp.topMargin = dp(this, 10);
+        sponsor.setLayoutParams(splp);
+        sponsor.setVisibility(View.GONE);
+        page.addView(sponsor);
+        aboutSponsorBody = sponsor;
+        TextView spTx = tv(this, "如果卡盒对你有用，欢迎赞助支持开发～", 12, Color.rgb(0x8E, 0x8E, 0x93), false);
+        spTx.setGravity(Gravity.CENTER);
+        sponsor.addView(spTx, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+
+        Bitmap qr = loadAssetBitmap("data/images/sponsor-qr.png");
+        if (qr != null) {
+            ImageView qrIv = new ImageView(this);
+            qrIv.setScaleType(ImageView.ScaleType.FIT_CENTER);
+            qrIv.setClipToOutline(true);
+            qrIv.setImageBitmap(qr);
+            LinearLayout.LayoutParams qlp = new LinearLayout.LayoutParams(dp(this, 180), dp(this, 180));
+            qlp.topMargin = dp(this, 10); qlp.bottomMargin = dp(this, 12);
+            qlp.gravity = Gravity.CENTER_HORIZONTAL;
+            sponsor.addView(qrIv, qlp);
+        } else {
+            FrameLayout qrBox = new FrameLayout(this);
+            qrBox.setBackground(roundRect(Color.WHITE, 12, this));
+            qrBox.addView(new DashedQrView(this), new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+            TextView ph = tv(this, "赞助二维码位\n（把收款码发我，即刻放上）", 12, Color.rgb(0x8E, 0x8E, 0x93), false);
+            ph.setGravity(Gravity.CENTER);
+            ph.setLineSpacing(0, 1.4f);
+            qrBox.addView(ph, new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+            LinearLayout.LayoutParams qlp = new LinearLayout.LayoutParams(dp(this, 150), dp(this, 150));
+            qlp.topMargin = dp(this, 10); qlp.bottomMargin = dp(this, 12);
+            qlp.gravity = Gravity.CENTER_HORIZONTAL;
+            sponsor.addView(qrBox, qlp);
+        }
+
+        Button save = new Button(this);
+        save.setText("保存二维码到相册"); save.setTextSize(14); save.setAllCaps(false);
+        save.setTextColor(Color.WHITE);
+        GradientDrawable sbg = new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
+            new int[]{Color.argb(235, 0x0A, 0x84, 0xFF), Color.argb(235, 0x00, 0x66, 0xE6)});
+        sbg.setCornerRadius(dp(this, 14));
+        sbg.setStroke(dp(this, 1), Color.argb(90, 255, 255, 255));
+        save.setBackground(sbg);
+        if (Build.VERSION.SDK_INT >= 21) save.setElevation(dp(this, 4));
+        save.setOnClickListener(v -> { haptic(); saveSponsorQr(); });
+        sponsor.addView(save, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(this, 46)));
+
+        toggle.setOnClickListener(v -> {
+            haptic();
+            aboutSponsorOpen = !aboutSponsorOpen;
+            sponsor.setVisibility(aboutSponsorOpen ? View.VISIBLE : View.GONE);
+            if (aboutSponsorArrow != null) aboutSponsorArrow.setRotation(aboutSponsorOpen ? 90f : 0f);
+            if (aboutSponsorOpen) {
+                sponsor.setAlpha(0f); sponsor.setTranslationY(dp(this, -6));
+                sponsor.animate().alpha(1f).translationY(0f).setDuration(220)
+                    .setInterpolator(new DecelerateInterpolator()).start();
+            }
+        });
+
+        Button close = new Button(this);
+        close.setText("关闭"); close.setTextSize(15); close.setAllCaps(false);
+        close.setTextColor(Color.rgb(0x00, 0x7A, 0xFF));
+        try { close.setTypeface(close.getTypeface(), android.graphics.Typeface.BOLD); } catch (Exception e) {}
+        GradientDrawable cbg = new GradientDrawable();
+        cbg.setColor(Color.argb(140, 255, 255, 255)); cbg.setCornerRadius(dp(this, 14));
+        cbg.setStroke(dp(this, 1), Color.argb(140, 255, 255, 255));
+        close.setBackground(cbg);
+        close.setOnClickListener(v -> { haptic(); closeAbout(); });
+        LinearLayout.LayoutParams clp2 = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(this, 50));
+        clp2.topMargin = dp(this, 14);
+        page.addView(close, clp2);
+        return page;
+    }
+
+    // 保存赞助二维码到相册（对照混合版 Bridge saveSponsorQr；API29+ 走 MediaStore 无需权限，低版本先申请写权限）
+    void saveSponsorQr() {
+        byte[] data;
+        try {
+            InputStream in = getAssets().open("data/images/sponsor-qr.png");
+            ByteArrayOutputStream bos = new ByteArrayOutputStream();
+            byte[] buf = new byte[8192]; int n;
+            while ((n = in.read(buf)) > 0) bos.write(buf, 0, n);
+            in.close();
+            data = bos.toByteArray();
+            if (data.length == 0) throw new Exception("empty");
+        } catch (Exception e) {
+            Toast.makeText(this, "收款码还没放上，放上后就能保存了", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        if (Build.VERSION.SDK_INT < 29
+            && checkSelfPermission(android.Manifest.permission.WRITE_EXTERNAL_STORAGE)
+                != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+            sponsorSavePending = true;
+            requestPermissions(new String[]{android.Manifest.permission.WRITE_EXTERNAL_STORAGE}, 4201);
+            return;
+        }
+        writeSponsorQrToAlbum(data);
+    }
+
+    void writeSponsorQrToAlbum(byte[] data) {
+        try {
+            if (Build.VERSION.SDK_INT >= 29) {
+                android.content.ContentValues cv = new android.content.ContentValues();
+                cv.put(android.provider.MediaStore.Images.Media.DISPLAY_NAME, "cardbox-sponsor-qr.png");
+                cv.put(android.provider.MediaStore.Images.Media.MIME_TYPE, "image/png");
+                cv.put(android.provider.MediaStore.Images.Media.RELATIVE_PATH, "Pictures/卡盒");
+                Uri uri = getContentResolver().insert(android.provider.MediaStore.Images.Media.EXTERNAL_CONTENT_URI, cv);
+                if (uri == null) throw new Exception("insert failed");
+                java.io.OutputStream out = getContentResolver().openOutputStream(uri);
+                if (out == null) throw new Exception("open failed");
+                out.write(data); out.close();
+            } else {
+                File dir = new File(android.os.Environment.getExternalStoragePublicDirectory(
+                    android.os.Environment.DIRECTORY_PICTURES), "卡盒");
+                if (!dir.exists()) dir.mkdirs();
+                File f = new File(dir, "cardbox-sponsor-qr.png");
+                FileOutputStream out = new FileOutputStream(f);
+                out.write(data); out.close();
+                android.media.MediaScannerConnection.scanFile(this,
+                    new String[]{f.getAbsolutePath()}, new String[]{"image/png"}, null);
+            }
+            Toast.makeText(this, "赞助二维码已保存到相册", Toast.LENGTH_SHORT).show();
+        } catch (Exception e) {
+            Toast.makeText(this, "保存失败，请稍后再试", Toast.LENGTH_SHORT).show();
+        }
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        if (requestCode == 4201) {
+            boolean granted = grantResults.length > 0
+                && grantResults[0] == android.content.pm.PackageManager.PERMISSION_GRANTED;
+            if (granted && sponsorSavePending) { sponsorSavePending = false; saveSponsorQr(); }
+            else {
+                sponsorSavePending = false;
+                Toast.makeText(this, "没有相册写入权限，二维码未保存", Toast.LENGTH_SHORT).show();
+            }
+        }
+    }
+
     // ---------- 欢迎页 / 更新日志（Phase 4b） ----------
     void showWelcome() {
         captureCurrentPageScroll();
@@ -4268,7 +4612,9 @@ public class MainActivity extends Activity {
         View welRow = settingRow("欢迎页", "重新看一遍首次打开的介绍 ›");
         welRow.setOnClickListener(v -> { haptic(); showWelcome(); });
         page.addView(welRow);
-        page.addView(settingRow("关于卡盒", "原生版：纯 Java 手写界面，数据与现行版共用同一份卡库"));
+        View aboutRow = settingRow("关于卡盒", "介绍与赞助 ›");
+        aboutRow.setOnClickListener(v -> { haptic(); openAbout(); });
+        page.addView(aboutRow);
         page.addView(settingRow("迁移进度", "全部卡片 / 详情 / 我的卡片 / 学生推荐 / 筛选 / 资讯 / 情景选卡 / 自定义卡 / 拖动 / 字体与界面大小 / 高刷 / 触感 / 欢迎页 / 更新日志 / 数据 OTA 已迁移"));
         ScrollView sv = new ScrollView(this);
         sv.setClipToPadding(false);
@@ -4384,6 +4730,7 @@ public class MainActivity extends Activity {
     @Override
     public void onBackPressed() {
         if (pressPreview != null) { dismissPressPreview(); return; }
+        if (aboutOpen) { closeAbout(); return; }
         if (welcomeOpen) { closeWelcome(); return; }
         if (changelogOpen) { closeChangelog(); return; }
         if (settingsLogOpen && "settings".equals(tab)) { settingsLogOpen = false; rebuildPages(); return; }
