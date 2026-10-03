@@ -1781,6 +1781,7 @@ public class MainActivity extends Activity {
     String filterType = null;   // "debit" / "credit" / null
     String filterOrg = null;    // org 代码 / null
     String filterStatus = null; // "在发" / "已停发" / null
+    String filterScoreStatus = null; // Q69: "rated" / "unrated" / null（与总分 filterScoreStatus 同级过滤）
 
     // 特点与发卡行（Phase 2a-2，对照 app.js 的 FEATS/featMatch 与 state.bank）
     java.util.Set<String> filterFeats = new java.util.LinkedHashSet<>(); // feat key，多选且 AND（每项都要满足）；保序与标签栏一致
@@ -1958,6 +1959,7 @@ public class MainActivity extends Activity {
         if (filterOrg != null) n++;
         if (filterStatus != null) n++;
         if (filterBank != null) n++;
+        if (filterScoreStatus != null) n++; // Q69
         return n;
     }
 
@@ -4455,6 +4457,9 @@ public class MainActivity extends Activity {
             if (filterOrg != null && !filterOrg.equals(c.org == null ? "" : c.org)) continue;
             if (filterStatus != null && !filterStatus.equals(c.status == null ? "" : c.status)) continue;
             if (filterBank != null && !filterBank.equals(c.bank == null ? "" : c.bank)) continue;
+            // Q69：评分状态以 Card.hasScore（条目是否带数值 score）为准，待评分/无 score 计未评分。
+            if ("rated".equals(filterScoreStatus) && !c.hasScore) continue;
+            if ("unrated".equals(filterScoreStatus) && c.hasScore) continue;
             boolean featOk = true;
             for (String f : filterFeats) if (!featMatch(c, f)) { featOk = false; break; }
             if (!featOk) continue;
@@ -4501,7 +4506,7 @@ public class MainActivity extends Activity {
     String homeSig() {
         StringBuilder sb = new StringBuilder();
         sb.append(query).append('|').append(filterType).append('|').append(filterOrg).append('|')
-          .append(filterStatus).append('|').append(filterBank).append('|').append(filterFeats).append('|')
+          .append(filterStatus).append('|').append(filterBank).append('|').append(filterScoreStatus).append('|').append(filterFeats).append('|')
           .append(selectedScoreDimsOrdered()).append('|')
           .append(sortMode).append('|').append(cols).append('|').append(groupBank).append('|')
           .append(new java.util.TreeSet<>(bankOpen)).append('|').append(Store.dataVersion).append('|')
@@ -4572,7 +4577,7 @@ public class MainActivity extends Activity {
         order.sort((x, y) -> { int r = Integer.compare(y.getValue().size(), x.getValue().size()); return r != 0 ? r : zh.compare(x.getKey(), y.getKey()); });
         int maxN = 1;
         for (Map.Entry<String, List<Card>> e : order) maxN = Math.max(maxN, e.getValue().size());
-        boolean forceOpen = !query.isEmpty() || filterOrg != null || filterStatus != null || filterType != null || !filterFeats.isEmpty();
+        boolean forceOpen = !query.isEmpty() || filterOrg != null || filterStatus != null || filterType != null || filterScoreStatus != null || !filterFeats.isEmpty();
         for (Map.Entry<String, List<Card>> e : order) {
             final String bank = e.getKey();
             List<Card> cs = e.getValue();
@@ -4692,6 +4697,7 @@ public class MainActivity extends Activity {
         if (filterBank != null) activeFilterBar.addView(afPill(filterBank, () -> { filterBank = null; refreshHome(); }));
         if (filterOrg != null) activeFilterBar.addView(afPill(orgLabel(filterOrg), () -> { filterOrg = null; refreshHome(); }));
         if (filterStatus != null) activeFilterBar.addView(afPill(filterStatus, () -> { filterStatus = null; refreshHome(); }));
+        if (filterScoreStatus != null) activeFilterBar.addView(afPill("rated".equals(filterScoreStatus) ? "已评分" : "未评分", () -> { filterScoreStatus = null; refreshHome(); }));
         for (final String f : new ArrayList<>(filterFeats))
             activeFilterBar.addView(afPill(featLabel(f), () -> { filterFeats.remove(f); refreshHome(); }));
         if (filterType != null) activeFilterBar.addView(afPill("credit".equals(filterType) ? "信用卡" : "借记卡", () -> { filterType = null; refreshHome(); }));
@@ -4749,16 +4755,16 @@ public class MainActivity extends Activity {
         clearT.setPadding(dp(this, 8), dp(this, 6), dp(this, 8), dp(this, 6));
         clearT.setOnClickListener(v -> {
             haptic();
-            final String sType = filterType, sOrg = filterOrg, sStatus = filterStatus, sBank = filterBank, sSort = sortMode;
+            final String sType = filterType, sOrg = filterOrg, sStatus = filterStatus, sBank = filterBank, sSort = sortMode, sScoreStatus = filterScoreStatus;
             final boolean sGroup = groupBank;
             final java.util.Set<String> sFeats = new java.util.LinkedHashSet<>(filterFeats);
             final java.util.Set<String> sDims = new java.util.LinkedHashSet<>(scoreDimsSel);
-            filterType = null; filterOrg = null; filterStatus = null;
+            filterType = null; filterOrg = null; filterStatus = null; filterScoreStatus = null;
             filterFeats.clear(); filterBank = null; scoreDimsSel.clear();
             sortMode = null; groupBank = false; persistViewPrefs();
             rebuildFilterPanel(filterPanelRef); refreshHome();
             showFloatToast("已清空筛选", "撤销", () -> {
-                filterType = sType; filterOrg = sOrg; filterStatus = sStatus; filterBank = sBank; sortMode = sSort;
+                filterType = sType; filterOrg = sOrg; filterStatus = sStatus; filterBank = sBank; sortMode = sSort; filterScoreStatus = sScoreStatus;
                 groupBank = sGroup;
                 filterFeats.clear(); filterFeats.addAll(sFeats);
                 scoreDimsSel.clear(); scoreDimsSel.addAll(sDims);
@@ -4869,6 +4875,14 @@ public class MainActivity extends Activity {
         stChips.add(filterChip("\u5728\u53d1", "\u5728\u53d1".equals(filterStatus), () -> { filterStatus = "\u5728\u53d1".equals(filterStatus) ? null : "\u5728\u53d1"; rebuildFilterPanel(panel); refreshHome(); }, filterStatus != null && !"\u5728\u53d1".equals(filterStatus)));
         stChips.add(filterChip("\u5df2\u505c\u53d1", "\u5df2\u505c\u53d1".equals(filterStatus), () -> { filterStatus = "\u5df2\u505c\u53d1".equals(filterStatus) ? null : "\u5df2\u505c\u53d1"; rebuildFilterPanel(panel); refreshHome(); }, filterStatus != null && !"\u5df2\u505c\u53d1".equals(filterStatus)));
         addChipFlow(panel, stChips);
+
+        // Q69：评分状态 —— 全部 / 已评分 / 未评分 三选，与现行筛选条件同级并存；以 Card.hasScore 为准（带数值 score 才算已评分）
+        panel.addView(filterSectionTitle("评分状态"));
+        List<View> scoreStatusChips = new ArrayList<>();
+        scoreStatusChips.add(filterChip("全部", filterScoreStatus == null, () -> { filterScoreStatus = null; rebuildFilterPanel(panel); refreshHome(); }));
+        scoreStatusChips.add(filterChip("已评分", "rated".equals(filterScoreStatus), () -> { filterScoreStatus = "rated".equals(filterScoreStatus) ? null : "rated"; rebuildFilterPanel(panel); refreshHome(); }));
+        scoreStatusChips.add(filterChip("未评分", "unrated".equals(filterScoreStatus), () -> { filterScoreStatus = "unrated".equals(filterScoreStatus) ? null : "unrated"; rebuildFilterPanel(panel); refreshHome(); }));
+        addChipFlow(panel, scoreStatusChips);
 
         panel.addView(filterSectionTitle("\u7279\u70b9\uff08\u53ef\u591a\u9009\uff0c\u987b\u540c\u65f6\u6ee1\u8db3\uff09"));
         List<View> featChips = new ArrayList<>();
