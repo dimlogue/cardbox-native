@@ -1568,6 +1568,8 @@ public class MainActivity extends Activity {
     int navSettled = 0;
     int navTintIdx = 0;             // Q38: tab index currently tinted as "under the lens" (icon+label follow the lens, not only the settled page)
     View currentPageView;           // Q38: currently displayed page view - only pages crossfade on switch; FABs/sheets in content keep removeAll semantics
+    int lastTabIdx = 0;             // Q64: last settled tab index for directional slide
+    int tabAnimGen = 0;             // Q64: generation token to cancel stale page animators on rapid taps
     boolean navDragging = false;
     int navDragIdx = -1;
     float navSpringV = 0f;
@@ -2469,9 +2471,14 @@ public class MainActivity extends Activity {
         clearLiveGlassForTabSwitch(); // Q63：切页瞬间清 live 玻璃旧帧，不许旧页文字在新页玻璃面糊出残影
         tab = key;
         sCrashTab = key;
-        // Q38: page switch crossfades in about 220ms and keeps cached pages alive (no rebuild).
-        // Only the tracked page view participates; FABs/sheets/overlays in content keep the old semantics.
-        final View oldPage = currentPageView;
+        // Q64：页间切换过渡（FClash 节奏学机制自写）——旧页直接退场不叠在新页底下透出，
+        // 新页按标签方向轻横移+淡入 220ms 一条 ANIM_ENTER 曲线走完；重活（refreshHome 的
+        // 签名校验与分帧续搭）让一帧再跑，不堵点击瞬间。快速连点以 tabAnimGen 代次作废旧动画。
+        final int newIdx64 = navOrder.indexOf(key);
+        final int dir64 = (newIdx64 >= 0) ? Integer.signum(newIdx64 - lastTabIdx) : 0;
+        if (newIdx64 >= 0) lastTabIdx = newIdx64;
+        final int gen64 = ++tabAnimGen;
+        if (currentPageView != null) currentPageView.animate().cancel();
         content.removeAllViews();
         View page = null;
         try {
@@ -2509,20 +2516,9 @@ public class MainActivity extends Activity {
             }
             try { showFloatToast("页面打开失败，已回到首页"); } catch (Throwable ignored) {}
         }
-        if (oldPage != null && oldPage != page) content.addView(oldPage); // outgoing page rides below
         content.addView(page);
         currentPageView = page;
-        if (oldPage != null && oldPage != page) {
-            // Q38 crossfade-out: old page stays below for 220ms, then detaches and resets for reuse.
-            final View fading = oldPage;
-            fading.animate().cancel();
-            fading.setTranslationY(0f);
-            fading.animate().alpha(0f).setDuration(220).setInterpolator(ANIM_ENTER)
-                .withEndAction(() -> {
-                    if (fading.getParent() == content) content.removeView(fading);
-                    fading.setAlpha(1f);
-                }).start();
-        }
+        // Q64：旧页已退场（不再垫底淡出），与 Q63 清旧帧合起来达成「切换瞬间不见上一页」。
         // Q21：弹簧/拖动未落稳时不抓玻璃全图（整屏 draw 会抢主线程、拖动随之发卡）；落稳后由滚动停稳防抖补刷。
         // Q63：不再切页即刻抓图——旧版 post 立即抓，抓到的是旧页淡出+新页淡入的混帧，旧页文字被烤进
         // 玻璃帧直到下一次停稳刷新才消失（残影 1–2 秒的定案来源）。改延迟到 280ms（220ms 交叉淡入已落定、
@@ -2531,13 +2527,19 @@ public class MainActivity extends Activity {
             final int gen63 = glassTabGen;
             mainHandler.postDelayed(() -> { if (gen63 == glassTabGen) refreshLiveGlass(); }, 280);
         }
-        // P4：切页淡入 + 轻微上移（220ms 减速曲线，与全 App 开合手感同一语言）
+        // Q64：新页方向轻移+淡入——从目标标签方向滑入（右移页自右轻入、左移页自左轻入），
+        // 220ms ANIM_ENTER 与底栏液滴「落位才切页」时序对齐；只动绘制层（alpha/translation），不抓图不采样。
         page.animate().cancel();
         page.setAlpha(0f);
-        page.setTranslationY(dp(this, 10));
-        page.animate().alpha(1f).translationY(0f)
+        page.setTranslationX(dir64 * dp(this, 18));
+        page.setTranslationY(dp(this, 4));
+        page.animate().alpha(1f).translationX(0f).translationY(0f)
             .setDuration(220).setInterpolator(ANIM_ENTER).start();
-        if ("home".equals(key) && homeList != null) refreshHome();
+        // Q64：首页重活让一帧——先让过渡首帧出去，再做签名校验/分帧续搭，避免 213 张校验堵在点击瞬间掉帧。
+        if ("home".equals(key) && homeList != null) {
+            final View pg64 = page;
+            pg64.post(() -> { if (gen64 == tabAnimGen && "home".equals(tab)) refreshHome(); });
+        }
         restoreCurrentTabScroll();
         syncSearchFab(); syncAddFab();
         for (Map.Entry<String, LinearLayout> e : navItems.entrySet()) {
