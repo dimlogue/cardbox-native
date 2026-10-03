@@ -1900,22 +1900,34 @@ public class MainActivity extends Activity {
         page.addView(top);
 
         ImageView iv = new ImageView(this);
-        // 卡面图按原比例完整显示不裁剪（对照混合版 .p-slide img：object-fit:contain、圆角 12）
+        // 卡面图按原比例完整显示不裁剪（对照混合版 .p-slide img：object-fit:contain、圆角 12、最大高 260）
         iv.setScaleType(ImageView.ScaleType.FIT_CENTER);
-        iv.setAdjustViewBounds(true);
         iv.setBackground(roundRect(Color.rgb(0xF1, 0xF1, 0xF4), 12, this));
         iv.setClipToOutline(true);
-        LinearLayout.LayoutParams ilp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(this, 220));
-        ilp.topMargin = dp(this, 12);
-        page.addView(iv, ilp);
         Bitmap b = Img.get(this, c.image);
+        int availW = getResources().getDisplayMetrics().widthPixels - dp(this, 32);
+        int imgW = availW, imgH = dp(this, 168);
+        if (b != null && b.getWidth() > 0 && b.getHeight() > 0) {
+            float ratio = (float) b.getHeight() / (float) b.getWidth();
+            imgH = Math.round(availW * ratio);
+            int maxH = dp(this, 260);
+            if (imgH > maxH) {
+                imgH = maxH;
+                imgW = Math.round(imgH / ratio);
+            }
+        }
+        LinearLayout.LayoutParams ilp = new LinearLayout.LayoutParams(imgW, imgH);
+        ilp.topMargin = dp(this, 12);
+        ilp.gravity = Gravity.CENTER_HORIZONTAL;
+        page.addView(iv, ilp);
         if (b != null) iv.setImageBitmap(b);
 
         TextView name = tv(this, c.name, 19, Color.rgb(0x1C, 0x1C, 0x1E), true);
         LinearLayout.LayoutParams nlp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         nlp.topMargin = dp(this, 12);
         page.addView(name, nlp);
-        TextView meta = tv(this, c.bank + " · " + orgLabel(c.org) + " · " + (c.isCredit() ? "信用卡" : "借记卡") + " · " + c.status,
+        TextView meta = tv(this, c.bank + " · " + orgLabel(c.org) + " · " + (c.isCredit() ? "信用卡" : "借记卡") + " · " + c.status
+            + " · " + (c.hasScore ? String.format(java.util.Locale.US, "%.1f分", c.score) : "待评分"),
             12.5f, Color.rgb(0x8E, 0x8E, 0x93), false);
         LinearLayout.LayoutParams mep = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         mep.topMargin = dp(this, 2);
@@ -1987,12 +1999,23 @@ public class MainActivity extends Activity {
             sbp.topMargin = dp(this, 8);
             page.addView(specBox, sbp);
             java.util.List<String[]> rows = new ArrayList<>();
+            // 固定优先键序（对照混合版 specRows 与 PROGRESS 已知注意），其余键随后，避免 org.json 无序打乱主参数
+            String[] prefKeys = {"卡片名称", "BIN", "币种支持", "货币转换费（FTF）", "货币转换费", "3DS", "自动购汇", "网付", "年费", "发行情况"};
+            java.util.Set<String> usedKeys = new HashSet<>();
+            for (String k : prefKeys) {
+                String v = c.specs.optString(k, "");
+                if (v == null || v.isEmpty() || usedKeys.contains(k)) continue;
+                rows.add(new String[]{k, v});
+                usedKeys.add(k);
+            }
             Iterator<String> keys = c.specs.keys();
             while (keys.hasNext()) {
                 String k = keys.next();
+                if (usedKeys.contains(k)) continue;
                 String v = c.specs.optString(k, "");
                 if (v == null || v.isEmpty()) continue;
                 rows.add(new String[]{k, v});
+                usedKeys.add(k);
             }
             for (int i = 0; i < rows.size(); i++) {
                 LinearLayout row = new LinearLayout(this);
