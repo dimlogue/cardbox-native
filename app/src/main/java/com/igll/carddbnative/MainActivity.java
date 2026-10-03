@@ -193,19 +193,55 @@ public class MainActivity extends Activity {
         static LruCache<String, Bitmap> cache = new LruCache<String, Bitmap>(48 * 1024) {
             protected int sizeOf(String k, Bitmap b) { return b.getByteCount() / 1024; }
         };
+        static final java.util.Set<String> fetching = new java.util.HashSet<>();
+
+        static Bitmap decode(InputStream in) {
+            BitmapFactory.Options op = new BitmapFactory.Options();
+            op.inSampleSize = 2;
+            Bitmap b = BitmapFactory.decodeStream(in, null, op);
+            try { in.close(); } catch (Exception e) {}
+            return b;
+        }
+
         static Bitmap get(Context c, String path) {
             if (path == null || path.isEmpty()) return null;
             Bitmap hit = cache.get(path);
             if (hit != null) return hit;
             try {
-                InputStream in = c.getAssets().open(path);
-                BitmapFactory.Options op = new BitmapFactory.Options();
-                op.inSampleSize = 2;
-                Bitmap b = BitmapFactory.decodeStream(in, null, op);
-                in.close();
-                if (b != null) cache.put(path, b);
-                return b;
-            } catch (Exception e) { return null; }
+                Bitmap b = decode(c.getAssets().open(path));
+                if (b != null) { cache.put(path, b); return b; }
+            } catch (Exception e) { /* 内置没有（OTA 新卡图）走远程兜底 */ }
+            // OTA 新卡的图不在安装包里：先读已缓存的远程图，没有就后台拉一次（数据仓 images/ 同步自 publish-data）
+            try {
+                File f = new File(new File(c.getFilesDir(), "ota-images"), new File(path).getName());
+                if (f.exists()) {
+                    Bitmap b = decode(new FileInputStream(f));
+                    if (b != null) { cache.put(path, b); return b; }
+                }
+                fetchRemote(c.getApplicationContext(), path, f);
+            } catch (Exception e) { /* 拿不到图就占位，不崩 */ }
+            return null;
+        }
+
+        static void fetchRemote(final Context ctx, final String path, final File dest) {
+            synchronized (fetching) { if (!fetching.add(path)) return; }
+            new Thread(() -> {
+                try {
+                    String name = new File(path).getName();
+                    HttpURLConnection conn = (HttpURLConnection) new URL("https://cdn.jsdelivr.net/gh/dimlogue/cardbox-data@main/images/" + name).openConnection();
+                    conn.setConnectTimeout(8000); conn.setReadTimeout(8000);
+                    if (conn.getResponseCode() == 200) {
+                        dest.getParentFile().mkdirs();
+                        FileOutputStream fos = new FileOutputStream(dest);
+                        InputStream in = conn.getInputStream();
+                        byte[] buf = new byte[8192]; int n;
+                        while ((n = in.read(buf)) > 0) fos.write(buf, 0, n);
+                        in.close(); fos.close();
+                    }
+                    conn.disconnect();
+                } catch (Exception e) { /* 断网就下次再试 */ }
+                synchronized (fetching) { fetching.remove(path); }
+            }).start();
         }
     }
 
@@ -2598,7 +2634,8 @@ public class MainActivity extends Activity {
                     if (!ok) continue;
                     runOnUiThread(() -> {
                         Toast.makeText(this, "卡片数据已更新到 v" + Store.dataVersion + "（" + Store.all.size() + " 张）", Toast.LENGTH_SHORT).show();
-                        rebuildPages();
+                        pages.clear(); // 页面缓存一律作废，下次进页用新数据重建
+                        if (detailCard == null) rebuildPages(); // 正看详情时不打断，关掉详情自然用新数据
                     });
                     return;
                 } catch (Exception e) { /* 换下一条线路 */ }
