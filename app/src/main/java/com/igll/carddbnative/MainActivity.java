@@ -9,6 +9,9 @@ import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.res.ColorStateList;
 import android.net.Uri;
+import android.nfc.NfcAdapter;
+import android.nfc.Tag;
+import android.nfc.tech.IsoDep;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.Canvas;
@@ -828,6 +831,23 @@ public class MainActivity extends Activity {
     java.util.List<CustomCard> customCards = new ArrayList<>();
     boolean customOpen = false;
     View customFormSheet = null; // Q8：表单改为根层浮卡（原 Dialog 全宽平纸已废）
+    // Q9 NFC 贴卡识别（对照混合版 NativeApp.startNfcRead 与 app.js __onNfcCard 回填）：
+    // 只读 EMV 目录取组织/应用名、再读 PAN 取 BIN8+尾号，完整卡号只在内存过一遍不落盘。
+    NfcAdapter nfcAdapter = null;
+    boolean nfcWaiting = false;
+    static class NfcFillTarget {
+        EditText name, bank, note;
+        String[] orgSel;
+        Runnable paintOrgs;
+    }
+    NfcFillTarget pendingNfcTarget = null;
+    Runnable nfcTimeoutTask = null;
+    final NfcAdapter.ReaderCallback nfcCallback = new NfcAdapter.ReaderCallback() {
+        @Override public void onTagDiscovered(Tag tag) { handleNfcTag(tag); }
+    };
+    // Q9 在线 BIN 查询（对照混合版 lookupBin/openBinQuery/addBinToMine）：binlist 在线认行，可一键入卡
+    View binSheet = null;
+    String lastBin = null, lastBinScheme = null, lastBinType = null, lastBinBrand = null, lastBinBank = null, lastBinCountry = null;
     // P-deck：我的卡片页滚动位置保持（换序/开合不甩回顶部）
     ScrollView mineScrollView = null;
     int mineScrollSaveY = 0;
@@ -1262,6 +1282,7 @@ public class MainActivity extends Activity {
         loadCustomCards();
         loadMineOrder();
         Store.load(this);
+        try { nfcAdapter = NfcAdapter.getDefaultAdapter(this); } catch (Throwable ignored) { nfcAdapter = null; }
 
         FrameLayout root = new FrameLayout(this);
         rootView = root;
@@ -1281,6 +1302,16 @@ public class MainActivity extends Activity {
         showTab("home");
         checkDataUpdate(false);
         if (!prefs.getBoolean("welcomed", false)) showWelcome();
+    }
+
+    @Override protected void onResume() {
+        super.onResume();
+        if (nfcWaiting) enableNfcReader();
+    }
+
+    @Override protected void onPause() {
+        try { if (nfcAdapter != null) nfcAdapter.disableReaderMode(this); } catch (Throwable ignored) {}
+        super.onPause();
     }
 
     // 高刷：开启时把窗口首选刷新率设为屏幕支持的最高档（对照混合版 Bridge setHighRefresh）
@@ -2032,8 +2063,8 @@ public class MainActivity extends Activity {
         fab.setOnClickListener(v -> { haptic(); openAddSheet(); });
         return fab;
     }
-    // Q7 ④：点 ＋ 先升「添加卡片」底表（自定义卡片 / 在线查询卡信息 / 取消），再进表单；
-    // 在线查询一条不得缺（混合版 index.html #fabSheet 同结构），其在线认行能力归 Q9，本段入口齐全。
+    // Q7 ④ + Q9：点 ＋ 先升「添加卡片」底表（自定义卡片 / 在线查询卡信息 / 取消），再进表单；
+    // 在线查询走真 BIN 在线认行（openBinQuery），不再是空壳跳转。
     void openAddSheet() {
         final FrameLayout sheet = new FrameLayout(this);
         sheet.setBackgroundColor(Color.argb(117, 15, 20, 40));
@@ -2055,8 +2086,7 @@ public class MainActivity extends Activity {
         card.addView(r1, r1lp);
         TextView r2 = addSheetRow("\u5728\u7EBF\u67E5\u8BE2\u5361\u4FE1\u606F", () -> {
             closeAddSheet(sheet);
-            showFloatToast("\u5728\u7EBF\u67E5\u8BE2\u5C06\u6309 BIN \u8BA4\u53D1\u5361\u884C\uFF08Q9\uFF09\uFF0C\u5148\u624B\u52A8\u586B\u4E00\u5F20");
-            openCustomForm(null);
+            openBinQuery();
         });
         card.addView(r2, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(this, 52)));
         TextView cancel = tv(this, "\u53D6\u6D88", 15, Color.rgb(0x8E, 0x8E, 0x93), false);
@@ -5510,6 +5540,595 @@ public class MainActivity extends Activity {
         if (sheet.getParent() != null) ((ViewGroup) sheet.getParent()).removeView(sheet);
     }
 
+    // ---------- Q9 NFC + 在线 BIN（对照混合版 app.js bankFromBinLocal/__onNfcCard/lookupBin 与混合版 MainActivity EMV 读卡） ----------
+    // 本地认行：用 BIN 前缀在卡库 specs.BIN 里找最长匹配（同 app.js bankFromBinLocal，bestLen 起点 5、最长 8）
+    String bankFromBinLocal(String bin) {
+        if (bin == null) return "";
+        String digits = bin.replaceAll("[^0-9]", "");
+        String bank = "";
+        int bestLen = 5;
+        for (Card c : Store.all) {
+            String b = c.spec("BIN").replaceAll("[^0-9]", "");
+            if (b.length() < 6) continue;
+            int n = Math.min(Math.min(digits.length(), b.length()), 8);
+            if (n > bestLen && digits.startsWith(b.substring(0, n))) { bestLen = n; bank = c.bank == null ? "" : c.bank; }
+        }
+        return bank;
+    }
+
+    void enableNfcReader() {
+        if (nfcAdapter == null) return;
+        try {
+            Bundle opts = new Bundle();
+            opts.putInt(NfcAdapter.EXTRA_READER_PRESENCE_CHECK_DELAY, 250);
+            nfcAdapter.enableReaderMode(this, nfcCallback,
+                NfcAdapter.FLAG_READER_NFC_A | NfcAdapter.FLAG_READER_NFC_B
+                | NfcAdapter.FLAG_READER_NFC_F | NfcAdapter.FLAG_READER_NFC_V
+                | NfcAdapter.FLAG_READER_NO_PLATFORM_SOUNDS, opts);
+        } catch (Throwable ignored) {}
+    }
+
+    void stopNfcReader() {
+        nfcWaiting = false;
+        pendingNfcTarget = null;
+        if (nfcTimeoutTask != null) { mainHandler.removeCallbacks(nfcTimeoutTask); nfcTimeoutTask = null; }
+        try { if (nfcAdapter != null) nfcAdapter.disableReaderMode(this); } catch (Throwable ignored) {}
+    }
+
+    void startNfcRead(NfcFillTarget target) {
+        if (nfcAdapter == null) { showFloatToast("这台手机没有 NFC 功能"); return; }
+        try {
+            if (!nfcAdapter.isEnabled()) { showFloatToast("NFC 还没打开，去系统设置打开后再试"); return; }
+        } catch (Throwable ignored) { showFloatToast("NFC 启动失败"); return; }
+        pendingNfcTarget = target;
+        nfcWaiting = true;
+        enableNfcReader();
+        showFloatToast("把银行卡贴到手机背面 NFC 区域…");
+        if (nfcTimeoutTask != null) mainHandler.removeCallbacks(nfcTimeoutTask);
+        nfcTimeoutTask = () -> {
+            if (nfcWaiting) { stopNfcReader(); showFloatToast("超时没等到卡，识别已取消"); }
+        };
+        mainHandler.postDelayed(nfcTimeoutTask, 30000);
+    }
+
+    void handleNfcTag(Tag tag) {
+        // ReaderCallback 在 binder 线程回调，IsoDep 收发不能上主线程；结果统一 runOnUiThread 回填。
+        try {
+            IsoDep iso = IsoDep.get(tag);
+            if (iso == null) {
+                runOnUiThread(() -> { stopNfcReader(); showFloatToast("没读到芯片卡，把卡贴紧手机背面再试"); });
+                return;
+            }
+            iso.connect();
+            iso.setTimeout(5000);
+            String aid = null, label = null;
+            byte[] resp = iso.transceive(hexToBytes("00A404000E325041592E5359532E444446303100"));
+            if (swOk(resp)) {
+                String[] f = parseEmvDir(resp);
+                aid = f[0]; label = f[1];
+            }
+            if (aid == null) {
+                String[] aids = {"A0000000031010", "A0000000041010", "A000000333010101", "A0000000250101", "A0000000651010"};
+                for (int i = 0; i < aids.length && aid == null; i++) {
+                    byte[] r2 = iso.transceive(selectAid(aids[i]));
+                    if (swOk(r2)) {
+                        String[] f = parseEmvDir(r2);
+                        aid = aids[i];
+                        if (f[1] != null) label = f[1];
+                    }
+                }
+            }
+            String bin = null, last4 = null;
+            if (aid != null) {
+                try {
+                    byte[] sel = iso.transceive(selectAid(aid));
+                    if (swOk(sel)) {
+                        String[] f2 = parseEmvDir(sel);
+                        if (f2[1] != null && f2[1].length() > 0) label = f2[1];
+                        String pan = readPan(iso, findValue(sel, 0x9F38));
+                        if (pan != null && pan.length() >= 4) {
+                            bin = pan.substring(0, Math.min(8, pan.length()));
+                            last4 = pan.substring(pan.length() - 4);
+                        }
+                        // 完整卡号只在内存里过一遍取 BIN/尾号，立即丢弃，绝不落盘/日志（混合版铁律）
+                        pan = null;
+                    }
+                } catch (Throwable ignored) {}
+            }
+            try { iso.close(); } catch (Throwable ignored) {}
+            final String fAid = aid, fLabel = label, fBin = bin, fLast4 = last4;
+            runOnUiThread(() -> onNfcTagResult(fAid, fLabel, fBin, fLast4));
+        } catch (Throwable e) {
+            runOnUiThread(() -> { stopNfcReader(); showFloatToast("读卡失败，把卡贴紧 NFC 区域再试"); });
+        }
+    }
+
+    void onNfcTagResult(String aid, String label, final String bin, final String last4) {
+        final NfcFillTarget t = pendingNfcTarget;
+        stopNfcReader();
+        if (aid == null) { showFloatToast("读到了卡，但没找到银行卡应用"); return; }
+        if (t == null) return; // 表单已关，识别结果无处回填，静默结束（已给过贴卡提示）
+        haptic();
+        final String org = schemeOf(aid);
+        final String type = typeOf(label);
+        final String cleanLabel = sanitizeLabel(label);
+        if (org != null && org.length() > 0 && t.orgSel != null) {
+            t.orgSel[0] = org;
+            if (t.paintOrgs != null) t.paintOrgs.run();
+        }
+        if (bin != null && bin.length() > 0) {
+            String local = bankFromBinLocal(bin);
+            if (local != null && local.length() > 0) {
+                finishNfcFill(t, org, type, cleanLabel, bin, last4, local);
+            } else {
+                // 本地没认出再在线认行（同混合版 fetch binlist 的回落），失败也不挡回填
+                new Thread(() -> {
+                    String onlineBank = "";
+                    try {
+                        HttpURLConnection conn = (HttpURLConnection) new URL("https://lookup.binlist.net/" + bin).openConnection();
+                        conn.setConnectTimeout(8000); conn.setReadTimeout(8000);
+                        conn.setRequestProperty("Accept", "application/json");
+                        if (conn.getResponseCode() == 200) {
+                            JSONObject d = new JSONObject(Store.readAll(conn.getInputStream()));
+                            JSONObject bk = d.optJSONObject("bank");
+                            if (bk != null) onlineBank = bk.optString("name", "");
+                        }
+                        conn.disconnect();
+                    } catch (Throwable ignored) {}
+                    final String ob = onlineBank;
+                    runOnUiThread(() -> finishNfcFill(t, org, type, cleanLabel, bin, last4, ob));
+                }).start();
+            }
+        } else {
+            finishNfcFill(t, org, type, cleanLabel, bin, last4, "");
+        }
+    }
+
+    void finishNfcFill(NfcFillTarget t, String org, String type, String label, String bin, String last4, String bank) {
+        if (t == null) return;
+        try {
+            if (bank != null && bank.length() > 0 && t.bank != null && t.bank.getText().toString().trim().isEmpty())
+                t.bank.setText(bank);
+            if (t.note != null && t.note.getText().toString().trim().isEmpty() && (type != null || bin != null || (bank != null && bank.length() > 0))) {
+                StringBuilder sb = new StringBuilder("NFC 识别：");
+                sb.append(type != null && !"类型未知".equals(type) ? type : "银行卡");
+                if (label != null && label.length() > 0) sb.append("（").append(label).append("）");
+                if (bank != null && bank.length() > 0) sb.append(" · 发卡行 ").append(bank);
+                if (bin != null && bin.length() > 0) sb.append(" · BIN ").append(bin);
+                if (last4 != null && last4.length() > 0) sb.append(" · 尾号 ").append(last4);
+                t.note.setText(sb.toString());
+            }
+            if (t.name != null && t.name.getText().toString().trim().isEmpty()
+                && org != null && org.length() > 0 && type != null && !"类型未知".equals(type))
+                t.name.setText(org + type);
+        } catch (Throwable ignored) {}
+        StringBuilder toast = new StringBuilder("识别到：");
+        toast.append(org != null && org.length() > 0 ? org : "未知组织");
+        if (type != null && type.length() > 0) toast.append(" · ").append(type);
+        if (bank != null && bank.length() > 0) toast.append(" · ").append(bank);
+        showFloatToast(toast.toString());
+    }
+
+    boolean swOk(byte[] r) {
+        return r != null && r.length >= 2 && (r[r.length - 2] & 0xFF) == 0x90 && (r[r.length - 1] & 0xFF) == 0x00;
+    }
+    byte[] selectAid(String aidHex) {
+        byte[] aid = hexToBytes(aidHex);
+        byte[] cmd = new byte[5 + aid.length + 1];
+        cmd[1] = (byte) 0xA4; cmd[2] = 0x04;
+        cmd[4] = (byte) aid.length;
+        System.arraycopy(aid, 0, cmd, 5, aid.length);
+        return cmd;
+    }
+    byte[] hexToBytes(String s) {
+        byte[] b = new byte[s.length() / 2];
+        for (int i = 0; i < b.length; i++) b[i] = (byte) Integer.parseInt(s.substring(i * 2, i * 2 + 2), 16);
+        return b;
+    }
+    String bytesToHex(byte[] d, int off, int len) {
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < len; i++) {
+            String h = Integer.toHexString(d[off + i] & 0xFF).toUpperCase();
+            if (h.length() == 1) sb.append('0');
+            sb.append(h);
+        }
+        return sb.toString();
+    }
+    String[] parseEmvDir(byte[] d) {
+        String aid = null, label = null;
+        int i = 0;
+        while (i + 1 < d.length) {
+            int first = d[i] & 0xFF;
+            int tag = first, tlen = 1;
+            if ((first & 0x1F) == 0x1F && i + 2 < d.length) { tag = (first << 8) | (d[i + 1] & 0xFF); tlen = 2; }
+            int p = i + tlen;
+            if (p >= d.length) break;
+            int len = d[p] & 0xFF; p++;
+            if (len == 0x81 && p < d.length) { len = d[p] & 0xFF; p++; }
+            else if (len > 0x80) break;
+            if (p + len > d.length) break;
+            if (tag == 0x4F && aid == null) aid = bytesToHex(d, p, len);
+            if ((tag == 0x50 || tag == 0x9F12) && label == null) label = asciiOf(d, p, len);
+            if ((first & 0x20) != 0) { i = p; continue; }
+            i = p + len;
+        }
+        return new String[]{aid, label};
+    }
+    String asciiOf(byte[] d, int off, int len) {
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < len; i++) {
+            int c = d[off + i] & 0xFF;
+            if (c >= 32 && c < 127) sb.append((char) c);
+        }
+        return sb.toString().trim();
+    }
+    String sanitizeLabel(String s) {
+        if (s == null) return "";
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < s.length(); i++) {
+            char c = s.charAt(i);
+            if ((c >= 32 && c < 127 && c != '"' && c != '\\') || (c >= 0x4E00 && c <= 0x9FA5)) sb.append(c);
+        }
+        return sb.toString().trim();
+    }
+    String schemeOf(String aid) {
+        if (aid == null) return "";
+        if (aid.startsWith("A000000003")) return "Visa";
+        if (aid.startsWith("A000000004")) return "万事达";
+        if (aid.startsWith("A000000333")) return "银联";
+        if (aid.startsWith("A000000025")) return "美国运通";
+        if (aid.startsWith("A000000065")) return "JCB";
+        return "";
+    }
+    String typeOf(String label) {
+        if (label == null || label.length() == 0) return "类型未知";
+        String s = label.toUpperCase();
+        if (s.contains("DEBIT") || s.contains("MAESTRO") || s.contains("V PAY")) return "借记卡";
+        if (s.contains("CREDIT")) return "信用卡";
+        if (s.contains("PREPAID")) return "预付卡";
+        return "类型未知";
+    }
+    byte[] findValue(byte[] d, int want) {
+        int i = 0;
+        while (i + 1 < d.length) {
+            int first = d[i] & 0xFF;
+            int tag = first, tlen = 1;
+            if ((first & 0x1F) == 0x1F && i + 2 < d.length) { tag = (first << 8) | (d[i + 1] & 0xFF); tlen = 2; }
+            int p = i + tlen;
+            if (p >= d.length) break;
+            int len = d[p] & 0xFF; p++;
+            if (len == 0x81 && p < d.length) { len = d[p] & 0xFF; p++; }
+            else if (len > 0x80) break;
+            if (p + len > d.length) break;
+            if (tag == want) {
+                byte[] v = new byte[len];
+                System.arraycopy(d, p, v, 0, len);
+                return v;
+            }
+            if ((first & 0x20) != 0) { i = p; continue; }
+            i = p + len;
+        }
+        return null;
+    }
+    byte bcdByte(int n) { return (byte) (((n / 10) << 4) | (n % 10)); }
+    byte[] buildGpoData(byte[] pdol) {
+        if (pdol == null || pdol.length == 0) return new byte[0];
+        java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
+        java.util.Calendar cal = java.util.Calendar.getInstance();
+        int i = 0;
+        while (i < pdol.length) {
+            int first = pdol[i] & 0xFF;
+            int tag = first, tlen = 1;
+            if ((first & 0x1F) == 0x1F && i + 1 < pdol.length) { tag = (first << 8) | (pdol[i + 1] & 0xFF); tlen = 2; }
+            if (i + tlen >= pdol.length) break;
+            int need = pdol[i + tlen] & 0xFF;
+            byte[] v = new byte[need];
+            if (tag == 0x9F1A || tag == 0x5F2A) {
+                if (need >= 2) { v[need - 2] = 0x01; v[need - 1] = 0x56; }
+            } else if (tag == 0x9A && need >= 3) {
+                v[need - 3] = bcdByte(cal.get(java.util.Calendar.YEAR) % 100);
+                v[need - 2] = bcdByte(cal.get(java.util.Calendar.MONTH) + 1);
+                v[need - 1] = bcdByte(cal.get(java.util.Calendar.DAY_OF_MONTH));
+            } else if (tag == 0x9F21 && need >= 3) {
+                v[need - 3] = bcdByte(cal.get(java.util.Calendar.HOUR_OF_DAY));
+                v[need - 2] = bcdByte(cal.get(java.util.Calendar.MINUTE));
+                v[need - 1] = bcdByte(cal.get(java.util.Calendar.SECOND));
+            } else if (tag == 0x9F37) {
+                java.util.Random rnd = new java.util.Random();
+                for (int k = 0; k < need; k++) v[k] = (byte) rnd.nextInt(256);
+            } else if (tag == 0x9F66 && need >= 4) {
+                v[need - 4] = 0x36; v[need - 3] = (byte) 0xA0; v[need - 2] = 0x40; v[need - 1] = 0x00;
+            }
+            out.write(v, 0, v.length);
+            i += tlen + 1;
+        }
+        return out.toByteArray();
+    }
+    String readPan(IsoDep iso, byte[] pdol) throws Exception {
+        byte[] gd = buildGpoData(pdol);
+        byte[] cmd = new byte[8 + gd.length];
+        cmd[0] = (byte) 0x80; cmd[1] = (byte) 0xA8;
+        cmd[4] = (byte) (gd.length + 2);
+        cmd[5] = (byte) 0x83; cmd[6] = (byte) gd.length;
+        System.arraycopy(gd, 0, cmd, 7, gd.length);
+        byte[] gpo = iso.transceive(cmd);
+        if (!swOk(gpo)) {
+            gpo = iso.transceive(new byte[]{(byte) 0x80, (byte) 0xA8, 0, 0, 2, (byte) 0x83, 0, 0});
+            if (!swOk(gpo)) return null;
+        }
+        byte[] afl = findValue(gpo, 0x94);
+        if (afl == null && gpo.length > 4 && (gpo[0] & 0xFF) == 0x80) {
+            int l = gpo[1] & 0xFF;
+            int end = Math.min(gpo.length - 2, 2 + l);
+            if (end > 4) {
+                afl = new byte[end - 4];
+                System.arraycopy(gpo, 4, afl, 0, afl.length);
+            }
+        }
+        if (afl == null) return null;
+        for (int k = 0; k + 3 < afl.length; k += 4) {
+            int sfi = (afl[k] & 0xFF) >> 3;
+            int first = afl[k + 1] & 0xFF, last = afl[k + 2] & 0xFF;
+            if (sfi < 1 || sfi > 30 || first < 1 || last < first || last > 10) continue;
+            for (int rec = first; rec <= last; rec++) {
+                byte[] rc = iso.transceive(new byte[]{0, (byte) 0xB2, (byte) rec, (byte) ((sfi << 3) | 4), 0});
+                if (!swOk(rc)) continue;
+                byte[] v5a = findValue(rc, 0x5A);
+                String pan = v5a != null ? bcdDigits(v5a) : null;
+                if (pan == null) {
+                    byte[] t2 = findValue(rc, 0x57);
+                    if (t2 != null) pan = track2Pan(t2);
+                }
+                if (pan != null && luhnOk(pan)) return pan;
+            }
+        }
+        return null;
+    }
+    String bcdDigits(byte[] v) {
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < v.length; i++) {
+            int hi = (v[i] >> 4) & 0xF, lo = v[i] & 0xF;
+            if (hi <= 9) sb.append((char) ('0' + hi)); else if (hi != 0xF) return null;
+            if (lo <= 9) sb.append((char) ('0' + lo)); else if (lo != 0xF) return null;
+        }
+        return sb.length() > 0 ? sb.toString() : null;
+    }
+    String track2Pan(byte[] v) {
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < v.length; i++) {
+            for (int j = 0; j < 2; j++) {
+                int n = j == 0 ? ((v[i] >> 4) & 0xF) : (v[i] & 0xF);
+                if (n == 0xD || n == 0xF) return sb.length() >= 13 ? sb.toString() : null;
+                if (n > 9) return null;
+                sb.append((char) ('0' + n));
+            }
+        }
+        return sb.length() >= 13 ? sb.toString() : null;
+    }
+    boolean luhnOk(String pan) {
+        if (pan == null || pan.length() < 13 || pan.length() > 19) return false;
+        int sum = 0;
+        boolean alt = false;
+        for (int i = pan.length() - 1; i >= 0; i--) {
+            int dg = pan.charAt(i) - '0';
+            if (dg < 0 || dg > 9) return false;
+            if (alt) { dg *= 2; if (dg > 9) dg -= 9; }
+            sum += dg;
+            alt = !alt;
+        }
+        return sum % 10 == 0;
+    }
+
+    // 在线 BIN 查询浮窗（对照混合版 #binDlg：输入 6–8 位 → binlist 在线认行 → 可一键加入我的卡片）
+    LinearLayout binSpecRow(String k, String v) {
+        LinearLayout row = new LinearLayout(this);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        row.setPadding(0, dp(this, 7), 0, dp(this, 7));
+        TextView dk = tv(this, k, 13, Color.rgb(0x8E, 0x8E, 0x93), false);
+        row.addView(dk, new LinearLayout.LayoutParams(dp(this, 72), ViewGroup.LayoutParams.WRAP_CONTENT));
+        TextView dv = tv(this, v == null ? "" : v, 13.5f, Color.rgb(0x1C, 0x1C, 0x1E), false);
+        dv.setGravity(Gravity.END);
+        row.addView(dv, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+        return row;
+    }
+
+    void openBinQuery() {
+        closeBinQueryNow();
+        lastBin = null; lastBinScheme = null; lastBinType = null; lastBinBrand = null; lastBinBank = null; lastBinCountry = null;
+        captureCurrentPageScroll();
+        if (navWrap != null) navWrap.setVisibility(View.GONE);
+        final FrameLayout sheet = new FrameLayout(this);
+        View shade = new View(this);
+        shade.setBackgroundColor(Color.argb(102, 0, 0, 0));
+        shade.setOnClickListener(v -> closeBinQuery());
+        sheet.addView(shade, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        LinearLayout card = new LinearLayout(this);
+        card.setOrientation(LinearLayout.VERTICAL);
+        GradientDrawable cg = new GradientDrawable();
+        cg.setColor(Color.argb(219, 255, 255, 255));
+        cg.setStroke(dp(this, 1), Color.argb(140, 255, 255, 255));
+        cg.setCornerRadius(dp(this, 22));
+        card.setBackground(cg);
+        if (Build.VERSION.SDK_INT >= 21) { card.setElevation(dp(this, 24)); card.setClipToOutline(true); }
+        card.setOnClickListener(v -> {});
+        card.setPadding(dp(this, 18), dp(this, 18), dp(this, 18), dp(this, 14));
+        final EditText inBin = customInput("输入卡号前 6–8 位", "", 8);
+        inBin.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
+        final LinearLayout resultBox = new LinearLayout(this);
+        resultBox.setOrientation(LinearLayout.VERTICAL);
+        final Button addBtn = new Button(this);
+        card.addView(tv(this, "在线查询卡信息", 17, Color.rgb(0x1C, 0x1C, 0x1E), true));
+        TextView hint = tv(this, "输入银行卡号前 6–8 位，在线查询卡组织、发卡行等信息，可一键加入我的卡片。", 12.5f, Color.rgb(0x8E, 0x8E, 0x93), false);
+        LinearLayout.LayoutParams hintLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        hintLp.topMargin = dp(this, 6);
+        card.addView(hint, hintLp);
+        LinearLayout formRow = new LinearLayout(this);
+        formRow.setOrientation(LinearLayout.HORIZONTAL);
+        LinearLayout.LayoutParams formLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        formLp.topMargin = dp(this, 12);
+        card.addView(formRow, formLp);
+        formRow.addView(inBin, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+        Button go = new Button(this);
+        go.setText("查询"); go.setTextSize(15); go.setAllCaps(false); go.setTextColor(Color.WHITE);
+        try { go.setTypeface(go.getTypeface(), android.graphics.Typeface.BOLD); } catch (Throwable ignored) {}
+        GradientDrawable goBg = new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
+            new int[]{Color.rgb(0x0A, 0x84, 0xFF), Color.rgb(0x00, 0x66, 0xE6)});
+        goBg.setCornerRadius(dp(this, 12));
+        go.setBackground(goBg);
+        LinearLayout.LayoutParams goLp = new LinearLayout.LayoutParams(dp(this, 84), dp(this, 48));
+        goLp.leftMargin = dp(this, 10);
+        // customInput 自带 topMargin 6，与查询钮对齐需把输入框的边距在行内归零
+        if (inBin.getLayoutParams() instanceof ViewGroup.MarginLayoutParams)
+            ((ViewGroup.MarginLayoutParams) inBin.getLayoutParams()).topMargin = 0;
+        formRow.addView(go, goLp);
+        LinearLayout.LayoutParams resLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        resLp.topMargin = dp(this, 6);
+        card.addView(resultBox, resLp);
+        LinearLayout acts = new LinearLayout(this);
+        acts.setOrientation(LinearLayout.HORIZONTAL);
+        LinearLayout.LayoutParams actLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        actLp.topMargin = dp(this, 14);
+        card.addView(acts, actLp);
+        Button closeBtn = new Button(this);
+        closeBtn.setText("关闭"); closeBtn.setTextSize(15); closeBtn.setAllCaps(false);
+        closeBtn.setBackground(roundRect(Color.rgb(0xF2, 0xF3, 0xF7), 14, this));
+        closeBtn.setOnClickListener(v -> { haptic(); closeBinQuery(); });
+        acts.addView(closeBtn, new LinearLayout.LayoutParams(0, dp(this, 48), 1f));
+        addBtn.setText("加入我的卡片"); addBtn.setTextSize(15); addBtn.setAllCaps(false); addBtn.setTextColor(Color.WHITE);
+        try { addBtn.setTypeface(addBtn.getTypeface(), android.graphics.Typeface.BOLD); } catch (Throwable ignored) {}
+        GradientDrawable addBg = new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
+            new int[]{Color.rgb(0x0A, 0x84, 0xFF), Color.rgb(0x00, 0x66, 0xE6)});
+        addBg.setCornerRadius(dp(this, 14));
+        addBtn.setBackground(addBg);
+        LinearLayout.LayoutParams addLp = new LinearLayout.LayoutParams(0, dp(this, 48), 1.4f);
+        addLp.leftMargin = dp(this, 10);
+        addBtn.setVisibility(View.GONE);
+        acts.addView(addBtn, addLp);
+        go.setOnClickListener(v -> { haptic(); lookupBinOnline(inBin.getText().toString().trim(), resultBox, addBtn); });
+        addBtn.setOnClickListener(v -> { haptic(); addLastBinToMine(); });
+        int sw = getResources().getDisplayMetrics().widthPixels;
+        int maxH = (int) (getResources().getDisplayMetrics().heightPixels * 0.82);
+        card.measure(View.MeasureSpec.makeMeasureSpec(sw - dp(this, 24), View.MeasureSpec.EXACTLY),
+            View.MeasureSpec.makeMeasureSpec(maxH, View.MeasureSpec.AT_MOST));
+        FrameLayout.LayoutParams clp = new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, Math.min(card.getMeasuredHeight(), maxH));
+        clp.gravity = Gravity.BOTTOM;
+        clp.leftMargin = dp(this, 12); clp.rightMargin = dp(this, 12);
+        clp.bottomMargin = dp(this, 12) + navBarH();
+        FrameLayout.LayoutParams fglp = new FrameLayout.LayoutParams(clp.width, clp.height);
+        fglp.gravity = clp.gravity; fglp.leftMargin = clp.leftMargin; fglp.rightMargin = clp.rightMargin; fglp.bottomMargin = clp.bottomMargin;
+        sheet.addView(glassLayer(card, 22, false), fglp);
+        sheet.addView(card, clp);
+        content.addView(sheet);
+        binSheet = sheet;
+        sheet.setAlpha(0f);
+        sheet.animate().alpha(1f).setDuration(200).setInterpolator(ANIM_ENTER).start();
+        card.setTranslationY(dp(this, 40)); card.setAlpha(0f);
+        card.animate().translationY(0f).alpha(1f).setDuration(280).setInterpolator(ANIM_ENTER).start();
+        inBin.postDelayed(() -> { try { inBin.requestFocus(); } catch (Throwable ignored) {} }, 120);
+    }
+
+    void closeBinQueryNow() {
+        View sheet = binSheet;
+        if (sheet == null) return;
+        binSheet = null;
+        if (sheet.getParent() != null) ((ViewGroup) sheet.getParent()).removeView(sheet);
+    }
+
+    void closeBinQuery() {
+        final View sheet = binSheet;
+        if (sheet == null) return;
+        binSheet = null;
+        hideKeyboardNow();
+        if (sheet.getParent() != null) {
+            View card = sheet instanceof ViewGroup && ((ViewGroup) sheet).getChildCount() > 1
+                ? ((ViewGroup) sheet).getChildAt(((ViewGroup) sheet).getChildCount() - 1) : null;
+            if (card != null) {
+                card.animate().translationY(dp(this, 42)).alpha(0f).setDuration(180).setInterpolator(ANIM_ENTER)
+                    .withEndAction(() -> {
+                        if (sheet.getParent() != null) ((ViewGroup) sheet.getParent()).removeView(sheet);
+                        if (navWrap != null) navWrap.setVisibility(View.VISIBLE);
+                        syncSearchFab();
+                    }).start();
+                sheet.animate().alpha(0f).setDuration(180).start();
+                return;
+            }
+            ((ViewGroup) sheet.getParent()).removeView(sheet);
+        }
+        if (navWrap != null) navWrap.setVisibility(View.VISIBLE);
+        syncSearchFab();
+    }
+
+    void lookupBinOnline(final String bin, final LinearLayout resultBox, final Button addBtn) {
+        if (bin == null || !bin.matches("[0-9]{6,8}")) { showFloatToast("请输入 6–8 位数字 BIN"); return; }
+        resultBox.removeAllViews();
+        resultBox.addView(tv(this, "查询中…", 13.5f, Color.rgb(0x8E, 0x8E, 0x93), false));
+        addBtn.setVisibility(View.GONE);
+        lastBin = null;
+        new Thread(() -> {
+            String scheme = null, type = null, brand = null, bankName = null, country = null;
+            boolean ok = false;
+            try {
+                HttpURLConnection conn = (HttpURLConnection) new URL("https://lookup.binlist.net/" + bin).openConnection();
+                conn.setConnectTimeout(8000); conn.setReadTimeout(8000);
+                conn.setRequestProperty("Accept", "application/json");
+                int code = conn.getResponseCode();
+                if (code == 200) {
+                    JSONObject d = new JSONObject(Store.readAll(conn.getInputStream()));
+                    scheme = d.optString("scheme", "");
+                    type = d.optString("type", "");
+                    brand = d.optString("brand", "");
+                    JSONObject bk = d.optJSONObject("bank");
+                    if (bk != null) bankName = bk.optString("name", "");
+                    JSONObject co = d.optJSONObject("country");
+                    if (co != null) country = co.optString("name", "");
+                    ok = (scheme != null && scheme.length() > 0) || (bankName != null && bankName.length() > 0);
+                }
+                conn.disconnect();
+            } catch (Throwable ignored) { ok = false; }
+            final String fScheme = scheme, fType = type, fBrand = brand, fBank = bankName, fCountry = country;
+            final boolean fOk = ok;
+            runOnUiThread(() -> {
+                resultBox.removeAllViews();
+                if (!fOk) {
+                    resultBox.addView(tv(MainActivity.this, "查不到这个 BIN 的信息，换个试试。", 13.5f, Color.rgb(0x8E, 0x8E, 0x93), false));
+                    addBtn.setVisibility(View.GONE);
+                    return;
+                }
+                lastBin = bin; lastBinScheme = fScheme; lastBinType = fType; lastBinBrand = fBrand; lastBinBank = fBank; lastBinCountry = fCountry;
+                if (bin != null && bin.length() > 0) resultBox.addView(binSpecRow("BIN", bin));
+                if (fScheme != null && fScheme.length() > 0) resultBox.addView(binSpecRow("卡组织", fScheme));
+                if (fType != null && fType.length() > 0) resultBox.addView(binSpecRow("类型", fType));
+                if (fBrand != null && fBrand.length() > 0) resultBox.addView(binSpecRow("品牌", fBrand));
+                if (fBank != null && fBank.length() > 0) resultBox.addView(binSpecRow("发卡行", fBank));
+                if (fCountry != null && fCountry.length() > 0) resultBox.addView(binSpecRow("国家", fCountry));
+                addBtn.setVisibility(View.VISIBLE);
+            });
+        }).start();
+    }
+
+    void addLastBinToMine() {
+        if (lastBin == null) return;
+        String bankName = lastBinBank == null ? "" : lastBinBank;
+        String schemeUp = lastBinScheme == null ? "" : lastBinScheme.toUpperCase();
+        String name = (bankName.length() > 0 ? bankName + " " : "") + (schemeUp.length() > 0 ? schemeUp : "银行卡") + " (" + lastBin + ")";
+        java.util.List<String> parts = new ArrayList<>();
+        if (lastBinType != null && lastBinType.length() > 0) parts.add(lastBinType);
+        if (lastBinBrand != null && lastBinBrand.length() > 0) parts.add(lastBinBrand);
+        if (lastBinCountry != null && lastBinCountry.length() > 0) parts.add(lastBinCountry);
+        StringBuilder note = new StringBuilder();
+        for (int i = 0; i < parts.size(); i++) { if (i > 0) note.append(" · "); note.append(parts.get(i)); }
+        CustomCard c = new CustomCard();
+        c.id = "custom-" + System.currentTimeMillis();
+        c.name = name; c.bank = bankName; c.org = schemeUp; c.note = note.toString(); c.style = 0;
+        customCards.add(c);
+        customOpen = true;
+        saveCustomCards();
+        closeBinQuery();
+        showFloatToast("已加入我的卡片");
+        refreshMineKeepScroll();
+    }
+
+
     // Q8 组织 chips（对照混合版 openCustomForm 的 .chips button 与 .dlg .chips 数值）：
     // 胶囊圆角、内边距 13/7、选中蓝渐变白字（同 .chips button.on），未选走筛选 chips 的近白口径保可读
     TextView formOrgChip(String label) {
@@ -5552,7 +6171,7 @@ public class MainActivity extends Activity {
     // .chips button.on 蓝渐变（废原整坨实心蓝）；卡面样式改 3×2 大渐变色块（.swatch 64×40 量级、
     // 圆角 8、选中 #007AFF 边+外圈 rgba(0,122,255,.25)，废原一排小药丸加勾）；标题/必填星/占位/
     // 字数上限照 index.html（名称*、如：我的工资卡/30、如：招商银行/20、备注 可空/60）；动作行
-    // 取消 flex1/保存 flex2（.dlg-actions 口径），保存走 .primary-btn 蓝渐变。NFC 行归 Q9 本段不加。
+    // 取消 flex1/保存 flex2（.dlg-actions 口径），保存走 .primary-btn 蓝渐变。NFC 贴卡行已于 Q9 补齐（见表单内按钮）。
     void openCustomForm(final CustomCard edit) {
         closeCustomFormNow();
         final boolean isNew = edit == null;
@@ -5692,8 +6311,33 @@ public class MainActivity extends Activity {
             }
         }
         paintStyles.run();
-        form.addView(customFormLabel("备注"));
         final EditText inNote = customInput("可空", draft.note, 60);
+        // Q9 NFC 贴卡按钮（对照混合版 index.html #ccNfc：全宽、浅蓝底、蓝字，禁用 emoji 改纯文字细线语言）：
+        // 点它起 NFC 读卡，回填组织/银行/备注；无 NFC 或未开启给明确提示，不静默失败。
+        TextView nfcBtn = tv(this, "NFC 贴卡识别（自动填卡组织 / 类型）", 14, Color.rgb(0x00, 0x7A, 0xFF), true);
+        nfcBtn.setGravity(Gravity.CENTER);
+        nfcBtn.setPadding(0, dp(this, 12), 0, dp(this, 12));
+        GradientDrawable nfcBg = new GradientDrawable();
+        nfcBg.setColor(Color.rgb(0xF2, 0xF7, 0xFF));
+        nfcBg.setCornerRadius(dp(this, 12));
+        nfcBg.setStroke(dp(this, 1), Color.rgb(0xCF, 0xE4, 0xFF));
+        nfcBtn.setBackground(nfcBg);
+        LinearLayout.LayoutParams nfcLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        nfcLp.topMargin = dp(this, 14);
+        nfcBtn.setLayoutParams(nfcLp);
+        nfcBtn.setOnClickListener(v -> {
+            haptic();
+            NfcFillTarget t = new NfcFillTarget();
+            t.name = inName; t.bank = inBank; t.note = inNote; t.orgSel = orgSel; t.paintOrgs = paintOrgs;
+            startNfcRead(t);
+        });
+        nfcBtn.setOnTouchListener((v, e) -> {
+            if (e.getAction() == MotionEvent.ACTION_DOWN) pressBounce(v, true);
+            else if (e.getAction() == MotionEvent.ACTION_UP || e.getAction() == MotionEvent.ACTION_CANCEL) pressBounce(v, false);
+            return false;
+        });
+        form.addView(nfcBtn);
+        form.addView(customFormLabel("备注"));
         form.addView(inNote);
 
         LinearLayout acts = new LinearLayout(this);
@@ -6875,6 +7519,7 @@ public class MainActivity extends Activity {
         if (settingsLogOpen && "settings".equals(tab)) { settingsLogOpen = false; rebuildPages(); return; }
         if (detailCard != null) { closeDetail(); return; }
         if (filterSheet != null) { closeFilterSheet(); return; }
+        if (binSheet != null) { closeBinQuery(); return; }
         if (customFormSheet != null) { closeCustomForm(); return; }
         if (wizardOpen) {
             if (wizSc == null) closeWizard(); else wizGoBack();
