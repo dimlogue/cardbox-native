@@ -177,12 +177,12 @@ public class MainActivity extends Activity {
             FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(dp(this, 46), dp(this, 46));
             lp.gravity = Gravity.END | Gravity.BOTTOM;
             lp.rightMargin = dp(this, 16);
-            lp.bottomMargin = dp(this, "home".equals(tab) && !changelogOpen ? 158 : 96);
+            lp.bottomMargin = dp(this, "home".equals(tab) && !changelogOpen ? 224 : 96);
             content.addView(topFab, lp);
             topFab.setVisibility(View.GONE);
         } else if (topFab.getLayoutParams() instanceof FrameLayout.LayoutParams) {
             FrameLayout.LayoutParams lp = (FrameLayout.LayoutParams) topFab.getLayoutParams();
-            int wantBottom = dp(this, "home".equals(tab) && !changelogOpen ? 158 : 96);
+            int wantBottom = dp(this, "home".equals(tab) && !changelogOpen ? 224 : 96);
             if (lp.bottomMargin != wantBottom) { lp.bottomMargin = wantBottom; topFab.setLayoutParams(lp); }
         }
         updateTopFabVisibility(sv.getScrollY());
@@ -636,9 +636,9 @@ public class MainActivity extends Activity {
     Button filterBtn;
     View filterSheet = null;
     ScrollView filterScroll = null; // P2e：筛选窗内滚动区（窗框固定不滚，四角不被内容切掉）
-    // P2 悬浮搜索圆钮（首页右下，点了回顶聚焦顶部搜索框）
+    // Q3 悬浮搜索圆钮（首页右侧竖列上钮，玻璃底深色放大镜，点了回顶聚焦顶部搜索框）
     View searchFab = null;
-    // P2c 悬浮筛选钮（与搜索钮同排同浮感，有已选条件时带角标计数）
+    // Q3 悬浮筛选钮（搜索钮正下方，玻璃底深色滑杆图标，有已选条件时带蓝角标计数）
     View filterFab = null;
     TextView filterFabBadge = null;
     // P-scroll 悬浮回顶圆钮（长列表滚过一段后出现，点了平滑回顶）
@@ -1140,43 +1140,58 @@ public class MainActivity extends Activity {
         }
     }
 
-    // ---------- P2 悬浮搜索圆钮 / P2c 悬浮筛选钮 ----------
-    // 细线放大镜（Canvas 线条，与导航图标同语言，禁用 emoji）
+    // ---------- Q3 悬浮钮玻璃化（对照混合版 .qf-btn/.quick-fab） ----------
+    // 混合版数值：48dp 圆钮、右 20dp、竖列（搜索上/筛选下）gap 10dp、列底距屏底 108dp；
+    // 底 rgba(255,255,255,.45)+blur28、描边 rgba(255,255,255,.55) 1dp、图标深色 #1C1C1E 细线 1.8/24 网格、svg 本体 22dp。
+    // 原生无 backdrop 实时模糊，底色用半透渐变提至约 .74/.66/.61 近似其发亮观感（非真模糊，完成说明如实标注）。
+    Drawable glassFabBg() {
+        GradientDrawable g = new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
+            new int[]{Color.argb(190, 255, 255, 255), Color.argb(168, 248, 250, 255),
+                Color.argb(156, 232, 238, 246)});
+        g.setShape(GradientDrawable.OVAL);
+        g.setStroke(dp(this, 1), Color.argb(140, 255, 255, 255));
+        return g;
+    }
+    void applyGlassFabShadow(View v) {
+        if (Build.VERSION.SDK_INT >= 21) v.setElevation(dp(this, 12));
+        if (Build.VERSION.SDK_INT >= 28) {
+            v.setOutlineAmbientShadowColor(Color.argb(41, 20, 30, 60));
+            v.setOutlineSpotShadowColor(Color.argb(41, 20, 30, 60));
+        }
+    }
+    // 细线放大镜（对照混合版 qfSearch svg：circle 11,11 r6.5 + 柄 15.8→20.5，stroke 1.8）
     class SearchIconView extends View {
-        int iconColor = Color.WHITE;
+        int iconColor = Color.rgb(0x1C, 0x1C, 0x1E);
         SearchIconView(Context c) { super(c); }
         @Override protected void onDraw(Canvas cv) {
             Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);
             p.setStyle(Paint.Style.STROKE);
             p.setStrokeCap(Paint.Cap.ROUND);
-            p.setStrokeWidth(dp(getContext(), 2.1f));
+            float sx = getWidth() / 24f, sy = getHeight() / 24f;
+            p.setStrokeWidth(1.8f * sx);
             p.setColor(iconColor);
-            float w = getWidth(), h = getHeight();
-            float sx = w / 24f, sy = h / 24f;
-            cv.drawCircle(10.8f * sx, 10.8f * sy, 5.6f * sx, p);
-            cv.drawLine(15.2f * sx, 15.2f * sy, 20.5f * sx, 20.5f * sy, p);
+            cv.drawCircle(11f * sx, 11f * sy, 6.5f * sx, p);
+            cv.drawLine(15.8f * sx, 15.8f * sy, 20.5f * sx, 20.5f * sy, p);
         }
     }
-    // P2c 细线漏斗（与搜索钮同一线条语言）
+    // Q3 滑杆图标（对照混合版 qfFilter svg：两横线+两圆钮，废除旧漏斗）
     class FilterIconView extends View {
-        int iconColor = Color.WHITE;
+        int iconColor = Color.rgb(0x1C, 0x1C, 0x1E);
         FilterIconView(Context c) { super(c); }
         @Override protected void onDraw(Canvas cv) {
             Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);
             p.setStyle(Paint.Style.STROKE);
             p.setStrokeCap(Paint.Cap.ROUND);
             p.setStrokeJoin(Paint.Join.ROUND);
-            p.setStrokeWidth(dp(getContext(), 2.0f));
+            float sx = getWidth() / 24f, sy = getHeight() / 24f;
+            p.setStrokeWidth(1.8f * sx);
             p.setColor(iconColor);
-            float w = getWidth(), h = getHeight();
-            float sx = w / 24f, sy = h / 24f;
-            // 漏斗：上宽下窄 + 柄
-            cv.drawLine(4.5f * sx, 5.0f * sy, 19.5f * sx, 5.0f * sy, p);
-            cv.drawLine(4.5f * sx, 5.0f * sy, 9.8f * sx, 12.2f * sy, p);
-            cv.drawLine(19.5f * sx, 5.0f * sy, 14.2f * sx, 12.2f * sy, p);
-            cv.drawLine(9.8f * sx, 12.2f * sy, 9.8f * sx, 18.6f * sy, p);
-            cv.drawLine(14.2f * sx, 12.2f * sy, 14.2f * sx, 18.6f * sy, p);
-            cv.drawLine(9.8f * sx, 18.6f * sy, 14.2f * sx, 18.6f * sy, p);
+            cv.drawLine(4f * sx, 8f * sy, 13f * sx, 8f * sy, p);
+            cv.drawLine(19f * sx, 8f * sy, 20f * sx, 8f * sy, p);
+            cv.drawLine(4f * sx, 16f * sy, 7f * sx, 16f * sy, p);
+            cv.drawLine(13f * sx, 16f * sy, 20f * sx, 16f * sy, p);
+            cv.drawCircle(16f * sx, 8f * sy, 2.2f * sx, p);
+            cv.drawCircle(10f * sx, 16f * sy, 2.2f * sx, p);
         }
     }
 
@@ -1200,25 +1215,25 @@ public class MainActivity extends Activity {
             if (searchFab != null && searchFab.getParent() != null)
                 ((ViewGroup) searchFab.getParent()).removeView(searchFab);
             searchFab = buildSearchFab();
-            FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(dp(this, 54), dp(this, 54));
+            FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(dp(this, 48), dp(this, 48));
             lp.gravity = Gravity.END | Gravity.BOTTOM;
-            lp.rightMargin = dp(this, 16);
-            lp.bottomMargin = dp(this, 96); // 悬在底栏 dock 之上
+            lp.rightMargin = dp(this, 20);
+            lp.bottomMargin = dp(this, 166); // Q3：竖列上钮 = 列底 108 + 钮 48 + 间距 10
             content.addView(searchFab, lp);
             searchFab.setAlpha(0f);
             searchFab.setScaleX(0.8f);
             searchFab.setScaleY(0.8f);
             searchFab.animate().alpha(1f).scaleX(1f).scaleY(1f).setDuration(ANIM_DUR_FADE).setInterpolator(ANIM_ENTER).start();
         }
-        // P2c 筛选钮（左邻搜索钮，同浮感）
+        // Q3 筛选钮：搜索钮正下方（同右距 20、列底 108），废除旧横排左邻位
         if (filterFab == null || filterFab.getParent() != content) {
             if (filterFab != null && filterFab.getParent() != null)
                 ((ViewGroup) filterFab.getParent()).removeView(filterFab);
             filterFab = buildFilterFab();
-            FrameLayout.LayoutParams flp = new FrameLayout.LayoutParams(dp(this, 54), dp(this, 54));
+            FrameLayout.LayoutParams flp = new FrameLayout.LayoutParams(dp(this, 48), dp(this, 48));
             flp.gravity = Gravity.END | Gravity.BOTTOM;
-            flp.rightMargin = dp(this, 80); // 16 + 54 + 10 间隔
-            flp.bottomMargin = dp(this, 96);
+            flp.rightMargin = dp(this, 20);
+            flp.bottomMargin = dp(this, 108);
             content.addView(filterFab, flp);
             filterFab.setAlpha(0f);
             filterFab.setScaleX(0.8f);
@@ -1233,58 +1248,38 @@ public class MainActivity extends Activity {
     void updateFilterFabBadge() {
         if (filterFabBadge == null || filterFab == null) return;
         int n = activeFilterCount();
+        // Q3：混合版已选只靠蓝角标计数，钮体玻璃底恒定不变（废除旧淡蓝底切换）
         if (n <= 0) {
             filterFabBadge.setVisibility(View.GONE);
-            // 无筛选时恢复白底
-            GradientDrawable bg0 = new GradientDrawable();
-            bg0.setShape(GradientDrawable.OVAL);
-            bg0.setColor(Color.WHITE);
-            bg0.setStroke(dp(this, 1), Color.argb(38, 20, 30, 60));
-            filterFab.setBackground(bg0);
         } else {
             filterFabBadge.setVisibility(View.VISIBLE);
             filterFabBadge.setText(n > 9 ? "9+" : String.valueOf(n));
-            // 有筛选时淡蓝底，与搜索钮的蓝呼应但不抢主次（同混合版已选态）
-            GradientDrawable bg1 = new GradientDrawable();
-            bg1.setShape(GradientDrawable.OVAL);
-            bg1.setColor(Color.rgb(0xE8, 0xF1, 0xFD));
-            bg1.setStroke(dp(this, 1), Color.argb(60, 0x0A, 0x5C, 0xD6));
-            filterFab.setBackground(bg1);
         }
     }
 
     View buildFilterFab() {
         FrameLayout fab = new FrameLayout(this);
+        fab.setClipChildren(false);
+        fab.setClipToPadding(false);
         int n0 = activeFilterCount();
-        GradientDrawable bg = new GradientDrawable();
-        bg.setShape(GradientDrawable.OVAL);
-        if (n0 > 0) {
-            bg.setColor(Color.rgb(0xE8, 0xF1, 0xFD));
-            bg.setStroke(dp(this, 1), Color.argb(60, 0x0A, 0x5C, 0xD6));
-        } else {
-            bg.setColor(Color.WHITE);
-            bg.setStroke(dp(this, 1), Color.argb(38, 20, 30, 60));
-        }
-        fab.setBackground(bg);
-        if (Build.VERSION.SDK_INT >= 21) fab.setElevation(dp(this, 12));
+        fab.setBackground(glassFabBg());
+        applyGlassFabShadow(fab);
         FilterIconView icon = new FilterIconView(this);
-        icon.iconColor = Color.rgb(0x0A, 0x5C, 0xD6);
-        int pad = dp(this, 13);
+        int pad = dp(this, 13); // 48 钮内 svg 本体 22dp：(48-22)/2
         icon.setPadding(pad, pad, pad, pad);
         fab.addView(icon, new FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
-        // 角标
+        // 角标：对照混合版 .qf-badge（#007AFF 蓝、右上 -4 外探、min 18×18、字 .68rem）
         TextView badge = tv(this, "", 10, Color.WHITE, true);
         badge.setGravity(Gravity.CENTER);
         GradientDrawable bbg = new GradientDrawable();
         bbg.setShape(GradientDrawable.OVAL);
-        bbg.setColor(Color.rgb(0xFF, 0x3B, 0x30));
-        bbg.setStroke(dp(this, 1), Color.WHITE);
+        bbg.setColor(Color.rgb(0x00, 0x7A, 0xFF));
         badge.setBackground(bbg);
         FrameLayout.LayoutParams blp = new FrameLayout.LayoutParams(dp(this, 18), dp(this, 18));
         blp.gravity = Gravity.END | Gravity.TOP;
-        blp.topMargin = dp(this, 1);
-        blp.rightMargin = dp(this, 1);
+        blp.topMargin = -dp(this, 4);
+        blp.rightMargin = -dp(this, 4);
         fab.addView(badge, blp);
         filterFabBadge = badge;
         if (n0 <= 0) badge.setVisibility(View.GONE);
@@ -1304,14 +1299,10 @@ public class MainActivity extends Activity {
 
     View buildSearchFab() {
         FrameLayout fab = new FrameLayout(this);
-        GradientDrawable bg = new GradientDrawable(GradientDrawable.Orientation.TL_BR,
-            new int[]{Color.rgb(0x0A, 0x6E, 0xD6), Color.rgb(0x0A, 0x5C, 0xD6)});
-        bg.setShape(GradientDrawable.OVAL);
-        bg.setStroke(dp(this, 1), Color.argb(60, 255, 255, 255));
-        fab.setBackground(bg);
-        if (Build.VERSION.SDK_INT >= 21) fab.setElevation(dp(this, 12));
+        fab.setBackground(glassFabBg());
+        applyGlassFabShadow(fab);
         SearchIconView icon = new SearchIconView(this);
-        int pad = dp(this, 13);
+        int pad = dp(this, 13); // 48 钮内 svg 本体 22dp
         icon.setPadding(pad, pad, pad, pad);
         fab.addView(icon, new FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
