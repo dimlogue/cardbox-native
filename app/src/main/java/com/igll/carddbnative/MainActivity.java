@@ -328,15 +328,8 @@ public class MainActivity extends Activity {
         fab.addView(glassLayer(fab, -1, true), new FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         // Q23 固定浅白染色托底（盖在模糊层之上、箭头之下）：对照混合版 .qf-top 的 background:rgba(255,255,255,.32)
-        View wash = new View(this);
-        wash.setClickable(false); wash.setFocusable(false);
-        wash.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
-        GradientDrawable washBg = new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
-            new int[]{Color.argb(170, 255, 255, 255), Color.argb(156, 244, 248, 253)});
-        washBg.setShape(GradientDrawable.OVAL);
-        washBg.setStroke(dp(this, 1), Color.argb(140, 255, 255, 255));
-        wash.setBackground(washBg);
-        fab.addView(wash, new FrameLayout.LayoutParams(
+        // Q53：改用与搜索/筛选钮同一 fabFrostWash() 提亮层，三钮黑底白底同一口径。
+        fab.addView(fabFrostWash(), new FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         applyGlassFabShadow(fab);
         TopIconView icon = new TopIconView(this);
@@ -2160,12 +2153,29 @@ public class MainActivity extends Activity {
     // Q11 起钮内已垫真模糊快照层（见 glassLayer），此渐变只作半透染色盖在模糊上。
     Drawable glassFabBg() {
         // Q37：回毛玻璃染色（对照混合版 .qf-btn rgba(255,255,255,.45) 量级 argb 118 半透），真糊由 live 玻璃层承担。
+        // Q53：玻璃禁用/无帧兜底时此层就是钮面本身——argb118 白压纯黑卡只剩暗灰、图标沉底隐身；
+        // 兜底底色提至近不透明浅白（214/206/198），玻璃在场时它在不透明模糊位图之下不参与呈色，
+        // 真正的提亮由 fabFrostWash() 固定浅白层盖在模糊层之上承担（黑底白底都立得住）。
         GradientDrawable g = new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
-            new int[]{Color.argb(118, 255, 255, 255), Color.argb(110, 248, 250, 255),
-                Color.argb(104, 232, 238, 246)});
+            new int[]{Color.argb(214, 255, 255, 255), Color.argb(206, 248, 250, 255),
+                Color.argb(198, 232, 238, 246)});
         g.setShape(GradientDrawable.OVAL);
-        g.setStroke(dp(this, 1), Color.argb(140, 255, 255, 255));
+        g.setStroke(dp(this, 1), Color.argb(170, 255, 255, 255));
         return g;
+    }
+    // Q53：悬浮钮磨砂提亮层——固定浅白半透盖在 live 模糊层之上、图标之下。玻璃位图是不透明快照，
+    // 压纯黑卡面时模糊层整片发黑、原 argb118 染色被它盖住，钮即全黑隐身；此层与身后颜色无关，
+    // argb 168→152 白提亮让黑底上钮面仍为浅灰白、深色细线图标可辨，白底上也不过曝（仍半透留糊感）。
+    View fabFrostWash() {
+        View wash = new View(this);
+        wash.setClickable(false); wash.setFocusable(false);
+        wash.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
+        GradientDrawable wg = new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
+            new int[]{Color.argb(168, 255, 255, 255), Color.argb(152, 244, 248, 253)});
+        wg.setShape(GradientDrawable.OVAL);
+        wg.setStroke(dp(this, 1), Color.argb(160, 255, 255, 255));
+        wash.setBackground(wg);
+        return wash;
     }
     void applyGlassFabShadow(View v) {
         if (Build.VERSION.SDK_INT >= 21) v.setElevation(dp(this, 12));
@@ -2396,6 +2406,8 @@ public class MainActivity extends Activity {
         fab.setBackground(glassFabBg());
         fab.addView(glassLayer(fab, -1, true), new FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        fab.addView(fabFrostWash(), new FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         applyGlassFabShadow(fab);
         FilterIconView icon = new FilterIconView(this);
         int pad = dp(this, 13); // 48 钮内 svg 本体 22dp：(48-22)/2
@@ -2434,6 +2446,8 @@ public class MainActivity extends Activity {
         FrameLayout fab = new FrameLayout(this);
         fab.setBackground(glassFabBg());
         fab.addView(glassLayer(fab, -1, true), new FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        fab.addView(fabFrostWash(), new FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         applyGlassFabShadow(fab);
         SearchIconView icon = new SearchIconView(this);
