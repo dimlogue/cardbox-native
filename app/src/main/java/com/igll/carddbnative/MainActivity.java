@@ -2063,53 +2063,117 @@ public class MainActivity extends Activity {
         return cardTile(c, parent, cols);
     }
 
+    // Q24 首页瓷砖加卡钮（对照混合版 .mine-btn：32dp 半透圆钮，3 列 26dp）：未加入灰半透底＋白色加号、
+    // 已加入蓝半透底＋白色勾（rgba(0,122,255,.38)），细线 Canvas 绘制禁用 emoji；按下 .9 回弹照 .mine-btn:active。
+    class MineAddBtn extends View {
+        boolean on = false;
+        MineAddBtn(Context ctx) { super(ctx); setClickable(true); setFocusable(false); }
+        void setOn(boolean v) { on = v; invalidate(); }
+        @Override protected void onDraw(Canvas cv) {
+            Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);
+            float cx = getWidth() / 2f, cy = getHeight() / 2f;
+            float r = Math.min(getWidth(), getHeight()) / 2f;
+            p.setStyle(Paint.Style.FILL);
+            p.setColor(on ? Color.argb(97, 0, 122, 255) : Color.argb(64, 120, 120, 128));
+            cv.drawCircle(cx, cy, r, p);
+            p.setStyle(Paint.Style.STROKE);
+            p.setStrokeCap(Paint.Cap.ROUND);
+            p.setStrokeJoin(Paint.Join.ROUND);
+            p.setStrokeWidth(dp(getContext(), 1.8f));
+            p.setColor(Color.WHITE);
+            float s = r * 0.42f;
+            if (on) {
+                android.graphics.Path path = new android.graphics.Path();
+                path.moveTo(cx - s, cy + s * 0.05f);
+                path.lineTo(cx - s * 0.25f, cy + s * 0.72f);
+                path.lineTo(cx + s * 1.05f, cy - s * 0.62f);
+                cv.drawPath(path, p);
+            } else {
+                cv.drawLine(cx - s, cy, cx + s, cy, p);
+                cv.drawLine(cx, cy - s, cx, cy + s, p);
+            }
+        }
+    }
+
     // P-grid：瓷砖规格统一——图区按 1.586 卡面比例定高（同列同宽同高）、卡名预留两行、行内等高拉伸，底边齐平
+    // Q24：卡图改全幅 cover 铺满图区（对照混合版 .art/.art-img object-fit:cover，图区贴瓷砖顶边满宽、不留白、
+    // 不拉伸；圆角靠瓷砖外框 clipToOutline 平滑裁切，冲突时保铺满）+ 图右上半透圆加卡钮（.mine-btn）。
     View cardTile(final Card c, ViewGroup parent, int nCols) {
         LinearLayout box = new LinearLayout(this);
         box.setOrientation(LinearLayout.VERTICAL);
         box.setBackground(rippleBg(Color.WHITE, 14));
         box.setClipToOutline(true);
-        box.setPadding(dp(this, 8), dp(this, 8), dp(this, 8), dp(this, 10));
         AbsListView.LayoutParams lp = new AbsListView.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         box.setLayoutParams(lp);
 
-        ImageView iv = new ImageView(this);
-        iv.setScaleType(ImageView.ScaleType.CENTER_CROP);
-        iv.setBackground(placeholderGrad(9, this));
         int nc = (nCols == 1 || nCols == 3) ? nCols : 2;
         int availW = getResources().getDisplayMetrics().widthPixels - dp(this, 28) - (nc - 1) * dp(this, 10);
-        int innerW = availW / nc - dp(this, 16);
-        int imgH = Math.max(dp(this, 40), Math.round(innerW / 1.586f));
-        LinearLayout.LayoutParams ilp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, imgH);
-        box.addView(iv, ilp);
+        int tileW = availW / nc;
+        int imgH = Math.max(dp(this, 40), Math.round(tileW / 1.586f));
+        FrameLayout art = new FrameLayout(this);
+        box.addView(art, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, imgH));
+        ImageView iv = new ImageView(this);
+        iv.setScaleType(ImageView.ScaleType.CENTER_CROP); // cover：铺满不留白、等比不拉伸
+        iv.setBackground(placeholderGrad(0, this));
+        art.addView(iv, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         Bitmap b = Img.get(this, c.image);
         if (b != null) iv.setImageBitmap(b); else iv.setImageBitmap(null);
+
+        LinearLayout body = new LinearLayout(this);
+        body.setOrientation(LinearLayout.VERTICAL);
+        body.setPadding(dp(this, 8), dp(this, 7), dp(this, 8), dp(this, 10));
+        box.addView(body, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
 
         TextView name = tv(this, c.name, 13, Color.rgb(0x1C, 0x1C, 0x1E), true);
         name.setMaxLines(2);
         name.setMinLines(2);
         name.setEllipsize(android.text.TextUtils.TruncateAt.END);
-        LinearLayout.LayoutParams nlp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        nlp.topMargin = dp(this, 7);
-        box.addView(name, nlp);
+        body.addView(name, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
 
         TextView sub = tv(this, c.bank + " · " + orgLabel(c.org), 10.5f, Color.rgb(0x8E, 0x8E, 0x93), false);
         sub.setMaxLines(1);
         sub.setEllipsize(android.text.TextUtils.TruncateAt.END);
-        box.addView(sub);
+        body.addView(sub);
 
         LinearLayout chips = new LinearLayout(this);
         chips.setOrientation(LinearLayout.HORIZONTAL);
         LinearLayout.LayoutParams clp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         clp.topMargin = dp(this, 6);
-        box.addView(chips, clp);
+        body.addView(chips, clp);
         float chipSp = nc == 3 ? 8.5f : 10f;
         chips.addView(chip(String.format(java.util.Locale.US, "%.1f分", c.score), Color.rgb(0xE8, 0xF1, 0xFD), Color.rgb(0x0A, 0x5C, 0xD6), chipSp));
         chips.addView(chip("已停发".equals(c.status) ? "已停发" : "在发",
             "已停发".equals(c.status) ? Color.rgb(0xF3, 0xE8, 0xE8) : Color.rgb(0xE6, 0xF6, 0xEC),
             "已停发".equals(c.status) ? Color.rgb(0xB0, 0x23, 0x2B) : Color.rgb(0x1D, 0x8A, 0x49), chipSp));
-        if (mine.contains(c.id)) chips.addView(chip("已添加", Color.rgb(0xE6, 0xF6, 0xEC), Color.rgb(0x1D, 0x8A, 0x49), chipSp));
-        // Q1 长按贴卡菜单（对照混合版 450ms 长按；我的卡片页会清掉此触摸改走拖动排序，语义不冲突）
+        final TextView addedChip = chip("已添加", Color.rgb(0xE6, 0xF6, 0xEC), Color.rgb(0x1D, 0x8A, 0x49), chipSp);
+        if (mine.contains(c.id)) chips.addView(addedChip);
+
+        // Q24 加卡钮：点它直接切换我的卡片不进详情（对照混合版 [data-mine] 点击 stopPropagation + toggleMine，
+        // 反馈走既有悬浮提示条/撤销）；钮态与「已添加」chip 在切换/撤销后就地同步，不整页重绘。
+        final MineAddBtn mineBtn = new MineAddBtn(this);
+        mineBtn.setOn(mine.contains(c.id));
+        int btnSize = nc == 3 ? dp(this, 26) : dp(this, 32);
+        int btnEdge = nc == 3 ? dp(this, 6) : dp(this, 8);
+        FrameLayout.LayoutParams blp2 = new FrameLayout.LayoutParams(btnSize, btnSize);
+        blp2.gravity = Gravity.TOP | Gravity.RIGHT;
+        blp2.topMargin = btnEdge; blp2.rightMargin = btnEdge;
+        art.addView(mineBtn, blp2);
+        mineBtn.setOnTouchListener((v, e) -> {
+            if (e.getAction() == MotionEvent.ACTION_DOWN) pressBounce(v, true);
+            else if (e.getAction() == MotionEvent.ACTION_UP || e.getAction() == MotionEvent.ACTION_CANCEL) pressBounce(v, false);
+            return false;
+        });
+        mineBtn.setOnClickListener(v -> {
+            haptic();
+            toggleMineWithToast(c, () -> {
+                boolean in = mine.contains(c.id);
+                mineBtn.setOn(in);
+                if (in) { if (addedChip.getParent() == null) chips.addView(addedChip); }
+                else if (addedChip.getParent() != null) chips.removeView(addedChip);
+            });
+        });
+        // Q1 长按贴卡菜单（对照混合版 450ms 长按；我的卡片页会清掉此触摸改走拖动排序，语义不冲突；
+        // 加卡钮为独立可点子视图，按住它不触发贴卡菜单，同混合版 closest('[data-mine]') 排除）
         attachCardMenuLongPress(box, c, false);
         return box;
     }
