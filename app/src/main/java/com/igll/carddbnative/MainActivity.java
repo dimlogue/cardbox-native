@@ -4130,8 +4130,9 @@ public class MainActivity extends Activity {
 
         panel.addView(filterSectionTitle("\u72b6\u6001"));
         List<View> stChips = new ArrayList<>();
-        stChips.add(filterChip("\u5728\u53d1", "\u5728\u53d1".equals(filterStatus), () -> { filterStatus = "\u5728\u53d1".equals(filterStatus) ? null : "\u5728\u53d1"; rebuildFilterPanel(panel); refreshHome(); }));
-        stChips.add(filterChip("\u5df2\u505c\u53d1", "\u5df2\u505c\u53d1".equals(filterStatus), () -> { filterStatus = "\u5df2\u505c\u53d1".equals(filterStatus) ? null : "\u5df2\u505c\u53d1"; rebuildFilterPanel(panel); refreshHome(); }));
+        // Q13: 在发/已停发互斥——已点亮一项时另一项置灰不可点（再点已选项取消后恢复），不许两项同亮自相矛盾
+        stChips.add(filterChip("\u5728\u53d1", "\u5728\u53d1".equals(filterStatus), () -> { filterStatus = "\u5728\u53d1".equals(filterStatus) ? null : "\u5728\u53d1"; rebuildFilterPanel(panel); refreshHome(); }, filterStatus != null && !"\u5728\u53d1".equals(filterStatus)));
+        stChips.add(filterChip("\u5df2\u505c\u53d1", "\u5df2\u505c\u53d1".equals(filterStatus), () -> { filterStatus = "\u5df2\u505c\u53d1".equals(filterStatus) ? null : "\u5df2\u505c\u53d1"; rebuildFilterPanel(panel); refreshHome(); }, filterStatus != null && !"\u5df2\u505c\u53d1".equals(filterStatus)));
         addChipFlow(panel, stChips);
 
         panel.addView(filterSectionTitle("\u7279\u70b9\uff08\u53ef\u591a\u9009\uff0c\u987b\u540c\u65f6\u6ee1\u8db3\uff09"));
@@ -4183,7 +4184,7 @@ public class MainActivity extends Activity {
             groupBank = false; persistViewPrefs();
             rebuildFilterPanel(panel); refreshHome();
         }));
-        dispChips.add(filterChip("\u6309\u94f6\u884c\u6298\u53e3", groupBank, () -> {
+        dispChips.add(filterChip("\u6309\u94f6\u884c\u6298\u53e0", groupBank, () -> {
             groupBank = true; persistViewPrefs();
             rebuildFilterPanel(panel); refreshHome();
         }));
@@ -4194,22 +4195,48 @@ public class MainActivity extends Activity {
         List<View> colChips = new ArrayList<>();
         for (final String[] co : colOpts) {
             final int nCols = Integer.parseInt(co[0]);
+            // Q13 A 案：按银行折叠时列数整组置灰禁用（当前所选以哑光蓝灰保留可见），切回显示全部即恢复可点
             colChips.add(filterChip(co[1], cols == nCols, () -> {
                 cols = nCols; persistViewPrefs();
                 rebuildFilterPanel(panel); refreshHome();
-            }));
+            }, groupBank));
         }
         addChipFlow(panel, colChips);
+        if (groupBank) {
+            TextView colsHint = tv(this, "\u6309\u94f6\u884c\u6298\u53e0\u65f6\u5217\u6570\u6682\u4e0d\u53ef\u8c03\uff0c\u5c55\u5f00\u94f6\u884c\u540e\u4ecd\u6309\u5f53\u524d\u5217\u6570\u663e\u793a", 11.5f, Color.rgb(0x8E, 0x8E, 0x93), false);
+            LinearLayout.LayoutParams chp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            chp.topMargin = dp(this, 6);
+            colsHint.setLayoutParams(chp);
+            panel.addView(colsHint);
+        }
 
         if (filterScroll != null) filterScroll.post(() -> filterScroll.scrollTo(0, keepY));
     }
 
     // P2e chips：紧凑胶囊流式排列（多枚一行），选中蓝渐变+勾；发卡行三列等宽（混合版 #chipsBank 口径）
     TextView filterChip(String label, boolean on, final Runnable act) {
+        return filterChip(label, on, act, false);
+    }
+
+    // Q13 置灰禁用态：哑光灰底灰字、无点击无按压无震动；若为当前所选则以哑光蓝灰保留勾与选中可辨
+    TextView filterChip(String label, boolean on, final Runnable act, boolean disabled) {
         TextView t = tv(this, (on ? "\u2713 " : "") + label, 13, on ? Color.WHITE : Color.rgb(0x1C, 0x1C, 0x1E), on);
         t.setSingleLine(true);
         t.setEllipsize(android.text.TextUtils.TruncateAt.END);
         t.setGravity(Gravity.CENTER);
+        if (disabled) {
+            t.setTextColor(on ? Color.rgb(0x6B, 0x7D, 0x94) : Color.rgb(0x9A, 0x9A, 0xA0));
+            GradientDrawable dg = new GradientDrawable();
+            dg.setColor(on ? Color.rgb(0xD9, 0xE4, 0xF2) : Color.rgb(0xE8, 0xEA, 0xEF));
+            dg.setCornerRadius(dp(this, 999));
+            dg.setStroke(dp(this, 1), Color.argb(10, 20, 30, 60));
+            t.setBackground(dg);
+            t.setAlpha(0.75f);
+            t.setEnabled(false);
+            t.setClickable(false);
+            t.setPadding(dp(this, 11), dp(this, 6), dp(this, 11), dp(this, 6));
+            return t;
+        }
         if (on) {
             GradientDrawable g = new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
                 new int[]{Color.rgb(0x0A, 0x84, 0xFF), Color.rgb(0x00, 0x66, 0xE6)});
