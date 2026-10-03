@@ -3485,7 +3485,7 @@ public class MainActivity extends Activity {
         card.setOrientation(LinearLayout.VERTICAL);
         // Q45：添加底表改为贴底形态——仅顶部圆角、底部直角直达屏底，消灭底部两角透出遮罩的黑三角
         GradientDrawable addBg = new GradientDrawable();
-        addBg.setColor(Color.rgb(0xFF, 0xFF, 0xFF)); // Q54：245 近实→实白，窗身一整块同色到底
+        addBg.setColor(colSheet()); // Q54 实底口径 + Q72 深色浮层，窗身一整块同色到底
         float addR = dp(this, 22);
         addBg.setCornerRadii(new float[]{addR, addR, addR, addR, 0, 0, 0, 0});
         card.setBackground(addBg);
@@ -3783,7 +3783,8 @@ public class MainActivity extends Activity {
     // P4：卡片按压波纹——圆角底 + 淡蓝灰涟漪（RippleDrawable，minSdk 24 可用），clipToOutline 防溢出圆角
     Drawable rippleBg(int color, float radiusDp) {
         Drawable base = roundRect(color, radiusDp, this);
-        return new RippleDrawable(ColorStateList.valueOf(Color.argb(38, 10, 92, 214)), base, null);
+        int ac = accentColor();
+        return new RippleDrawable(ColorStateList.valueOf(Color.argb(38, Color.red(ac), Color.green(ac), Color.blue(ac))), base, null); // Q72 波纹随主题色
     }
 
     View cardTile(final Card c, ViewGroup parent) {
@@ -5121,9 +5122,9 @@ public class MainActivity extends Activity {
         LinearLayout card = new LinearLayout(this);
         card.setOrientation(LinearLayout.VERTICAL);
         GradientDrawable cg = new GradientDrawable();
-        cg.setColor(Color.argb(247, 255, 255, 255)); // Q52 对照 cardapp #filterSheet：rgba(255,255,255,.97) 近实白（原 168 半透发雾、用户点名不美观）
+        cg.setColor(colSheet()); // Q52 近实白口径 + Q72 深色浮层 #232323
         cg.setCornerRadius(dp(this, 24));
-        cg.setStroke(dp(this, 1), Color.argb(18, 20, 30, 60));
+        cg.setStroke(dp(this, 1), colDivider());
         card.setBackground(cg);
         if (Build.VERSION.SDK_INT >= 21) {
             card.setElevation(dp(this, 24));
@@ -5135,9 +5136,9 @@ public class MainActivity extends Activity {
         chead.setOrientation(LinearLayout.HORIZONTAL);
         chead.setGravity(Gravity.CENTER_VERTICAL);
         chead.setPadding(dp(this, 16), dp(this, 12), dp(this, 10), dp(this, 4));
-        TextView cttl = tv(this, "\u7b5b\u9009", 16, Color.rgb(0x1C, 0x1C, 0x1E), true);
+        TextView cttl = tv(this, "\u7b5b\u9009", 16, colText(), true);
         chead.addView(cttl, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
-        TextView clearT = tv(this, "\u6e05\u7a7a", 13, Color.rgb(0x8E, 0x8E, 0x93), false);
+        TextView clearT = tv(this, "\u6e05\u7a7a", 13, colText2(), false);
         clearT.setPadding(dp(this, 8), dp(this, 6), dp(this, 8), dp(this, 6));
         clearT.setOnClickListener(v -> {
             haptic();
@@ -5161,7 +5162,7 @@ public class MainActivity extends Activity {
             });
         });
         chead.addView(clearT);
-        TextView doneT = tv(this, "\u5b8c\u6210", 13, Color.rgb(0x0A, 0x5C, 0xD6), true);
+        TextView doneT = tv(this, "\u5b8c\u6210", 13, accentColor(), true);
         doneT.setPadding(dp(this, 8), dp(this, 6), dp(this, 10), dp(this, 6));
         doneT.setOnClickListener(v -> { haptic(); closeFilterSheet(); });
         chead.addView(doneT);
@@ -5756,7 +5757,7 @@ public class MainActivity extends Activity {
         LinearLayout card = new LinearLayout(this);
         card.setOrientation(LinearLayout.VERTICAL);
         GradientDrawable cg = new GradientDrawable();
-        cg.setColor(Color.rgb(0xFC, 0xFC, 0xFE)); // Q14：对照混合版 .wiz-sheet rgba(252,252,254,.98) 窗体改近白不透（Q54 灰底 F2F3F7 在此销账），窗身一整块同色到底无底部色差横带
+        cg.setColor(colSheet()); // Q14 近白不透口径 + Q72 深色浮层，窗身一整块同色到底
         float rTop = dp(this, 26);
         cg.setCornerRadii(new float[]{rTop, rTop, rTop, rTop, 0, 0, 0, 0});
         card.setBackground(cg);
@@ -6221,7 +6222,7 @@ public class MainActivity extends Activity {
         final LinearLayout sheetCard = new LinearLayout(this);
         sheetCard.setOrientation(LinearLayout.VERTICAL);
         GradientDrawable sheetBg = new GradientDrawable();
-        sheetBg.setColor(Color.rgb(0xFF, 0xFF, 0xFF));
+        sheetBg.setColor(colSheet()); // Q72
         float rTop = dp(this, 20);
         sheetBg.setCornerRadii(new float[]{rTop, rTop, rTop, rTop, 0, 0, 0, 0});
         sheetCard.setBackground(sheetBg);
@@ -8984,7 +8985,7 @@ public class MainActivity extends Activity {
         LinearLayout card = new LinearLayout(this);
         card.setOrientation(LinearLayout.VERTICAL);
         GradientDrawable cg = new GradientDrawable();
-        cg.setColor(Color.rgb(0xFF, 0xFF, 0xFF)); // Q54：219 半透→实白，窗身一整块同色到底（同关于窗提实口径），玻璃退为纯垫底
+        cg.setColor(colSheet()); // Q54 实底口径 + Q72 深色浮层，玻璃退为纯垫底
         float binR = dp(this, 22); // Q45：仅顶部圆角、底部直角贴屏底（原四角同圆时底部两角露遮罩成黑三角）
         cg.setCornerRadii(new float[]{binR, binR, binR, binR, 0, 0, 0, 0});
         card.setBackground(cg);
@@ -9300,7 +9301,7 @@ public class MainActivity extends Activity {
         LinearLayout card = new LinearLayout(this);
         card.setOrientation(LinearLayout.VERTICAL);
         GradientDrawable cg = new GradientDrawable();
-        cg.setColor(Color.rgb(0xFF, 0xFF, 0xFF)); // Q54：219 半透（.dlg .86）→实白，窗身一整块同色到底，玻璃退为纯垫底（网页 .86 靠真 backdrop 模糊兜底，原生冻结玻璃兜不住会发雾）
+        cg.setColor(colSheet()); // Q54 实底口径 + Q72 深色浮层，玻璃退为纯垫底
         cg.setStroke(dp(this, 1), Color.argb(140, 255, 255, 255));
         // Q45：仅顶部圆角、底部直角贴屏底（原四角同圆时底部两角露遮罩成黑三角）
         float formR = dp(this, 22);
@@ -10541,7 +10542,7 @@ public class MainActivity extends Activity {
         LinearLayout card = new LinearLayout(this);
         card.setOrientation(LinearLayout.VERTICAL);
         GradientDrawable cg = new GradientDrawable();
-        cg.setColor(Color.rgb(0xFF, 0xFF, 0xFF)); // Q54：164 半透→实白（对照混合版 .panel #fff）——半透窗身把身后亮页透成白雾、底部空带与内容区成色差横带，提实后窗身一整块同色到底，玻璃退为纯垫底
+        cg.setColor(colSheet()); // Q54 实底口径 + Q72 深色浮层，玻璃退为纯垫底
         cg.setStroke(dp(this, 1), Color.argb(140, 255, 255, 255));
         // Q45：仅顶部圆角、底部直角——原四角同圆时底部两角把暗遮罩露成黑三角（用户 22:21 截图）
         float aboutR = dp(this, 22);
