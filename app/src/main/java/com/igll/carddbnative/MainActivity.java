@@ -127,18 +127,20 @@ public class MainActivity extends Activity {
     void updateTopFabVisibility(int y) {
         if (topFab == null) return;
         boolean show = y > dp(this, 420);
-        if (show && topFab.getVisibility() != View.VISIBLE) {
+        if (show && !topFabShown) {
+            topFabShown = true;
             topFab.animate().cancel();
             topFab.setVisibility(View.VISIBLE);
             topFab.setAlpha(0f); topFab.setScaleX(0.82f); topFab.setScaleY(0.82f);
             topFab.animate().alpha(1f).scaleX(1f).scaleY(1f).setDuration(190)
                 .setInterpolator(new DecelerateInterpolator()).start();
-        } else if (!show && topFab.getVisibility() == View.VISIBLE) {
+        } else if (!show && topFabShown) {
+            topFabShown = false;
             final View fab = topFab;
             fab.animate().cancel();
             fab.animate().alpha(0f).scaleX(0.85f).scaleY(0.85f).setDuration(150)
                 .setInterpolator(new DecelerateInterpolator())
-                .withEndAction(() -> { if (fab == topFab) fab.setVisibility(View.GONE); }).start();
+                .withEndAction(() -> { if (fab == topFab && !topFabShown) fab.setVisibility(View.GONE); }).start();
         }
     }
     void syncTopFab() {
@@ -147,11 +149,13 @@ public class MainActivity extends Activity {
         if (sv == null || (covered && !changelogOpen)) {
             if (topFab != null && topFab.getParent() != null) ((ViewGroup) topFab.getParent()).removeView(topFab);
             topFab = null;
+            topFabShown = false;
             return;
         }
         if (topFab == null || topFab.getParent() != content) {
             if (topFab != null && topFab.getParent() != null) ((ViewGroup) topFab.getParent()).removeView(topFab);
             topFab = buildTopFab();
+            topFabShown = false;
             FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(dp(this, 46), dp(this, 46));
             lp.gravity = Gravity.END | Gravity.BOTTOM;
             lp.rightMargin = dp(this, 16);
@@ -596,6 +600,7 @@ public class MainActivity extends Activity {
     TextView filterFabBadge = null;
     // P-scroll 悬浮回顶圆钮（长列表滚过一段后出现，点了平滑回顶）
     View topFab = null;
+    boolean topFabShown = false;
     // P-searchfix：首页悬浮搜索栏本体与显隐状态（滚动时收起/失焦，不再赖在视角上）
     View homeSearchBar = null;
     boolean homeSearchBarShown = true;
@@ -2666,6 +2671,7 @@ public class MainActivity extends Activity {
     View buildDetailPage(final Card c) {
         ScrollView sc = new ScrollView(this);
         thinScrollbar(sc);
+        if (Build.VERSION.SDK_INT >= 23) sc.setOnScrollChangeListener((v, sx, sy, ox, oy) -> updateTopFabVisibility(sy));
         sc.setBackgroundColor(Color.rgb(0xF2, 0xF3, 0xF7));
         LinearLayout page = new LinearLayout(this);
         page.setOrientation(LinearLayout.VERTICAL);
