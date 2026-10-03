@@ -1585,6 +1585,7 @@ public class MainActivity extends Activity {
     View cardMenuClone = null;
     View cardMenuPop = null;
     View cardMenuGlass = null; // Q11：长按菜单下的冻结模糊层
+    View moreMenuOverlay = null; // Q58：设置页 ⋯ 菜单（从按钮角长出、点外部收回）
 
     // 筛选状态（Phase 2a-1：与混合版 chipRow 相同的单选切换语义，点已选项再点一次取消）
     String filterType = null;   // "debit" / "credit" / null
@@ -9173,8 +9174,128 @@ public class MainActivity extends Activity {
         return box;
     }
 
+    // ── Q58 ⋯ 菜单丝滑展开（只学机制自写：缩放原点贴按钮角、缩放+淡入同步、轻回弹、点外部反向收回）──
+    class MoreDotsView extends View {
+        MoreDotsView(Context c) { super(c); }
+        @Override protected void onDraw(Canvas cv) {
+            super.onDraw(cv);
+            Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);
+            p.setStyle(Paint.Style.FILL);
+            p.setColor(Color.rgb(0x1C, 0x1C, 0x1E));
+            float cx = getWidth() / 2f;
+            float r = dp(getContext(), 2.1f);
+            float gap = dp(getContext(), 6.2f);
+            float cy = getHeight() / 2f;
+            cv.drawCircle(cx, cy - gap, r, p);
+            cv.drawCircle(cx, cy, r, p);
+            cv.drawCircle(cx, cy + gap, r, p);
+        }
+    }
+
+    View moreMenuRow(String label, final Runnable act) {
+        TextView t = tv(this, label, 14.5f, Color.rgb(0x1C, 0x1C, 0x1E), false);
+        t.setPadding(dp(this, 16), dp(this, 12), dp(this, 16), dp(this, 12));
+        t.setBackground(rippleBg(Color.WHITE, 10));
+        t.setClipToOutline(true);
+        t.setOnTouchListener((v, e) -> {
+            if (e.getAction() == MotionEvent.ACTION_DOWN) pressBounce(v, true);
+            else if (e.getAction() == MotionEvent.ACTION_UP || e.getAction() == MotionEvent.ACTION_CANCEL) pressBounce(v, false);
+            return false;
+        });
+        t.setOnClickListener(v -> {
+            haptic();
+            closeMoreMenu();
+            if (act != null) mainHandler.postDelayed(act, 150);
+        });
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        t.setLayoutParams(lp);
+        return t;
+    }
+
+    void openMoreMenu(View anchor) {
+        if (moreMenuOverlay != null) { closeMoreMenu(); return; }
+        if (anchor == null || content == null) return;
+        haptic();
+        final FrameLayout overlay = new FrameLayout(this);
+        overlay.setBackgroundColor(Color.TRANSPARENT);
+        overlay.setOnClickListener(v -> closeMoreMenu());
+        final LinearLayout card = new LinearLayout(this);
+        card.setOrientation(LinearLayout.VERTICAL);
+        card.setBackground(roundRect(Color.WHITE, 16, this));
+        try { card.setOutlineProvider(new android.view.ViewOutlineProvider() {
+            @Override public void getOutline(View v, android.graphics.Outline o) {
+                o.setRoundRect(0, 0, v.getWidth(), v.getHeight(), dp(v.getContext(), 16));
+            }
+        }); card.setClipToOutline(true); } catch (Throwable ignored) {}
+        card.setElevation(dp(this, 18));
+        card.setPadding(dp(this, 6), dp(this, 6), dp(this, 6), dp(this, 6));
+        card.addView(moreMenuRow("情景选卡", () -> openWizard()));
+        card.addView(moreMenuRow("更新日志", () -> { settingsLogOpen = true; rebuildPages(); }));
+        card.addView(moreMenuRow("欢迎页", () -> showWelcome()));
+        card.addView(moreMenuRow("关于卡盒", () -> openAbout()));
+        card.setOnClickListener(v -> {});
+        int menuW = dp(this, 196);
+        FrameLayout.LayoutParams clp = new FrameLayout.LayoutParams(menuW, ViewGroup.LayoutParams.WRAP_CONTENT);
+        int[] al = new int[2]; anchor.getLocationOnScreen(al);
+        int[] cl = new int[2]; content.getLocationOnScreen(cl);
+        int anchorRight = al[0] - cl[0] + anchor.getWidth();
+        int anchorTop = al[1] - cl[1];
+        clp.leftMargin = Math.max(dp(this, 12), anchorRight - menuW);
+        clp.topMargin = Math.max(pageTopPad(), anchorTop + anchor.getHeight() + dp(this, 6));
+        overlay.addView(card, clp);
+        content.addView(overlay, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        moreMenuOverlay = overlay;
+        // 缩放原点贴按钮角（右上）：菜单像从 ⋯ 钮角上长出来；缩放与淡入同步、带轻回弹。
+        card.setPivotX(menuW);
+        card.setPivotY(0f);
+        card.setScaleX(0.72f); card.setScaleY(0.72f); card.setAlpha(0f);
+        card.animate().scaleX(1f).scaleY(1f).alpha(1f)
+            .setDuration(260).setInterpolator(new OvershootInterpolator(1.15f)).start();
+    }
+
+    void closeMoreMenu() {
+        final View ov = moreMenuOverlay;
+        if (ov == null) return;
+        moreMenuOverlay = null;
+        if (ov instanceof FrameLayout && ((FrameLayout) ov).getChildCount() > 0) {
+            View card = ((FrameLayout) ov).getChildAt(0);
+            card.animate().cancel();
+            card.animate().scaleX(0.78f).scaleY(0.78f).alpha(0f)
+                .setDuration(160).setInterpolator(ANIM_EXIT)
+                .withEndAction(() -> { if (ov.getParent() != null) ((ViewGroup) ov.getParent()).removeView(ov); })
+                .start();
+        } else if (ov.getParent() != null) {
+            ((ViewGroup) ov.getParent()).removeView(ov);
+        }
+    }
+
     View buildSettingsPage() {
         LinearLayout page = basePage("设置");
+        // Q58：标题行右上角 ⋯ 菜单钮（细线三点自绘，禁用 emoji；菜单从此钮角长出）
+        try {
+            if (page.getChildCount() > 0 && page.getChildAt(0) instanceof TextView) {
+                TextView titleTv = (TextView) page.getChildAt(0);
+                page.removeViewAt(0);
+                LinearLayout titleRow = new LinearLayout(this);
+                titleRow.setOrientation(LinearLayout.HORIZONTAL);
+                titleRow.setGravity(Gravity.CENTER_VERTICAL);
+                titleRow.addView(titleTv, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+                FrameLayout moreBtn = new FrameLayout(this);
+                moreBtn.setBackground(rippleBg(Color.rgb(0xF2, 0xF3, 0xF7), 999));
+                moreBtn.setClipToOutline(true);
+                MoreDotsView dots = new MoreDotsView(this);
+                moreBtn.addView(dots, new FrameLayout.LayoutParams(dp(this, 22), dp(this, 22), Gravity.CENTER));
+                LinearLayout.LayoutParams mbLp = new LinearLayout.LayoutParams(dp(this, 40), dp(this, 40));
+                titleRow.addView(moreBtn, mbLp);
+                moreBtn.setOnTouchListener((v, e) -> {
+                    if (e.getAction() == MotionEvent.ACTION_DOWN) pressBounce(v, true);
+                    else if (e.getAction() == MotionEvent.ACTION_UP || e.getAction() == MotionEvent.ACTION_CANCEL) pressBounce(v, false);
+                    return false;
+                });
+                moreBtn.setOnClickListener(v -> openMoreMenu(v));
+                page.addView(titleRow, 0);
+            }
+        } catch (Throwable ignored) {}
         View wizEntry = settingRow("情景选卡", "出国留学 / 出境旅游 / 海淘网购 / 日常使用，按场景挑卡 ›");
         wizEntry.setOnClickListener(v -> { haptic(); openWizard(); });
         page.addView(wizEntry);
@@ -9399,6 +9520,7 @@ public class MainActivity extends Activity {
 
     @Override
     public void onBackPressed() {
+        if (moreMenuOverlay != null) { closeMoreMenu(); return; }
         if (floatSearchOpen) { closeFloatSearch(); return; }
         if (cardMenuPop != null) { closeCardMenu(); return; }
         if (aboutOpen) { closeAbout(); return; }
