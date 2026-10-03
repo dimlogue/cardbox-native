@@ -136,7 +136,7 @@
 
 - [x] Q58 ⋯ 菜单丝滑展开（2026-10-04 完成：本段为机制参考段（FClash 三点菜单，只学机制自写 Java、未抄码），未改 cardapp 任何文件；落点选设置页——标题行右上角新增 40dp 细线三点钮（MoreDotsView Canvas 三点自绘，禁用 emoji），点它在钮下方升起 196dp 白卡菜单（圆角 16+elevation 18，四项：情景选卡/更新日志/欢迎页/关于卡盒），缩放原点贴按钮右上角（pivotX=菜单宽、pivotY=0），开场 260ms 以 OvershootInterpolator(1.15) 缩放 .72→1 与淡入同步带轻回弹、收起 160ms ANIM_EXIT 反向缩淡，点遮罩外/系统返回/切页（showTab 即刻退场）三路收回，菜单项点选先收菜单再延迟 150ms 执行原动作；全程只动 View 动画层、无抓图采样，全文件主动 Bitmap.recycle() 代码 0 处（仅注释），包名未动。版本 1.43-native（versionCode 143），段内 1.42-native（3936b50）为首版保底提交，真机手感待用户验收，顺了再推广其他菜单。）
 
-- [ ] Q59【急件·用户 2026-10-04 01:17 真机报】Java 原生版检查数据更新被 jsDelivr 旧缓存骗成「已是最新数据（v10）」：根因查明——checkDataUpdate 双线是「jsDelivr 成功就结案」，jsDelivr 200 但内容是旧版时不回落 raw 对照（?t= 参数也未必穿透 CDN 缓存）。修法：两条线都取，以 data_version 高者为准，相等才说已是最新；更新成功逻辑不动。下一包必带（可与当前段并包优先）。
+- [x] Q59【急件·用户 2026-10-04 01:17 真机报】Java 原生版检查数据更新被 jsDelivr 旧缓存骗成「已是最新数据（v10）」：根因查明——checkDataUpdate 双线是「jsDelivr 成功就结案」，jsDelivr 200 但内容是旧版时不回落 raw 对照（?t= 参数也未必穿透 CDN 缓存）。修法：两条线都取，以 data_version 高者为准，相等才说已是最新；更新成功逻辑不动。下一包必带（可与当前段并包优先）。（2026-10-04 完成：施工前核对 cardapp site/app.js 第 5–43 行 DATA_URLS 与 checkDataUpdate——原为 raw 优先、jsDelivr 次之的顺序回落，原生则为 jsDelivr 优先；两端同为「首线 200 即结案」，故 jsDelivr 返旧缓存时本地也判已是最新。原生 MainActivity.checkDataUpdate 改双线全取：两条 URL 均以 ?t= 时间戳加 Cache-Control:no-cache 拉取（8s 超时），逐条过 cards 数>0 校验后按 Store.versionOf 取 data_version 最大者为候选；候选为空→手动时报「检查更新失败，请检查网络」，候选版本≤Store.dataVersion 时才报「已是最新数据（vX）」，更新成功仍走原落盘 cards-ota.json→Store.parseInto→pages.clear+rebuildPages（正看详情不打断），全文件主动 Bitmap.recycle() 代码 0 处（仅注释），包名未动。版本 1.44-native（versionCode 144），段内 7e23803 为首版保底提交，真机联网更新待用户验收。）
 
 - [ ] Q60 学生页头部不沉浸修（2026-10-04 01:23 用户真机截图点名）：学生推荐页上半块（大标题+「6 张精选卡」统计卡+蓝色说明框）被钉死固定，滑动只有下方卡片列表在滚，头部不随滚消失、白占大半屏。改：整页连贯滚动，头部随列表一起滚走（对照首页沉浸滚动口径），列表可视区让出来；统计/说明内容不删，只改滚动归属。真机由用户终审。
 
