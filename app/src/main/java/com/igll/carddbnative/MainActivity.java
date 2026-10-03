@@ -8642,8 +8642,8 @@ public class MainActivity extends Activity {
         });
 
         sectionHead(page, "数据");
-        page.addView(settingRow("数据版本", "v" + Store.dataVersion + " · " + Store.all.size() + " 张卡（启动自动检查，更新后无需重装）"));
-        View updRow = settingRow("检查数据更新", "从数据仓拉最新卡库 ›");
+        // Q44: 纯显示行与检查行合并为一行——副行实时显示版本与张数，整行可点直接联网检查更新
+        View updRow = settingRow("数据更新", "v" + Store.dataVersion + " · " + Store.all.size() + " 张卡 · 点此直接检查更新 ›");
         updRow.setOnClickListener(v -> { haptic(); showFloatToast("正在检查数据更新…"); checkDataUpdate(true); });
         page.addView(updRow);
 
