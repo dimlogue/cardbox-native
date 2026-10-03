@@ -2618,26 +2618,35 @@ public class MainActivity extends Activity {
         cardMenuBackdrop = backdrop;
 
         // 高亮：源卡 1:1 快照浮在遮罩上（原大小不变），蓝框 2.5dp rgba(0,122,255,.7) + 浮起阴影（对照 pop-clone）
+        // Q36：旧实现快照为方角位图、克隆层无圆角裁切，蓝框圆角内侧四角被方角白像素顶出（用户截图头顶两角外凸）。
+        // 对照混合版 styles.css .card（border-radius:14px;overflow:hidden，克隆 pop-clone 的 box-shadow 随圆角走）
+        // 与原生 Q27/Q33 同一套——位图级切圆（roundBitmap）+ 显式 RoundRect outline（roundClip 塑 elevation 阴影）。
+        // 半径与锚卡同源：首页瓷砖 tileR=max(14,cardRadiusDp(图宽))，学生/选卡行为 14dp，本式在行宽下≈14.4dp 同量级。
         int w = Math.max(1, anchor.getWidth()), h = Math.max(1, anchor.getHeight());
+        final float cloneR = Math.max(14f, cardRadiusDp(w / getResources().getDisplayMetrics().density));
         int[] rl = new int[2]; rootView.getLocationOnScreen(rl);
         int[] al = new int[2]; anchor.getLocationOnScreen(al);
         int left = al[0] - rl[0], top = al[1] - rl[1];
         FrameLayout clone = new FrameLayout(this);
+        roundClip(clone, cloneR, this); // 克隆容器同半径裁切 + elevation 阴影按圆角轮廓，不再方角打影
         try {
             Bitmap snap = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888);
             anchor.draw(new Canvas(snap));
             ImageView iv = new ImageView(this);
-            iv.setImageBitmap(snap);
+            // 位图级四角切透明（半径按位图 px 换算即 dp(this,cloneR)），不靠视图硬剪贴，从根上无外凸无毛刺
+            iv.setImageBitmap(roundBitmap(snap, dp(this, cloneR)));
             iv.setScaleType(ImageView.ScaleType.FIT_XY);
+            roundClip(iv, cloneR, this);
             clone.addView(iv, new FrameLayout.LayoutParams(w, h));
         } catch (Exception e) { /* 快照失败仍保留蓝框定位 */ }
         GradientDrawable border = new GradientDrawable();
         border.setColor(Color.TRANSPARENT);
-        border.setCornerRadius(dp(this, 14));
+        border.setCornerRadius(dp(this, cloneR));
         border.setStroke(dp(this, 2.5f), Color.argb(179, 0, 122, 255));
         View borderV = new View(this);
         borderV.setBackground(border);
         borderV.setClickable(false);
+        roundClip(borderV, cloneR, this);
         clone.addView(borderV, new FrameLayout.LayoutParams(w, h));
         clone.setClickable(false);
         if (Build.VERSION.SDK_INT >= 21) clone.setElevation(dp(this, 18));
