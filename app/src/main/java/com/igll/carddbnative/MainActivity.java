@@ -532,7 +532,7 @@ public class MainActivity extends Activity {
             p.setStrokeCap(Paint.Cap.ROUND);
             p.setStrokeJoin(Paint.Join.ROUND);
             p.setStrokeWidth(dp(getContext(), 1.7f));
-            p.setColor(on ? Color.rgb(0x1C, 0x1C, 0x1E) : Color.rgb(0x8E, 0x8E, 0x93));
+            p.setColor(on ? Color.rgb(0x1C, 0x1C, 0x1E) : Color.rgb(0x63, 0x63, 0x66));
             float w = getWidth(), h = getHeight();
             float sx = w / 24f, sy = h / 24f;
             // 在 24x24 网格上画，坐标随控件尺寸缩放
