@@ -7,6 +7,7 @@ import android.app.Dialog;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.content.res.ColorStateList;
 import android.net.Uri;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
@@ -16,6 +17,7 @@ import android.graphics.Paint;
 import android.graphics.RectF;
 import android.graphics.drawable.Drawable;
 import android.graphics.drawable.GradientDrawable;
+import android.graphics.drawable.RippleDrawable;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.VibrationEffect;
@@ -416,12 +418,14 @@ public class MainActivity extends Activity {
     long lastDragEndAt = 0;
     String tab = "home";
     Card detailCard = null;
+    View detailView = null; // P4：详情页根视图（滑入/滑出动画用）
 
     // 情景选卡状态（Phase 3a，对照 app.js 的 wiz 全局状态）
     boolean wizardOpen = false;
     boolean detailFromWiz = false;
     // P2b：选卡悬浮窗根视图（遮罩+底部升起的大圆角窗），底层页面保留不切页，关窗回到原页原位
     View wizardSheet = null;
+    int lastWizStepShown = -1; // P4：选卡步骤切换方向判定（前进从右滑入、后退从左）
     String wizSc = null;
     int wizStep = 0;
     Map<String, String> wizA = new HashMap<>();
@@ -808,6 +812,12 @@ public class MainActivity extends Activity {
             pages.put(key, page);
         }
         content.addView(page);
+        // P4：切页淡入 + 轻微上移（220ms 减速曲线，与全 App 开合手感同一语言）
+        page.animate().cancel();
+        page.setAlpha(0f);
+        page.setTranslationY(dp(this, 10));
+        page.animate().alpha(1f).translationY(0f)
+            .setDuration(220).setInterpolator(new DecelerateInterpolator()).start();
         if ("home".equals(key) && homeList != null) refreshHome();
         restoreCurrentTabScroll();
         syncSearchFab();
@@ -1082,6 +1092,12 @@ public class MainActivity extends Activity {
     }
 
     // ---------- 通用：卡片瓷砖 ----------
+    // P4：卡片按压波纹——圆角底 + 淡蓝灰涟漪（RippleDrawable，minSdk 24 可用），clipToOutline 防溢出圆角
+    Drawable rippleBg(int color, float radiusDp) {
+        Drawable base = roundRect(color, radiusDp, this);
+        return new RippleDrawable(ColorStateList.valueOf(Color.argb(38, 10, 92, 214)), base, null);
+    }
+
     View cardTile(final Card c, ViewGroup parent) {
         return cardTile(c, parent, cols);
     }
@@ -1090,7 +1106,8 @@ public class MainActivity extends Activity {
     View cardTile(final Card c, ViewGroup parent, int nCols) {
         LinearLayout box = new LinearLayout(this);
         box.setOrientation(LinearLayout.VERTICAL);
-        box.setBackground(roundRect(Color.WHITE, 14, this));
+        box.setBackground(rippleBg(Color.WHITE, 14));
+        box.setClipToOutline(true);
         box.setPadding(dp(this, 8), dp(this, 8), dp(this, 8), dp(this, 10));
         AbsListView.LayoutParams lp = new AbsListView.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         box.setLayoutParams(lp);
@@ -2111,6 +2128,8 @@ public class MainActivity extends Activity {
     // +贴底大圆角窗（顶圆角 26、max-height 88vh、柔影），底层页面留在后面，关窗回到原页原位。
     void showWizardPage() {
         navBar.setVisibility(View.GONE);
+        // P4：窗已在场时是步骤切换（新内容横向滑入），否则是首次打开（整窗升起）
+        boolean stepSwitch = wizardSheet != null && wizardSheet.getParent() != null;
         if (wizardSheet != null && wizardSheet.getParent() != null)
             ((ViewGroup) wizardSheet.getParent()).removeView(wizardSheet);
         final FrameLayout sheet = new FrameLayout(this);
@@ -2144,13 +2163,24 @@ public class MainActivity extends Activity {
         sheet.addView(card, clp);
         content.addView(sheet);
         wizardSheet = sheet;
-        // 开场：遮罩淡入 + 窗从下方 42dp 上浮，260ms（混合版 wizUp .26s cubic-bezier(.2,.9,.3,1) 口径）
-        sheet.setAlpha(0f);
-        sheet.animate().alpha(1f).setDuration(200)
-            .setInterpolator(new DecelerateInterpolator()).start();
-        card.setTranslationY(dp(this, 42));
-        card.animate().translationY(0f)
-            .setDuration(260).setInterpolator(new DecelerateInterpolator(1.8f)).start();
+        // P4：首次打开走遮罩淡入+窗从下方 42dp 上浮（260ms，混合版 wizUp 口径）；步骤切换只让
+        // 新内容横向轻滑淡入——前进从右侧、后退从左侧，220ms 减速，窗体高度与遮罩保持不动。
+        if (stepSwitch) {
+            sheet.setAlpha(1f);
+            float dx = dp(this, wizStep >= lastWizStepShown ? 28 : -28);
+            card.setAlpha(0f);
+            card.setTranslationX(dx);
+            card.animate().alpha(1f).translationX(0f)
+                .setDuration(220).setInterpolator(new DecelerateInterpolator(1.8f)).start();
+        } else {
+            sheet.setAlpha(0f);
+            sheet.animate().alpha(1f).setDuration(200)
+                .setInterpolator(new DecelerateInterpolator()).start();
+            card.setTranslationY(dp(this, 42));
+            card.animate().translationY(0f)
+                .setDuration(260).setInterpolator(new DecelerateInterpolator(1.8f)).start();
+        }
+        lastWizStepShown = wizStep;
     }
 
     WizSc wizScenario() {
@@ -2441,22 +2471,43 @@ public class MainActivity extends Activity {
         detailCard = c;
         content.removeAllViews();
         navBar.setVisibility(View.GONE);
-        content.addView(buildDetailPage(c));
+        View dv = buildDetailPage(c);
+        detailView = dv;
+        content.addView(dv);
+        // P4：详情页从右侧轻滑入 + 淡入（260ms 减速）
+        dv.setAlpha(0f);
+        dv.setTranslationX(dp(this, 48));
+        dv.animate().alpha(1f).translationX(0f)
+            .setDuration(260).setInterpolator(new DecelerateInterpolator(1.6f)).start();
     }
 
     void closeDetail() {
-        detailCard = null;
-        if (detailFromWiz && wizardOpen) {
-            // P2b：从选卡结果点进来的详情：关掉必回悬浮选卡窗且进度还在（wizSc/wizStep/wizA 未动，同混合版 detailFromWiz）；
-            // 先恢复选卡窗底下那一页，再把选卡窗叠回最上层
+        final View dv = detailView;
+        detailView = null;
+        final boolean[] done = {false};
+        Runnable finish = () -> {
+            if (done[0]) return; done[0] = true; // 滑出途中连按返回时别跑两遍
+            detailCard = null;
+            if (detailFromWiz && wizardOpen) {
+                // P2b：从选卡结果点进来的详情：关掉必回悬浮选卡窗且进度还在（wizSc/wizStep/wizA 未动，同混合版 detailFromWiz）；
+                // 先恢复选卡窗底下那一页，再把选卡窗叠回最上层
+                detailFromWiz = false;
+                showTab(tab);
+                showWizardPage();
+                return;
+            }
             detailFromWiz = false;
+            navBar.setVisibility(View.VISIBLE);
             showTab(tab);
-            showWizardPage();
-            return;
+        };
+        // P4：详情先向右滑出淡出（180ms）再切回底下页面；无视图可动时直接切
+        if (dv != null && dv.getParent() != null) {
+            dv.animate().alpha(0f).translationX(dp(this, 48))
+                .setDuration(180).setInterpolator(new DecelerateInterpolator())
+                .withEndAction(finish).start();
+        } else {
+            finish.run();
         }
-        detailFromWiz = false;
-        navBar.setVisibility(View.VISIBLE);
-        showTab(tab);
     }
 
     View buildDetailPage(final Card c) {
