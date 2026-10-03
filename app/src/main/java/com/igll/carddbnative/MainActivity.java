@@ -399,6 +399,9 @@ public class MainActivity extends Activity {
     View homeSearchBar = null;
     boolean homeSearchBarShown = true;
     int lastHomeScrollY = 0;
+    // P-press 长按放大预览：快照浮层与源视图（松手即收起）
+    View pressPreview = null;
+    View pressPreviewSrc = null;
 
     // 筛选状态（Phase 2a-1：与混合版 chipRow 相同的单选切换语义，点已选项再点一次取消）
     String filterType = null;   // "debit" / "credit" / null
@@ -724,6 +727,7 @@ public class MainActivity extends Activity {
     }
 
     void showTab(String key) {
+        dismissPressPreview();
         tab = key;
         content.removeAllViews();
         View page = pages.get(key);
@@ -932,7 +936,80 @@ public class MainActivity extends Activity {
             "已停发".equals(c.status) ? Color.rgb(0xF3, 0xE8, 0xE8) : Color.rgb(0xE6, 0xF6, 0xEC),
             "已停发".equals(c.status) ? Color.rgb(0xB0, 0x23, 0x2B) : Color.rgb(0x1D, 0x8A, 0x49)));
         if (mine.contains(c.id)) chips.addView(chip("已添加", Color.rgb(0xE6, 0xF6, 0xEC), Color.rgb(0x1D, 0x8A, 0x49)));
+        // P-press 长按放大预览（我的卡片页会覆盖此长按为拖动排序，语义不冲突）
+        box.setOnLongClickListener(v -> { showPressPreview(box); return true; });
         return box;
+    }
+
+    // P-press：长按放大预览——拍源视图像素快照做浮层，按当场实测宽高等比放大并居中夹在屏内，
+    // 1/2/3 列都取实测尺寸，不复制子视图，也就不会丢行高/字号（混合版克隆栽过的跟头）。
+    // 松手（UP/CANCEL）即收；切页/开详情时也会先收，避免浮层残留。
+    void showPressPreview(final View src) {
+        if (src == null || pressPreview != null) return;
+        final int w = src.getWidth(), h = src.getHeight();
+        if (w <= 0 || h <= 0) return;
+        Bitmap snap;
+        try {
+            snap = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888);
+            src.draw(new Canvas(snap));
+        } catch (Exception e) { return; }
+        ViewGroup rootVg = (ViewGroup) findViewById(android.R.id.content);
+        if (rootVg == null || rootVg.getWidth() <= 0 || rootVg.getHeight() <= 0) return;
+        int[] rl = new int[2]; rootVg.getLocationOnScreen(rl);
+        int[] sl = new int[2]; src.getLocationOnScreen(sl);
+        float left = sl[0] - rl[0], top = sl[1] - rl[1];
+
+        FrameLayout holder = new FrameLayout(this);
+        holder.setBackground(roundRect(Color.WHITE, 14, this));
+        holder.setClipToOutline(true);
+        if (Build.VERSION.SDK_INT >= 21) holder.setElevation(dp(this, 18));
+        ImageView iv = new ImageView(this);
+        iv.setImageBitmap(snap);
+        iv.setScaleType(ImageView.ScaleType.FIT_XY);
+        holder.addView(iv, new FrameLayout.LayoutParams(w, h));
+        FrameLayout.LayoutParams hlp = new FrameLayout.LayoutParams(w, h);
+        hlp.leftMargin = (int) left; hlp.topMargin = (int) top;
+        rootVg.addView(holder, hlp);
+
+        float maxW = rootVg.getWidth() - dp(this, 32);
+        float maxH = rootVg.getHeight() - dp(this, 48);
+        float mul = w < dp(this, 150) ? 1.9f : (w < dp(this, 230) ? 1.45f : 1.18f);
+        float scale = Math.min(mul, Math.min(maxW / w, maxH / h));
+        if (scale < 1.05f) scale = 1.05f;
+        float cx = left + w / 2f, cy = top + h / 2f;
+        float tw = w * scale, th = h * scale;
+        float wantCx = Math.max(tw / 2f + dp(this, 10), Math.min(cx, rootVg.getWidth() - tw / 2f - dp(this, 10)));
+        float wantCy = Math.max(th / 2f + dp(this, 10), Math.min(cy, rootVg.getHeight() - th / 2f - dp(this, 10)));
+        holder.setPivotX(w / 2f); holder.setPivotY(h / 2f);
+        holder.setAlpha(0.92f);
+        holder.animate().scaleX(scale).scaleY(scale)
+            .translationX(wantCx - cx).translationY(wantCy - cy).alpha(1f)
+            .setDuration(220).setInterpolator(new DecelerateInterpolator()).start();
+
+        pressPreview = holder; pressPreviewSrc = src;
+        haptic();
+        android.view.ViewParent p = src.getParent();
+        while (p != null) { p.requestDisallowInterceptTouchEvent(true); p = p.getParent(); }
+        src.setOnTouchListener((v, e) -> {
+            if (e.getActionMasked() == MotionEvent.ACTION_UP || e.getActionMasked() == MotionEvent.ACTION_CANCEL) dismissPressPreview();
+            return false;
+        });
+    }
+
+    void dismissPressPreview() {
+        if (pressPreview == null) return;
+        final View holder = pressPreview; pressPreview = null;
+        if (pressPreviewSrc != null) {
+            pressPreviewSrc.setOnTouchListener(null);
+            android.view.ViewParent p = pressPreviewSrc.getParent();
+            while (p != null) { p.requestDisallowInterceptTouchEvent(false); p = p.getParent(); }
+            pressPreviewSrc = null;
+        }
+        holder.animate().cancel();
+        holder.animate().scaleX(1f).scaleY(1f).translationX(0).translationY(0).alpha(0f)
+            .setDuration(140).setInterpolator(new DecelerateInterpolator())
+            .withEndAction(() -> { if (holder.getParent() instanceof ViewGroup) ((ViewGroup) holder.getParent()).removeView(holder); })
+            .start();
     }
 
     TextView chip(String s, int bg, int fg) {
@@ -2063,6 +2140,7 @@ public class MainActivity extends Activity {
             showWizardPage();
         });
         row.setOnClickListener(v -> openDetail(c, true));
+        row.setOnLongClickListener(v -> { showPressPreview(row); return true; });
         return row;
     }
 
@@ -2070,6 +2148,7 @@ public class MainActivity extends Activity {
     void openDetail(Card c) { openDetail(c, false); }
 
     void openDetail(Card c, boolean fromWiz) {
+        dismissPressPreview();
         detailFromWiz = fromWiz;
         detailCard = c;
         content.removeAllViews();
@@ -2383,6 +2462,7 @@ public class MainActivity extends Activity {
             clp.topMargin = dp(this, 10);
             listBox.addView(cardBox, clp);
             cardBox.setOnClickListener(v -> openDetail(c));
+            cardBox.setOnLongClickListener(v -> { showPressPreview(cardBox); return true; });
 
             LinearLayout top = new LinearLayout(this);
             top.setOrientation(LinearLayout.HORIZONTAL);
