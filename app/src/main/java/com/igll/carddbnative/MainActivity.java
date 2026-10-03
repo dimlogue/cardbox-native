@@ -9,7 +9,10 @@ import android.content.SharedPreferences;
 import android.net.Uri;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
+import android.graphics.Canvas;
 import android.graphics.Color;
+import android.graphics.Paint;
+import android.graphics.RectF;
 import android.graphics.drawable.GradientDrawable;
 import android.os.Build;
 import android.os.Bundle;
@@ -329,8 +332,11 @@ public class MainActivity extends Activity {
 
     FrameLayout content;
     LinearLayout navBar;
+    FrameLayout navWrap;
     Map<String, View> pages = new HashMap<>();
-    Map<String, Button> navBtns = new HashMap<>();
+    Map<String, LinearLayout> navItems = new HashMap<>();
+    Map<String, NavIconView> navIcons = new HashMap<>();
+    Map<String, TextView> navLabels = new HashMap<>();
 
     // 首页控件（切页回来保持搜索词）
     EditText searchBox;
@@ -460,12 +466,14 @@ public class MainActivity extends Activity {
         loadMineOrder();
         Store.load(this);
 
-        LinearLayout root = new LinearLayout(this);
-        root.setOrientation(LinearLayout.VERTICAL);
+        FrameLayout root = new FrameLayout(this);
         root.setBackgroundColor(Color.rgb(0xF2, 0xF3, 0xF7));
 
         content = new FrameLayout(this);
-        root.addView(content, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
+        // 悬浮底栏浮在内容上：内容区底部留白，滚动到底不被挡住（P1）
+        content.setPadding(0, 0, 0, dp(this, 88));
+        content.setClipToPadding(false);
+        root.addView(content, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         buildNav(root);
         setContentView(root);
 
@@ -511,26 +519,133 @@ public class MainActivity extends Activity {
         showTab(tab);
     }
 
-    // ---------- 底部导航 ----------
-    void buildNav(LinearLayout root) {
+    // ---------- 底部导航（P1 悬浮底栏：对照混合版 .dock-glass） ----------
+    // 细线自绘图标：Canvas 线条，禁用 emoji 与系统老图标
+    class NavIconView extends View {
+        final String kind;
+        boolean on = false;
+        NavIconView(Context c, String k) { super(c); kind = k; }
+        void setOn(boolean v) { on = v; invalidate(); }
+        @Override protected void onDraw(Canvas cv) {
+            Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);
+            p.setStyle(Paint.Style.STROKE);
+            p.setStrokeCap(Paint.Cap.ROUND);
+            p.setStrokeJoin(Paint.Join.ROUND);
+            p.setStrokeWidth(dp(getContext(), 1.7f));
+            p.setColor(on ? Color.rgb(0x1C, 0x1C, 0x1E) : Color.rgb(0x8E, 0x8E, 0x93));
+            float w = getWidth(), h = getHeight();
+            float sx = w / 24f, sy = h / 24f;
+            // 在 24x24 网格上画，坐标随控件尺寸缩放
+            java.util.function.BiConsumer<float[], float[]> line = (a, b) ->
+                cv.drawLine(a[0] * sx, a[1] * sy, b[0] * sx, b[1] * sy, p);
+            switch (kind) {
+                case "home": {
+                    line.accept(new float[]{4f, 11.5f}, new float[]{12f, 4.5f});
+                    line.accept(new float[]{12f, 4.5f}, new float[]{20f, 11.5f});
+                    line.accept(new float[]{6.5f, 9.5f}, new float[]{6.5f, 19.5f});
+                    line.accept(new float[]{17.5f, 9.5f}, new float[]{17.5f, 19.5f});
+                    line.accept(new float[]{6.5f, 19.5f}, new float[]{17.5f, 19.5f});
+                    cv.drawRect(new RectF(10.2f * sx, 13.5f * sy, 13.8f * sx, 19.5f * sy), p);
+                    break;
+                }
+                case "student": {
+                    // 学士帽：菱形帽面 + 流苏 + 头弧
+                    cv.drawLine(12f * sx, 5.5f * sy, 21.5f * sx, 10f * sy, p);
+                    cv.drawLine(21.5f * sx, 10f * sy, 12f * sx, 14.5f * sy, p);
+                    cv.drawLine(12f * sx, 14.5f * sy, 2.5f * sx, 10f * sy, p);
+                    cv.drawLine(2.5f * sx, 10f * sy, 12f * sx, 5.5f * sy, p);
+                    cv.drawLine(21.5f * sx, 10f * sy, 21.5f * sx, 16f * sy, p);
+                    cv.drawArc(new RectF(7.5f * sx, 12.5f * sy, 16.5f * sx, 20f * sy), 0, 180, false, p);
+                    break;
+                }
+                case "mine": {
+                    RectF r = new RectF(3.5f * sx, 6.5f * sy, 20.5f * sx, 17.5f * sy);
+                    cv.drawRoundRect(r, 2.5f * sx, 2.5f * sy, p);
+                    cv.drawLine(3.5f * sx, 10.5f * sy, 20.5f * sx, 10.5f * sy, p);
+                    cv.drawLine(6.5f * sx, 14.5f * sy, 11f * sx, 14.5f * sy, p);
+                    break;
+                }
+                case "news": {
+                    RectF r = new RectF(5f * sx, 4.5f * sy, 19f * sx, 19.5f * sy);
+                    cv.drawRoundRect(r, 1.8f * sx, 1.8f * sy, p);
+                    cv.drawLine(8f * sx, 8.5f * sy, 16f * sx, 8.5f * sy, p);
+                    cv.drawLine(8f * sx, 12f * sy, 16f * sx, 12f * sy, p);
+                    cv.drawLine(8f * sx, 15.5f * sy, 13.5f * sx, 15.5f * sy, p);
+                    break;
+                }
+                default: { // settings 齿轮：外圈 + 八齿 + 中心圆
+                    for (int i = 0; i < 8; i++) {
+                        double a = Math.toRadians(i * 45.0);
+                        float x1 = (float) (12 + 5.1 * Math.cos(a)), y1 = (float) (12 + 5.1 * Math.sin(a));
+                        float x2 = (float) (12 + 7.4 * Math.cos(a)), y2 = (float) (12 + 7.4 * Math.sin(a));
+                        cv.drawLine(x1 * sx, y1 * sy, x2 * sx, y2 * sy, p);
+                    }
+                    cv.drawCircle(12f * sx, 12f * sy, 5.1f * sx, p);
+                    cv.drawCircle(12f * sx, 12f * sy, 2.1f * sx, p);
+                    break;
+                }
+            }
+        }
+    }
+
+    GradientDrawable floatingBarBg() {
+        GradientDrawable g = new GradientDrawable();
+        g.setColor(Color.argb(235, 255, 255, 255));
+        g.setCornerRadius(dp(this, 26));
+        g.setStroke(dp(this, 1), Color.argb(28, 20, 30, 60));
+        return g;
+    }
+
+    GradientDrawable navPillBg() {
+        GradientDrawable g = new GradientDrawable();
+        g.setColor(Color.argb(255, 255, 255, 255));
+        g.setCornerRadius(dp(this, 18));
+        g.setStroke(dp(this, 1), Color.argb(18, 20, 30, 60));
+        return g;
+    }
+
+    void buildNav(FrameLayout root) {
+        navWrap = new FrameLayout(this);
+        FrameLayout.LayoutParams wrapLp = new FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        wrapLp.gravity = Gravity.BOTTOM;
+        wrapLp.leftMargin = dp(this, 12);
+        wrapLp.rightMargin = dp(this, 12);
+        wrapLp.bottomMargin = dp(this, 12);
+        navWrap.setLayoutParams(wrapLp);
+
         navBar = new LinearLayout(this);
         navBar.setOrientation(LinearLayout.HORIZONTAL);
-        navBar.setBackgroundColor(Color.WHITE);
-        navBar.setPadding(dp(this, 8), dp(this, 6), dp(this, 8), dp(this, 10));
+        navBar.setBackground(floatingBarBg());
+        navBar.setPadding(dp(this, 8), dp(this, 8), dp(this, 8), dp(this, 8));
+        if (Build.VERSION.SDK_INT >= 21) navBar.setElevation(dp(this, 10));
+        navBar.setClipToOutline(false);
         String[][] tabs = {
             {"home", "全部卡片"}, {"student", "学生推荐"}, {"mine", "我的卡片"}, {"news", "资讯"}, {"settings", "设置"}
         };
         for (String[] t : tabs) {
-            Button b = new Button(this);
-            b.setText(t[1]); b.setTextSize(12);
-            b.setAllCaps(false);
-            b.setBackground(null);
             final String key = t[0];
-            b.setOnClickListener(v -> { haptic(); showTab(key); });
-            navBtns.put(key, b);
-            navBar.addView(b, new LinearLayout.LayoutParams(0, dp(this, 44), 1f));
+            LinearLayout item = new LinearLayout(this);
+            item.setOrientation(LinearLayout.VERTICAL);
+            item.setGravity(Gravity.CENTER_HORIZONTAL);
+            item.setPadding(dp(this, 4), dp(this, 6), dp(this, 4), dp(this, 6));
+            NavIconView icon = new NavIconView(this, key);
+            item.addView(icon, new LinearLayout.LayoutParams(dp(this, 23), dp(this, 23)));
+            TextView label = tv(this, t[1], 10f, Color.rgb(0x8E, 0x8E, 0x93), false);
+            label.setGravity(Gravity.CENTER);
+            LinearLayout.LayoutParams llp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            llp.topMargin = dp(this, 2);
+            item.addView(label, llp);
+            item.setOnClickListener(v -> { haptic(); showTab(key); });
+            navItems.put(key, item);
+            navIcons.put(key, icon);
+            navLabels.put(key, label);
+            navBar.addView(item, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
         }
-        root.addView(navBar);
+        navWrap.addView(navBar, new FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        root.addView(navWrap);
     }
 
     void showTab(String key) {
@@ -553,11 +668,18 @@ public class MainActivity extends Activity {
         }
         content.addView(page);
         if ("home".equals(key) && homeList != null) refreshHome();
-        for (Map.Entry<String, Button> e : navBtns.entrySet()) {
+        for (Map.Entry<String, LinearLayout> e : navItems.entrySet()) {
             boolean on = e.getKey().equals(key);
-            e.getValue().setTextColor(on ? Color.rgb(0x0A, 0x5C, 0xD6) : Color.rgb(0x8E, 0x8E, 0x93));
-            e.getValue().setTypeface(on ? android.graphics.Typeface.DEFAULT_BOLD : android.graphics.Typeface.DEFAULT);
-            e.getValue().setBackground(on ? roundRect(Color.rgb(0xE8, 0xF1, 0xFD), 12, this) : null);
+            e.getValue().setBackground(on ? navPillBg() : null);
+            if (Build.VERSION.SDK_INT >= 21) e.getValue().setElevation(on ? dp(this, 2) : 0);
+            NavIconView ic = navIcons.get(e.getKey());
+            if (ic != null) ic.setOn(on);
+            TextView lb = navLabels.get(e.getKey());
+            if (lb != null) {
+                lb.setTextColor(on ? Color.rgb(0x1C, 0x1C, 0x1E) : Color.rgb(0x8E, 0x8E, 0x93));
+                android.graphics.Typeface cur = lb.getTypeface();
+                if (cur != null) lb.setTypeface(cur, on ? android.graphics.Typeface.BOLD : android.graphics.Typeface.NORMAL);
+            }
         }
     }
 

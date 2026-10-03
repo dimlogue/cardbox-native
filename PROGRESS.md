@@ -39,6 +39,14 @@
 - [x] Phase 4a 设置补全：字体三档（软件默认/本机/内置宋体——宋体 woff2 在混合版 assets，安卓原生用 Typeface.createFromAsset 需 ttf/otf：混合版有 woff2 不能直接用，需从 ~/.fonts 或系统找 Noto Serif CJK 源文件重新子集化为 ttf；无源就记录阻塞，别硬凑）、界面大小三档（缩放 sp 基准）、高刷（WindowManager preferredRefreshRate 对照混合版 Bridge setHighRefresh）、触感（Vibrator）。（2026-10-03 完成：字体三档走 tv() 统一分发——软件默认 DEFAULT/本机 SANS_SERIF/内置宋体 createFromAsset(fonts/serif.ttf，粗体合成)；宋体由系统 NotoSerifCJK-Regular.ttc 的 SC 面子集化（GB2312 一二级字库+cards/news/界面文案实际用字，共 7909 码位，4.2MB，已验常用字零缺字）；界面大小 0.9/1.0/1.12 倍乘在 tv() 的 sp 上；三者切换即存 SharedPreferences 并整页重建生效。高刷开后遍历 Display.getSupportedModes 取最高刷新率写 preferredDisplayModeId+preferredRefreshRate。触感 Vibrator 一次 15ms，挂在底部导航与设置切换。版本 0.10-native（versionCode 10）。）
 - [x] Phase 4b 欢迎页（对照混合版文案，真实图标）+更新日志页（把混合版 CHANGELOG 文案搬成静态数据+右侧滑杆+底部收起/回顶）。（2026-10-03 完成：欢迎页首启自动出现（prefs welcomed 标记）、文案四项与混合版逐字一致（图鉴张数按当前卡库动态填）、开始使用后记住不再弹、设置「欢迎页」行可重开、系统返回键等同开始使用；更新日志把混合版 CHANGELOG 全 84 版/194 条用脚本原样导出 assets/data/changelog.json 静态内置，设置「更新日志」行进入独立页：版本头+圆点条目、右侧常显滚动条、底部常驻「↑ 回到顶部/收起日志」两钮，返回键收起；设置页整体改为可滚动保证新增行够得着。版本 0.11-native（versionCode 11）。）
 - [x] Phase 4c OTA 数据更新：启动时拉 https://cdn.jsdelivr.net/gh/dimlogue/cardbox-data@main/cards.json（失败回落 raw.githubusercontent），data_version 更新则存 filesDir 并优先读它（对照 tools/publish-data.js 的发布格式）。（2026-10-03 完成：Store 改为先解析校验再替换（data_version 读取+临时表成功才换）；加载顺序 OTA 文件（filesDir/cards-ota.json）版本>内置才优先，否则内置 assets，离线可读；启动自动 checkDataUpdate(false)、设置页新增「数据」区（数据版本 vN·卡数行+手动检查，手动给 已是最新/更新成功/失败 三种 toast）；更新成功清页面缓存、正看详情不打断；OTA 新卡图片不在安装包时后台从数据仓 images/ 拉到 filesDir/ota-images 缓存（CDN 路径实测 200）。双线 URL 实测均 200，远程 data_version=10 与内置一致，自动检查当前为无更新无感。版本 0.12-native（versionCode 12）。）
+- [ ] Phase P 界面打磨（2026-10-03 用户真机验收 0.12 后立项；他原话要点：筛选该是悬浮窗、底栏该悬浮且要有 iOS 风按钮、静音也要有震动且震动要分档、动画缺失、整体 UI 还粗。审美基准就是混合版现行界面，逐项往它靠）：
+  - [ ] P1 悬浮底栏：底部导航改悬浮——左右留边、底部留空、圆角大、白色微透+投影浮在内容上；选中态 iOS 风胶囊；五枚图标改细线自绘（Canvas 线条：首页/学生帽/卡包/资讯/齿轮，禁用 emoji、禁用系统老图标），内容区底部留白防遮挡。
+  - [ ] P2 悬浮搜索与筛选窗：首页加右下悬浮搜索圆钮（点了聚焦顶部搜索框）；筛选改悬浮卡窗（带阴影的浮层卡片，不是贴边全宽抽屉），开合带动画；已选标签栏位置跟混合版一致。
+  - [ ] P2b 情景选卡改悬浮窗：现在是整页跳转，要改回混合版形态——从当前页升起的悬浮窗（大圆角、带阴影、底层页面还在后面），在窗里答题看结果，关掉回到刚才那一页；进详情再返回仍保留选卡进度。
+  - [ ] P3 触感分档：设置「触感反馈」关/轻/中/强四档（10/20/40ms 或等效振幅），切换即试震；底部导航、筛选点选、收藏切换、主要按钮统一挂震动；静音模式下照常震（走 Vibrator 系统服务，与铃声音量无关），档位存 prefs。
+  - [ ] P4 动画补齐：切页淡入+轻微上移；详情页滑入/滑出；筛选浮层缩放+淡入；卡片瓷砖按压波纹反馈；选卡步骤切换有过渡。不许为了动画牺牲滚动流畅度。
+  - [ ] P4b 悬浮提示条：底部悬浮胶囊提示（带浮现动画、几秒自动消失），关键操作可带操作钮——移除收藏时出「撤销」、删自定义卡/清筛选同理；把现在生硬的 系统 Toast 在这些场景里换掉，样式照混合版白色毛玻璃长条。
+  - [ ] P5 视觉细修：间距/字号层级/圆角/空状态向混合版对齐一轮（对照混合版 styles.css 的数值），图片占位给柔和渐变不要灰块。
 - [ ] Phase 5 数据迁移与切换：给混合版发最后一版（3.108）把 localStorage 的 mine/自定义卡/设置经已有 setPref 桥镜像到 SharedPreferences；原生版首启读 com.igll.carddb 的 prefs（同签名同包时可读）完成迁移；切正式包名 com.igll.carddb、versionCode 接 121；提醒用户覆盖安装验收。动这一步前先在主会话汇报，未经用户点头不要切包名。
 
 ## 已知注意
