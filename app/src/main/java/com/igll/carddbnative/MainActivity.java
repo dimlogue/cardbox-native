@@ -510,6 +510,8 @@ public class MainActivity extends Activity {
     /** 滚动停稳后刷新 live 玻璃（底栏/悬浮钮/回顶/搜索胶囊）；有浮窗在场时不刷，浮窗用的是冻结快照。 */
     void refreshLiveGlass() {
         if (glassDisabled || glassCapturing || rootView == null || rootView.getWidth() <= 0) return;
+        // Q21 ③：底栏拖动/弹簧进行中不做整屏抓图——capture 是全树 draw，正是滑动发卡与 MOVE 被饿死的主因之一；落稳后防抖任务会补上最终帧。
+        if (navDragging || navSpringRunning) return;
         if (cardMenuPop != null || filterSheet != null || wizardOpen || aboutOpen
             || detailCard != null || welcomeOpen || changelogOpen) return;
         captureGlassSnapshot();
@@ -522,6 +524,8 @@ public class MainActivity extends Activity {
         // Q16 (2) live glass: while scrolling, re-sample throttled at 140ms (dock / fabs / search capsule track the
         // background instead of showing one frozen frame), then the existing 380ms debounce settles a final frame.
         // refreshLiveGlass() itself skips while any overlay sheet is open.
+        // Q21：底栏手势优先——拖动/弹簧期间连排队都免了，避免手势一结束就被积压的抓图任务堵住切页。
+        if (navDragging || navSpringRunning) return;
         long now = android.os.SystemClock.elapsedRealtime();
         if (now - lastLiveGlassMs >= 140) {
             lastLiveGlassMs = now;
@@ -807,7 +811,29 @@ public class MainActivity extends Activity {
                 if (c.style < 0 || c.style >= CUSTOM_STYLES.length) c.style = 0;
                 customCards.add(c);
             }
-        } catch (Exception e) { customCards = new ArrayList<>(); }
+        } catch (Throwable e) {
+            // Q21：单条坏数据不许整表蒸发——退到逐条抢救，能读几张读几张；整表清空只会把用户卡一次丢光。
+            customCards = new ArrayList<>();
+            try {
+                String raw2 = prefs.getString("custom_cards", "[]");
+                JSONArray arr2 = new JSONArray(raw2 == null || raw2.isEmpty() ? "[]" : raw2);
+                for (int i = 0; i < arr2.length(); i++) {
+                    try {
+                        JSONObject o = arr2.getJSONObject(i);
+                        CustomCard c = new CustomCard();
+                        c.id = o.optString("id");
+                        c.name = o.optString("name");
+                        c.bank = o.optString("bank");
+                        c.org = o.optString("org");
+                        c.note = o.optString("note");
+                        c.style = o.optInt("style", 0);
+                        if (c.id == null || c.id.isEmpty()) c.id = "custom-" + i;
+                        if (c.style < 0 || c.style >= CUSTOM_STYLES.length) c.style = 0;
+                        customCards.add(c);
+                    } catch (Throwable ignored) { /* 跳过这一条坏数据 */ }
+                }
+            } catch (Throwable ignored2) { /* 原始串本身不可解析才保持空表 */ }
+        }
     }
 
     void saveCustomCards() {
@@ -823,8 +849,9 @@ public class MainActivity extends Activity {
                 o.put("style", c.style);
                 arr.put(o);
             }
-            prefs.edit().putString("custom_cards", arr.toString()).apply();
-        } catch (Exception e) { /* 存不下就保持内存中的列表 */ }
+            // Q21：自定义卡是用户资产，apply() 异步落盘在紧接着的崩溃/强杀下可能来不及刷盘；JSON 很小，直接 commit 同步落盘。
+            prefs.edit().putString("custom_cards", arr.toString()).commit();
+        } catch (Throwable e) { /* 存不下就保持内存中的列表 */ }
     }
 
     GradientDrawable customGradient(int style) {
@@ -949,6 +976,14 @@ public class MainActivity extends Activity {
     int navDragIdx = -1;
     float navSpringV = 0f;
     boolean navSpringRunning = false;
+    // Q21 ①：弹簧只许一条回路——代次令牌 + 任务句柄。新弹簧/取消/按下接管都自增代次并摘除旧任务，
+    // 旧 Runnable 即使已被系统派发也会因代次不符立即退出，杜绝两条回路同驱 navPos 互殴空转。
+    int navSpringGen = 0;
+    Runnable navSpringTask = null;
+    float navDownRawX = 0f;
+    // Q21 ②：首页渲染签名（查询/筛选/排序/列数/分组/展开集/收藏集/数据版本）——未变时切页回来不重搭 213 张瓷砖。
+    String homeRenderSig = null;
+    int homeRenderGen = 0; // 分帧渲染代次：新的 refresh 作废上一轮未跑完的续帧任务
     long navGlassMs = 0;
     FrameLayout navWrap;
     Map<String, View> pages = new HashMap<>();
@@ -1264,22 +1299,27 @@ public class MainActivity extends Activity {
     }
 
     // 收藏切换统一入口：移除出「撤销」（按原顺序恢复，因 mineOrder 未动、重新加入即回原位）、加入给普通提示
+    // Q21：收藏集合同走 commit 同步落盘——用户资产不赌 apply() 的异步刷盘窗口（崩溃/强杀紧跟保存时不丢）。
+    void persistMineSet() {
+        try { prefs.edit().putStringSet("mine_ids", new HashSet<>(mine)).commit(); } catch (Throwable ignored) {}
+    }
+
     void toggleMineWithToast(final Card c, final Runnable uiRefresh) {
         if (mine.contains(c.id)) {
             mine.remove(c.id);
-            prefs.edit().putStringSet("mine_ids", new HashSet<>(mine)).apply();
+            persistMineSet();
             pages.remove("mine");
             if (uiRefresh != null) uiRefresh.run();
             showFloatToast("已从我的卡片移除：" + c.name, "撤销", () -> {
                 mine.add(c.id);
-                prefs.edit().putStringSet("mine_ids", new HashSet<>(mine)).apply();
+                persistMineSet();
                 pages.remove("mine");
                 if (uiRefresh != null) uiRefresh.run();
                 showFloatToast("已恢复：" + c.name);
             });
         } else {
             mine.add(c.id);
-            prefs.edit().putStringSet("mine_ids", new HashSet<>(mine)).apply();
+            persistMineSet();
             pages.remove("mine");
             if (uiRefresh != null) uiRefresh.run();
             showFloatToast("已加入我的卡片：" + c.name);
@@ -1450,20 +1490,26 @@ public class MainActivity extends Activity {
             llp.topMargin = dp(this, 2);
             item.addView(label, llp);
             item.setOnClickListener(v -> { if (!navDragging) { haptic(); showTab(key); } });
-            // Q17: drag on the dock itself - finger drags the drop, passing a tab ticks haptic, release springs to nearest and only then switches page.
+            // Q17/Q21: drag on the dock itself - finger drags the drop, passing a tab ticks haptic, release springs to nearest and only then switches page.
+            // Q21 ③ 触摸竞争治理：按下即向父级声明不许拦截（底栏整条手势归条目独占），坐标统一用 rawX 换算到 navRow，
+            // 手指滑出起始条目后仍由按下条目独占 MOVE 流，不再出现滑到一半被别的视图抢走而「滑不动」。
             item.setOnTouchListener((v, e) -> {
-                float navX = v.getLeft() + e.getX();
                 switch (e.getActionMasked()) {
                     case MotionEvent.ACTION_DOWN:
-                        navDownX = navX; navDownMs = android.os.SystemClock.uptimeMillis(); return false;
+                        navDownRawX = e.getRawX(); navDownMs = android.os.SystemClock.uptimeMillis();
+                        try { v.getParent().requestDisallowInterceptTouchEvent(true); } catch (Throwable ignored) {}
+                        // 手指已落到底栏：正在跑的弹簧立刻让位给手指（代次作废旧回路），不许弹簧与手指同驱指示块。
+                        if (navSpringRunning) cancelNavSpring();
+                        return false;
                     case MotionEvent.ACTION_MOVE:
-                        if (!navDragging && Math.abs(navX - navDownX) > dp(this, 9)) {
+                        if (!navDragging && Math.abs(e.getRawX() - navDownRawX) > dp(this, 9)) {
                             navDragging = true; navDragIdx = Math.round(navPos); cancelNavSpring();
                         }
-                        if (navDragging) { navDragTo(navX); return true; }
+                        if (navDragging) { navDragTo(e.getRawX()); return true; }
                         return false;
                     case MotionEvent.ACTION_UP:
                     case MotionEvent.ACTION_CANCEL:
+                        try { v.getParent().requestDisallowInterceptTouchEvent(false); } catch (Throwable ignored) {}
                         if (navDragging) { navDragging = false; settleNav(); return true; }
                         return false;
                 }
@@ -1514,8 +1560,11 @@ public class MainActivity extends Activity {
         // Q20 拆弹：拖动/弹簧帧里不再做 applyGlass 位图裁图（曾是卡死与巨卡来源之一）。
     }
 
-    void navDragTo(float navX) {
-        float slot = navSlotW(); if (slot <= 0) return;
+    // Q21：rawX（屏幕坐标）→ 标签小数位：以 navRow 在屏位置为原点，跨条目滑动时坐标连续不跳变。
+    void navDragTo(float rawX) {
+        float slot = navSlotW(); if (slot <= 0 || navRow == null) return;
+        int[] loc = new int[2]; navRow.getLocationOnScreen(loc);
+        float navX = rawX - loc[0];
         float p = (navX - dp(this, 8)) / slot - 0.5f;
         p = Math.max(-0.12f, Math.min(4.12f, p));
         float vel = (p - navPos) * 18f;
@@ -1525,28 +1574,35 @@ public class MainActivity extends Activity {
         if (idx != navDragIdx) { navDragIdx = idx; haptic(); } // one tick per tab passed
     }
 
-    void cancelNavSpring() { navSpringRunning = false; }
+    void cancelNavSpring() {
+        navSpringRunning = false;
+        navSpringGen++;
+        if (navSpringTask != null) { mainHandler.removeCallbacks(navSpringTask); navSpringTask = null; }
+    }
 
     void settleNav() { springNavTo(Math.max(0, Math.min(4, Math.round(navPos))), true); }
 
-    // hand-written damped spring (no libs): stiffness 170, damping ratio ~0.55 -> visible overshoot settle.
+    // hand-written damped spring (no libs): stiffness 240, damping ratio ~0.62 -> snappy settle with slight overshoot.
+    // Q21 ①：全程只许一条回路——启动时摘除旧任务并自增代次，帧内先验代次再推进；取消/新弹簧/手指接管任一发生，旧回路当帧自尽。
+    // Q21 ②：刚度 170→240 缩短落位时长，落位才切页的等待随之压短；拖动中不切页的防闪烁语义不变。
     void springNavTo(final int target, final boolean switchPage) {
-        cancelNavSpring();
+        final int gen = ++navSpringGen;
+        if (navSpringTask != null) mainHandler.removeCallbacks(navSpringTask);
         navSpringRunning = true;
         navSpringV = 0f;
         final long[] last = { android.os.SystemClock.uptimeMillis() };
-        mainHandler.post(new Runnable() {
+        navSpringTask = new Runnable() {
             public void run() {
-                if (!navSpringRunning) return;
+                if (gen != navSpringGen || !navSpringRunning) return; // 已被更新的回路/取消取代
                 long now = android.os.SystemClock.uptimeMillis();
                 float dt = Math.min(0.032f, Math.max(0.001f, (now - last[0]) / 1000f)); last[0] = now;
-                float k = 170f, c = 2f * 0.55f * (float) Math.sqrt(k);
+                float k = 240f, c = 2f * 0.62f * (float) Math.sqrt(k);
                 float a = -k * (navPos - target) - c * navSpringV;
                 navSpringV += a * dt;
                 navPos += navSpringV * dt;
                 placeNavIndicator(navSpringV);
                 if (Math.abs(navPos - target) < 0.002f && Math.abs(navSpringV) < 0.08f) {
-                    navPos = target; navSpringV = 0f; navSpringRunning = false;
+                    navPos = target; navSpringV = 0f; navSpringRunning = false; navSpringTask = null;
                     placeNavIndicator(0f);
                     navSettled = target;
                     if (switchPage) {
@@ -1557,7 +1613,8 @@ public class MainActivity extends Activity {
                 }
                 mainHandler.postDelayed(this, 16);
             }
-        });
+        };
+        mainHandler.post(navSpringTask);
     }
 
     void showTab(String key) {
@@ -1602,7 +1659,8 @@ public class MainActivity extends Activity {
             try { showFloatToast("页面打开失败，已回到首页"); } catch (Throwable ignored) {}
         }
         content.addView(page);
-        if (rootView != null) rootView.post(() -> refreshLiveGlass()); // Q11：切页后按新页画面刷新玻璃
+        // Q21：弹簧/拖动未落稳时不抓玻璃全图（整屏 draw 会抢主线程、拖动随之发卡）；落稳后由滚动停稳防抖补刷。
+        if (rootView != null && !navSpringRunning && !navDragging) rootView.post(() -> refreshLiveGlass()); // Q11：切页后按新页画面刷新玻璃
         // P4：切页淡入 + 轻微上移（220ms 减速曲线，与全 App 开合手感同一语言）
         page.animate().cancel();
         page.setAlpha(0f);
@@ -1624,10 +1682,11 @@ public class MainActivity extends Activity {
             }
         }
         // Q17: move the liquid drop (spring if layout ready; the tap path also lands here)
+        // Q21：navSettled 只在弹簧真正落稳时写入（弹簧帧内），此处提前写入会让「已落位」与动画中的实际位置脱节。
         int targetIdx = navOrder.indexOf(key);
         if (targetIdx >= 0 && navIndicator != null) {
             if (Math.abs(navPos - targetIdx) > 0.01f) springNavTo(targetIdx, false);
-            navSettled = targetIdx;
+            else navSettled = targetIdx;
         }
     }
 
@@ -2397,8 +2456,26 @@ public class MainActivity extends Activity {
         return out;
     }
 
+    // Q21 ② 首页渲染签名：把决定网格内容的全部输入拼成一把钥匙——切页回来/关弹层这类「什么都没变」的 refresh 直接跳过整表重搭。
+    String homeSig() {
+        StringBuilder sb = new StringBuilder();
+        sb.append(query).append('|').append(filterType).append('|').append(filterOrg).append('|')
+          .append(filterStatus).append('|').append(filterBank).append('|').append(filterFeats).append('|')
+          .append(sortMode).append('|').append(cols).append('|').append(groupBank).append('|')
+          .append(new java.util.TreeSet<>(bankOpen)).append('|').append(Store.dataVersion).append('|')
+          .append(Store.all.size()).append('|').append(mine.size()).append(':');
+        for (String id : new java.util.TreeSet<>(mine)) sb.append(id).append(',');
+        return sb.toString();
+    }
+
     void refreshHome() {
         if (homeList == null) return;
+        // Q21 ②：签名未变的重复 refresh（切页回来、关详情、关筛选）不再把 213 张瓷砖连图带字重搭一遍——这是切页发慢的主因。
+        String sig = homeSig();
+        if (sig.equals(homeRenderSig) && homeList.getChildCount() > 0) {
+            if (homeCount != null) homeCount.setText("共 " + filteredHome().size() + " 张");
+            return;
+        }
         // P-keepscroll：重渲染前记下滚动位置——列表一清空高度骤降，系统会把 scrollY 钳到顶，重建后按原位恢复
         final int keepY = savedPageScrollY("home", homeScroll);
         List<Card> list = filteredHome();
@@ -2410,11 +2487,13 @@ public class MainActivity extends Activity {
         }
         renderActiveFilters();
         renderHomeList(list);
+        homeRenderSig = sig;
         updateFilterFabBadge();
         if (keepY > 0 && homeScroll != null) homeScroll.post(() -> homeScroll.scrollTo(0, keepY));
     }
 
     void renderHomeList(List<Card> list) {
+        final int gen = ++homeRenderGen; // 作废上一轮尚未跑完的分帧续帧
         homeList.removeAllViews();
         if (list.isEmpty()) {
             homeList.addView(emptyState("没有符合条件的卡\n换个筛选条件或清空筛选试试"));
@@ -2422,7 +2501,7 @@ public class MainActivity extends Activity {
         }
         if (query.isEmpty() && activeFilterCount() == 0) homeList.addView(wizardBanner());
         if (!groupBank) {
-            addCardRows(homeList, list);
+            addCardRowsChunked(homeList, list, gen);
             return;
         }
         // 按银行折叠：组按卡数降序、同数按银行中文序（同混合版 renderGrid 分组）
@@ -2447,34 +2526,56 @@ public class MainActivity extends Activity {
                 persistViewPrefs();
                 refreshHome();
             }));
-            if (open) addCardRows(homeList, cs);
+            if (open) addCardRowsChunked(homeList, cs, gen);
         }
     }
 
-    void addCardRows(LinearLayout container, List<Card> list) {
-        for (int i = 0; i < list.size(); i += cols) {
-            LinearLayout row = new LinearLayout(this);
-            row.setOrientation(LinearLayout.HORIZONTAL);
-            LinearLayout.LayoutParams rlp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-            rlp.topMargin = dp(this, 10);
-            row.setLayoutParams(rlp);
-            container.addView(row);
-            for (int j = 0; j < cols; j++) {
-                if (i + j < list.size()) {
-                    final Card c = list.get(i + j);
-                    View tile = cardTile(c, row);
-                    LinearLayout.LayoutParams tlp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1f);
-                    if (j > 0) tlp.leftMargin = dp(this, 10);
-                    tile.setLayoutParams(tlp);
-                    tile.setOnClickListener(v -> openDetail(c));
-                    row.addView(tile);
-                } else {
-                    View spacer = new View(this);
-                    LinearLayout.LayoutParams slp2 = new LinearLayout.LayoutParams(0, 1, 1f);
-                    if (j > 0) slp2.leftMargin = dp(this, 10);
-                    spacer.setLayoutParams(slp2);
-                    row.addView(spacer);
-                }
+    // Q21 ② 分帧渲染：首帧只搭首屏（约 4 行），其余每帧续搭 4 行——213 张不再一口气堵死主线程，
+    // 切页/筛选后的第一眼立刻出现，列表在手指碰到前就已补齐；代次令牌保证快速连改筛选时旧续帧不会把过期卡塞回来。
+    // 分组模式下续帧按记录的插入位回插本组行尾（下一组标题之前），不许续帧一律 append 到全表末尾把组冲散。
+    void addCardRowsChunked(final LinearLayout container, final List<Card> list, final int gen) {
+        final int rows = (list.size() + cols - 1) / cols;
+        final int[] insertAt = { container.getChildCount() };
+        final int firstRows = Math.min(rows, 4);
+        for (int r = 0; r < firstRows; r++) addCardRowAt(container, list, r, insertAt);
+        if (rows <= firstRows) return;
+        final int[] next = { firstRows };
+        final Runnable[] step = new Runnable[1];
+        step[0] = () -> {
+            if (gen != homeRenderGen || container != homeList) return; // 已有更新一轮渲染接管
+            int end = Math.min(rows, next[0] + 4);
+            for (int r = next[0]; r < end; r++) addCardRowAt(container, list, r, insertAt);
+            next[0] = end;
+            if (next[0] < rows) container.post(step[0]);
+        };
+        container.post(step[0]);
+    }
+
+    void addCardRowAt(LinearLayout container, List<Card> list, int rowIdx, int[] insertAt) {
+        int i = rowIdx * cols;
+        LinearLayout row = new LinearLayout(this);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        LinearLayout.LayoutParams rlp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        rlp.topMargin = dp(this, 10);
+        row.setLayoutParams(rlp);
+        int at = Math.max(0, Math.min(insertAt[0], container.getChildCount()));
+        container.addView(row, at);
+        insertAt[0] = at + 1;
+        for (int j = 0; j < cols; j++) {
+            if (i + j < list.size()) {
+                final Card c = list.get(i + j);
+                View tile = cardTile(c, row);
+                LinearLayout.LayoutParams tlp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1f);
+                if (j > 0) tlp.leftMargin = dp(this, 10);
+                tile.setLayoutParams(tlp);
+                tile.setOnClickListener(v -> openDetail(c));
+                row.addView(tile);
+            } else {
+                View spacer = new View(this);
+                LinearLayout.LayoutParams slp2 = new LinearLayout.LayoutParams(0, 1, 1f);
+                if (j > 0) slp2.leftMargin = dp(this, 10);
+                spacer.setLayoutParams(slp2);
+                row.addView(spacer);
             }
         }
     }
@@ -4170,8 +4271,9 @@ public class MainActivity extends Activity {
         try {
             JSONArray arr = new JSONArray();
             for (String id : mineOrder) arr.put(id);
-            prefs.edit().putString("mine_order", arr.toString()).apply();
-        } catch (Exception e) { /* 存不下就保持内存顺序 */ }
+            // Q21：顺序同为用户资产，走 commit 同步落盘（理由同 saveCustomCards）。
+            prefs.edit().putString("mine_order", arr.toString()).commit();
+        } catch (Throwable e) { /* 存不下就保持内存顺序 */ }
     }
 
     // 同 app.js applyMineOrder：已保存顺序的在前（按保存序），其余保持原相对序（List.sort 稳定）
