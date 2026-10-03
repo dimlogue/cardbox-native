@@ -27,6 +27,7 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.view.Window;
 import android.view.WindowManager;
+import android.view.inputmethod.InputMethodManager;
 import android.widget.AbsListView;
 import android.widget.AdapterView;
 import android.widget.BaseAdapter;
@@ -344,6 +345,8 @@ public class MainActivity extends Activity {
     TextView homeCount;
     Button filterBtn;
     View filterSheet = null;
+    // P2 悬浮搜索圆钮（首页右下，点了回顶聚焦顶部搜索框）
+    View searchFab = null;
 
     // 筛选状态（Phase 2a-1：与混合版 chipRow 相同的单选切换语义，点已选项再点一次取消）
     String filterType = null;   // "debit" / "credit" / null
@@ -676,6 +679,7 @@ public class MainActivity extends Activity {
         }
         content.addView(page);
         if ("home".equals(key) && homeList != null) refreshHome();
+        syncSearchFab();
         for (Map.Entry<String, LinearLayout> e : navItems.entrySet()) {
             boolean on = e.getKey().equals(key);
             e.getValue().setBackground(on ? navPillBg() : null);
@@ -689,6 +693,78 @@ public class MainActivity extends Activity {
                 if (cur != null) lb.setTypeface(cur, on ? android.graphics.Typeface.BOLD : android.graphics.Typeface.NORMAL);
             }
         }
+    }
+
+    // ---------- P2 悬浮搜索圆钮 ----------
+    // 细线放大镜（Canvas 线条，与导航图标同语言，禁用 emoji）
+    class SearchIconView extends View {
+        SearchIconView(Context c) { super(c); }
+        @Override protected void onDraw(Canvas cv) {
+            Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);
+            p.setStyle(Paint.Style.STROKE);
+            p.setStrokeCap(Paint.Cap.ROUND);
+            p.setStrokeWidth(dp(getContext(), 2.1f));
+            p.setColor(Color.WHITE);
+            float w = getWidth(), h = getHeight();
+            float sx = w / 24f, sy = h / 24f;
+            cv.drawCircle(10.8f * sx, 10.8f * sy, 5.6f * sx, p);
+            cv.drawLine(15.2f * sx, 15.2f * sy, 20.5f * sx, 20.5f * sy, p);
+        }
+    }
+
+    // 只在首页、且没有整屏覆盖层时出现；覆盖层（详情/向导/欢迎/日志）都会
+    // content.removeAllViews()，天然把它清掉，回到首页时 showTab 会再挂回来。
+    void syncSearchFab() {
+        boolean want = "home".equals(tab) && detailCard == null && !wizardOpen && !welcomeOpen && !changelogOpen;
+        if (!want) {
+            if (searchFab != null && searchFab.getParent() != null)
+                ((ViewGroup) searchFab.getParent()).removeView(searchFab);
+            searchFab = null;
+            return;
+        }
+        if (searchFab != null && searchFab.getParent() == content) return;
+        searchFab = buildSearchFab();
+        FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(dp(this, 54), dp(this, 54));
+        lp.gravity = Gravity.END | Gravity.BOTTOM;
+        lp.rightMargin = dp(this, 16);
+        lp.bottomMargin = dp(this, 96); // 悬在底栏 dock 之上
+        content.addView(searchFab, lp);
+        searchFab.setAlpha(0f);
+        searchFab.setScaleX(0.8f);
+        searchFab.setScaleY(0.8f);
+        searchFab.animate().alpha(1f).scaleX(1f).scaleY(1f).setDuration(160).start();
+    }
+
+    View buildSearchFab() {
+        FrameLayout fab = new FrameLayout(this);
+        GradientDrawable bg = new GradientDrawable(GradientDrawable.Orientation.TL_BR,
+            new int[]{Color.rgb(0x0A, 0x6E, 0xD6), Color.rgb(0x0A, 0x5C, 0xD6)});
+        bg.setShape(GradientDrawable.OVAL);
+        bg.setStroke(dp(this, 1), Color.argb(60, 255, 255, 255));
+        fab.setBackground(bg);
+        if (Build.VERSION.SDK_INT >= 21) fab.setElevation(dp(this, 12));
+        SearchIconView icon = new SearchIconView(this);
+        int pad = dp(this, 13);
+        icon.setPadding(pad, pad, pad, pad);
+        fab.addView(icon, new FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        fab.setOnClickListener(v -> {
+            haptic();
+            focusSearch();
+        });
+        return fab;
+    }
+
+    void focusSearch() {
+        if (homeScroll != null) homeScroll.smoothScrollTo(0, 0);
+        if (searchBox == null) return;
+        searchBox.postDelayed(() -> {
+            searchBox.requestFocus();
+            try {
+                InputMethodManager imm = (InputMethodManager) getSystemService(INPUT_METHOD_SERVICE);
+                if (imm != null) imm.showSoftInput(searchBox, InputMethodManager.SHOW_IMPLICIT);
+            } catch (Exception e) { /* 无输入法静默 */ }
+        }, 120);
     }
 
     // ---------- 通用：卡片瓷砖 ----------
@@ -1034,9 +1110,9 @@ public class MainActivity extends Activity {
         return t;
     }
 
-    // ---------- 筛选面板（Phase 2a-1） ----------
+    // ---------- 筛选面板（Phase 2a-1；P2 改悬浮卡窗：左右/底部留空、四角全圆+描边+投影、开合动画） ----------
     void openFilterSheet() {
-        closeFilterSheet();
+        closeFilterSheetNow();
         final FrameLayout sheet = new FrameLayout(this);
         sheet.setBackgroundColor(Color.argb(90, 10, 16, 28));
         sheet.setOnClickListener(v -> closeFilterSheet());
@@ -1044,27 +1120,56 @@ public class MainActivity extends Activity {
         panel.setOrientation(LinearLayout.VERTICAL);
         GradientDrawable pg = new GradientDrawable();
         pg.setColor(Color.WHITE);
-        pg.setCornerRadii(new float[]{dp(this, 18), dp(this, 18), dp(this, 18), dp(this, 18), 0, 0, 0, 0});
+        pg.setCornerRadius(dp(this, 22));
+        pg.setStroke(dp(this, 1), Color.argb(48, 20, 30, 60));
         panel.setBackground(pg);
         panel.setPadding(dp(this, 16), dp(this, 14), dp(this, 16), dp(this, 18));
         panel.setOnClickListener(v -> {});
         ScrollView panelScroll = new ScrollView(this);
         panelScroll.setBackgroundColor(Color.TRANSPARENT);
         panelScroll.setFillViewport(true);
-        int maxH = (int) (getResources().getDisplayMetrics().heightPixels * 0.78);
+        if (Build.VERSION.SDK_INT >= 21) panelScroll.setElevation(dp(this, 18));
+        int maxH = (int) (getResources().getDisplayMetrics().heightPixels * 0.72);
         FrameLayout.LayoutParams splp = new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, maxH);
         splp.gravity = Gravity.BOTTOM;
+        splp.leftMargin = dp(this, 14);
+        splp.rightMargin = dp(this, 14);
+        splp.bottomMargin = dp(this, 92); // 浮在底栏 dock 之上，不贴边
         panelScroll.addView(panel, new ScrollView.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         sheet.addView(panelScroll, splp);
         rebuildFilterPanel(panel);
         content.addView(sheet);
         filterSheet = sheet;
+        // 开场：淡入 + 轻微放大上浮
+        panelScroll.setAlpha(0f);
+        panelScroll.setScaleX(0.96f);
+        panelScroll.setScaleY(0.96f);
+        panelScroll.setTranslationY(dp(this, 18));
+        panelScroll.animate().alpha(1f).scaleX(1f).scaleY(1f).translationY(0f).setDuration(190).start();
     }
 
     void closeFilterSheet() {
-        if (filterSheet != null && filterSheet.getParent() != null)
-            ((ViewGroup) filterSheet.getParent()).removeView(filterSheet);
+        final View sheet = filterSheet;
+        if (sheet == null) return;
         filterSheet = null;
+        if (sheet.getParent() == null) return;
+        View card = sheet instanceof ViewGroup && ((ViewGroup) sheet).getChildCount() > 0
+            ? ((ViewGroup) sheet).getChildAt(0) : null;
+        if (card != null) {
+            card.animate().alpha(0f).scaleX(0.96f).scaleY(0.96f).translationY(dp(this, 18))
+                .setDuration(140).withEndAction(() -> closeFilterSheetNow(sheet)).start();
+            sheet.animate().alpha(0f).setDuration(140).start();
+        } else {
+            closeFilterSheetNow(sheet);
+        }
+    }
+
+    void closeFilterSheetNow() { closeFilterSheetNow(filterSheet); }
+
+    void closeFilterSheetNow(View sheet) {
+        if (sheet != null && sheet.getParent() != null)
+            ((ViewGroup) sheet.getParent()).removeView(sheet);
+        if (sheet == filterSheet) filterSheet = null;
     }
 
     void rebuildFilterPanel(final LinearLayout panel) {
