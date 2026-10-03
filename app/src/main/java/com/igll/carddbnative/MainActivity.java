@@ -470,8 +470,9 @@ public class MainActivity extends Activity {
         root.setBackgroundColor(Color.rgb(0xF2, 0xF3, 0xF7));
 
         content = new FrameLayout(this);
-        // 悬浮底栏浮在内容上：内容区底部留白，滚动到底不被挡住（P1）
-        content.setPadding(0, 0, 0, dp(this, 88));
+        // P1b 浮感修正：内容区不再留底部硬白边，各页滚动视图全高延伸到悬浮条底下，
+        // 滚动时内容从半透明条下隐约滑过；最后一项靠各页内衬的底部留白滚出条外。
+        content.setPadding(0, 0, 0, 0);
         content.setClipToPadding(false);
         root.addView(content, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         buildNav(root);
@@ -589,10 +590,11 @@ public class MainActivity extends Activity {
     }
 
     GradientDrawable floatingBarBg() {
-        GradientDrawable g = new GradientDrawable();
-        g.setColor(Color.argb(235, 255, 255, 255));
+        // P1b：灰白半透（与页面 #F2F3F7 拉开层次又能透出底下滚动内容）+ 1dp 淡灰描边
+        GradientDrawable g = new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
+            new int[]{Color.argb(228, 255, 255, 255), Color.argb(214, 243, 243, 247)});
         g.setCornerRadius(dp(this, 26));
-        g.setStroke(dp(this, 1), Color.argb(28, 20, 30, 60));
+        g.setStroke(dp(this, 1), Color.argb(56, 20, 30, 60));
         return g;
     }
 
@@ -618,7 +620,7 @@ public class MainActivity extends Activity {
         navBar.setOrientation(LinearLayout.HORIZONTAL);
         navBar.setBackground(floatingBarBg());
         navBar.setPadding(dp(this, 8), dp(this, 8), dp(this, 8), dp(this, 8));
-        if (Build.VERSION.SDK_INT >= 21) navBar.setElevation(dp(this, 10));
+        if (Build.VERSION.SDK_INT >= 21) navBar.setElevation(dp(this, 16));
         navBar.setClipToOutline(false);
         String[][] tabs = {
             {"home", "全部卡片"}, {"student", "学生推荐"}, {"mine", "我的卡片"}, {"news", "资讯"}, {"settings", "设置"}
@@ -831,9 +833,10 @@ public class MainActivity extends Activity {
 
         homeScroll = new ScrollView(this);
         homeScroll.setFillViewport(true);
+        homeScroll.setClipToPadding(false);
         homeList = new LinearLayout(this);
         homeList.setOrientation(LinearLayout.VERTICAL);
-        homeList.setPadding(0, dp(this, 10), 0, dp(this, 16));
+        homeList.setPadding(0, dp(this, 10), 0, dp(this, 104));
         homeScroll.addView(homeList, new ScrollView.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
         page.addView(homeScroll, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
         refreshHome();
@@ -1915,9 +1918,10 @@ public class MainActivity extends Activity {
         page.addView(sect, sectLp);
 
         ScrollView sv = new ScrollView(this);
+        sv.setClipToPadding(false);
         LinearLayout listBox = new LinearLayout(this);
         listBox.setOrientation(LinearLayout.VERTICAL);
-        listBox.setPadding(0, dp(this, 10), 0, dp(this, 16));
+        listBox.setPadding(0, dp(this, 10), 0, dp(this, 104));
         sv.addView(listBox);
         page.addView(sv, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
 
@@ -2202,9 +2206,10 @@ public class MainActivity extends Activity {
         // 整页可滚：自定义卡展开后不会把卡库收藏网格挤没（色带多时纵向滚动看）
         ScrollView sv = new ScrollView(this);
         sv.setFillViewport(true);
+        sv.setClipToPadding(false);
         LinearLayout inner = new LinearLayout(this);
         inner.setOrientation(LinearLayout.VERTICAL);
-        inner.setPadding(0, dp(this, 10), 0, dp(this, 16));
+        inner.setPadding(0, dp(this, 10), 0, dp(this, 104));
         sv.addView(inner, new ScrollView.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
         page.addView(sv, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
         if (!mineCards.isEmpty()) inner.addView(buildMineAnalysis(mineCards));
@@ -2948,9 +2953,10 @@ public class MainActivity extends Activity {
         page.addView(newsMeta, mLp);
 
         ScrollView sv = new ScrollView(this);
+        sv.setClipToPadding(false);
         newsListBox = new LinearLayout(this);
         newsListBox.setOrientation(LinearLayout.VERTICAL);
-        newsListBox.setPadding(0, dp(this, 2), 0, dp(this, 16));
+        newsListBox.setPadding(0, dp(this, 2), 0, dp(this, 104));
         sv.addView(newsListBox);
         page.addView(sv, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
         renderNews();
@@ -3193,6 +3199,8 @@ public class MainActivity extends Activity {
         page.addView(settingRow("关于卡盒", "原生版：纯 Java 手写界面，数据与现行版共用同一份卡库"));
         page.addView(settingRow("迁移进度", "全部卡片 / 详情 / 我的卡片 / 学生推荐 / 筛选 / 资讯 / 情景选卡 / 自定义卡 / 拖动 / 字体与界面大小 / 高刷 / 触感 / 欢迎页 / 更新日志 / 数据 OTA 已迁移"));
         ScrollView sv = new ScrollView(this);
+        sv.setClipToPadding(false);
+        page.setPadding(dp(this, 14), dp(this, 12), dp(this, 14), dp(this, 104));
         sv.addView(page);
         return sv;
     }
