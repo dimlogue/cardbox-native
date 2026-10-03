@@ -600,6 +600,7 @@ public class MainActivity extends Activity {
     FrameLayout rootView = null;
     View floatToastView = null;
     Runnable floatToastTimer = null;
+    final android.os.Handler mainHandler = new android.os.Handler(android.os.Looper.getMainLooper());
 
     FrameLayout content;
     LinearLayout navBar;
@@ -880,14 +881,12 @@ public class MainActivity extends Activity {
         bar.setScaleX(0.98f); bar.setScaleY(0.98f);
         bar.animate().alpha(1f).translationY(0f).scaleX(1f).scaleY(1f)
             .setDuration(250).setInterpolator(ANIM_ENTER).start();
-        final android.os.Handler h = new android.os.Handler(android.os.Looper.getMainLooper());
         floatToastTimer = () -> dismissFloatToast(false);
-        h.postDelayed(floatToastTimer, (actionLabel != null && onAction != null) ? 4500 : 2200);
+        mainHandler.postDelayed(floatToastTimer, (actionLabel != null && onAction != null) ? 4500 : 2200);
     }
 
     void dismissFloatToast(boolean immediate) {
-        final android.os.Handler h = new android.os.Handler(android.os.Looper.getMainLooper());
-        if (floatToastTimer != null) { h.removeCallbacks(floatToastTimer); floatToastTimer = null; }
+        if (floatToastTimer != null) { mainHandler.removeCallbacks(floatToastTimer); floatToastTimer = null; }
         final View bar = floatToastView;
         floatToastView = null;
         if (bar == null) return;
@@ -1919,7 +1918,8 @@ public class MainActivity extends Activity {
                 groupBank = sGroup;
                 filterFeats.clear(); filterFeats.addAll(sFeats);
                 persistViewPrefs();
-                rebuildFilterPanel(filterPanelRef); refreshHome();
+                if (filterPanelRef != null) rebuildFilterPanel(filterPanelRef);
+                refreshHome();
                 showFloatToast("已恢复筛选");
             });
         });
@@ -2753,7 +2753,7 @@ public class MainActivity extends Activity {
         side.addView(add, alp);
         add.setOnClickListener(v -> {
             haptic();
-            toggleMineWithToast(c, () -> showWizardPage());
+            toggleMineWithToast(c, () -> { if (wizardOpen) showWizardPage(); });
         });
         row.setOnClickListener(v -> openDetail(c, true));
         row.setOnLongClickListener(v -> { showPressPreview(row); return true; });
