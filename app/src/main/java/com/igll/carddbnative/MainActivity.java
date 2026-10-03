@@ -1605,6 +1605,13 @@ public class MainActivity extends Activity {
     LinearLayout homeList = null;
     ScrollView homeScroll = null;
     LinearLayout homeHero = null; // Q15：卡库总览英雄卡（仅无搜索/无筛选时显示，同混合版 lib-hero 口径）
+    // Q61 下拉刷新（仅首页列表在顶部时接管下拉，松手触发双线检查更新；带轻量指示，不跳顶、不丢位置）
+    TextView homePullText = null;
+    FrameLayout homePullBar = null;
+    boolean homePullTracking = false;
+    boolean homePullRefreshing = false;
+    float homePullDownY = -1f;
+    float homePullDy = 0f;
 
     static String sortLabel(String v) {
         if ("score-desc".equals(v)) return "评分由高到低";
@@ -3614,6 +3621,30 @@ public class MainActivity extends Activity {
         // the inline capsule needs no handler here - it scrolls off with the content by itself.
         homeScroll.setOnTouchListener((v, e) -> {
             if (e.getAction() == MotionEvent.ACTION_DOWN && floatSearchOpen) closeFloatSearch();
+            int act = e.getActionMasked();
+            if (homePullRefreshing) return false;
+            if (act == MotionEvent.ACTION_DOWN) {
+                if (homeScroll.getScrollY() == 0) {
+                    homePullTracking = true; homePullDownY = e.getRawY(); homePullDy = 0f;
+                } else { homePullTracking = false; homePullDy = 0f; }
+                return false;
+            }
+            if (act == MotionEvent.ACTION_MOVE && homePullTracking) {
+                if (homeScroll.getScrollY() != 0) { homePullTracking = false; homePullDy = 0f; updateHomePullUi(); return false; }
+                float dy = e.getRawY() - homePullDownY;
+                if (dy <= 0) { homePullDy = 0f; updateHomePullUi(); return false; }
+                homePullDy = dy;
+                updateHomePullUi();
+                // Pull past the slop: take over so the list itself does not jitter; still let Q49 bar & tiles see UP via our return.
+                return dy > dp(v.getContext(), 36);
+            }
+            if ((act == MotionEvent.ACTION_UP || act == MotionEvent.ACTION_CANCEL) && homePullTracking) {
+                float dy = homePullDy;
+                homePullTracking = false; homePullDownY = -1f;
+                if (dy >= dp(v.getContext(), 72)) { startHomePullRefresh(); return true; }
+                homePullDy = 0f; updateHomePullUi();
+                return dy > dp(v.getContext(), 36);
+            }
             return false;
         });
         homeScroll.setOnScrollChangeListener((v, scrollX, scrollY, oldScrollX, oldScrollY) -> {
@@ -3624,6 +3655,20 @@ public class MainActivity extends Activity {
         });
         page.addView(homeScroll, new FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        // Q61：顶部下拉刷新指示（素净细线胶囊，默认隐藏；拉动渐显、松手触发后转「正在检查…」）
+        homePullBar = new FrameLayout(this);
+        homePullBar.setBackground(roundRect(Color.argb(238, 255, 255, 255), 999, this));
+        homePullBar.setVisibility(View.GONE);
+        homePullText = tv(this, "下拉检查更新", 12.5f, Color.rgb(0x3A, 0x3A, 0x3C), false);
+        homePullText.setGravity(Gravity.CENTER);
+        homePullText.setPadding(dp(this, 14), dp(this, 7), dp(this, 14), dp(this, 7));
+        homePullBar.addView(homePullText, new FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        FrameLayout.LayoutParams pullLp = new FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        pullLp.gravity = Gravity.TOP | Gravity.CENTER_HORIZONTAL;
+        pullLp.topMargin = statusBarH() + dp(this, 10);
+        page.addView(homePullBar, pullLp);
         // Q49：全部卡片长列表必备可拖拽滚动条（轨道 top 120dp 起、bottom 100dp 止于 dock 上沿）
         attachDragBar(page, homeScroll, false, 120, 100);
 
@@ -3902,6 +3947,37 @@ public class MainActivity extends Activity {
                 || bin.contains(q) || (c.keywords != null && c.keywords.toLowerCase().contains(q))) out.add(c);
         }
         return out;
+    }
+
+    // Q61 下拉刷新指示与触发（仅首页顶部；刷新沿 Q59 双线口径，完成后原地重绘保住滚动位）
+    void updateHomePullUi() {
+        if (homePullBar == null) return;
+        if (homePullRefreshing) {
+            if (homePullText != null) homePullText.setText("正在检查数据更新…");
+            homePullBar.setVisibility(View.VISIBLE);
+            homePullBar.setAlpha(1f);
+            homePullBar.setTranslationY(0f);
+            return;
+        }
+        if (homePullDy < dp(this, 8)) { homePullBar.setVisibility(View.GONE); return; }
+        float prog = Math.min(1f, homePullDy / dp(this, 72));
+        homePullBar.setVisibility(View.VISIBLE);
+        homePullBar.setAlpha(0.35f + 0.65f * prog);
+        homePullBar.setTranslationY(-dp(this, 10) + dp(this, 10) * prog);
+        if (homePullText != null) {
+            homePullText.setText(homePullDy >= dp(this, 72) ? "↑ 松开检查更新" : "↓ 下拉检查更新");
+        }
+    }
+    void startHomePullRefresh() {
+        if (homePullRefreshing) return;
+        homePullRefreshing = true;
+        homePullDy = 0f;
+        updateHomePullUi();
+        haptic();
+        checkDataUpdate(true, true, () -> {
+            homePullRefreshing = false;
+            if (homePullBar != null) homePullBar.setVisibility(View.GONE);
+        });
     }
 
     // Q21 ② 首页渲染签名：把决定网格内容的全部输入拼成一把钥匙——切页回来/关弹层这类「什么都没变」的 refresh 直接跳过整表重搭。
@@ -8269,8 +8345,10 @@ public class MainActivity extends Activity {
 
     // 启动自动查一次；设置页手动查 manual=true 给 toast 反馈。
     // Q59 修：双线都取，以 data_version 高者为准（jsDelivr 200 但回旧缓存时不被其骗成「已是最新」）。
-    void checkDataUpdate(final boolean manual) {
-        if (!manual && otaFetchStarted) return;
+    void checkDataUpdate(final boolean manual) { checkDataUpdate(manual, false, null); }
+    // Q61：fromPull 表示来自首页下拉刷新（失败 toast 用「检查失败，请稍后再试」），onDone 在 UI 线程收尾拿来收指示
+    void checkDataUpdate(final boolean manual, final boolean fromPull, final Runnable onDone) {
+        if (!manual && otaFetchStarted) { if (onDone != null) onDone.run(); return; }
         otaFetchStarted = true;
         final String[] urls = {
             "https://cdn.jsdelivr.net/gh/dimlogue/cardbox-data@main/cards.json",
@@ -8298,11 +8376,18 @@ public class MainActivity extends Activity {
                 } catch (Exception e) { /* 换下一条线路，另一条线的结果仍可入选 */ }
             }
             if (bestJson == null) {
-                if (manual) runOnUiThread(() -> showFloatToast("检查更新失败，请检查网络"));
+                runOnUiThread(() -> {
+                    if (fromPull) showFloatToast("检查失败，请稍后再试");
+                    else if (manual) showFloatToast("检查更新失败，请检查网络");
+                    if (onDone != null) onDone.run();
+                });
                 return;
             }
             if (bestVer <= Store.dataVersion) {
-                if (manual) runOnUiThread(() -> showFloatToast("已是最新数据（v" + Store.dataVersion + "）"));
+                runOnUiThread(() -> {
+                    if (manual || fromPull) showFloatToast("已是最新数据（v" + Store.dataVersion + "）");
+                    if (onDone != null) onDone.run();
+                });
                 return;
             }
             final String json = bestJson;
@@ -8312,13 +8397,18 @@ public class MainActivity extends Activity {
             } catch (Exception e) { /* 落盘失败也继续用本次拉到的数据刷新界面 */ }
             final boolean ok = Store.parseInto(json);
             if (!ok) {
-                if (manual) runOnUiThread(() -> showFloatToast("检查更新失败，请检查网络"));
+                runOnUiThread(() -> {
+                    if (fromPull) showFloatToast("检查失败，请稍后再试");
+                    else if (manual) showFloatToast("检查更新失败，请检查网络");
+                    if (onDone != null) onDone.run();
+                });
                 return;
             }
             runOnUiThread(() -> {
                 showFloatToast("卡片数据已更新到 v" + Store.dataVersion + "（" + Store.all.size() + " 张）");
-                pages.clear(); // 页面缓存一律作废，下次进页用新数据重建
+                pages.clear(); // 页面缓存一律作废，下次进页用新数据重建（rebuildPages 先 capture 各页滚动位再恢复，不跳顶）
                 if (detailCard == null) rebuildPages(); // 正看详情时不打断，关掉详情自然用新数据
+                if (onDone != null) onDone.run();
             });
         }).start();
     }
