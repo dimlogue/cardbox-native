@@ -148,7 +148,7 @@ public class MainActivity extends Activity {
     boolean isChromeCovered() {
         return welcomeOpen || changelogOpen || wizardOpen || aboutOpen
             || filterSheet != null || detailCard != null || cardMenuPop != null
-            || customFormSheet != null || binSheet != null || addSheetView != null;
+            || customFormSheet != null || customDetailSheet != null || binSheet != null || addSheetView != null;
     }
     void hideFabsNow() {
         cancelTopFabShow();
@@ -883,6 +883,12 @@ public class MainActivity extends Activity {
     java.util.List<CustomCard> customCards = new ArrayList<>();
     boolean customOpen = false;
     View customFormSheet = null; // Q8：表单改为根层浮卡（原 Dialog 全宽平纸已废）
+    // Q19：自定义卡详情改为与 Q6 数据库详情同规范的贴底浮窗（原居中 AlertDialog 白框已废）
+    View customDetailSheet = null;
+    View customDetailWrap = null;
+    ScrollView customDetailScroll = null;
+    boolean customDetailClosing = false;
+    CustomCard customDetailCard = null;
     // Q9 NFC 贴卡识别（对照混合版 NativeApp.startNfcRead 与 app.js __onNfcCard 回填）：
     // 只读 EMV 目录取组织/应用名、再读 PAN 取 BIN8+尾号，完整卡号只在内存过一遍不落盘。
     NfcAdapter nfcAdapter = null;
@@ -5493,52 +5499,320 @@ public class MainActivity extends Activity {
             .show();
     }
 
+    // Q19 对照混合版 app.js openCustomDetail + styles.css .panel/.cc-hero/.p-close/.p-sec/.spec/.dlg-actions：
+    // 废居中 AlertDialog 白框，改与 Q6 同规范的贴底浮窗——底层页保留、遮罩 rgba(0,0,0,.4)、窗体全宽贴底
+    // 顶圆 20dp/最高 88vh/白底 elevation 24、垫冻结玻璃层； hero 为 .cc-hero（渐变 135°、内边距 28/20/22、
+    // 卡名 1.3rem/800 白字 + 发卡行·组织副行 .88rem/88% 白），右上 .p-close 式 34dp 半透圆 ✕ 长在窗内
+    // 随窗同升同降；「卡片信息」走 .spec 细线分行（标签左灰、值右对齐 500、缺项 —）；底部动作行照
+    // .dlg-actions 双 ghost 钮（左「在卡库里搜这家银行」蓝、右「删除这张卡」#e03131 红），编辑入口
+    // 以 hero 内半透描边小钮保留在窗内。开窗 hideChrome（Q12），关窗 restoreCurrentTabScroll 回原位。
     void openCustomDetail(final CustomCard c) {
-        LinearLayout box = new LinearLayout(this);
-        box.setOrientation(LinearLayout.VERTICAL);
-        box.setPadding(dp(this, 18), dp(this, 6), dp(this, 18), dp(this, 4));
+        if (c == null || customDetailSheet != null || customDetailClosing) return;
+        closeCustomDetailNow();
+        captureCurrentPageScroll();
+        customDetailCard = c;
+        customDetailClosing = false;
+        hideChrome(); // Q12
+
+        final FrameLayout overlay = new FrameLayout(this);
+        overlay.setBackgroundColor(Color.TRANSPARENT);
+        final View shade = new View(this);
+        shade.setBackgroundColor(Color.argb(102, 0, 0, 0)); // .backdrop rgba(0,0,0,.4)
+        shade.setAlpha(0f);
+        shade.setOnClickListener(v -> closeCustomDetail());
+        overlay.addView(shade, new FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+
+        final FrameLayout wrap = new FrameLayout(this);
+        int screenW = getResources().getDisplayMetrics().widthPixels;
+        int screenH = getResources().getDisplayMetrics().heightPixels;
+        final int maxH = (int) (screenH * 0.88); // .panel max-height:88vh
+
+        final LinearLayout sheetCard = new LinearLayout(this);
+        sheetCard.setOrientation(LinearLayout.VERTICAL);
+        GradientDrawable sheetBg = new GradientDrawable();
+        sheetBg.setColor(Color.WHITE);
+        float rTop = dp(this, 20);
+        sheetBg.setCornerRadii(new float[]{rTop, rTop, rTop, rTop, 0, 0, 0, 0});
+        sheetCard.setBackground(sheetBg);
+        if (Build.VERSION.SDK_INT >= 21) { sheetCard.setElevation(dp(this, 24)); sheetCard.setClipToOutline(true); }
+        sheetCard.setOnClickListener(v -> {}); // 窗体吃点击防穿透遮罩
+
+        ScrollView sc = new ScrollView(this);
+        thinScrollbar(sc);
+        sc.setBackgroundColor(Color.TRANSPARENT);
+        sc.setFillViewport(false);
+        customDetailScroll = sc;
+        LinearLayout body = buildCustomDetailBody(c);
+        body.setPadding(0, 0, 0, dp(this, 20) + navBarH()); // .panel padding-bottom 20+safe
+        sc.addView(body);
+        sheetCard.addView(sc, new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
+
+        sheetCard.measure(View.MeasureSpec.makeMeasureSpec(screenW, View.MeasureSpec.EXACTLY),
+            View.MeasureSpec.makeMeasureSpec(maxH, View.MeasureSpec.AT_MOST));
+        int sheetH = Math.min(sheetCard.getMeasuredHeight(), maxH);
+        FrameLayout.LayoutParams wlp = new FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, sheetH);
+        wlp.gravity = Gravity.BOTTOM;
+        wrap.addView(glassLayer(sheetCard, 20, false), new FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        wrap.addView(sheetCard, new FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        overlay.addView(wrap, wlp);
+        customDetailWrap = wrap;
+
+        // 右上 ✕：长在窗内随窗同升同降（同 Q30 纪律，禁根层独立字形）；.p-close 34dp 半透圆，
+        // 圆底加深为半透炭灰保证在任意卡色渐变上可辨，仍半透非实心
+        final FrameLayout glyphFrame = new FrameLayout(this);
+        glyphFrame.setClipChildren(false); glyphFrame.setClipToPadding(false);
+        glyphFrame.setAlpha(0f);
+        View circle = new View(this);
+        GradientDrawable cg = new GradientDrawable();
+        cg.setShape(GradientDrawable.OVAL);
+        cg.setColor(Color.argb(110, 30, 32, 40));
+        cg.setStroke(dp(this, 1), Color.argb(110, 255, 255, 255));
+        circle.setBackground(cg);
+        if (Build.VERSION.SDK_INT >= 21) circle.setElevation(dp(this, 5));
+        FrameLayout.LayoutParams clp2 = new FrameLayout.LayoutParams(dp(this, 34), dp(this, 34));
+        clp2.gravity = Gravity.CENTER;
+        glyphFrame.addView(circle, clp2);
+        CloseIconView x = new CloseIconView(this);
+        x.iconColor = Color.WHITE;
+        x.lineDp = 1.9f;
+        x.shadow = true;
+        x.setLayerType(View.LAYER_TYPE_SOFTWARE, null);
+        int xPad = dp(this, 4);
+        x.setPadding(xPad, xPad, xPad, xPad);
+        FrameLayout.LayoutParams xlp = new FrameLayout.LayoutParams(dp(this, 34), dp(this, 34));
+        xlp.gravity = Gravity.CENTER;
+        glyphFrame.addView(x, xlp);
+        glyphFrame.setOnClickListener(v -> { haptic(); closeCustomDetail(); });
+        FrameLayout.LayoutParams glp = new FrameLayout.LayoutParams(dp(this, 48), dp(this, 48));
+        glp.gravity = Gravity.TOP | Gravity.END;
+        glp.topMargin = dp(this, 5);
+        glp.rightMargin = dp(this, 5);
+        wrap.addView(glyphFrame, glp);
+
+        attachCustomDetailDrag(wrap);
+        content.addView(overlay, new FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        overlay.bringToFront();
+        customDetailSheet = overlay;
+        shade.animate().alpha(1f).setDuration(220).setInterpolator(ANIM_ENTER).start();
+        wrap.setTranslationY(sheetH);
+        wrap.animate().translationY(0f).setDuration(240).setInterpolator(ANIM_ENTER).start();
+        glyphFrame.animate().alpha(1f).setDuration(220).setStartDelay(70).setInterpolator(ANIM_ENTER).start();
+    }
+
+    LinearLayout buildCustomDetailBody(final CustomCard c) {
+        LinearLayout page = new LinearLayout(this);
+        page.setOrientation(LinearLayout.VERTICAL);
+        page.setBackgroundColor(Color.WHITE);
+
+        // .cc-hero：卡色渐变头（135° 双色、顶圆 20 与窗体同半径、内边距 28/20/22）
         LinearLayout hero = new LinearLayout(this);
         hero.setOrientation(LinearLayout.VERTICAL);
-        hero.setBackground(customGradient(c.style));
-        hero.setPadding(dp(this, 14), dp(this, 12), dp(this, 14), dp(this, 12));
-        box.addView(hero);
-        hero.addView(tv(this, c.name, 16, Color.WHITE, true));
-        hero.addView(tv(this, (c.bank == null || c.bank.isEmpty() ? "未填发卡行" : c.bank)
-            + (c.org != null && !c.org.isEmpty() ? " · " + c.org : ""), 12, Color.argb(220, 255, 255, 255), false));
-        box.addView(customDetailRow("卡片名称", c.name));
-        box.addView(customDetailRow("发卡银行", c.bank == null || c.bank.isEmpty() ? "—" : c.bank));
-        box.addView(customDetailRow("卡组织", c.org == null || c.org.isEmpty() ? "—" : c.org));
-        if (c.note != null && !c.note.isEmpty()) box.addView(customDetailRow("备注", c.note));
+        GradientDrawable hg = customGradient(c.style);
+        float hr = dp(this, 20);
+        hg.setCornerRadii(new float[]{hr, hr, hr, hr, 0, 0, 0, 0});
+        hero.setBackground(hg);
+        hero.setPadding(dp(this, 20), dp(this, 28), dp(this, 64), dp(this, 22));
+        page.addView(hero);
+        TextView nm = tvW(this, c.name == null ? "" : c.name, 20, Color.WHITE, 800);
+        nm.setLineSpacing(0, 1.15f);
+        hero.addView(nm);
+        String sub = (c.bank == null || c.bank.isEmpty() ? "未填发卡行" : c.bank)
+            + (c.org != null && !c.org.isEmpty() ? " · " + c.org : "");
+        TextView sb = tv(this, sub, 13.5f, Color.argb(224, 255, 255, 255), false);
+        LinearLayout.LayoutParams slp = new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        slp.topMargin = dp(this, 4);
+        hero.addView(sb, slp);
+        // 编辑入口保留在窗内：hero 右下半透描边小钮（白字），不与底部双钮动作行抢位
+        TextView editBtn = tv(this, "编辑", 12.5f, Color.WHITE, true);
+        editBtn.setGravity(Gravity.CENTER);
+        GradientDrawable eg = new GradientDrawable();
+        eg.setColor(Color.argb(46, 255, 255, 255));
+        eg.setCornerRadius(dp(this, 999));
+        eg.setStroke(dp(this, 1), Color.argb(140, 255, 255, 255));
+        editBtn.setBackground(eg);
+        editBtn.setPadding(dp(this, 14), dp(this, 6), dp(this, 14), dp(this, 6));
+        LinearLayout.LayoutParams elp = new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        elp.topMargin = dp(this, 12);
+        elp.gravity = Gravity.END;
+        hero.addView(editBtn, elp);
+        editBtn.setOnClickListener(v -> {
+            haptic();
+            suppressNextChromeRestore = true; // 链式开表单，跳过一次恢复防 dock 闪烁（Q12）
+            closeCustomDetailNow();
+            openCustomForm(c);
+        });
+        editBtn.setOnTouchListener((v, e) -> {
+            if (e.getAction() == MotionEvent.ACTION_DOWN) pressBounce(v, true);
+            else if (e.getAction() == MotionEvent.ACTION_UP || e.getAction() == MotionEvent.ACTION_CANCEL)
+                pressBounce(v, false);
+            return false;
+        });
 
-        final AlertDialog[] holder = new AlertDialog[1];
+        // .p-body（padding 16/18）+ .p-sec「卡片信息」+ .spec 细线分行
+        LinearLayout inner = new LinearLayout(this);
+        inner.setOrientation(LinearLayout.VERTICAL);
+        inner.setPadding(dp(this, 18), dp(this, 16), dp(this, 18), 0);
+        page.addView(inner);
+        inner.addView(detailSectionTitle("卡片信息"));
+        LinearLayout specBox = new LinearLayout(this);
+        specBox.setOrientation(LinearLayout.VERTICAL);
+        inner.addView(specBox);
+        String[][] rows = {
+            {"卡片名称", dash(c.name)},
+            {"发卡银行", dash(c.bank)},
+            {"卡组织", dash(c.org)},
+            {"备注", dash(c.note)},
+        };
+        for (int i = 0; i < rows.length; i++) {
+            specBox.addView(customDetailRow(rows[i][0], rows[i][1]));
+            if (i < rows.length - 1) {
+                View div = new View(this);
+                div.setBackgroundColor(Color.rgb(0xF0, 0xF0, 0xF5)); // .spec border-bottom #f0f0f5
+                specBox.addView(div, new LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT, Math.max(1, dp(this, 1) / 2)));
+            }
+        }
+
+        // .dlg-actions 底部动作行：左搜银行（蓝）/右删除（红），无发卡行时只留删除占满
+        LinearLayout acts = new LinearLayout(this);
+        acts.setOrientation(LinearLayout.HORIZONTAL);
+        LinearLayout.LayoutParams alp = new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        alp.topMargin = dp(this, 16);
+        inner.addView(acts, alp);
         if (c.bank != null && !c.bank.isEmpty()) {
-            TextView find = tv(this, "在卡库里搜「" + c.bank + "」 ›", 13, Color.rgb(0x0A, 0x5C, 0xD6), true);
-            find.setPadding(0, dp(this, 10), 0, dp(this, 8));
+            TextView find = customDetailAction("在卡库里搜这家银行", Color.rgb(0x00, 0x7A, 0xFF));
             find.setOnClickListener(v -> {
-                if (holder[0] != null) holder[0].dismiss();
+                haptic();
+                suppressNextChromeRestore = true; // 随即切首页，跳过一次恢复防闪烁
+                closeCustomDetailNow();
                 query = c.bank;
-                resetPageScroll("home", homeScroll); // 这是去看搜索结果，明确回顶（P-keepscroll 的例外）
+                resetPageScroll("home", homeScroll); // 去看搜索结果，明确回顶（P-keepscroll 例外）
                 showTab("home");
                 if (searchBox != null) searchBox.setText(c.bank);
             });
-            box.addView(find);
+            LinearLayout.LayoutParams flp2 = new LinearLayout.LayoutParams(0, dp(this, 46), 1f);
+            acts.addView(find, flp2);
         }
-        AlertDialog dlg = new AlertDialog.Builder(this)
-            .setView(box)
-            .setNegativeButton("关闭", null)
-            .setNeutralButton("删除", (d, w) -> confirmDeleteCustom(c))
-            .setPositiveButton("编辑", (d, w) -> openCustomForm(c))
-            .create();
-        holder[0] = dlg;
-        dlg.show();
+        TextView del = customDetailAction("删除这张卡", Color.rgb(0xE0, 0x31, 0x31));
+        del.setOnClickListener(v -> {
+            haptic();
+            closeCustomDetailNow();
+            confirmDeleteCustom(c);
+        });
+        LinearLayout.LayoutParams dlp2 = new LinearLayout.LayoutParams(0, dp(this, 46), 1f);
+        if (c.bank != null && !c.bank.isEmpty()) dlp2.leftMargin = dp(this, 10);
+        acts.addView(del, dlp2);
+        return page;
     }
 
+    static String dash(String s) { return s == null || s.isEmpty() ? "—" : s; }
+
+    // .dlg-actions .ghost-btn：flex1、圆角 14、浅底+细描边、按下 .98（以 pressBounce 近似）
+    TextView customDetailAction(String label, int color) {
+        TextView t = tv(this, label, 14, color, true);
+        t.setGravity(Gravity.CENTER);
+        t.setSingleLine(true);
+        t.setEllipsize(android.text.TextUtils.TruncateAt.END);
+        GradientDrawable g = new GradientDrawable();
+        g.setColor(Color.rgb(0xF7, 0xF8, 0xFA));
+        g.setCornerRadius(dp(this, 14));
+        g.setStroke(dp(this, 1), Color.rgb(0xE8, 0xE8, 0xEE));
+        t.setBackground(g);
+        t.setOnTouchListener((v, e) -> {
+            if (e.getAction() == MotionEvent.ACTION_DOWN) pressBounce(v, true);
+            else if (e.getAction() == MotionEvent.ACTION_UP || e.getAction() == MotionEvent.ACTION_CANCEL)
+                pressBounce(v, false);
+            return false;
+        });
+        return t;
+    }
+
+    void attachCustomDetailDrag(final View wrap) {
+        final float[] downY = {0f};
+        final boolean[] dragging = {false};
+        if (customDetailScroll == null) return;
+        customDetailScroll.setOnTouchListener((v, e) -> {
+            if (customDetailClosing) return false;
+            switch (e.getActionMasked()) {
+                case MotionEvent.ACTION_DOWN:
+                    downY[0] = e.getRawY(); dragging[0] = false; return false;
+                case MotionEvent.ACTION_MOVE:
+                    if (customDetailScroll.getScrollY() <= 0 && e.getRawY() - downY[0] > dp(this, 12)) {
+                        dragging[0] = true;
+                        float dy = Math.max(0f, e.getRawY() - downY[0]);
+                        if (wrap != null) wrap.setTranslationY(dy * 0.6f);
+                        return false;
+                    }
+                    return false;
+                case MotionEvent.ACTION_UP:
+                case MotionEvent.ACTION_CANCEL:
+                    if (dragging[0] && wrap != null) {
+                        float dy = e.getRawY() - downY[0];
+                        dragging[0] = false;
+                        if (dy > dp(this, 80)) { closeCustomDetail(); return true; }
+                        wrap.animate().translationY(0f).setDuration(180)
+                            .setInterpolator(ANIM_ENTER).start();
+                    }
+                    return false;
+                default: return false;
+            }
+        });
+    }
+
+    void closeCustomDetail() {
+        if (customDetailSheet == null || customDetailClosing) return;
+        customDetailClosing = true;
+        final View overlay = customDetailSheet;
+        final View wrap = customDetailWrap;
+        Runnable finish = () -> {
+            if (overlay.getParent() instanceof ViewGroup)
+                ((ViewGroup) overlay.getParent()).removeView(overlay);
+            if (customDetailSheet == overlay) {
+                customDetailSheet = null; customDetailWrap = null;
+                customDetailScroll = null; customDetailCard = null;
+            }
+            customDetailClosing = false;
+            restoreCurrentTabScroll();
+            restoreChrome(); // Q12
+        };
+        if (wrap == null) { finish.run(); return; }
+        View shade = overlay instanceof ViewGroup && ((ViewGroup) overlay).getChildCount() > 0
+            ? ((ViewGroup) overlay).getChildAt(0) : null;
+        if (shade != null) shade.animate().alpha(0f).setDuration(180).setInterpolator(ANIM_EXIT).start();
+        int targetY = wrap.getHeight() > 0 ? wrap.getHeight() : dp(this, 420);
+        wrap.animate().translationY(targetY).setDuration(240).setInterpolator(ANIM_ENTER)
+            .withEndAction(finish).start();
+    }
+
+    void closeCustomDetailNow() {
+        View sheet = customDetailSheet;
+        if (sheet == null) return;
+        customDetailSheet = null; customDetailWrap = null;
+        customDetailScroll = null; customDetailCard = null;
+        customDetailClosing = false;
+        if (sheet.getParent() != null) ((ViewGroup) sheet.getParent()).removeView(sheet);
+    }
+
+    // .spec 分行：标签左灰 flex-none、值右对齐（对照混合版 .spec dt/dd）
     View customDetailRow(String k, String v) {
         LinearLayout row = new LinearLayout(this);
         row.setOrientation(LinearLayout.HORIZONTAL);
-        row.setPadding(0, dp(this, 7), 0, dp(this, 7));
-        row.addView(tv(this, k, 12.5f, Color.rgb(0x8E, 0x8E, 0x93), false), new LinearLayout.LayoutParams(dp(this, 76), ViewGroup.LayoutParams.WRAP_CONTENT));
-        row.addView(tv(this, v == null ? "" : v, 13, Color.rgb(0x1C, 0x1C, 0x1E), false), new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+        row.setGravity(Gravity.TOP);
+        row.setPadding(0, dp(this, 8), 0, dp(this, 8));
+        row.addView(tv(this, k, 13, Color.rgb(0x8E, 0x8E, 0x93), false),
+            new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        TextView vt = tvW(this, v == null ? "" : v, 13, Color.rgb(0x1C, 0x1C, 0x1E), 500);
+        vt.setGravity(Gravity.END);
+        row.addView(vt, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
         return row;
     }
 
@@ -7606,6 +7880,7 @@ public class MainActivity extends Activity {
         if (welcomeOpen) { closeWelcome(); return; }
         if (changelogOpen) { closeChangelog(); return; }
         if (settingsLogOpen && "settings".equals(tab)) { settingsLogOpen = false; rebuildPages(); return; }
+        if (customDetailSheet != null) { closeCustomDetail(); return; }
         if (detailCard != null) { closeDetail(); return; }
         if (filterSheet != null) { closeFilterSheet(); return; }
         if (binSheet != null) { closeBinQuery(); return; }
