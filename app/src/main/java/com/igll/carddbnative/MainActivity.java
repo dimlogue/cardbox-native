@@ -1602,6 +1602,7 @@ public class MainActivity extends Activity {
     java.util.Set<String> bankOpen = new java.util.HashSet<>();
     LinearLayout homeList = null;
     ScrollView homeScroll = null;
+    LinearLayout homeHero = null; // Q15：卡库总览英雄卡（仅无搜索/无筛选时显示，同混合版 lib-hero 口径）
 
     static String sortLabel(String v) {
         if ("score-desc".equals(v)) return "评分由高到低";
@@ -3667,33 +3668,51 @@ public class MainActivity extends Activity {
         col.addView(afScroll, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
         activeFilterBar.setTag(afScroll);
 
-        // 卡库总览（与混合版同款深蓝卡）：与网格同在一条滚动流里，间距 10dp，结构上不可能遮挡
+        // Q15 卡库总览英雄卡：对照 cardapp app.js lib-hero 与 styles.css .dash-hero/.dash-tiles
+        // 渐变 135deg #16283F→#0B5FA5(55%)→#00A3C8、圆角 22、内边距 20、三格 gap 10 均匀间隙
         LinearLayout hero = new LinearLayout(this);
+        homeHero = hero;
         hero.setOrientation(LinearLayout.VERTICAL);
         GradientDrawable hg = new GradientDrawable(GradientDrawable.Orientation.TL_BR,
-            new int[]{Color.rgb(0x0B, 0x3D, 0x91), Color.rgb(0x0A, 0x6E, 0xD6), Color.rgb(0x00, 0xA3, 0xC8)});
-        hg.setCornerRadius(dp(this, 20));
+            new int[]{Color.rgb(0x16, 0x28, 0x3F), Color.rgb(0x0B, 0x5F, 0xA5), Color.rgb(0x00, 0xA3, 0xC8)});
+        hg.setCornerRadius(dp(this, 22));
         hero.setBackground(hg);
-        hero.setPadding(dp(this, 18), dp(this, 16), dp(this, 18), dp(this, 16));
+        if (Build.VERSION.SDK_INT >= 21) hero.setElevation(dp(this, 10));
+        hero.setPadding(dp(this, 20), dp(this, 20), dp(this, 20), dp(this, 20));
         LinearLayout.LayoutParams hlp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         hlp.topMargin = dp(this, 10);
         col.addView(hero, hlp);
-        // Q39: .dash-kick .78rem/.14em 字距；.dash-big 800/行高1.08
-        TextView kick = tvW(this, "卡库总览", 12.5f, Color.argb(200, 255, 255, 255), 600);
+        // .dash-kick .78rem/opacity .75/letter-spacing .14em；.dash-big 2.9rem/800/1.08；.dash-sub .85rem/opacity .88
+        TextView kick = tvW(this, "卡库总览", 12.5f, Color.argb(191, 255, 255, 255), 600);
         kick.setLetterSpacing(0.14f);
         hero.addView(kick);
-        TextView big = tvW(this, Store.all.size() + " 张卡", 34, Color.WHITE, 800);
-        big.setLineSpacing(0, 1.08f);
-        hero.addView(big);
-        hero.addView(tv(this, banks.size() + " 家银行 · 6 大卡组织", 13, Color.argb(220, 255, 255, 255), false));
+        LinearLayout bigRow = new LinearLayout(this);
+        bigRow.setOrientation(LinearLayout.HORIZONTAL);
+        bigRow.setGravity(Gravity.BOTTOM);
+        TextView bigNum = tvW(this, String.valueOf(Store.all.size()), 44, Color.WHITE, 800);
+        bigNum.setLineSpacing(0, 1.08f);
+        bigRow.addView(bigNum);
+        TextView bigUnit = tvW(this, "张卡", 16, Color.argb(217, 255, 255, 255), 600);
+        LinearLayout.LayoutParams bulp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        bulp.leftMargin = dp(this, 7);
+        bulp.bottomMargin = dp(this, 5);
+        bigRow.addView(bigUnit, bulp);
+        hero.addView(bigRow);
+        java.util.Set<String> orgs = new java.util.HashSet<>();
+        for (Card c : Store.all) if (c.org != null && !c.org.isEmpty()) orgs.add(c.org);
+        hero.addView(tv(this, banks.size() + " 家银行 · " + orgs.size() + " 大卡组织", 13, Color.argb(224, 255, 255, 255), false));
         LinearLayout tiles = new LinearLayout(this);
         tiles.setOrientation(LinearLayout.HORIZONTAL);
         LinearLayout.LayoutParams tlp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        tlp.topMargin = dp(this, 12);
+        tlp.topMargin = dp(this, 16);
         hero.addView(tiles, tlp);
-        tiles.addView(heroTile(debit + " 张", "借记卡"), new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
-        tiles.addView(heroTile((Store.all.size() - debit) + " 张", "信用卡"), new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
-        tiles.addView(heroTile(stopped + " 张", "已停发"), new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+        tiles.addView(heroTile("card", debit + " 张", "借记卡"), new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+        LinearLayout.LayoutParams tile2Lp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+        tile2Lp.leftMargin = dp(this, 10);
+        tiles.addView(heroTile("card", (Store.all.size() - debit) + " 张", "信用卡"), tile2Lp);
+        LinearLayout.LayoutParams tile3Lp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+        tile3Lp.leftMargin = dp(this, 10);
+        tiles.addView(heroTile("clock", stopped + " 张", "已停发"), tile3Lp);
 
         homeList = new LinearLayout(this);
         homeList.setOrientation(LinearLayout.VERTICAL);
@@ -3817,17 +3836,49 @@ public class MainActivity extends Activity {
         return page;
     }
 
-    View heroTile(String v, String k) {
+    // Q15 .dash-tile：玻璃格 rgba(255,255,255,.13)+1px rgba(255,255,255,.16) 边、圆角 14、内边距 10/12
+    // 顶部 20dp 细线图标（ICO.card/ICO.clock 白色细线，禁用 emoji）+ .dt-v 1.05rem/700 + .dt-k .72rem
+    View heroTile(String icon, String v, String k) {
         LinearLayout t = new LinearLayout(this);
         t.setOrientation(LinearLayout.VERTICAL);
-        t.setBackground(roundRect(Color.argb(38, 255, 255, 255), 12, this));
-        t.setPadding(dp(this, 10), dp(this, 9), dp(this, 10), dp(this, 9));
-        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
-        lp.rightMargin = dp(this, 8);
-        t.setLayoutParams(lp);
-        t.addView(tv(this, v, 15, Color.WHITE, true));
-        t.addView(tv(this, k, 10.5f, Color.argb(200, 255, 255, 255), false));
+        GradientDrawable bg = new GradientDrawable();
+        bg.setShape(GradientDrawable.RECTANGLE);
+        bg.setCornerRadius(dp(this, 14));
+        bg.setColor(Color.argb(33, 255, 255, 255));
+        bg.setStroke(dp(this, 1), Color.argb(41, 255, 255, 255));
+        t.setBackground(bg);
+        t.setPadding(dp(this, 12), dp(this, 10), dp(this, 12), dp(this, 10));
+        DashTileIconView ic = new DashTileIconView(this);
+        ic.kind = icon;
+        t.addView(ic, new LinearLayout.LayoutParams(dp(this, 20), dp(this, 20)));
+        t.addView(tvW(this, v, 17, Color.WHITE, 700));
+        t.addView(tv(this, k, 11, Color.argb(199, 255, 255, 255), false));
         return t;
+    }
+
+    // Q15 英雄卡三格细线图标：card=卡面矩形+磁条+芯片短线，clock=圆+时分针（24 网格、1.7dp 白色细线）
+    class DashTileIconView extends View {
+        String kind = "card";
+        DashTileIconView(Context c) { super(c); }
+        @Override protected void onDraw(Canvas cv) {
+            Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);
+            p.setStyle(Paint.Style.STROKE);
+            p.setStrokeCap(Paint.Cap.ROUND);
+            p.setStrokeJoin(Paint.Join.ROUND);
+            p.setColor(Color.argb(235, 255, 255, 255));
+            float sx = getWidth() / 24f, sy = getHeight() / 24f;
+            p.setStrokeWidth(1.7f * sx);
+            if ("clock".equals(kind)) {
+                cv.drawCircle(12f * sx, 12f * sy, 8.5f * sx, p);
+                cv.drawLine(12f * sx, 12f * sy, 12f * sx, 7.5f * sy, p);
+                cv.drawLine(12f * sx, 12f * sy, 15.5f * sx, 14f * sy, p);
+            } else {
+                RectF r = new RectF(3f * sx, 6f * sy, 21f * sx, 18f * sy);
+                cv.drawRoundRect(r, 2.5f * sx, 2.5f * sy, p);
+                cv.drawLine(3f * sx, 10f * sy, 21f * sx, 10f * sy, p);
+                cv.drawLine(6.5f * sx, 14.5f * sy, 11f * sx, 14.5f * sy, p);
+            }
+        }
     }
 
     List<Card> filteredHome() {
@@ -3864,6 +3915,11 @@ public class MainActivity extends Activity {
 
     void refreshHome() {
         if (homeList == null) return;
+        // Q15：英雄卡仅在无搜索/无筛选时显示（同混合版 lib-hero 条件），有条件时整卡收起不占位
+        if (homeHero != null) {
+            boolean heroOn = query.isEmpty() && activeFilterCount() == 0;
+            homeHero.setVisibility(heroOn ? View.VISIBLE : View.GONE);
+        }
         // Q21 ②：签名未变的重复 refresh（切页回来、关详情、关筛选）不再把 213 张瓷砖连图带字重搭一遍——这是切页发慢的主因。
         String sig = homeSig();
         if (sig.equals(homeRenderSig) && homeList.getChildCount() > 0) {
@@ -4383,24 +4439,32 @@ public class MainActivity extends Activity {
         return t;
     }
 
+    // Q15 情景横幅：对照 cardapp index.html #wizBanner 与 styles.css .wiz-banner/.wiz-go
+    // 渐变 120deg #0A84FF→#5E5CE6(62%)→#BF5AF2、圆角 18、内边距 13/14、白字主行+副行、白药丸「去选卡」蓝字
     View wizardBanner() {
         LinearLayout b = new LinearLayout(this);
         b.setOrientation(LinearLayout.HORIZONTAL);
         b.setGravity(Gravity.CENTER_VERTICAL);
         GradientDrawable bg = new GradientDrawable(GradientDrawable.Orientation.TL_BR,
-            new int[]{Color.rgb(0x0B, 0x3D, 0x91), Color.rgb(0x0A, 0x6E, 0xD6), Color.rgb(0x00, 0xA3, 0xC8)});
-        bg.setCornerRadius(dp(this, 16));
+            new int[]{Color.rgb(0x0A, 0x84, 0xFF), Color.rgb(0x5E, 0x5C, 0xE6), Color.rgb(0xBF, 0x5A, 0xF2)});
+        bg.setCornerRadius(dp(this, 18));
         b.setBackground(bg);
-        b.setPadding(dp(this, 14), dp(this, 12), dp(this, 14), dp(this, 12));
+        if (Build.VERSION.SDK_INT >= 21) b.setElevation(dp(this, 6));
+        b.setPadding(dp(this, 14), dp(this, 13), dp(this, 14), dp(this, 13));
         LinearLayout.LayoutParams blp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        blp.topMargin = dp(this, 2);
+        blp.topMargin = dp(this, 12);
+        blp.bottomMargin = dp(this, 12);
         b.setLayoutParams(blp);
         LinearLayout tx = new LinearLayout(this);
         tx.setOrientation(LinearLayout.VERTICAL);
         b.addView(tx, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
-        tx.addView(tv(this, "情景选卡", 15, Color.WHITE, true));
-        tx.addView(tv(this, "按场景答几题，从在发卡里挑适合你的", 11.5f, Color.argb(215, 255, 255, 255), false));
-        b.addView(tv(this, "开始 ›", 13, Color.WHITE, true));
+        tx.addView(tvW(this, "不知道选哪张？", 15, Color.WHITE, 700));
+        tx.addView(tv(this, "情景选卡：留学 · 旅游 · 海淘 · 日常，答几题就给你排好", 12, Color.argb(224, 255, 255, 255), false));
+        TextView go = tvW(this, "去选卡", 13, Color.rgb(0x0A, 0x5C, 0xD6), 700);
+        go.setGravity(Gravity.CENTER);
+        go.setBackground(roundRect(Color.WHITE, 999, this));
+        go.setPadding(dp(this, 16), dp(this, 9), dp(this, 16), dp(this, 9));
+        b.addView(go);
         b.setOnClickListener(v -> { haptic(); openWizard(); });
         return b;
     }
