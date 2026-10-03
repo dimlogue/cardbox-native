@@ -251,6 +251,11 @@ public class MainActivity extends Activity {
     int wizStep = 0;
     Map<String, String> wizA = new HashMap<>();
 
+    // 欢迎页 / 更新日志（Phase 4b，对照 app.js showWelcome/renderChangelog）
+    boolean welcomeOpen = false;
+    boolean changelogOpen = false;
+    ScrollView changelogScroll = null;
+
     FrameLayout content;
     LinearLayout navBar;
     Map<String, View> pages = new HashMap<>();
@@ -394,6 +399,7 @@ public class MainActivity extends Activity {
         setContentView(root);
 
         showTab("home");
+        if (!prefs.getBoolean("welcomed", false)) showWelcome();
     }
 
     // 高刷：开启时把窗口首选刷新率设为屏幕支持的最高档（对照混合版 Bridge setHighRefresh）
@@ -2708,6 +2714,203 @@ public class MainActivity extends Activity {
         return page;
     }
 
+    // ---------- 欢迎页 / 更新日志（Phase 4b） ----------
+    void showWelcome() {
+        welcomeOpen = true;
+        navBar.setVisibility(View.GONE);
+        content.removeAllViews();
+        content.addView(buildWelcomePage());
+    }
+
+    void closeWelcome() {
+        prefs.edit().putBoolean("welcomed", true).apply();
+        welcomeOpen = false;
+        navBar.setVisibility(View.VISIBLE);
+        showTab(tab);
+    }
+
+    View buildWelcomePage() {
+        ScrollView sc = new ScrollView(this);
+        sc.setBackgroundColor(Color.WHITE);
+        sc.setFillViewport(true);
+        LinearLayout page = new LinearLayout(this);
+        page.setOrientation(LinearLayout.VERTICAL);
+        page.setPadding(dp(this, 26), dp(this, 22), dp(this, 26), dp(this, 18));
+        sc.addView(page);
+
+        TextView logo = tv(this, "卡", 30, Color.WHITE, true);
+        logo.setGravity(Gravity.CENTER);
+        GradientDrawable lg = new GradientDrawable(GradientDrawable.Orientation.TL_BR,
+            new int[]{Color.rgb(0x0A, 0x84, 0xFF), Color.rgb(0x5E, 0x5C, 0xE6)});
+        lg.setCornerRadius(dp(this, 18));
+        logo.setBackground(lg);
+        page.addView(logo, new LinearLayout.LayoutParams(dp(this, 64), dp(this, 64)));
+
+        TextView title = tv(this, "欢迎使用卡盒", 28, Color.rgb(0x1C, 0x1C, 0x1E), true);
+        LinearLayout.LayoutParams tlp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        tlp.topMargin = dp(this, 16);
+        page.addView(title, tlp);
+        TextView sub = tv(this, "把银行卡装进一个盒子，出门刷卡不再纠结。", 14, Color.rgb(0x8E, 0x8E, 0x93), false);
+        sub.setLineSpacing(0, 1.35f);
+        LinearLayout.LayoutParams slp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        slp.topMargin = dp(this, 8);
+        page.addView(sub, slp);
+
+        String n = String.valueOf(Store.all.size());
+        String[][] feats = {
+            {"▭", "银行卡图鉴", n + " 张借记卡与信用卡，费率、币种、权益一次看清"},
+            {"◉", "情景选卡", "留学、旅游、海淘、日常，答几道题给你推荐合适的卡"},
+            {"☆", "我的卡片", "收藏自己的卡，能看卡包实力，还能拖动排序"},
+            {"∅", "断网可用", "数据存在手机里，没网也能查，更新不用重装"},
+        };
+        for (String[] f : feats) {
+            LinearLayout row = new LinearLayout(this);
+            row.setOrientation(LinearLayout.HORIZONTAL);
+            row.setGravity(Gravity.TOP);
+            LinearLayout.LayoutParams rlp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            rlp.topMargin = dp(this, 15);
+            page.addView(row, rlp);
+            TextView ic = tv(this, f[0], 19, Color.rgb(0x0A, 0x5C, 0xD6), true);
+            ic.setGravity(Gravity.CENTER);
+            ic.setBackground(roundRect(Color.rgb(0xEE, 0xF4, 0xFF), 13, this));
+            row.addView(ic, new LinearLayout.LayoutParams(dp(this, 44), dp(this, 44)));
+            LinearLayout tx = new LinearLayout(this);
+            tx.setOrientation(LinearLayout.VERTICAL);
+            LinearLayout.LayoutParams txlp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+            txlp.leftMargin = dp(this, 13);
+            row.addView(tx, txlp);
+            tx.addView(tv(this, f[1], 14.5f, Color.rgb(0x1C, 0x1C, 0x1E), true));
+            TextView d = tv(this, f[2], 12.5f, Color.rgb(0x8E, 0x8E, 0x93), false);
+            d.setLineSpacing(0, 1.3f);
+            tx.addView(d);
+        }
+
+        Button go = new Button(this);
+        go.setText("开始使用");
+        go.setTextSize(15.5f);
+        go.setAllCaps(false);
+        go.setTextColor(Color.WHITE);
+        GradientDrawable gb = new GradientDrawable(GradientDrawable.Orientation.LEFT_RIGHT,
+            new int[]{Color.rgb(0x0A, 0x84, 0xFF), Color.rgb(0x5E, 0x5C, 0xE6)});
+        gb.setCornerRadius(dp(this, 16));
+        go.setBackground(gb);
+        LinearLayout.LayoutParams glp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(this, 52));
+        glp.topMargin = dp(this, 26);
+        page.addView(go, glp);
+        go.setOnClickListener(v -> { haptic(); closeWelcome(); });
+
+        TextView note = tv(this, "卡片数据仅供参考，办卡以银行最新公告为准", 11, Color.rgb(0xC7, 0xC7, 0xCC), false);
+        note.setGravity(Gravity.CENTER);
+        LinearLayout.LayoutParams nlp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        nlp.topMargin = dp(this, 12);
+        page.addView(note, nlp);
+        return sc;
+    }
+
+    static class LogEntry { String v; List<String> notes = new ArrayList<>(); }
+
+    List<LogEntry> loadChangelog() {
+        List<LogEntry> out = new ArrayList<>();
+        try {
+            InputStream in = getAssets().open("data/changelog.json");
+            ByteArrayOutputStream bos = new ByteArrayOutputStream();
+            byte[] buf = new byte[8192]; int r;
+            while ((r = in.read(buf)) > 0) bos.write(buf, 0, r);
+            in.close();
+            JSONArray arr = new JSONArray(new String(bos.toByteArray(), "UTF-8"));
+            for (int i = 0; i < arr.length(); i++) {
+                JSONObject o = arr.getJSONObject(i);
+                LogEntry e = new LogEntry();
+                e.v = o.optString("v");
+                JSONArray ns = o.optJSONArray("notes");
+                if (ns != null) for (int j = 0; j < ns.length(); j++) e.notes.add(ns.optString(j));
+                out.add(e);
+            }
+        } catch (Exception e) { /* 读不到就空列表，页面会提示 */ }
+        return out;
+    }
+
+    void showChangelog() {
+        changelogOpen = true;
+        navBar.setVisibility(View.GONE);
+        content.removeAllViews();
+        content.addView(buildChangelogPage());
+    }
+
+    void closeChangelog() {
+        changelogOpen = false;
+        navBar.setVisibility(View.VISIBLE);
+        showTab(tab);
+    }
+
+    View buildChangelogPage() {
+        LinearLayout root = new LinearLayout(this);
+        root.setOrientation(LinearLayout.VERTICAL);
+        root.setBackgroundColor(Color.rgb(0xF2, 0xF3, 0xF7));
+
+        LinearLayout head = new LinearLayout(this);
+        head.setOrientation(LinearLayout.HORIZONTAL);
+        head.setGravity(Gravity.CENTER_VERTICAL);
+        head.setPadding(dp(this, 14), dp(this, 12), dp(this, 14), dp(this, 6));
+        root.addView(head);
+        Button back = new Button(this);
+        back.setText("‹ 返回"); back.setTextSize(14); back.setAllCaps(false);
+        back.setBackground(roundRect(Color.WHITE, 12, this));
+        back.setOnClickListener(v -> closeChangelog());
+        head.addView(back, new LinearLayout.LayoutParams(dp(this, 84), dp(this, 38)));
+        TextView ht = tv(this, "更新日志", 17, Color.rgb(0x1C, 0x1C, 0x1E), true);
+        LinearLayout.LayoutParams htlp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+        htlp.leftMargin = dp(this, 10);
+        head.addView(ht, htlp);
+
+        changelogScroll = new ScrollView(this);
+        changelogScroll.setVerticalScrollBarEnabled(true);
+        changelogScroll.setScrollbarFadingEnabled(false);
+        LinearLayout page = new LinearLayout(this);
+        page.setOrientation(LinearLayout.VERTICAL);
+        page.setPadding(dp(this, 16), dp(this, 6), dp(this, 16), dp(this, 16));
+        changelogScroll.addView(page);
+        root.addView(changelogScroll, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
+
+        List<LogEntry> logs = loadChangelog();
+        if (logs.isEmpty()) {
+            page.addView(tv(this, "更新日志读取失败", 13.5f, Color.rgb(0x8E, 0x8E, 0x93), false));
+        }
+        for (LogEntry e : logs) {
+            TextView ver = tv(this, "v" + e.v, 14.5f, Color.rgb(0x1C, 0x1C, 0x1E), true);
+            LinearLayout.LayoutParams vlp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            vlp.topMargin = dp(this, 14);
+            page.addView(ver, vlp);
+            for (String note : e.notes) {
+                TextView nt = tv(this, "•  " + note, 12.5f, Color.rgb(0x3A, 0x3A, 0x3C), false);
+                nt.setLineSpacing(0, 1.45f);
+                LinearLayout.LayoutParams nlp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+                nlp.topMargin = dp(this, 3); nlp.leftMargin = dp(this, 4);
+                page.addView(nt, nlp);
+            }
+        }
+
+        LinearLayout actions = new LinearLayout(this);
+        actions.setOrientation(LinearLayout.HORIZONTAL);
+        actions.setGravity(Gravity.CENTER);
+        actions.setBackgroundColor(Color.WHITE);
+        actions.setPadding(dp(this, 14), dp(this, 10), dp(this, 14), dp(this, 12));
+        root.addView(actions);
+        Button top = new Button(this);
+        top.setText("↑ 回到顶部"); top.setTextSize(13); top.setAllCaps(false);
+        top.setBackground(roundRect(Color.rgb(0xEE, 0xF1, 0xF6), 999, this));
+        top.setOnClickListener(v -> { if (changelogScroll != null) changelogScroll.smoothScrollTo(0, 0); });
+        actions.addView(top, new LinearLayout.LayoutParams(0, dp(this, 40), 1f));
+        Button fold = new Button(this);
+        fold.setText("收起日志"); fold.setTextSize(13); fold.setAllCaps(false);
+        fold.setBackground(roundRect(Color.rgb(0xEE, 0xF1, 0xF6), 999, this));
+        fold.setOnClickListener(v -> closeChangelog());
+        LinearLayout.LayoutParams flp = new LinearLayout.LayoutParams(0, dp(this, 40), 1f);
+        flp.leftMargin = dp(this, 10);
+        actions.addView(fold, flp);
+        return root;
+    }
+
     View buildSettingsPage() {
         LinearLayout page = basePage("设置");
         View wizEntry = settingRow("情景选卡", "出国留学 / 出境旅游 / 海淘网购 / 日常使用，按场景挑卡 ›");
@@ -2730,9 +2933,16 @@ public class MainActivity extends Activity {
             hapticOn = on; prefs.edit().putBoolean("haptic", on).apply(); haptic(); rebuildPages();
         });
 
-        page.addView(settingRow("版本", "0.10-native（Phase 4a）"));
+        sectionHead(page, "关于");
+        page.addView(settingRow("版本", "0.11-native（Phase 4b）"));
+        View logRow = settingRow("更新日志", "每个版本改了什么 ›");
+        logRow.setOnClickListener(v -> { haptic(); showChangelog(); });
+        page.addView(logRow);
+        View welRow = settingRow("欢迎页", "重新看一遍首次打开的介绍 ›");
+        welRow.setOnClickListener(v -> { haptic(); showWelcome(); });
+        page.addView(welRow);
         page.addView(settingRow("关于卡盒", "原生版：纯 Java 手写界面，数据与现行版共用同一份卡库"));
-        page.addView(settingRow("迁移进度", "全部卡片 / 详情 / 我的卡片 / 学生推荐 / 筛选 / 资讯 / 情景选卡 / 自定义卡 / 拖动 / 字体与界面大小 / 高刷 / 触感 已迁移；欢迎页与 OTA 在后续阶段"));
+        page.addView(settingRow("迁移进度", "全部卡片 / 详情 / 我的卡片 / 学生推荐 / 筛选 / 资讯 / 情景选卡 / 自定义卡 / 拖动 / 字体与界面大小 / 高刷 / 触感 / 欢迎页 / 更新日志 已迁移；OTA 在后续阶段"));
         return page;
     }
 
@@ -2824,6 +3034,8 @@ public class MainActivity extends Activity {
 
     @Override
     public void onBackPressed() {
+        if (welcomeOpen) { closeWelcome(); return; }
+        if (changelogOpen) { closeChangelog(); return; }
         if (detailCard != null) { closeDetail(); return; }
         if (filterSheet != null) { closeFilterSheet(); return; }
         if (wizardOpen) {
