@@ -4014,18 +4014,12 @@ public class MainActivity extends Activity {
         x.lineDp = 1.9f;
         x.shadow = true;
         x.setLayerType(View.LAYER_TYPE_SOFTWARE, null);
-        int xPad = dp(this, 10);
+        int xPad = dp(this, 4); // 内衬 26dp → ✕ 约 13.5dp，对照混合版 .p-close 的 1rem 字形量级
         x.setPadding(xPad, xPad, xPad, xPad);
         FrameLayout.LayoutParams xlp = new FrameLayout.LayoutParams(dp(this, 34), dp(this, 34));
         xlp.gravity = Gravity.CENTER;
         glyphFrame.addView(x, xlp);
         glyphFrame.setOnClickListener(v -> { haptic(); closeDetail(); });
-        glyphFrame.setOnTouchListener((v, e) -> {
-            if (e.getAction() == MotionEvent.ACTION_DOWN) pressBounce(v, true);
-            else if (e.getAction() == MotionEvent.ACTION_UP || e.getAction() == MotionEvent.ACTION_CANCEL)
-                pressBounce(v, false);
-            return false;
-        });
         FrameLayout.LayoutParams glp = new FrameLayout.LayoutParams(dp(this, 48), dp(this, 48));
         glp.gravity = Gravity.TOP | Gravity.END;
         glp.topMargin = dp(this, 5);
