@@ -4058,7 +4058,7 @@ public class MainActivity extends Activity {
             ViewGroup.LayoutParams.MATCH_PARENT, Math.min(card.getMeasuredHeight(), maxH));
         clp.gravity = Gravity.BOTTOM;
         clp.leftMargin = dp(this, 12); clp.rightMargin = dp(this, 12);
-        clp.bottomMargin = dp(this, 12) + statusBarH() / 4;
+        clp.bottomMargin = dp(this, 12);
         sheet.addView(card, clp);
         content.addView(sheet);
         aboutSheet = sheet;
@@ -4112,7 +4112,9 @@ public class MainActivity extends Activity {
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
         ImageView icon = new ImageView(this);
         icon.setScaleType(ImageView.ScaleType.FIT_CENTER);
+        icon.setBackground(roundRect(Color.WHITE, 14, this));
         icon.setClipToOutline(true);
+        if (Build.VERSION.SDK_INT >= 21) icon.setElevation(dp(this, 2));
         Bitmap iconBmp = loadAssetBitmap("data/images/about-icon.png");
         if (iconBmp != null) icon.setImageBitmap(iconBmp);
         hero.addView(icon, new LinearLayout.LayoutParams(dp(this, 56), dp(this, 56)));
@@ -4143,7 +4145,6 @@ public class MainActivity extends Activity {
         LinearLayout toggle = new LinearLayout(this);
         toggle.setOrientation(LinearLayout.HORIZONTAL);
         toggle.setGravity(Gravity.CENTER_VERTICAL);
-        toggle.setBackground(rippleBg(Color.rgb(0xF7, 0xF8, 0xFA), 14));
         toggle.setClipToOutline(true);
         GradientDrawable tg = new GradientDrawable();
         tg.setColor(Color.rgb(0xF7, 0xF8, 0xFA)); tg.setCornerRadius(dp(this, 14));
