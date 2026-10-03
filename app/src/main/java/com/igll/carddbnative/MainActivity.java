@@ -151,13 +151,13 @@ public class MainActivity extends Activity {
             topFab.setVisibility(View.VISIBLE);
             topFab.setAlpha(0f); topFab.setScaleX(0.82f); topFab.setScaleY(0.82f);
             topFab.animate().alpha(1f).scaleX(1f).scaleY(1f).setDuration(190)
-                .setInterpolator(new DecelerateInterpolator()).start();
+                .setInterpolator(ANIM_ENTER).start();
         } else if (!show && topFabShown) {
             topFabShown = false;
             final View fab = topFab;
             fab.animate().cancel();
-            fab.animate().alpha(0f).scaleX(0.85f).scaleY(0.85f).setDuration(150)
-                .setInterpolator(new DecelerateInterpolator())
+            fab.animate().alpha(0f).scaleX(0.85f).scaleY(0.85f).setDuration(170)
+                .setInterpolator(ANIM_EXIT)
                 .withEndAction(() -> { if (fab == topFab && !topFabShown) fab.setVisibility(View.GONE); }).start();
         }
     }
@@ -195,7 +195,7 @@ public class MainActivity extends Activity {
         long dur = Math.min(520, 240 + from / 5);
         ValueAnimator va = ValueAnimator.ofInt(from, 0);
         va.setDuration(dur);
-        va.setInterpolator(new DecelerateInterpolator());
+        va.setInterpolator(ANIM_ENTER);
         va.addUpdateListener(a -> sv.scrollTo(0, (int) a.getAnimatedValue()));
         va.start();
     }
@@ -981,7 +981,7 @@ public class MainActivity extends Activity {
         page.setAlpha(0f);
         page.setTranslationY(dp(this, 10));
         page.animate().alpha(1f).translationY(0f)
-            .setDuration(220).setInterpolator(new DecelerateInterpolator()).start();
+            .setDuration(220).setInterpolator(ANIM_ENTER).start();
         if ("home".equals(key) && homeList != null) refreshHome();
         restoreCurrentTabScroll();
         syncSearchFab();
@@ -1072,7 +1072,7 @@ public class MainActivity extends Activity {
             searchFab.setAlpha(0f);
             searchFab.setScaleX(0.8f);
             searchFab.setScaleY(0.8f);
-            searchFab.animate().alpha(1f).scaleX(1f).scaleY(1f).setDuration(160).start();
+            searchFab.animate().alpha(1f).scaleX(1f).scaleY(1f).setDuration(ANIM_DUR_FADE).setInterpolator(ANIM_ENTER).start();
         }
         // P2c 筛选钮（左邻搜索钮，同浮感）
         if (filterFab == null || filterFab.getParent() != content) {
@@ -1087,7 +1087,7 @@ public class MainActivity extends Activity {
             filterFab.setAlpha(0f);
             filterFab.setScaleX(0.8f);
             filterFab.setScaleY(0.8f);
-            filterFab.animate().alpha(1f).scaleX(1f).scaleY(1f).setDuration(160).start();
+            filterFab.animate().alpha(1f).scaleX(1f).scaleY(1f).setDuration(ANIM_DUR_FADE).setInterpolator(ANIM_ENTER).start();
         } else {
             updateFilterFabBadge();
         }
@@ -1210,7 +1210,7 @@ public class MainActivity extends Activity {
         if (animate) {
             homeSearchBar.animate().translationY(ty).alpha(show ? 1f : 0f)
                 .setDuration(show ? 240 : 200)
-                .setInterpolator(new DecelerateInterpolator()).start();
+                .setInterpolator(ANIM_ENTER).start();
         } else {
             homeSearchBar.setTranslationY(ty);
             homeSearchBar.setAlpha(show ? 1f : 0f);
@@ -1242,7 +1242,7 @@ public class MainActivity extends Activity {
             scrollDur = Math.min(420, 200 + from / 6);
             ValueAnimator va = ValueAnimator.ofInt(from, 0);
             va.setDuration(scrollDur);
-            va.setInterpolator(new DecelerateInterpolator());
+            va.setInterpolator(ANIM_ENTER);
             va.addUpdateListener(a -> { if (homeScroll != null) homeScroll.scrollTo(0, (int) a.getAnimatedValue()); });
             va.start();
         }
@@ -1362,7 +1362,7 @@ public class MainActivity extends Activity {
         holder.setAlpha(0.92f);
         holder.animate().scaleX(scale).scaleY(scale)
             .translationX(wantCx - cx).translationY(wantCy - cy).alpha(1f)
-            .setDuration(220).setInterpolator(new DecelerateInterpolator()).start();
+            .setDuration(220).setInterpolator(ANIM_ENTER).start();
 
         pressPreview = holder; pressPreviewSrc = src;
         haptic();
@@ -1385,7 +1385,7 @@ public class MainActivity extends Activity {
         }
         holder.animate().cancel();
         holder.animate().scaleX(1f).scaleY(1f).translationX(0).translationY(0).alpha(0f)
-            .setDuration(140).setInterpolator(new DecelerateInterpolator())
+            .setDuration(140).setInterpolator(ANIM_ENTER)
             .withEndAction(() -> { if (holder.getParent() instanceof ViewGroup) ((ViewGroup) holder.getParent()).removeView(holder); })
             .start();
     }
@@ -1828,7 +1828,7 @@ public class MainActivity extends Activity {
         // 开场：淡入+放大+上浮，减速曲线（P4-fix 统一手感方向，220–320ms 档）
         sheet.setAlpha(0f);
         sheet.animate().alpha(1f).setDuration(200)
-            .setInterpolator(new DecelerateInterpolator()).start();
+            .setInterpolator(ANIM_ENTER).start();
         card.setAlpha(0f);
         card.setScaleX(0.94f); card.setScaleY(0.94f);
         card.setTranslationY(dp(this, 14));
@@ -1847,7 +1847,7 @@ public class MainActivity extends Activity {
             ? ((ViewGroup) sheet).getChildAt(0) : null;
         if (card != null) {
             card.animate().alpha(0f).scaleX(0.96f).scaleY(0.96f).translationY(dp(this, 10))
-                .setDuration(180).setInterpolator(new DecelerateInterpolator())
+                .setDuration(180).setInterpolator(ANIM_ENTER)
                 .withEndAction(() -> { closeFilterSheetNow(sheet); syncSearchFab(); }).start();
             sheet.animate().alpha(0f).setDuration(180).start();
         } else {
@@ -2273,7 +2273,7 @@ public class MainActivity extends Activity {
                 ? ((ViewGroup) sheet).getChildAt(1) : null;
             if (card != null) {
                 card.animate().translationY(dp(this, 42)).alpha(0f)
-                    .setDuration(180).setInterpolator(new DecelerateInterpolator())
+                    .setDuration(180).setInterpolator(ANIM_ENTER)
                     .withEndAction(() -> {
                         if (sheet.getParent() != null) ((ViewGroup) sheet.getParent()).removeView(sheet);
                         navBar.setVisibility(View.VISIBLE);
@@ -2345,7 +2345,7 @@ public class MainActivity extends Activity {
         } else {
             sheet.setAlpha(0f);
             sheet.animate().alpha(1f).setDuration(200)
-                .setInterpolator(new DecelerateInterpolator()).start();
+                .setInterpolator(ANIM_ENTER).start();
             card.setTranslationY(dp(this, 42));
             card.animate().translationY(0f)
                 .setDuration(260).setInterpolator(ANIM_ENTER).start();
@@ -2679,7 +2679,7 @@ public class MainActivity extends Activity {
         // P4：详情先向右滑出淡出（180ms）再切回底下页面；无视图可动时直接切
         if (dv != null && dv.getParent() != null) {
             dv.animate().alpha(0f).translationX(dp(this, 48))
-                .setDuration(180).setInterpolator(new DecelerateInterpolator())
+                .setDuration(180).setInterpolator(ANIM_ENTER)
                 .withEndAction(finish).start();
         } else {
             finish.run();
@@ -4232,7 +4232,7 @@ public class MainActivity extends Activity {
         content.addView(sheet);
         aboutSheet = sheet;
         sheet.setAlpha(0f);
-        sheet.animate().alpha(1f).setDuration(200).setInterpolator(new DecelerateInterpolator()).start();
+        sheet.animate().alpha(1f).setDuration(200).setInterpolator(ANIM_ENTER).start();
         card.setTranslationY(dp(this, 42));
         card.animate().translationY(0f).setDuration(260)
             .setInterpolator(ANIM_ENTER).start();
@@ -4247,7 +4247,7 @@ public class MainActivity extends Activity {
                 ? ((ViewGroup) sheet).getChildAt(1) : null;
             if (card != null) {
                 card.animate().translationY(dp(this, 42)).alpha(0f)
-                    .setDuration(180).setInterpolator(new DecelerateInterpolator())
+                    .setDuration(180).setInterpolator(ANIM_ENTER)
                     .withEndAction(() -> {
                         if (sheet.getParent() != null) ((ViewGroup) sheet.getParent()).removeView(sheet);
                         navBar.setVisibility(View.VISIBLE);
@@ -4394,7 +4394,7 @@ public class MainActivity extends Activity {
             if (aboutSponsorOpen) {
                 sponsor.setAlpha(0f); sponsor.setTranslationY(dp(this, -6));
                 sponsor.animate().alpha(1f).translationY(0f).setDuration(220)
-                    .setInterpolator(new DecelerateInterpolator()).start();
+                    .setInterpolator(ANIM_ENTER).start();
             }
         });
 
