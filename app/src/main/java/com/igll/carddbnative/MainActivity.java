@@ -3332,6 +3332,18 @@ public class MainActivity extends Activity {
 
     interface SegPick { void onPick(String v); }
 
+    static boolean segOn(String optionKey, String cur) {
+        // 数值类选项（界面大小 0.9/1/1.12）必须按浮点比较：
+        // String.valueOf(1.0f) 得 "1.0"，与键 "1" 直等永假，「标准」永不显蓝。
+        try {
+            float a = Float.parseFloat(optionKey.trim());
+            float b = Float.parseFloat(cur.trim());
+            return Math.abs(a - b) < 0.0001f;
+        } catch (Exception e) {
+            return optionKey.equals(cur);
+        }
+    }
+
     // 三档单选行：白卡里横排，选中蓝底（与筛选面板 chipRow 同风格）
     void segRow(LinearLayout page, String label, String[][] opts, String cur, final SegPick pick) {
         LinearLayout box = new LinearLayout(this);
@@ -3348,7 +3360,7 @@ public class MainActivity extends Activity {
         rlp.topMargin = dp(this, 9);
         box.addView(row, rlp);
         for (final String[] o : opts) {
-            final boolean on = o[0].equals(cur);
+            final boolean on = segOn(o[0], cur);
             TextView t = tv(this, o[1], 12.5f, on ? Color.WHITE : Color.rgb(0x1C, 0x1C, 0x1E), on);
             t.setGravity(Gravity.CENTER);
             t.setBackground(roundRect(on ? Color.rgb(0x0A, 0x5C, 0xD6) : Color.rgb(0xEE, 0xF1, 0xF6), 9, this));
