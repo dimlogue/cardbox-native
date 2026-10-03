@@ -1832,16 +1832,18 @@ public class MainActivity extends Activity {
             cv.drawLine(ox + 15.8f * sx, oy + 15.8f * sy, ox + 20.5f * sx, oy + 20.5f * sy, p);
         }
     }
-    // Q10: thin-line X for search capsules (mixed .clear-btn / #floatSearchClose), Canvas-drawn, no emoji font glyph
+    // Q30：细线 ✕（搜索胶囊同语言）；shadow=true 时给白字形加暗晕，保证浅图上也可辨
     class CloseIconView extends View {
         int iconColor = Color.rgb(0x1C, 0x1C, 0x1E);
         float lineDp = 1.6f;
+        boolean shadow = false;
         CloseIconView(Context c) { super(c); }
         @Override protected void onDraw(Canvas cv) {
             Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);
             p.setStyle(Paint.Style.STROKE);
             p.setStrokeCap(Paint.Cap.ROUND);
             p.setColor(iconColor);
+            if (shadow) p.setShadowLayer(dp(getContext(), 3), 0, dp(getContext(), 1), Color.argb(170, 0, 0, 0));
             float w = getWidth() - getPaddingLeft() - getPaddingRight();
             float h = getHeight() - getPaddingTop() - getPaddingBottom();
             float m = Math.min(w, h) * 0.26f;
@@ -3918,8 +3920,8 @@ public class MainActivity extends Activity {
 
     // ---------- 详情页（Q6 贴底浮窗，对照混合版 .panel/.backdrop/.p-*） ----------
     // 底层页面不切走、不重绑：浮窗盖在现页之上，关窗回原页原滚动位；遮罩 rgba(0,0,0,.4)、
-    // 窗体贴底全宽、顶圆 20dp、最高 88vh、内滚、底内边 20dp；关闭字形 48dp 触控框内嵌 34dp
-    // 半透圆，右上 -4dp 微出窗外，升起时与窗同行、收窗时先冻结在原位、最后与遮罩一同淡出。
+    // 窗体贴底全宽、顶圆 20dp、最高 88vh、内滚、底内边 20dp；关闭钮 Q30 改为长在窗体内部：
+    // 对照混合版 .p-close（34dp 半透圆、top/right 12dp、.panel 子层随窗升降），禁止根层独立字形冻结/淡出。
     void openDetail(Card c) { openDetail(c, false); }
 
     void openDetail(Card c, boolean fromWiz) {
@@ -3989,26 +3991,45 @@ public class MainActivity extends Activity {
         overlay.addView(wrap, wlp);
         detailSheetWrap = wrap;
 
-        // 关闭字形：48dp 对话框框 + 内嵌 34dp 半透圆 ✕，右上 -4dp 微出窗外（与窗同为 wrap 子层，升起同行）
+        // Q30 关闭钮：长在窗体内部，随窗同升同降同销毁。对照混合版 .p-close 数值——
+        // 34dp 半透圆、top/right 12dp 浮在图廊右上；48dp 只是触控框，圆心对齐靠框边距 5dp+居中 7dp=12dp。
+        // 对比修正：混合版原底 rgba(120,120,128,.25) 在浅卡图/浅占位上会让白 ✕ 隐身，原生把圆底
+        // 加深为半透炭灰 argb(142,54,56,64)+白半透描边+elevation 柔影，白细线 ✕ 再加暗晕，
+        // 浅图/深图/占位渐变上都可辨，仍是半透若隐若现而非实心硬键（真机观感待验收）。
         final FrameLayout glyphFrame = new FrameLayout(this);
         glyphFrame.setClipChildren(false); glyphFrame.setClipToPadding(false);
+        glyphFrame.setAlpha(0f);
         View circle = new View(this);
         GradientDrawable cg = new GradientDrawable();
         cg.setShape(GradientDrawable.OVAL);
-        cg.setColor(Color.argb(64, 120, 120, 128)); // rgba(120,120,128,.25)
+        cg.setColor(Color.argb(142, 54, 56, 64));
+        cg.setStroke(dp(this, 1), Color.argb(125, 255, 255, 255));
         circle.setBackground(cg);
+        if (Build.VERSION.SDK_INT >= 21) circle.setElevation(dp(this, 5));
         FrameLayout.LayoutParams clp2 = new FrameLayout.LayoutParams(dp(this, 34), dp(this, 34));
         clp2.gravity = Gravity.CENTER;
         glyphFrame.addView(circle, clp2);
-        TextView x = tv(this, "\u2715", 15, Color.WHITE, true);
-        x.setGravity(Gravity.CENTER);
-        glyphFrame.addView(x, new FrameLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        CloseIconView x = new CloseIconView(this);
+        x.iconColor = Color.WHITE;
+        x.lineDp = 1.9f;
+        x.shadow = true;
+        x.setLayerType(View.LAYER_TYPE_SOFTWARE, null);
+        int xPad = dp(this, 10);
+        x.setPadding(xPad, xPad, xPad, xPad);
+        FrameLayout.LayoutParams xlp = new FrameLayout.LayoutParams(dp(this, 34), dp(this, 34));
+        xlp.gravity = Gravity.CENTER;
+        glyphFrame.addView(x, xlp);
         glyphFrame.setOnClickListener(v -> { haptic(); closeDetail(); });
+        glyphFrame.setOnTouchListener((v, e) -> {
+            if (e.getAction() == MotionEvent.ACTION_DOWN) pressBounce(v, true);
+            else if (e.getAction() == MotionEvent.ACTION_UP || e.getAction() == MotionEvent.ACTION_CANCEL)
+                pressBounce(v, false);
+            return false;
+        });
         FrameLayout.LayoutParams glp = new FrameLayout.LayoutParams(dp(this, 48), dp(this, 48));
         glp.gravity = Gravity.TOP | Gravity.END;
-        glp.topMargin = -dp(this, 4);
-        glp.rightMargin = dp(this, 12);
+        glp.topMargin = dp(this, 5);
+        glp.rightMargin = dp(this, 5);
         wrap.addView(glyphFrame, glp);
         detailCloseGlyph = glyphFrame;
 
@@ -4021,10 +4042,11 @@ public class MainActivity extends Activity {
         detailView = overlay;
         syncSearchFab();
         syncTopFab();
-        // 升起：遮罩 220ms 淡入 + 窗体（含字形）自下方滑入 240ms 同曲线家族
+        // 升起：遮罩 220ms 淡入 + 窗体自下方滑入 240ms 同曲线家族；✕ 长在窗内随窗同行，再略延迟淡入呈半透浮现
         shade.animate().alpha(1f).setDuration(220).setInterpolator(ANIM_ENTER).start();
         wrap.setTranslationY(sheetH);
         wrap.animate().translationY(0f).setDuration(240).setInterpolator(ANIM_ENTER).start();
+        glyphFrame.animate().alpha(1f).setDuration(220).setStartDelay(70).setInterpolator(ANIM_ENTER).start();
     }
 
     void attachDetailDrag(final View wrap, final View sheetCard) {
@@ -4068,7 +4090,6 @@ public class MainActivity extends Activity {
         final View overlay = detailView;
         final View wrap = detailSheetWrap;
         final View shade = detailShade;
-        final View glyph = detailCloseGlyph;
         final boolean wasWiz = detailFromWiz;
         Runnable finish = () -> {
             if (overlay != null && overlay.getParent() instanceof ViewGroup)
@@ -4090,29 +4111,12 @@ public class MainActivity extends Activity {
             if (next != null) openDetail(next, wasWiz && wizardOpen);
         };
         if (overlay == null || wrap == null) { finish.run(); return; }
-        // 收窗第一程：字形先冻结——摘到浮层根上原地不动（-4dp 出窗位保持），窗体单独下滑 240ms
-        try {
-            if (glyph != null && glyph.getParent() == wrap && overlay instanceof FrameLayout) {
-                int[] gl = new int[2]; glyph.getLocationOnScreen(gl);
-                int[] ol = new int[2]; overlay.getLocationOnScreen(ol);
-                ((ViewGroup) wrap).removeView(glyph);
-                FrameLayout.LayoutParams fp = new FrameLayout.LayoutParams(dp(this, 48), dp(this, 48));
-                fp.gravity = Gravity.TOP | Gravity.START;
-                fp.leftMargin = gl[0] - ol[0]; fp.topMargin = gl[1] - ol[1];
-                ((FrameLayout) overlay).addView(glyph, fp);
-                glyph.bringToFront();
-            }
-        } catch (Throwable ignored) { /* 冻结失败不挡关窗，字形随窗走 */ }
+        // Q30：✕ 是 wrap 子层，不摘出、不冻结、不单独淡出——随窗同降，overlay 销毁时一并销毁，主页不留残影。
+        // 关窗与混合版同口径并行：窗体 240ms 下滑、遮罩 180ms 淡出同时进行，落定才拆浮层。
         int targetY = wrap.getHeight() > 0 ? wrap.getHeight() : dp(this, 420);
+        if (shade != null) shade.animate().alpha(0f).setDuration(180).setInterpolator(ANIM_EXIT).start();
         wrap.animate().translationY(targetY).setDuration(240).setInterpolator(ANIM_ENTER)
-            .withEndAction(() -> {
-                // 第二程：字形与遮罩一同淡出，落定后才拆浮层
-                if (glyph != null) glyph.animate().alpha(0f).setDuration(180)
-                    .setInterpolator(ANIM_EXIT).start();
-                if (shade != null) shade.animate().alpha(0f).setDuration(180)
-                    .setInterpolator(ANIM_EXIT).withEndAction(finish).start();
-                else finish.run();
-            }).start();
+            .withEndAction(finish).start();
     }
 
     String variantBinText(Card c, int idx) {
