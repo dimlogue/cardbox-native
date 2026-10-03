@@ -222,7 +222,7 @@ public class MainActivity extends Activity {
     View buildTopFab() {
         FrameLayout fab = new FrameLayout(this);
         GradientDrawable bg = new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
-            new int[]{Color.argb(238, 255, 255, 255), Color.argb(222, 244, 248, 253)});
+            new int[]{Color.argb(148, 255, 255, 255), Color.argb(136, 244, 248, 253)});
         bg.setShape(GradientDrawable.OVAL);
         bg.setStroke(dp(this, 1), Color.argb(70, 20, 30, 60));
         fab.setBackground(bg);
@@ -288,6 +288,14 @@ public class MainActivity extends Activity {
                 }
             });
         }
+        if (Build.VERSION.SDK_INT >= 23) {
+            // Q16 (3): edge highlight band (hand-drawn Fresnel approximation) - 1dp white bright line, center stays unfogged, no AGSL refraction
+            GradientDrawable fg = new GradientDrawable();
+            fg.setColor(Color.TRANSPARENT);
+            if (radiusDp < 0) fg.setShape(GradientDrawable.OVAL); else fg.setCornerRadius(dp(this, radiusDp));
+            fg.setStroke(dp(this, 1), Color.argb(95, 255, 255, 255));
+            try { iv.setForeground(fg); } catch (Throwable t) { /* some OEMs unsupported -> no highlight */ }
+        }
         glassViews.add(iv);
         if (host != null) glassHosts.put(iv, host);
         iv.post(() -> applyGlass(iv));
@@ -296,29 +304,38 @@ public class MainActivity extends Activity {
 
     /** 抓当前根视图快照（0.2 降采样）：抓图时把所有已登记玻璃面整面隐藏，避免把玻璃自己拍进背景。 */
     Bitmap captureGlassSnapshot() {
-        if (rootView == null || rootView.getWidth() <= 0 || rootView.getHeight() <= 0 || glassCapturing) return glassSnap;
+        // Q16 (1) crash kill: full Throwable guard. On some vivo/OEM devices drawing a subtree that carries
+        // RenderEffect into a software Canvas throws Error (not Exception), which the old catch missed -> crash.
+        // On failure we must also restore host visibility and the glassCapturing flag, else glass layers stay
+        // invisible forever. Worst case: keep previous snapshot, or none (tint layer underneath still shows).
+        if (rootView == null || !rootView.isAttachedToWindow() || rootView.getWidth() <= 0 || rootView.getHeight() <= 0 || glassCapturing) return glassSnap;
         pruneGlass();
         glassCapturing = true;
         java.util.Map<View, Integer> saved = new java.util.HashMap<>();
-        for (ImageView iv : new java.util.ArrayList<>(glassViews)) {
-            View h = glassHosts.get(iv);
-            View t = h != null ? h : iv;
-            if (t != null && t.isAttachedToWindow() && !saved.containsKey(t)) {
-                saved.put(t, t.getVisibility());
-                t.setVisibility(View.INVISIBLE);
-            }
-        }
         Bitmap out = null;
         try {
+            for (ImageView iv : new java.util.ArrayList<>(glassViews)) {
+                View h = glassHosts.get(iv);
+                View t = h != null ? h : iv;
+                if (t != null && t.isAttachedToWindow() && !saved.containsKey(t)) {
+                    saved.put(t, t.getVisibility());
+                    t.setVisibility(View.INVISIBLE);
+                }
+            }
             int w = rootView.getWidth(), h = rootView.getHeight();
             float s = 0.20f;
             out = Bitmap.createBitmap(Math.max(1, Math.round(w * s)), Math.max(1, Math.round(h * s)), Bitmap.Config.ARGB_8888);
             Canvas cv = new Canvas(out);
             cv.scale(s, s);
             rootView.draw(cv);
-        } catch (Exception e) { out = null; }
-        for (java.util.Map.Entry<View, Integer> e : saved.entrySet()) e.getKey().setVisibility(e.getValue());
-        glassCapturing = false;
+        } catch (Throwable t) {
+            out = null; // degrade: keep previous frame; tint underneath still renders
+        } finally {
+            for (java.util.Map.Entry<View, Integer> e : saved.entrySet()) {
+                try { e.getKey().setVisibility(e.getValue()); } catch (Throwable ignored) {}
+            }
+            glassCapturing = false;
+        }
         if (out != null) {
             Bitmap old = glassSnap;
             glassSnap = out;
@@ -329,37 +346,46 @@ public class MainActivity extends Activity {
 
     /** 把全屏快照按本层在根视图中的位置裁出对应区域（带饱和），API 31+ 再叠硬件模糊。 */
     void applyGlass(final ImageView iv) {
-        if (iv == null || rootView == null || !iv.isAttachedToWindow()) return;
-        if (iv.getWidth() <= 0 || iv.getHeight() <= 0) { iv.post(() -> applyGlass(iv)); return; }
-        if (glassSnap == null || glassSnap.isRecycled()) captureGlassSnapshot();
-        Bitmap full = glassSnap;
-        if (full == null || full.isRecycled()) return;
-        int[] rl = new int[2]; rootView.getLocationOnScreen(rl);
-        int[] il = new int[2]; iv.getLocationOnScreen(il);
-        int left = il[0] - rl[0], top = il[1] - rl[1];
-        int w = iv.getWidth(), h = iv.getHeight();
-        if (rootView.getWidth() <= 0) return;
-        float s = (float) full.getWidth() / (float) rootView.getWidth();
-        Bitmap out = null;
+        // Q16 (1): full Throwable guard; any failure clears this layer's image/effect and the tint underneath takes over
         try {
-            out = Bitmap.createBitmap(Math.max(1, Math.round(w * s)), Math.max(1, Math.round(h * s)), Bitmap.Config.ARGB_8888);
+            if (iv == null || rootView == null || !iv.isAttachedToWindow() || glassCapturing) return;
+            if (iv.getWidth() <= 0 || iv.getHeight() <= 0) {
+                Integer r0 = glassRetry.get(iv);
+                int rn = r0 == null ? 0 : r0;
+                if (rn > 24) return; // never-laid-out glass layer must not spin-post forever (old behaviour)
+                glassRetry.put(iv, rn + 1);
+                iv.postDelayed(() -> applyGlass(iv), 50);
+                return;
+            }
+            glassRetry.remove(iv);
+            if (glassSnap == null || glassSnap.isRecycled()) captureGlassSnapshot();
+            Bitmap full = glassSnap;
+            if (full == null || full.isRecycled()) return;
+            int[] rl = new int[2]; rootView.getLocationOnScreen(rl);
+            int[] il = new int[2]; iv.getLocationOnScreen(il);
+            int left = il[0] - rl[0], top = il[1] - rl[1];
+            int w = iv.getWidth(), h = iv.getHeight();
+            if (rootView.getWidth() <= 0) return;
+            float s = (float) full.getWidth() / (float) rootView.getWidth();
+            Bitmap out = Bitmap.createBitmap(Math.max(1, Math.round(w * s)), Math.max(1, Math.round(h * s)), Bitmap.Config.ARGB_8888);
             Canvas cv = new Canvas(out);
             Paint pt = new Paint(Paint.FILTER_BITMAP_FLAG);
             ColorMatrix cm = new ColorMatrix();
-            cm.setSaturation(1.5f); // Q4：取 LIQUID-GLASS-NOTES 锚点上限 1.5，往混合版 backdrop saturate(2) 再靠一档（原生 ColorMatrix 过 1.5 易溢色，不追 2）
+            cm.setSaturation(1.4f);
             pt.setColorFilter(new ColorMatrixColorFilter(cm));
             android.graphics.Matrix m = new android.graphics.Matrix();
             m.setTranslate(-left * s, -top * s);
             cv.drawBitmap(full, m, pt);
-        } catch (Exception e) { out = null; }
-        if (out == null) return;
-        Bitmap old = glassCrops.put(iv, out);
-        if (old != null && old != out && !old.isRecycled()) old.recycle();
-        iv.setImageBitmap(out);
-        if (Build.VERSION.SDK_INT >= 31) {
-            // Q4：模糊半径 18→24 往混合版 blur(28px) 靠（快照已 0.2 降采样，24 在小图上等效更糊、开销可控）
-            try { iv.setRenderEffect(RenderEffect.createBlurEffect(24f, 24f, Shader.TileMode.CLAMP)); }
-            catch (Exception e) { /* 个别机型不支持就保留降采样柔糊 */ }
+            iv.setImageBitmap(out);
+            Bitmap old = glassCrops.put(iv, out);
+            if (old != null && old != out && !old.isRecycled()) old.recycle(); // swap new in first, then recycle old (never draw a recycled bitmap)
+            if (Build.VERSION.SDK_INT >= 31) {
+                // Q16 (4): blur radius 24 -> 13 (snapshot is already 0.2-downsampled/soft); cards under glass must stay recognisable
+                try { iv.setRenderEffect(RenderEffect.createBlurEffect(13f, 13f, Shader.TileMode.CLAMP)); }
+                catch (Throwable t) { /* unsupported on some devices: downsample softness remains */ }
+            }
+        } catch (Throwable t) {
+            try { iv.setImageBitmap(null); if (Build.VERSION.SDK_INT >= 31) iv.setRenderEffect(null); } catch (Throwable ignored) {}
         }
     }
 
@@ -375,6 +401,15 @@ public class MainActivity extends Activity {
     }
 
     void scheduleGlassRefresh() {
+        // Q16 (2) live glass: while scrolling, re-sample throttled at 140ms (dock / fabs / search capsule track the
+        // background instead of showing one frozen frame), then the existing 380ms debounce settles a final frame.
+        // refreshLiveGlass() itself skips while any overlay sheet is open.
+        long now = android.os.SystemClock.elapsedRealtime();
+        if (now - lastLiveGlassMs >= 140) {
+            lastLiveGlassMs = now;
+            mainHandler.removeCallbacks(liveGlassTask);
+            mainHandler.post(liveGlassTask);
+        }
         mainHandler.removeCallbacks(glassRefreshTask);
         mainHandler.postDelayed(glassRefreshTask, 380);
     }
@@ -761,6 +796,9 @@ public class MainActivity extends Activity {
     Bitmap glassSnap = null;
     boolean glassCapturing = false;
     final Runnable glassRefreshTask = new Runnable() { public void run() { refreshLiveGlass(); } };
+    long lastLiveGlassMs = 0; // Q16: throttle stamp for scrolling-time live re-sampling
+    final Runnable liveGlassTask = new Runnable() { public void run() { refreshLiveGlass(); } };
+    final java.util.Map<ImageView, Integer> glassRetry = new java.util.HashMap<>(); // Q16: layout retry cap per glass layer
 
     FrameLayout content;
     LinearLayout navBar;
@@ -996,7 +1034,7 @@ public class MainActivity extends Activity {
         bar.setOrientation(LinearLayout.HORIZONTAL);
         bar.setGravity(Gravity.CENTER_VERTICAL);
         GradientDrawable bg = new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
-            new int[]{Color.argb(230, 255, 255, 255), Color.argb(218, 246, 249, 253)}); // Q11：半透染色盖在冻结模糊层上
+            new int[]{Color.argb(196, 255, 255, 255), Color.argb(186, 246, 249, 253)}); // Q11：半透染色盖在冻结模糊层上
         bg.setCornerRadius(dp(this, 16));
         bg.setStroke(dp(this, 1), Color.argb(20, 20, 30, 60));
         bar.setBackground(bg);
@@ -1180,8 +1218,8 @@ public class MainActivity extends Activity {
         // 真糊由玻璃层（applyGlass blur+saturate）承担，此处只剩染色不许再抢不透明度，
         // 否则底下卡片透不过来、图标反而发飘。
         GradientDrawable g = new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
-            new int[]{Color.argb(153, 255, 255, 255), Color.argb(148, 248, 250, 255),
-                Color.argb(145, 238, 243, 250)});
+            new int[]{Color.argb(108, 255, 255, 255), Color.argb(104, 248, 250, 255),
+                Color.argb(102, 238, 243, 250)});
         g.setCornerRadius(dp(this, 26));
         g.setStroke(dp(this, 1), Color.argb(140, 255, 255, 255));
         return g;
@@ -1192,8 +1230,8 @@ public class MainActivity extends Activity {
         // inset 0 1px 高光 + 0 2px 10px 软影）：旧顶段 198(.78) 过实、压住玻璃透光且与
         // dock 本体 .58 拉出两截色，改均匀 argb 174(.68) 贴原值，高光靠描边。
         GradientDrawable g = new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
-            new int[]{Color.argb(176, 255, 255, 255), Color.argb(173, 247, 250, 254),
-                Color.argb(170, 240, 245, 251)});
+            new int[]{Color.argb(148, 255, 255, 255), Color.argb(145, 247, 250, 254),
+                Color.argb(142, 240, 245, 251)});
         g.setCornerRadius(dp(this, 18));
         g.setStroke(dp(this, 1), Color.argb(150, 255, 255, 255));
         return g;
@@ -1308,8 +1346,8 @@ public class MainActivity extends Activity {
     // Q11 起钮内已垫真模糊快照层（见 glassLayer），此渐变只作半透染色盖在模糊上。
     Drawable glassFabBg() {
         GradientDrawable g = new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
-            new int[]{Color.argb(190, 255, 255, 255), Color.argb(168, 248, 250, 255),
-                Color.argb(156, 232, 238, 246)});
+            new int[]{Color.argb(118, 255, 255, 255), Color.argb(110, 248, 250, 255),
+                Color.argb(104, 232, 238, 246)});
         g.setShape(GradientDrawable.OVAL);
         g.setStroke(dp(this, 1), Color.argb(140, 255, 255, 255));
         return g;
@@ -1766,7 +1804,7 @@ public class MainActivity extends Activity {
         LinearLayout pop = new LinearLayout(this);
         pop.setOrientation(LinearLayout.VERTICAL);
         GradientDrawable pbg = new GradientDrawable();
-        pbg.setColor(Color.argb(228, 255, 255, 255)); // Q11：半透染色盖在冻结模糊层上
+        pbg.setColor(Color.argb(198, 255, 255, 255)); // Q11：半透染色盖在冻结模糊层上
         pbg.setCornerRadius(dp(this, 16));
         pbg.setStroke(dp(this, 1), Color.argb(46, 20, 30, 60));
         pop.setBackground(pbg);
@@ -1885,7 +1923,7 @@ public class MainActivity extends Activity {
     // P2d/Q11：毛玻璃白悬浮搜索栏（圆角 + 淡描边 + 投影，Q11 起栏内垫 live 真模糊层，上为半透染色）
     GradientDrawable glassPillBg() {
         GradientDrawable g = new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
-            new int[]{Color.argb(226, 255, 255, 255), Color.argb(204, 246, 247, 250)});
+            new int[]{Color.argb(148, 255, 255, 255), Color.argb(136, 246, 247, 250)});
         g.setCornerRadius(dp(this, 999));
         g.setStroke(dp(this, 1), Color.argb(70, 20, 30, 60));
         return g;
@@ -2242,7 +2280,7 @@ public class MainActivity extends Activity {
         LinearLayout card = new LinearLayout(this);
         card.setOrientation(LinearLayout.VERTICAL);
         GradientDrawable cg = new GradientDrawable();
-        cg.setColor(Color.argb(228, 255, 255, 255)); // Q11：半透染色盖在冻结模糊层上
+        cg.setColor(Color.argb(192, 255, 255, 255)); // Q11：半透染色盖在冻结模糊层上
         cg.setCornerRadius(dp(this, 24));
         cg.setStroke(dp(this, 1), Color.argb(18, 20, 30, 60));
         card.setBackground(cg);
@@ -2799,7 +2837,7 @@ public class MainActivity extends Activity {
         LinearLayout card = new LinearLayout(this);
         card.setOrientation(LinearLayout.VERTICAL);
         GradientDrawable cg = new GradientDrawable();
-        cg.setColor(Color.argb(232, 0xF2, 0xF3, 0xF7)); // Q11：半透染色盖在冻结模糊层上
+        cg.setColor(Color.argb(198, 0xF2, 0xF3, 0xF7)); // Q11：半透染色盖在冻结模糊层上
         float rTop = dp(this, 26);
         cg.setCornerRadii(new float[]{rTop, rTop, rTop, rTop, 0, 0, 0, 0});
         card.setBackground(cg);
@@ -4695,7 +4733,7 @@ public class MainActivity extends Activity {
         LinearLayout card = new LinearLayout(this);
         card.setOrientation(LinearLayout.VERTICAL);
         GradientDrawable cg = new GradientDrawable();
-        cg.setColor(Color.argb(219, 255, 255, 255));
+        cg.setColor(Color.argb(190, 255, 255, 255)); // Q16: about sheet tint thinned, glass underneath shows through
         cg.setStroke(dp(this, 1), Color.argb(140, 255, 255, 255));
         cg.setCornerRadius(dp(this, 22));
         card.setBackground(cg);
