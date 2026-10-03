@@ -553,6 +553,57 @@ public class MainActivity extends Activity {
     int colText3() { return darkEff() ? Color.argb(97,255,255,255) : Color.rgb(0xAE,0xAE,0xB2); }
     int colDivider() { return darkEff() ? Color.argb(26,255,255,255) : Color.argb(13,20,30,60); }
     int colChipOff() { return darkEff() ? Color.rgb(0x2A,0x2A,0x2E) : Color.rgb(0xEE,0xF1,0xF6); }
+    // Q73 unified true-glass spec (all floating pieces share this): frozen/live snapshot blur
+    // (applyGlass blur13 + saturate1.65, aligned to the tile +/check frost the user approved in Q47)
+    // + ONLY a thin tint over it + a fixed light wash + a soft 1dp edge. Tint must stay thin and
+    // see-through (never a thick milky block, never Q34 solid white plastic); dark mode swaps to a
+    // dark thin tint. Pieces: float toast/undo bar, more-menu, detail close, card +/check (Q47),
+    // search/filter fabs, top fab, dock, search capsules. Sampling stays Q29/Q41 static-band:
+    // refresh on settle/tab-switch only, zero capture while scrolling, no Bitmap.recycle (Q21).
+    GradientDrawable glassTintDrawable(float radiusDp, boolean oval) {
+        GradientDrawable g;
+        if (darkEff()) {
+            g = new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
+                new int[]{Color.argb(96, 52, 52, 58), Color.argb(84, 40, 40, 46), Color.argb(76, 34, 34, 40)});
+        } else {
+            g = new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
+                new int[]{Color.argb(84, 255, 255, 255), Color.argb(72, 246, 249, 253), Color.argb(64, 238, 244, 250)});
+        }
+        if (oval) g.setShape(GradientDrawable.OVAL); else g.setCornerRadius(dp(this, radiusDp));
+        g.setStroke(dp(this, 1), darkEff() ? Color.argb(44, 255, 255, 255) : Color.argb(110, 255, 255, 255));
+        return g;
+    }
+    GradientDrawable glassWashDrawable(float radiusDp, boolean oval) {
+        GradientDrawable g;
+        if (darkEff()) {
+            g = new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
+                new int[]{Color.argb(34, 255, 255, 255), Color.argb(22, 255, 255, 255)});
+        } else {
+            g = new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
+                new int[]{Color.argb(96, 255, 255, 255), Color.argb(78, 248, 250, 253)});
+        }
+        if (oval) g.setShape(GradientDrawable.OVAL); else g.setCornerRadius(dp(this, radiusDp));
+        g.setStroke(dp(this, 1), darkEff() ? Color.argb(36, 255, 255, 255) : Color.argb(120, 255, 255, 255));
+        return g;
+    }
+    View glassWashView(float radiusDp, boolean oval) {
+        View wash = new View(this);
+        wash.setClickable(false); wash.setFocusable(false);
+        wash.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
+        wash.setBackground(glassWashDrawable(radiusDp, oval));
+        return wash;
+    }
+    void glassClip(View v, final float radiusDp, final boolean oval) {
+        try {
+            v.setClipToOutline(true);
+            v.setOutlineProvider(new android.view.ViewOutlineProvider() {
+                @Override public void getOutline(View vv, android.graphics.Outline o) {
+                    if (oval) o.setOval(0, 0, Math.max(1, vv.getWidth()), Math.max(1, vv.getHeight()));
+                    else o.setRoundRect(0, 0, Math.max(1, vv.getWidth()), Math.max(1, vv.getHeight()), dp(vv.getContext(), radiusDp));
+                }
+            });
+        } catch (Throwable ignored) {}
+    }
     // 切深色先套色再显页：根底色与状态/导航栏图标明暗在建页前就定，不许闪白
     void applyAppearanceChrome() {
         try {
@@ -2253,14 +2304,11 @@ public class MainActivity extends Activity {
         final LinearLayout bar = new LinearLayout(this);
         bar.setOrientation(LinearLayout.HORIZONTAL);
         bar.setGravity(Gravity.CENTER_VERTICAL);
-        GradientDrawable bg = new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
-            new int[]{Color.argb(170, 255, 255, 255), Color.argb(160, 246, 249, 253)}); // Q29：196/186→170/160 减薄，冻结模糊的彩色透进来
-        bg.setCornerRadius(dp(this, 16));
-        bg.setStroke(dp(this, 1), Color.argb(20, 20, 30, 60));
-        bar.setBackground(bg);
+        // Q73: thin unified tint over the frozen true-blur layer below (was argb170/160 milky block).
+        bar.setBackground(glassTintDrawable(16, false));
         if (Build.VERSION.SDK_INT >= 21) bar.setElevation(dp(this, 10));
         bar.setPadding(dp(this, 15), dp(this, 12), dp(this, 15), dp(this, 12));
-        TextView txt = tv(this, msg, 14, Color.rgb(0x1C, 0x1C, 0x1E), false);
+        TextView txt = tv(this, msg, 14, colText(), false);
         txt.setSingleLine(true);
         txt.setEllipsize(android.text.TextUtils.TruncateAt.END);
         bar.addView(txt, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
@@ -2295,9 +2343,14 @@ public class MainActivity extends Activity {
         lp.leftMargin = dp(this, 16);
         lp.rightMargin = dp(this, 16);
         lp.bottomMargin = dp(this, 106) + navBarH(); // Q26：导航栏避让
-        // Q11：提示条垫冻结模糊层，外壳只剩半透染色
+        // Q73: frozen true-blur of the content directly behind the bar + thin tint + light wash,
+        // one smooth rounded clip for body+edge together (no hard bright line). The snapshot is
+        // taken now, at the bar's own position, so the blur always matches what is behind it.
         FrameLayout toastWrap = new FrameLayout(this);
+        glassClip(toastWrap, 16, false);
         toastWrap.addView(glassLayer(toastWrap, 16, false), new FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        toastWrap.addView(glassWashView(16, false), new FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         toastWrap.addView(bar, new FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
@@ -2856,40 +2909,19 @@ public class MainActivity extends Activity {
     }
 
     Drawable floatingBarBg() {
-        // Q37 浅色毛玻璃染色 + Q72 深色档：深色下换深色半透底+白 10% 描边，玻璃层口径不变
-        GradientDrawable g;
-        if (darkEff()) {
-            g = new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
-                new int[]{Color.argb(168, 35, 35, 38), Color.argb(162, 30, 30, 33),
-                    Color.argb(158, 28, 28, 30)});
-            g.setCornerRadius(dp(this, 26));
-            g.setStroke(dp(this, 1), Color.argb(31, 255, 255, 255));
-            return g;
-        }
-        g = new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
-            new int[]{Color.argb(148, 255, 255, 255), Color.argb(145, 248, 250, 255),
-                Color.argb(142, 238, 243, 250)});
-        g.setCornerRadius(dp(this, 26));
-        g.setStroke(dp(this, 1), Color.argb(140, 255, 255, 255));
-        return g;
+        // Q73: unified thin tint over the live glass layer (was argb148-168, too milky).
+        return glassTintDrawable(26, false);
     }
 
     Drawable navPillBg() {
-        // Q37 浅色半透 + Q72 深色档（深色下提亮一档与 dock 底分层，透镜机制归 Q38）
-        GradientDrawable g;
-        if (darkEff()) {
-            g = new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
-                new int[]{Color.argb(120, 255, 255, 255), Color.argb(112, 245, 248, 252),
-                    Color.argb(108, 238, 243, 250)});
-            g.setCornerRadius(dp(this, 18));
-            g.setStroke(dp(this, 1), Color.argb(46, 255, 255, 255));
-            return g;
-        }
-        g = new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
-            new int[]{Color.argb(174, 255, 255, 255), Color.argb(170, 247, 250, 254),
-                Color.argb(166, 240, 245, 251)});
-        g.setCornerRadius(dp(this, 18));
-        g.setStroke(dp(this, 1), Color.argb(150, 255, 255, 255));
+        // Q73: lens tint slightly stronger than dock tint so the lens still reads, same family.
+        GradientDrawable g = glassTintDrawable(18, false);
+        try {
+            int[] cs = darkEff()
+                ? new int[]{Color.argb(120, 255, 255, 255), Color.argb(108, 245, 248, 252), Color.argb(100, 238, 243, 250)}
+                : new int[]{Color.argb(112, 255, 255, 255), Color.argb(102, 247, 250, 254), Color.argb(96, 240, 245, 251)};
+            g.setColors(cs);
+        } catch (Throwable ignored) {}
         return g;
     }
 
@@ -3235,30 +3267,23 @@ public class MainActivity extends Activity {
     // 底 rgba(255,255,255,.45)+blur28、描边 rgba(255,255,255,.55) 1dp、图标深色 #1C1C1E 细线 1.8/24 网格、svg 本体 22dp。
     // Q11 起钮内已垫真模糊快照层（见 glassLayer），此渐变只作半透染色盖在模糊上。
     Drawable glassFabBg() {
-        // Q37：回毛玻璃染色（对照混合版 .qf-btn rgba(255,255,255,.45) 量级 argb 118 半透），真糊由 live 玻璃层承担。
-        // Q53：玻璃禁用/无帧兜底时此层就是钮面本身——argb118 白压纯黑卡只剩暗灰、图标沉底隐身；
-        // 兜底底色提至近不透明浅白（214/206/198），玻璃在场时它在不透明模糊位图之下不参与呈色，
-        // 真正的提亮由 fabFrostWash() 固定浅白层盖在模糊层之上承担（黑底白底都立得住）。
-        GradientDrawable g = new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
-            new int[]{Color.argb(214, 255, 255, 255), Color.argb(206, 248, 250, 255),
-                Color.argb(198, 232, 238, 246)});
-        g.setShape(GradientDrawable.OVAL);
-        g.setStroke(dp(this, 1), Color.argb(170, 255, 255, 255));
+        // Q73: unified oval thin tint; when glass is disabled this is the fallback face, so keep
+        // it light enough to stand on pure-black cards (Q53) without turning into solid plastic.
+        GradientDrawable g = glassTintDrawable(-1, true);
+        if (glassDisabled) {
+            try { g.setColors(darkEff()
+                ? new int[]{Color.argb(210, 52, 52, 58), Color.argb(200, 40, 40, 46)}
+                : new int[]{Color.argb(214, 255, 255, 255), Color.argb(206, 248, 250, 255), Color.argb(198, 232, 238, 246)}); }
+            catch (Throwable ignored) {}
+        }
         return g;
     }
     // Q53：悬浮钮磨砂提亮层——固定浅白半透盖在 live 模糊层之上、图标之下。玻璃位图是不透明快照，
     // 压纯黑卡面时模糊层整片发黑、原 argb118 染色被它盖住，钮即全黑隐身；此层与身后颜色无关，
     // argb 168→152 白提亮让黑底上钮面仍为浅灰白、深色细线图标可辨，白底上也不过曝（仍半透留糊感）。
     View fabFrostWash() {
-        View wash = new View(this);
-        wash.setClickable(false); wash.setFocusable(false);
-        wash.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
-        GradientDrawable wg = new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
-            new int[]{Color.argb(168, 255, 255, 255), Color.argb(152, 244, 248, 253)});
-        wg.setShape(GradientDrawable.OVAL);
-        wg.setStroke(dp(this, 1), Color.argb(160, 255, 255, 255));
-        wash.setBackground(wg);
-        return wash;
+        // Q73: same wash as every other glass piece (was a one-off argb168/152).
+        return glassWashView(-1, true);
     }
     void applyGlassFabShadow(View v) {
         if (Build.VERSION.SDK_INT >= 21) v.setElevation(dp(this, 12));
@@ -4497,21 +4522,15 @@ public class MainActivity extends Activity {
     // ---------- 首页 ----------
     // P2d/Q11：毛玻璃白悬浮搜索栏（圆角 + 淡描边 + 投影，Q11 起栏内垫 live 真模糊层，上为半透染色）
     GradientDrawable glassPillBg() {
-        // Q37：回毛玻璃染色 argb 128/118（对照混合版 #search rgba .78+blur20 的通透下限取 Q18 校准值），真糊由 live 玻璃层承担。
-        GradientDrawable g = new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
-            new int[]{Color.argb(128, 255, 255, 255), Color.argb(118, 246, 247, 250)});
-        g.setCornerRadius(dp(this, 999));
-        g.setStroke(dp(this, 1), Color.argb(70, 20, 30, 60));
+        // Q73: unified thin tint (radius 999 capsule), true blur from the live glass layer.
+        GradientDrawable g = glassTintDrawable(999, false);
         return g;
     }
 
     // Q37: float search capsule back to shallow glass (mixed .float-search rgba(255,255,255,.85)+blur24 saturate1.7; Q29 thinned 176/166)
     GradientDrawable glassFloatBg() {
-        GradientDrawable g = new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
-            new int[]{Color.argb(176, 255, 255, 255), Color.argb(166, 238, 245, 255)});
-        g.setCornerRadius(dp(this, 999));
-        g.setStroke(dp(this, 1), Color.argb(153, 255, 255, 255));
-        return g;
+        // Q73: unified thin tint (was argb176/166, the milky block the user rejected).
+        return glassTintDrawable(999, false);
     }
 
     // P2d：整页改单 ScrollView 流，内容从悬浮栏底下滚过；英雄卡与网格同流 10dp 间隔，不再压首排
@@ -11132,7 +11151,7 @@ public class MainActivity extends Activity {
     View moreMenuRow(String label, final Runnable act) {
         TextView t = tv(this, label, 14.5f, Color.rgb(0x1C, 0x1C, 0x1E), false);
         t.setPadding(dp(this, 16), dp(this, 12), dp(this, 16), dp(this, 12));
-        t.setBackground(rippleBg(Color.WHITE, 10));
+        t.setBackground(rippleBg(Color.TRANSPARENT, 10)); // Q73: row sits on menu glass, no opaque white
         t.setClipToOutline(true);
         t.setOnTouchListener((v, e) -> {
             if (e.getAction() == MotionEvent.ACTION_DOWN) pressBounce(v, true);
@@ -11156,20 +11175,25 @@ public class MainActivity extends Activity {
         final FrameLayout overlay = new FrameLayout(this);
         overlay.setBackgroundColor(Color.TRANSPARENT);
         overlay.setOnClickListener(v -> closeMoreMenu());
+        // Q73: more-menu joins the same true-glass family (frozen blur + thin tint + wash),
+        // was a solid white card. Rows keep their ripple over the glass.
+        final FrameLayout cardWrap = new FrameLayout(this);
+        glassClip(cardWrap, 16, false);
+        cardWrap.setElevation(dp(this, 18));
+        cardWrap.addView(glassLayer(cardWrap, 16, false), new FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        cardWrap.addView(glassWashView(16, false), new FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         final LinearLayout card = new LinearLayout(this);
         card.setOrientation(LinearLayout.VERTICAL);
-        card.setBackground(roundRect(Color.WHITE, 16, this));
-        try { card.setOutlineProvider(new android.view.ViewOutlineProvider() {
-            @Override public void getOutline(View v, android.graphics.Outline o) {
-                o.setRoundRect(0, 0, v.getWidth(), v.getHeight(), dp(v.getContext(), 16));
-            }
-        }); card.setClipToOutline(true); } catch (Throwable ignored) {}
-        card.setElevation(dp(this, 18));
+        card.setBackground(glassTintDrawable(16, false));
         card.setPadding(dp(this, 6), dp(this, 6), dp(this, 6), dp(this, 6));
         card.addView(moreMenuRow("情景选卡", () -> openWizard()));
         card.addView(moreMenuRow("更新日志", () -> { settingsLogOpen = true; rebuildPages(); }));
         card.addView(moreMenuRow("欢迎页", () -> showWelcome()));
         card.addView(moreMenuRow("关于卡盒", () -> openAbout()));
+        cardWrap.addView(card, new FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
         card.setOnClickListener(v -> {});
         int menuW = dp(this, 196);
         FrameLayout.LayoutParams clp = new FrameLayout.LayoutParams(menuW, ViewGroup.LayoutParams.WRAP_CONTENT);
@@ -11179,14 +11203,14 @@ public class MainActivity extends Activity {
         int anchorTop = al[1] - cl[1];
         clp.leftMargin = Math.max(dp(this, 12), anchorRight - menuW);
         clp.topMargin = Math.max(pageTopPad(), anchorTop + anchor.getHeight() + dp(this, 6));
-        overlay.addView(card, clp);
+        overlay.addView(cardWrap, clp);
         content.addView(overlay, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         moreMenuOverlay = overlay;
         // 缩放原点贴按钮角（右上）：菜单像从 ⋯ 钮角上长出来；缩放与淡入同步、带轻回弹。
-        card.setPivotX(menuW);
-        card.setPivotY(0f);
-        card.setScaleX(0.72f); card.setScaleY(0.72f); card.setAlpha(0f);
-        card.animate().scaleX(1f).scaleY(1f).alpha(1f)
+        cardWrap.setPivotX(menuW);
+        cardWrap.setPivotY(0f);
+        cardWrap.setScaleX(0.72f); cardWrap.setScaleY(0.72f); cardWrap.setAlpha(0f);
+        cardWrap.animate().scaleX(1f).scaleY(1f).alpha(1f)
             .setDuration(260).setInterpolator(new OvershootInterpolator(1.15f)).start();
     }
 
