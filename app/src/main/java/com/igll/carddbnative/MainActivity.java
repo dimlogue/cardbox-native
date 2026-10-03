@@ -596,6 +596,11 @@ public class MainActivity extends Activity {
     boolean aboutSponsorOpen = false;
     boolean sponsorSavePending = false;
 
+    // P4b 悬浮提示条（对照混合版 .toast：白色毛玻璃长条，带操作钮与自动消失）
+    FrameLayout rootView = null;
+    View floatToastView = null;
+    Runnable floatToastTimer = null;
+
     FrameLayout content;
     LinearLayout navBar;
     FrameLayout navWrap;
@@ -754,6 +759,7 @@ public class MainActivity extends Activity {
         Store.load(this);
 
         FrameLayout root = new FrameLayout(this);
+        rootView = root;
         root.setBackgroundColor(Color.rgb(0xF2, 0xF3, 0xF7));
 
         content = new FrameLayout(this);
@@ -807,6 +813,117 @@ public class MainActivity extends Activity {
             if (Build.VERSION.SDK_INT >= 26) v.vibrate(VibrationEffect.createOneShot(ms, amp));
             else v.vibrate(ms);
         } catch (Exception e) { /* 无振动器静默 */ }
+    }
+
+    // ---------- P4b 悬浮提示条 ----------
+    // 对照混合版 .toast 数值：左右 16dp、距底 106dp、圆角 16、白色半透、12/15 内边距、16px 圆角；
+    // 浮现：上浮 12dp+缩放 .98→1+淡入（250ms 减速），收起 180ms；无操作 2200ms、有「撤销」等操作钮 4500ms 自动消失。
+    void showFloatToast(String msg) { showFloatToast(msg, null, null); }
+
+    void showFloatToast(final String msg, final String actionLabel, final Runnable onAction) {
+        if (android.os.Looper.myLooper() != android.os.Looper.getMainLooper()) {
+            runOnUiThread(() -> showFloatToast(msg, actionLabel, onAction));
+            return;
+        }
+        dismissFloatToast(true);
+        if (rootView == null) return;
+        final LinearLayout bar = new LinearLayout(this);
+        bar.setOrientation(LinearLayout.HORIZONTAL);
+        bar.setGravity(Gravity.CENTER_VERTICAL);
+        GradientDrawable bg = new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
+            new int[]{Color.argb(242, 255, 255, 255), Color.argb(232, 246, 249, 253)});
+        bg.setCornerRadius(dp(this, 16));
+        bg.setStroke(dp(this, 1), Color.argb(20, 20, 30, 60));
+        bar.setBackground(bg);
+        if (Build.VERSION.SDK_INT >= 21) bar.setElevation(dp(this, 10));
+        bar.setPadding(dp(this, 15), dp(this, 12), dp(this, 15), dp(this, 12));
+        TextView txt = tv(this, msg, 14, Color.rgb(0x1C, 0x1C, 0x1E), false);
+        txt.setSingleLine(true);
+        txt.setEllipsize(android.text.TextUtils.TruncateAt.END);
+        bar.addView(txt, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+        if (actionLabel != null && onAction != null) {
+            TextView act = tv(this, actionLabel, 12.5f, Color.WHITE, true);
+            act.setGravity(Gravity.CENTER);
+            GradientDrawable ab = new GradientDrawable(GradientDrawable.Orientation.LEFT_RIGHT,
+                new int[]{Color.rgb(0x0A, 0x84, 0xFF), Color.rgb(0x5E, 0x5C, 0xE6)});
+            ab.setCornerRadius(dp(this, 999));
+            act.setBackground(ab);
+            act.setPadding(dp(this, 14), dp(this, 7), dp(this, 14), dp(this, 7));
+            LinearLayout.LayoutParams alp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            alp.leftMargin = dp(this, 10);
+            bar.addView(act, alp);
+            act.setOnClickListener(v -> {
+                haptic();
+                dismissFloatToast(false);
+                onAction.run();
+            });
+            act.setOnTouchListener((v, e) -> {
+                if (e.getAction() == MotionEvent.ACTION_DOWN) pressBounce(v, true);
+                else if (e.getAction() == MotionEvent.ACTION_UP || e.getAction() == MotionEvent.ACTION_CANCEL)
+                    pressBounce(v, false);
+                return false;
+            });
+            bar.setClickable(true);
+        } else {
+            bar.setClickable(false);
+        }
+        FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        lp.gravity = Gravity.BOTTOM;
+        lp.leftMargin = dp(this, 16);
+        lp.rightMargin = dp(this, 16);
+        lp.bottomMargin = dp(this, 106);
+        rootView.addView(bar, lp);
+        bar.bringToFront();
+        floatToastView = bar;
+        bar.setAlpha(0f);
+        bar.setTranslationY(dp(this, 12));
+        bar.setScaleX(0.98f); bar.setScaleY(0.98f);
+        bar.animate().alpha(1f).translationY(0f).scaleX(1f).scaleY(1f)
+            .setDuration(250).setInterpolator(ANIM_ENTER).start();
+        final android.os.Handler h = new android.os.Handler(android.os.Looper.getMainLooper());
+        floatToastTimer = () -> dismissFloatToast(false);
+        h.postDelayed(floatToastTimer, (actionLabel != null && onAction != null) ? 4500 : 2200);
+    }
+
+    void dismissFloatToast(boolean immediate) {
+        final android.os.Handler h = new android.os.Handler(android.os.Looper.getMainLooper());
+        if (floatToastTimer != null) { h.removeCallbacks(floatToastTimer); floatToastTimer = null; }
+        final View bar = floatToastView;
+        floatToastView = null;
+        if (bar == null) return;
+        if (bar.getParent() == null) return;
+        if (immediate) {
+            if (bar.getParent() instanceof ViewGroup) ((ViewGroup) bar.getParent()).removeView(bar);
+            return;
+        }
+        bar.animate().cancel();
+        bar.animate().alpha(0f).translationY(dp(this, 8)).scaleX(0.98f).scaleY(0.98f)
+            .setDuration(180).setInterpolator(ANIM_EXIT)
+            .withEndAction(() -> { if (bar.getParent() instanceof ViewGroup) ((ViewGroup) bar.getParent()).removeView(bar); })
+            .start();
+    }
+
+    // 收藏切换统一入口：移除出「撤销」（按原顺序恢复，因 mineOrder 未动、重新加入即回原位）、加入给普通提示
+    void toggleMineWithToast(final Card c, final Runnable uiRefresh) {
+        if (mine.contains(c.id)) {
+            mine.remove(c.id);
+            prefs.edit().putStringSet("mine_ids", new HashSet<>(mine)).apply();
+            pages.remove("mine");
+            if (uiRefresh != null) uiRefresh.run();
+            showFloatToast("已从我的卡片移除：" + c.name, "撤销", () -> {
+                mine.add(c.id);
+                prefs.edit().putStringSet("mine_ids", new HashSet<>(mine)).apply();
+                pages.remove("mine");
+                if (uiRefresh != null) uiRefresh.run();
+                showFloatToast("已恢复：" + c.name);
+            });
+        } else {
+            mine.add(c.id);
+            prefs.edit().putStringSet("mine_ids", new HashSet<>(mine)).apply();
+            pages.remove("mine");
+            if (uiRefresh != null) uiRefresh.run();
+            showFloatToast("已加入我的卡片：" + c.name);
+        }
     }
 
     // 字体/界面大小变化后整页重建（各页都是缓存 View，必须重造才生效）
@@ -1790,10 +1907,21 @@ public class MainActivity extends Activity {
         clearT.setPadding(dp(this, 8), dp(this, 6), dp(this, 8), dp(this, 6));
         clearT.setOnClickListener(v -> {
             haptic();
+            final String sType = filterType, sOrg = filterOrg, sStatus = filterStatus, sBank = filterBank, sSort = sortMode;
+            final boolean sGroup = groupBank;
+            final java.util.Set<String> sFeats = new java.util.LinkedHashSet<>(filterFeats);
             filterType = null; filterOrg = null; filterStatus = null;
             filterFeats.clear(); filterBank = null;
             sortMode = null; groupBank = false; persistViewPrefs();
             rebuildFilterPanel(filterPanelRef); refreshHome();
+            showFloatToast("已清空筛选", "撤销", () -> {
+                filterType = sType; filterOrg = sOrg; filterStatus = sStatus; filterBank = sBank; sortMode = sSort;
+                groupBank = sGroup;
+                filterFeats.clear(); filterFeats.addAll(sFeats);
+                persistViewPrefs();
+                rebuildFilterPanel(filterPanelRef); refreshHome();
+                showFloatToast("已恢复筛选");
+            });
         });
         chead.addView(clearT);
         TextView doneT = tv(this, "\u5b8c\u6210", 13, Color.rgb(0x0A, 0x5C, 0xD6), true);
@@ -1910,7 +2038,7 @@ public class MainActivity extends Activity {
                     if (!any) {
                         StringBuilder names = new StringBuilder();
                         for (String k : test) { if (names.length() > 0) names.append("\u300d+\u300c"); names.append(featLabel(k)); }
-                        Toast.makeText(this, "\u300c" + names + "\u300d\u6ca1\u6709\u5361\u540c\u65f6\u6ee1\u8db3\uff0c\u4e0d\u80fd\u4e00\u8d77\u9009", Toast.LENGTH_SHORT).show();
+                        showFloatToast("\u300c" + names + "\u300d\u6ca1\u6709\u5361\u540c\u65f6\u6ee1\u8db3\uff0c\u4e0d\u80fd\u4e00\u8d77\u9009");
                         return;
                     }
                     filterFeats.add(f[0]);
@@ -2625,11 +2753,7 @@ public class MainActivity extends Activity {
         side.addView(add, alp);
         add.setOnClickListener(v -> {
             haptic();
-            if (mine.contains(c.id)) { mine.remove(c.id); Toast.makeText(this, "已从我的卡片移除", Toast.LENGTH_SHORT).show(); }
-            else { mine.add(c.id); Toast.makeText(this, "已加入我的卡片", Toast.LENGTH_SHORT).show(); }
-            prefs.edit().putStringSet("mine_ids", new HashSet<>(mine)).apply();
-            pages.remove("mine");
-            showWizardPage();
+            toggleMineWithToast(c, () -> showWizardPage());
         });
         row.setOnClickListener(v -> openDetail(c, true));
         row.setOnLongClickListener(v -> { showPressPreview(row); return true; });
@@ -2786,11 +2910,7 @@ public class MainActivity extends Activity {
         styleMineBtn(mineBtn, c);
         mineBtn.setOnClickListener(v -> {
             haptic();
-            if (mine.contains(c.id)) { mine.remove(c.id); Toast.makeText(this, "已从我的卡片移除", Toast.LENGTH_SHORT).show(); }
-            else { mine.add(c.id); Toast.makeText(this, "已加入我的卡片", Toast.LENGTH_SHORT).show(); }
-            prefs.edit().putStringSet("mine_ids", new HashSet<>(mine)).apply();
-            styleMineBtn(mineBtn, c);
-            pages.remove("mine");
+            toggleMineWithToast(c, () -> styleMineBtn(mineBtn, c));
         });
         LinearLayout.LayoutParams mlp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(this, 46));
         mlp.topMargin = dp(this, 12);
@@ -3397,7 +3517,7 @@ public class MainActivity extends Activity {
             mineOrder = new ArrayList<>();
             for (Card c : list) mineOrder.add(c.id);
             saveMineOrder();
-            Toast.makeText(this, "顺序已保存", Toast.LENGTH_SHORT).show();
+            showFloatToast("顺序已保存");
         }
         showTab("mine");
     }
@@ -3628,7 +3748,7 @@ public class MainActivity extends Activity {
             CustomCard moved = customCards.remove(fromIdx);
             customCards.add(toIdx, moved);
             saveCustomCards();
-            Toast.makeText(this, "顺序已保存", Toast.LENGTH_SHORT).show();
+            showFloatToast("顺序已保存");
         }
         refreshMineKeepScroll();
     }
@@ -3664,10 +3784,17 @@ public class MainActivity extends Activity {
             .setMessage("「" + c.name + "」删了就没了，备注也会一起清掉。")
             .setNegativeButton("取消", null)
             .setPositiveButton("删除", (d, w) -> {
+                final int idx = customCards.indexOf(c);
                 customCards.remove(c);
                 saveCustomCards();
-                Toast.makeText(this, "已删除这张自定义卡", Toast.LENGTH_SHORT).show();
                 refreshMineKeepScroll();
+                showFloatToast("已删除这张自定义卡", "撤销", () -> {
+                    int at = idx < 0 ? customCards.size() : Math.min(idx, customCards.size());
+                    customCards.add(at, c);
+                    saveCustomCards();
+                    refreshMineKeepScroll();
+                    showFloatToast("已恢复「" + c.name + "」");
+                });
             })
             .show();
     }
@@ -3860,7 +3987,7 @@ public class MainActivity extends Activity {
         save.setOnClickListener(v -> {
             haptic();
             String name = inName.getText().toString().trim();
-            if (name.isEmpty()) { Toast.makeText(this, "请填写卡片名称", Toast.LENGTH_SHORT).show(); inName.requestFocus(); return; }
+            if (name.isEmpty()) { showFloatToast("请填写卡片名称"); inName.requestFocus(); return; }
             if (isNew) {
                 CustomCard c = new CustomCard();
                 c.id = "custom-" + System.currentTimeMillis();
@@ -3871,14 +3998,14 @@ public class MainActivity extends Activity {
                 c.style = styleSel[0];
                 customCards.add(c);
                 customOpen = true;
-                Toast.makeText(this, "已添加「" + name + "」", Toast.LENGTH_SHORT).show();
+                showFloatToast("已添加「" + name + "」");
             } else {
                 edit.name = name;
                 edit.bank = inBank.getText().toString().trim();
                 edit.org = orgSel[0];
                 edit.note = inNote.getText().toString().trim();
                 edit.style = styleSel[0];
-                Toast.makeText(this, "已保存「" + name + "」", Toast.LENGTH_SHORT).show();
+                showFloatToast("已保存「" + name + "」");
             }
             saveCustomCards();
             customDialog = null;
@@ -3912,7 +4039,7 @@ public class MainActivity extends Activity {
                     conn.disconnect();
                     int remoteVer = Store.versionOf(json);
                     if (remoteVer <= Store.dataVersion) {
-                        if (manual) runOnUiThread(() -> Toast.makeText(this, "已是最新数据（v" + Store.dataVersion + "）", Toast.LENGTH_SHORT).show());
+                        if (manual) runOnUiThread(() -> showFloatToast("已是最新数据（v" + Store.dataVersion + "）"));
                         return;
                     }
                     // 先在临时解析校验卡数>0 再落盘，避免把坏数据写进 filesDir
@@ -3928,14 +4055,14 @@ public class MainActivity extends Activity {
                     final boolean ok = Store.parseInto(json);
                     if (!ok) continue;
                     runOnUiThread(() -> {
-                        Toast.makeText(this, "卡片数据已更新到 v" + Store.dataVersion + "（" + Store.all.size() + " 张）", Toast.LENGTH_SHORT).show();
+                        showFloatToast("卡片数据已更新到 v" + Store.dataVersion + "（" + Store.all.size() + " 张）");
                         pages.clear(); // 页面缓存一律作废，下次进页用新数据重建
                         if (detailCard == null) rebuildPages(); // 正看详情时不打断，关掉详情自然用新数据
                     });
                     return;
                 } catch (Exception e) { /* 换下一条线路 */ }
             }
-            if (manual) runOnUiThread(() -> Toast.makeText(this, "检查更新失败，请检查网络", Toast.LENGTH_SHORT).show());
+            if (manual) runOnUiThread(() -> showFloatToast("检查更新失败，请检查网络"));
         }).start();
     }
 
@@ -4097,7 +4224,7 @@ public class MainActivity extends Activity {
                     link.setOnClickListener(v -> {
                         haptic();
                         try { startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(n.url))); }
-                        catch (Exception e) { Toast.makeText(this, "打不开这个链接", Toast.LENGTH_SHORT).show(); }
+                        catch (Exception e) { showFloatToast("打不开这个链接"); }
                     });
                 } else {
                     det.addView(tv(this, "暂无原文链接", 11.5f, Color.rgb(0x8E, 0x8E, 0x93), false));
@@ -4425,7 +4552,7 @@ public class MainActivity extends Activity {
             data = bos.toByteArray();
             if (data.length == 0) throw new Exception("empty");
         } catch (Exception e) {
-            Toast.makeText(this, "收款码还没放上，放上后就能保存了", Toast.LENGTH_SHORT).show();
+            showFloatToast("收款码还没放上，放上后就能保存了");
             return;
         }
         if (Build.VERSION.SDK_INT < 29
@@ -4460,9 +4587,9 @@ public class MainActivity extends Activity {
                 android.media.MediaScannerConnection.scanFile(this,
                     new String[]{f.getAbsolutePath()}, new String[]{"image/png"}, null);
             }
-            Toast.makeText(this, "赞助二维码已保存到相册", Toast.LENGTH_SHORT).show();
+            showFloatToast("赞助二维码已保存到相册");
         } catch (Exception e) {
-            Toast.makeText(this, "保存失败，请稍后再试", Toast.LENGTH_SHORT).show();
+            showFloatToast("保存失败，请稍后再试");
         }
     }
 
@@ -4475,7 +4602,7 @@ public class MainActivity extends Activity {
             if (granted && sponsorSavePending) { sponsorSavePending = false; saveSponsorQr(); }
             else {
                 sponsorSavePending = false;
-                Toast.makeText(this, "没有相册写入权限，二维码未保存", Toast.LENGTH_SHORT).show();
+                showFloatToast("没有相册写入权限，二维码未保存");
             }
         }
     }
@@ -4771,7 +4898,7 @@ public class MainActivity extends Activity {
         sectionHead(page, "数据");
         page.addView(settingRow("数据版本", "v" + Store.dataVersion + " · " + Store.all.size() + " 张卡（启动自动检查，更新后无需重装）"));
         View updRow = settingRow("检查数据更新", "从数据仓拉最新卡库 ›");
-        updRow.setOnClickListener(v -> { haptic(); Toast.makeText(this, "正在检查数据更新…", Toast.LENGTH_SHORT).show(); checkDataUpdate(true); });
+        updRow.setOnClickListener(v -> { haptic(); showFloatToast("正在检查数据更新…"); checkDataUpdate(true); });
         page.addView(updRow);
 
         sectionHead(page, "关于");
