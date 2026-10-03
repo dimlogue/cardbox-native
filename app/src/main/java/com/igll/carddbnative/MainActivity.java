@@ -3487,10 +3487,14 @@ public class MainActivity extends Activity {
     // Q24：卡图改全幅 cover 铺满图区（对照混合版 .art/.art-img object-fit:cover，图区贴瓷砖顶边满宽、不留白、
     // 不拉伸；圆角靠瓷砖外框 clipToOutline 平滑裁切，冲突时保铺满）+ 图右上半透圆加卡钮（.mine-btn）。
     View cardTile(final Card c, ViewGroup parent, int nCols) {
-        return cardTile(c, parent, nCols, "");
+        return cardTile(c, parent, nCols, "", false);
     }
 
     View cardTile(final Card c, ViewGroup parent, int nCols, final String acctClass) {
+        return cardTile(c, parent, nCols, acctClass, true);
+    }
+
+    View cardTile(final Card c, ViewGroup parent, int nCols, final String acctClass, final boolean mineTile) {
         LinearLayout box = new LinearLayout(this);
         box.setOrientation(LinearLayout.VERTICAL);
         box.setClipToOutline(true);
@@ -3543,7 +3547,8 @@ public class MainActivity extends Activity {
             "已停发".equals(c.status) ? Color.rgb(0xF3, 0xE8, 0xE8) : Color.rgb(0xE6, 0xF6, 0xEC),
             "已停发".equals(c.status) ? Color.rgb(0xB0, 0x23, 0x2B) : Color.rgb(0x1D, 0x8A, 0x49), chipSp));
         final TextView addedChip = chip("已添加", Color.rgb(0xE6, 0xF6, 0xEC), Color.rgb(0x1D, 0x8A, 0x49), chipSp);
-        if (mine.contains(c.id)) chips.addView(addedChip);
+        // 我的卡片瓷砖不重复「已添加」（页面本身即自有条目），把同一格位留给类别标签，未标则不占位
+        if (!mineTile && mine.contains(c.id)) chips.addView(addedChip);
         // Q65：类别标签只在用户自有条目瓷砖出现（我的卡片传入 acctClass），未标完全不占位；样式同现行 chips
         if (acctClass != null && !acctClass.isEmpty())
             chips.addView(chip(acctClass, Color.rgb(0xF0, 0xF7, 0xFF), Color.rgb(0x2F, 0x6F, 0xD0), chipSp));
@@ -3578,6 +3583,7 @@ public class MainActivity extends Activity {
             handleMineAddButton(c, () -> {
                 boolean in = mine.contains(c.id);
                 mineBtn.setOn(in);
+                if (mineTile) return; // 我的卡片瓷砖无「已添加」chip，只同步钮态
                 if (in) { if (addedChip.getParent() == null) chips.addView(addedChip); }
                 else if (addedChip.getParent() != null) chips.removeView(addedChip);
             });
@@ -6802,11 +6808,12 @@ public class MainActivity extends Activity {
         if (toIdx != fromIdx) {
             MineRow moved = list.remove(fromIdx);
             list.add(toIdx, moved);
-            // 条目顺序即 mineEntries 中这些条目的相对顺序：抽出后按新序插回原位置段
+            // 条目顺序即 mineEntries 中这些条目的相对顺序：抽出后按新序插回原段首位
             java.util.List<MineEntry> ordered = new ArrayList<>();
             for (MineRow r : list) ordered.add(r.entry);
+            int insertAt = ordered.isEmpty() ? 0 : Math.max(0, mineEntries.indexOf(ordered.get(0)));
             mineEntries.removeAll(ordered);
-            mineEntries.addAll(0, ordered);
+            mineEntries.addAll(Math.min(insertAt, mineEntries.size()), ordered);
             saveMineEntries();
             showFloatToast("顺序已保存");
         }
@@ -10215,6 +10222,7 @@ public class MainActivity extends Activity {
 
     @Override
     public void onBackPressed() {
+        if (acctPickerView != null) { closeAcctClassPicker(); return; }
         if (moreMenuOverlay != null) { closeMoreMenu(); return; }
         if (floatSearchOpen) { closeFloatSearch(); return; }
         if (cardMenuPop != null) { closeCardMenu(); return; }
