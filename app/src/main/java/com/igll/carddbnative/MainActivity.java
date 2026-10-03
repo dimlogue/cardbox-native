@@ -295,7 +295,8 @@ public class MainActivity extends Activity {
                 for (ImageView iv : new java.util.ArrayList<>(glassViews)) {
                     try { iv.setImageBitmap(null); if (Build.VERSION.SDK_INT >= 31) iv.setRenderEffect(null); } catch (Throwable ignored) {}
                 }
-                if (glassSnap != null && !glassSnap.isRecycled()) glassSnap.recycle();
+                // Q21 黑匣子定案：绝不主动 recycle——仍被某个 ImageView 显示列表引用的图一旦 recycle，下一帧 onDraw 即
+                // 「Canvas: trying to use a recycled bitmap」整 App 闪退（0.67/0.70 两案同签名）。只解引用交系统回收。
                 glassSnap = null;
             } catch (Throwable ignored) {}
         }
@@ -364,8 +365,7 @@ public class MainActivity extends Activity {
         while (it.hasNext()) {
             ImageView iv = it.next();
             if (!iv.isAttachedToWindow()) {
-                Bitmap b = glassCrops.remove(iv);
-                if (b != null && !b.isRecycled()) b.recycle();
+                glassCrops.remove(iv); // Q21：只解引用不 recycle（同 noteGlassFailure 定案，防 recycled bitmap 闪退）
                 glassHosts.remove(iv);
                 it.remove();
             }
@@ -451,9 +451,8 @@ public class MainActivity extends Activity {
             glassCapturing = false;
         }
         if (out != null) {
-            Bitmap old = glassSnap;
+            // Q21：换快照只换引用——旧图可能仍被某玻璃层显示列表引用，主动 recycle 即触发黑匣子同签名闪退；0.2 降采样小图交系统回收。
             glassSnap = out;
-            if (old != null && old != out && !old.isRecycled()) old.recycle();
             noteGlassSuccess();
         }
         return glassSnap;
@@ -492,8 +491,7 @@ public class MainActivity extends Activity {
             m.setTranslate(-left * s, -top * s);
             cv.drawBitmap(full, m, pt);
             iv.setImageBitmap(out);
-            Bitmap old = glassCrops.put(iv, out);
-            if (old != null && old != out && !old.isRecycled()) old.recycle(); // swap new in first, then recycle old (never draw a recycled bitmap)
+            glassCrops.put(iv, out); // Q21：旧裁片只解引用不 recycle（黑匣子定案：显示列表在用时 recycle 必崩，见 noteGlassFailure）
             if (Build.VERSION.SDK_INT >= 31) {
                 // Q18 (4): blur 13 -> 11 + saturation 1.4 kept: snapshot already 0.2-downsampled,
                 // lower radius keeps background colour/shape recognisable (no milky wall)
