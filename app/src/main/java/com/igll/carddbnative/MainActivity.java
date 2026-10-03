@@ -1972,9 +1972,11 @@ public class MainActivity extends Activity {
     // 我的卡片网格：双列；长按拖动排序（对照 app.js startMineDrag/endMineDrag 的落位换序与 450ms 点击锁）
     void addMineCardRows(LinearLayout container, final List<Card> list, final ScrollView sv) {
         final int mineCols = 2;
+        container.setClipChildren(false);
         for (int i = 0; i < list.size(); i += mineCols) {
             LinearLayout row = new LinearLayout(this);
             row.setOrientation(LinearLayout.HORIZONTAL);
+            row.setClipChildren(false);
             LinearLayout.LayoutParams rlp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
             rlp.topMargin = dp(this, 10);
             row.setLayoutParams(rlp);
@@ -2007,6 +2009,7 @@ public class MainActivity extends Activity {
     void startMineTileDrag(final View tile, final List<Card> list, final int fromIdx, final ScrollView sv) {
         tile.setScaleX(1.04f); tile.setScaleY(1.04f); tile.setAlpha(0.92f);
         tile.setElevation(dp(this, 8));
+        if (tile.getParent() instanceof ViewGroup) ((ViewGroup) tile.getParent()).bringChildToFront(tile);
         if (sv != null) sv.requestDisallowInterceptTouchEvent(true);
         tile.setOnTouchListener(new View.OnTouchListener() {
             float downX = -1, downY = -1;
