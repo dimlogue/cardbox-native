@@ -2999,6 +2999,7 @@ public class MainActivity extends Activity {
         roundClip(box, tileR, this);
         int imgH = Math.max(dp(this, 40), Math.round(tileW / 1.586f));
         FrameLayout art = new FrameLayout(this);
+        topSheetClip(art, tileR, this); // Q48 排查补强：图区容器同半径顶圆底直裁切，顶图四角不靠瓷砖外框单层 outline
         box.addView(art, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, imgH));
         ImageView iv = new ImageView(this);
         iv.setScaleType(ImageView.ScaleType.CENTER_CROP); // cover：铺满不留白、等比不拉伸
