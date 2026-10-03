@@ -2341,7 +2341,7 @@ public class MainActivity extends Activity {
         card.setOrientation(LinearLayout.VERTICAL);
         // Q45：添加底表改为贴底形态——仅顶部圆角、底部直角直达屏底，消灭底部两角透出遮罩的黑三角
         GradientDrawable addBg = new GradientDrawable();
-        addBg.setColor(Color.argb(245, 255, 255, 255));
+        addBg.setColor(Color.rgb(0xFF, 0xFF, 0xFF)); // Q54：245 近实→实白，窗身一整块同色到底
         float addR = dp(this, 22);
         addBg.setCornerRadii(new float[]{addR, addR, addR, addR, 0, 0, 0, 0});
         card.setBackground(addBg);
@@ -4140,7 +4140,7 @@ public class MainActivity extends Activity {
         LinearLayout card = new LinearLayout(this);
         card.setOrientation(LinearLayout.VERTICAL);
         GradientDrawable cg = new GradientDrawable();
-        cg.setColor(Color.argb(172, 0xF2, 0xF3, 0xF7)); // Q29：198→172 减薄，冻结模糊的彩色透进来
+        cg.setColor(Color.rgb(0xF2, 0xF3, 0xF7)); // Q54：172 半透→同色提实，窗身一整块同色到底、不许底部色差横带（色相未动，白底化归 Q14）
         float rTop = dp(this, 26);
         cg.setCornerRadii(new float[]{rTop, rTop, rTop, rTop, 0, 0, 0, 0});
         card.setBackground(cg);
@@ -4161,7 +4161,9 @@ public class MainActivity extends Activity {
         clp.height = card.getMeasuredHeight();
         // Q11：贴底窗下垫冻结模糊层——玻璃层向下多延 26dp，让顶圆角对齐窗体、底圆角沉到屏外
         FrameLayout wizGlassWrap = new FrameLayout(this);
-        wizGlassWrap.addView(glassLayer(card, 26, false), new FrameLayout.LayoutParams(
+        View wizGlass = glassLayer(card, 26, false);
+        topSheetClip(wizGlass, 26, this); // Q54：玻璃轮廓与窗体同（顶圆底直），不得在窗外露面发雾
+        wizGlassWrap.addView(wizGlass, new FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, clp.height + dp(this, 26)));
         wizGlassWrap.addView(card, new FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
@@ -4537,7 +4539,9 @@ public class MainActivity extends Activity {
         // 窗外由 wrap 裁掉，窗底两角只剩直角白窗贴齐屏底，不露玻璃/遮罩黑三角
         FrameLayout.LayoutParams detailGlassLp = new FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, sheetH + dp(this, 20));
-        wrap.addView(glassLayer(sheetCard, 20, false), detailGlassLp);
+        View detailGlass = glassLayer(sheetCard, 20, false);
+        topSheetClip(detailGlass, 20, this); // Q54：玻璃轮廓与窗体同（顶圆底直），不得在窗外露面发雾
+        wrap.addView(detailGlass, detailGlassLp);
         wrap.addView(sheetCard, new FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         overlay.addView(wrap, wlp);
@@ -5848,7 +5852,9 @@ public class MainActivity extends Activity {
         // Q45：同详情窗——冻结玻璃层高出窗体 20dp，底圆角沉到窗外由 wrap 裁掉，窗底直角贴屏底
         FrameLayout.LayoutParams customDetailGlassLp = new FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, sheetH + dp(this, 20));
-        wrap.addView(glassLayer(sheetCard, 20, false), customDetailGlassLp);
+        View customDetailGlass = glassLayer(sheetCard, 20, false);
+        topSheetClip(customDetailGlass, 20, this); // Q54：玻璃轮廓与窗体同（顶圆底直），不得在窗外露面发雾
+        wrap.addView(customDetailGlass, customDetailGlassLp);
         wrap.addView(sheetCard, new FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         overlay.addView(wrap, wlp);
@@ -6599,10 +6605,8 @@ public class MainActivity extends Activity {
         LinearLayout card = new LinearLayout(this);
         card.setOrientation(LinearLayout.VERTICAL);
         GradientDrawable cg = new GradientDrawable();
-        cg.setColor(Color.argb(219, 255, 255, 255));
-        cg.setStroke(dp(this, 1), Color.argb(140, 255, 255, 255));
-        // Q45：仅顶部圆角、底部直角贴屏底（原四角同圆时底部两角露遮罩成黑三角）
-        float binR = dp(this, 22);
+        cg.setColor(Color.rgb(0xFF, 0xFF, 0xFF)); // Q54：219 半透→实白，窗身一整块同色到底（同关于窗提实口径），玻璃退为纯垫底
+        float binR = dp(this, 22); // Q45：仅顶部圆角、底部直角贴屏底（原四角同圆时底部两角露遮罩成黑三角）
         cg.setCornerRadii(new float[]{binR, binR, binR, binR, 0, 0, 0, 0});
         card.setBackground(cg);
         if (Build.VERSION.SDK_INT >= 21) { card.setElevation(dp(this, 24)); topSheetClip(card, 22, this); } // Q45 顶圆底直轮廓
@@ -6673,7 +6677,9 @@ public class MainActivity extends Activity {
         // Q45：玻璃与窗体同装贴底容器，玻璃高出 22dp、底圆角沉出容器被裁，与窗体同升同降；
         // closeBinQuery 取最后一层即此容器，动画口径不变
         FrameLayout binWrap = new FrameLayout(this);
-        binWrap.addView(glassLayer(card, 22, false), new FrameLayout.LayoutParams(
+        View binGlass = glassLayer(card, 22, false);
+        topSheetClip(binGlass, 22, this); // Q54：玻璃轮廓与窗体同（顶圆底直），不得在窗外露面发雾
+        binWrap.addView(binGlass, new FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, clp.height + dp(this, 22)));
         binWrap.addView(card, new FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
@@ -6855,7 +6861,7 @@ public class MainActivity extends Activity {
         LinearLayout card = new LinearLayout(this);
         card.setOrientation(LinearLayout.VERTICAL);
         GradientDrawable cg = new GradientDrawable();
-        cg.setColor(Color.argb(219, 255, 255, 255)); // .dlg rgba(255,255,255,.86)
+        cg.setColor(Color.rgb(0xFF, 0xFF, 0xFF)); // Q54：219 半透（.dlg .86）→实白，窗身一整块同色到底，玻璃退为纯垫底（网页 .86 靠真 backdrop 模糊兜底，原生冻结玻璃兜不住会发雾）
         cg.setStroke(dp(this, 1), Color.argb(140, 255, 255, 255));
         // Q45：仅顶部圆角、底部直角贴屏底（原四角同圆时底部两角露遮罩成黑三角）
         float formR = dp(this, 22);
@@ -7062,7 +7068,9 @@ public class MainActivity extends Activity {
         // Q45：玻璃与窗体同装贴底容器，玻璃高出 22dp、底圆角沉出容器被裁，与窗体同升同降；
         // closeCustomForm 取最后一层即此容器，动画口径不变
         FrameLayout formWrap = new FrameLayout(this);
-        formWrap.addView(glassLayer(card, 22, false), new FrameLayout.LayoutParams(
+        View formGlass = glassLayer(card, 22, false);
+        topSheetClip(formGlass, 22, this); // Q54：玻璃轮廓与窗体同（顶圆底直），不得在窗外露面发雾
+        formWrap.addView(formGlass, new FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, clp.height + dp(this, 22))); // Q11 冻结玻璃垫底
         formWrap.addView(card, new FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
@@ -7422,7 +7430,7 @@ public class MainActivity extends Activity {
         LinearLayout card = new LinearLayout(this);
         card.setOrientation(LinearLayout.VERTICAL);
         GradientDrawable cg = new GradientDrawable();
-        cg.setColor(Color.argb(164, 255, 255, 255)); // Q29：190→164 减薄，冻结玻璃下身后彩色透进来（Q16 已先行 219→190）
+        cg.setColor(Color.rgb(0xFF, 0xFF, 0xFF)); // Q54：164 半透→实白（对照混合版 .panel #fff）——半透窗身把身后亮页透成白雾、底部空带与内容区成色差横带，提实后窗身一整块同色到底，玻璃退为纯垫底
         cg.setStroke(dp(this, 1), Color.argb(140, 255, 255, 255));
         // Q45：仅顶部圆角、底部直角——原四角同圆时底部两角把暗遮罩露成黑三角（用户 22:21 截图）
         float aboutR = dp(this, 22);
@@ -7453,7 +7461,9 @@ public class MainActivity extends Activity {
         // Q45：玻璃与窗体装进同一贴底容器——玻璃高出窗体 22dp、底圆角沉到容器外被裁掉，
         // 与窗体同升同降；关窗时 closeAbout 取到的最后一层即此容器，动画口径不变
         FrameLayout aboutWrap = new FrameLayout(this);
-        aboutWrap.addView(glassLayer(card, 22, false), new FrameLayout.LayoutParams(
+        View aboutGlass = glassLayer(card, 22, false);
+        topSheetClip(aboutGlass, 22, this); // Q54：玻璃轮廓与窗体同（顶圆底直），不得在窗外露面发雾
+        aboutWrap.addView(aboutGlass, new FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, clp.height + dp(this, 22)));
         aboutWrap.addView(card, new FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
