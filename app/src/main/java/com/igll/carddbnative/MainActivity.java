@@ -146,29 +146,53 @@ public class MainActivity extends Activity {
             default: return homeScroll;
         }
     }
+    // Q5 回顶钮时机：滑动中藏起，停稳 650ms 后才淡入；滚深门槛 480dp（对照混合版 qfScrolling/qfTop）
+    int topFabLastY = 0;
+    Runnable topFabShowTask = null;
+    void cancelTopFabShow() {
+        if (topFabShowTask != null) { mainHandler.removeCallbacks(topFabShowTask); topFabShowTask = null; }
+    }
+    void showTopFab() {
+        if (topFab == null || topFabShown) return;
+        topFabShown = true;
+        topFab.animate().cancel();
+        topFab.setVisibility(View.VISIBLE);
+        topFab.setAlpha(0f); topFab.setScaleX(0.82f); topFab.setScaleY(0.82f);
+        topFab.animate().alpha(1f).scaleX(1f).scaleY(1f).setDuration(190)
+            .setInterpolator(ANIM_ENTER).start();
+    }
+    void hideTopFab() {
+        if (topFab == null || !topFabShown) return;
+        topFabShown = false;
+        final View fab = topFab;
+        fab.animate().cancel();
+        fab.animate().alpha(0f).scaleX(0.85f).scaleY(0.85f).setDuration(170)
+            .setInterpolator(ANIM_EXIT)
+            .withEndAction(() -> { if (fab == topFab && !topFabShown) fab.setVisibility(View.GONE); }).start();
+    }
     void updateTopFabVisibility(int y) {
         if (topFab == null) return;
-        boolean show = y > dp(this, 420);
-        if (show && !topFabShown) {
-            topFabShown = true;
-            topFab.animate().cancel();
-            topFab.setVisibility(View.VISIBLE);
-            topFab.setAlpha(0f); topFab.setScaleX(0.82f); topFab.setScaleY(0.82f);
-            topFab.animate().alpha(1f).scaleX(1f).scaleY(1f).setDuration(190)
-                .setInterpolator(ANIM_ENTER).start();
-        } else if (!show && topFabShown) {
-            topFabShown = false;
-            final View fab = topFab;
-            fab.animate().cancel();
-            fab.animate().alpha(0f).scaleX(0.85f).scaleY(0.85f).setDuration(170)
-                .setInterpolator(ANIM_EXIT)
-                .withEndAction(() -> { if (fab == topFab && !topFabShown) fab.setVisibility(View.GONE); }).start();
-        }
+        topFabLastY = y;
+        // 回到顶部附近：立即隐去并取消待显
+        if (y <= dp(this, 480)) { cancelTopFabShow(); hideTopFab(); return; }
+        // 还在滑动：先藏，停稳 650ms 后由定时器按最新位置决定是否淡入
+        hideTopFab();
+        cancelTopFabShow();
+        topFabShowTask = () -> {
+            topFabShowTask = null;
+            if (topFab != null && topFabLastY > dp(this, 480)) showTopFab();
+        };
+        mainHandler.postDelayed(topFabShowTask, 650);
     }
     void syncTopFab() {
-        boolean covered = welcomeOpen || wizardOpen || aboutOpen || filterSheet != null;
+        // Q5：回顶钮只在全部卡片/学生/我的卡片三个列表页出现（对照混合版 syncQuickFab 的 tab 口径）；
+        // 设置/资讯不挂，浮窗（筛选/选卡/欢迎/关于/详情/日志）升起时退场（Q12 名单先行落地这一钮）
+        boolean pageOk = "home".equals(tab) || "student".equals(tab) || "mine".equals(tab);
+        boolean covered = welcomeOpen || wizardOpen || aboutOpen || filterSheet != null
+            || detailCard != null || changelogOpen;
         ScrollView sv = activeLongScroll();
-        if (sv == null || (covered && !changelogOpen)) {
+        if (sv == null || covered || !pageOk) {
+            cancelTopFabShow();
             if (topFab != null && topFab.getParent() != null) ((ViewGroup) topFab.getParent()).removeView(topFab);
             topFab = null;
             topFabShown = false;
@@ -178,16 +202,19 @@ public class MainActivity extends Activity {
             if (topFab != null && topFab.getParent() != null) ((ViewGroup) topFab.getParent()).removeView(topFab);
             topFab = buildTopFab();
             topFabShown = false;
-            FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(dp(this, 46), dp(this, 46));
-            lp.gravity = Gravity.END | Gravity.BOTTOM;
-            lp.rightMargin = dp(this, 16);
-            lp.bottomMargin = dp(this, "home".equals(tab) && !changelogOpen ? 224 : 96);
+            // Q5：页面下方正中、悬浮栏上方居中（对照混合版 .qf-top：left 50% + bottom 112）
+            FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(dp(this, 44), dp(this, 44));
+            lp.gravity = Gravity.CENTER_HORIZONTAL | Gravity.BOTTOM;
+            lp.bottomMargin = dp(this, 112);
             content.addView(topFab, lp);
             topFab.setVisibility(View.GONE);
         } else if (topFab.getLayoutParams() instanceof FrameLayout.LayoutParams) {
             FrameLayout.LayoutParams lp = (FrameLayout.LayoutParams) topFab.getLayoutParams();
-            int wantBottom = dp(this, "home".equals(tab) && !changelogOpen ? 224 : 96);
-            if (lp.bottomMargin != wantBottom) { lp.bottomMargin = wantBottom; topFab.setLayoutParams(lp); }
+            int wantBottom = dp(this, 112);
+            if (lp.bottomMargin != wantBottom || lp.gravity != (Gravity.CENTER_HORIZONTAL | Gravity.BOTTOM)) {
+                lp.bottomMargin = wantBottom; lp.gravity = Gravity.CENTER_HORIZONTAL | Gravity.BOTTOM;
+                lp.rightMargin = 0; topFab.setLayoutParams(lp);
+            }
         }
         updateTopFabVisibility(sv.getScrollY());
     }
@@ -212,7 +239,7 @@ public class MainActivity extends Activity {
             p.setStrokeCap(Paint.Cap.ROUND);
             p.setStrokeJoin(Paint.Join.ROUND);
             p.setStrokeWidth(dp(getContext(), 2.0f));
-            p.setColor(Color.rgb(0x0A, 0x5C, 0xD6));
+            p.setColor(Color.rgb(0x1C, 0x1C, 0x1E)); // Q5：对照混合版 .qf-top 深色箭头（原蓝箭头废除）
             float sx = getWidth() / 24f, sy = getHeight() / 24f;
             cv.drawLine(12f * sx, 19.5f * sy, 12f * sx, 5.5f * sy, p);
             cv.drawLine(6.2f * sx, 11.2f * sy, 12f * sx, 5.2f * sy, p);
@@ -221,16 +248,17 @@ public class MainActivity extends Activity {
     }
     View buildTopFab() {
         FrameLayout fab = new FrameLayout(this);
+        // Q5：浅透玻璃染色（对照混合版 .qf-top rgba(255,255,255,.32)+白色 .5 描边），真模糊由 glassLayer 垫底
         GradientDrawable bg = new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
-            new int[]{Color.argb(148, 255, 255, 255), Color.argb(136, 244, 248, 253)});
+            new int[]{Color.argb(108, 255, 255, 255), Color.argb(96, 244, 248, 253)});
         bg.setShape(GradientDrawable.OVAL);
-        bg.setStroke(dp(this, 1), Color.argb(70, 20, 30, 60));
+        bg.setStroke(dp(this, 1), Color.argb(128, 255, 255, 255));
         fab.setBackground(bg);
         if (Build.VERSION.SDK_INT >= 21) fab.setElevation(dp(this, 10));
         fab.addView(glassLayer(fab, -1, true), new FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         TopIconView icon = new TopIconView(this);
-        int pad = dp(this, 11);
+        int pad = dp(this, 12);
         icon.setPadding(pad, pad, pad, pad);
         fab.addView(icon, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         fab.setOnClickListener(v -> { haptic(); smoothScrollTop(activeLongScroll()); });
