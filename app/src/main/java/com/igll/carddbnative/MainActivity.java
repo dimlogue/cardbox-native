@@ -2302,12 +2302,17 @@ public class MainActivity extends Activity {
         sheet.setOnClickListener(v -> closeAddSheet(sheet));
         LinearLayout card = new LinearLayout(this);
         card.setOrientation(LinearLayout.VERTICAL);
-        card.setBackground(roundRect(Color.argb(245, 255, 255, 255), 22, this));
+        // Q45：添加底表改为贴底形态——仅顶部圆角、底部直角直达屏底，消灭底部两角透出遮罩的黑三角
+        GradientDrawable addBg = new GradientDrawable();
+        addBg.setColor(Color.argb(245, 255, 255, 255));
+        float addR = dp(this, 22);
+        addBg.setCornerRadii(new float[]{addR, addR, addR, addR, 0, 0, 0, 0});
+        card.setBackground(addBg);
         if (Build.VERSION.SDK_INT >= 21) card.setElevation(dp(this, 24));
         card.setPadding(dp(this, 18), dp(this, 16), dp(this, 18), dp(this, 12) + navBarH());
         FrameLayout.LayoutParams clp = new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         clp.gravity = Gravity.BOTTOM;
-        clp.leftMargin = dp(this, 12); clp.rightMargin = dp(this, 12); clp.bottomMargin = dp(this, 12) + navBarH();
+        clp.leftMargin = dp(this, 12); clp.rightMargin = dp(this, 12); clp.bottomMargin = 0;
         sheet.addView(card, clp);
         card.setOnClickListener(v -> {});
         card.addView(tv(this, "\u6DFB\u52A0\u5361\u7247", 17, Color.rgb(0x1C, 0x1C, 0x1E), true));
@@ -4412,9 +4417,11 @@ public class MainActivity extends Activity {
         FrameLayout.LayoutParams wlp = new FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, sheetH);
         wlp.gravity = Gravity.BOTTOM;
-        // Q11：窗下垫冻结玻璃层，与窗同位（顶圆 20 对齐，底边沉屏外由容器裁掉）
-        wrap.addView(glassLayer(sheetCard, 20, false), new FrameLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        // Q11：窗下垫冻结玻璃层，与窗同位（顶圆 20 对齐）；Q45：玻璃层高出窗体 20dp、底圆角沉到
+        // 窗外由 wrap 裁掉，窗底两角只剩直角白窗贴齐屏底，不露玻璃/遮罩黑三角
+        FrameLayout.LayoutParams detailGlassLp = new FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, sheetH + dp(this, 20));
+        wrap.addView(glassLayer(sheetCard, 20, false), detailGlassLp);
         wrap.addView(sheetCard, new FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         overlay.addView(wrap, wlp);
@@ -5722,8 +5729,10 @@ public class MainActivity extends Activity {
         FrameLayout.LayoutParams wlp = new FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, sheetH);
         wlp.gravity = Gravity.BOTTOM;
-        wrap.addView(glassLayer(sheetCard, 20, false), new FrameLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        // Q45：同详情窗——冻结玻璃层高出窗体 20dp，底圆角沉到窗外由 wrap 裁掉，窗底直角贴屏底
+        FrameLayout.LayoutParams customDetailGlassLp = new FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, sheetH + dp(this, 20));
+        wrap.addView(glassLayer(sheetCard, 20, false), customDetailGlassLp);
         wrap.addView(sheetCard, new FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         overlay.addView(wrap, wlp);
@@ -6476,11 +6485,13 @@ public class MainActivity extends Activity {
         GradientDrawable cg = new GradientDrawable();
         cg.setColor(Color.argb(219, 255, 255, 255));
         cg.setStroke(dp(this, 1), Color.argb(140, 255, 255, 255));
-        cg.setCornerRadius(dp(this, 22));
+        // Q45：仅顶部圆角、底部直角贴屏底（原四角同圆时底部两角露遮罩成黑三角）
+        float binR = dp(this, 22);
+        cg.setCornerRadii(new float[]{binR, binR, binR, binR, 0, 0, 0, 0});
         card.setBackground(cg);
         if (Build.VERSION.SDK_INT >= 21) { card.setElevation(dp(this, 24)); card.setClipToOutline(true); }
         card.setOnClickListener(v -> {});
-        card.setPadding(dp(this, 18), dp(this, 18), dp(this, 18), dp(this, 14));
+        card.setPadding(dp(this, 18), dp(this, 18), dp(this, 18), dp(this, 14) + navBarH());
         final EditText inBin = customInput("输入卡号前 6–8 位", "", 8);
         inBin.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
         final LinearLayout resultBox = new LinearLayout(this);
@@ -6542,17 +6553,21 @@ public class MainActivity extends Activity {
         FrameLayout.LayoutParams clp = new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, Math.min(card.getMeasuredHeight(), maxH));
         clp.gravity = Gravity.BOTTOM;
         clp.leftMargin = dp(this, 12); clp.rightMargin = dp(this, 12);
-        clp.bottomMargin = dp(this, 12) + navBarH();
-        FrameLayout.LayoutParams fglp = new FrameLayout.LayoutParams(clp.width, clp.height);
-        fglp.gravity = clp.gravity; fglp.leftMargin = clp.leftMargin; fglp.rightMargin = clp.rightMargin; fglp.bottomMargin = clp.bottomMargin;
-        sheet.addView(glassLayer(card, 22, false), fglp);
-        sheet.addView(card, clp);
+        clp.bottomMargin = 0; // Q45：窗底直达屏底，动作行靠卡内底部留白（含手势避让）抬起
+        // Q45：玻璃与窗体同装贴底容器，玻璃高出 22dp、底圆角沉出容器被裁，与窗体同升同降；
+        // closeBinQuery 取最后一层即此容器，动画口径不变
+        FrameLayout binWrap = new FrameLayout(this);
+        binWrap.addView(glassLayer(card, 22, false), new FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, clp.height + dp(this, 22)));
+        binWrap.addView(card, new FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        sheet.addView(binWrap, clp);
         content.addView(sheet);
         binSheet = sheet;
         sheet.setAlpha(0f);
         sheet.animate().alpha(1f).setDuration(200).setInterpolator(ANIM_ENTER).start();
-        card.setTranslationY(dp(this, 40)); card.setAlpha(0f);
-        card.animate().translationY(0f).alpha(1f).setDuration(280).setInterpolator(ANIM_ENTER).start();
+        binWrap.setTranslationY(dp(this, 40)); binWrap.setAlpha(0f);
+        binWrap.animate().translationY(0f).alpha(1f).setDuration(280).setInterpolator(ANIM_ENTER).start();
         inBin.postDelayed(() -> { try { inBin.requestFocus(); } catch (Throwable ignored) {} }, 120);
     }
 
@@ -6726,7 +6741,9 @@ public class MainActivity extends Activity {
         GradientDrawable cg = new GradientDrawable();
         cg.setColor(Color.argb(219, 255, 255, 255)); // .dlg rgba(255,255,255,.86)
         cg.setStroke(dp(this, 1), Color.argb(140, 255, 255, 255));
-        cg.setCornerRadius(dp(this, 22));
+        // Q45：仅顶部圆角、底部直角贴屏底（原四角同圆时底部两角露遮罩成黑三角）
+        float formR = dp(this, 22);
+        cg.setCornerRadii(new float[]{formR, formR, formR, formR, 0, 0, 0, 0});
         card.setBackground(cg);
         if (Build.VERSION.SDK_INT >= 21) {
             card.setElevation(dp(this, 24));
@@ -6738,7 +6755,7 @@ public class MainActivity extends Activity {
         thinScrollbar(sv);
         LinearLayout form = new LinearLayout(this);
         form.setOrientation(LinearLayout.VERTICAL);
-        form.setPadding(dp(this, 18), dp(this, 18), dp(this, 18), dp(this, 18)); // .dlg padding 18px
+        form.setPadding(dp(this, 18), dp(this, 18), dp(this, 18), dp(this, 18) + navBarH()); // .dlg padding 18px；Q45 贴底后底部再加手势避让
         sv.addView(form);
         card.addView(sv, new LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
@@ -6925,18 +6942,22 @@ public class MainActivity extends Activity {
             ViewGroup.LayoutParams.MATCH_PARENT, Math.min(card.getMeasuredHeight(), maxH));
         clp.gravity = Gravity.BOTTOM;
         clp.leftMargin = dp(this, 12); clp.rightMargin = dp(this, 12);
-        clp.bottomMargin = dp(this, 12) + navBarH(); // .dlg bottom 12px+手势条避让（Q26 口径）
-        FrameLayout.LayoutParams fglp = new FrameLayout.LayoutParams(clp.width, clp.height);
-        fglp.gravity = clp.gravity; fglp.leftMargin = clp.leftMargin; fglp.rightMargin = clp.rightMargin; fglp.bottomMargin = clp.bottomMargin;
-        sheet.addView(glassLayer(card, 22, false), fglp); // Q11 冻结玻璃垫底
-        sheet.addView(card, clp);
+        clp.bottomMargin = 0; // Q45：窗底直达屏底，表单底部留白（含手势避让）托起动作行
+        // Q45：玻璃与窗体同装贴底容器，玻璃高出 22dp、底圆角沉出容器被裁，与窗体同升同降；
+        // closeCustomForm 取最后一层即此容器，动画口径不变
+        FrameLayout formWrap = new FrameLayout(this);
+        formWrap.addView(glassLayer(card, 22, false), new FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, clp.height + dp(this, 22))); // Q11 冻结玻璃垫底
+        formWrap.addView(card, new FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        sheet.addView(formWrap, clp);
         content.addView(sheet);
         customFormSheet = sheet;
         sheet.setAlpha(0f);
         sheet.animate().alpha(1f).setDuration(200).setInterpolator(ANIM_ENTER).start();
-        card.setTranslationY(dp(this, 40)); // dlgIn：40px 上浮淡入 .28s
-        card.setAlpha(0f);
-        card.animate().translationY(0f).alpha(1f).setDuration(280)
+        formWrap.setTranslationY(dp(this, 40)); // dlgIn：40px 上浮淡入 .28s
+        formWrap.setAlpha(0f);
+        formWrap.animate().translationY(0f).alpha(1f).setDuration(280)
             .setInterpolator(ANIM_ENTER).start();
     }
 
@@ -7287,7 +7308,9 @@ public class MainActivity extends Activity {
         GradientDrawable cg = new GradientDrawable();
         cg.setColor(Color.argb(164, 255, 255, 255)); // Q29：190→164 减薄，冻结玻璃下身后彩色透进来（Q16 已先行 219→190）
         cg.setStroke(dp(this, 1), Color.argb(140, 255, 255, 255));
-        cg.setCornerRadius(dp(this, 22));
+        // Q45：仅顶部圆角、底部直角——原四角同圆时底部两角把暗遮罩露成黑三角（用户 22:21 截图）
+        float aboutR = dp(this, 22);
+        cg.setCornerRadii(new float[]{aboutR, aboutR, aboutR, aboutR, 0, 0, 0, 0});
         card.setBackground(cg);
         if (Build.VERSION.SDK_INT >= 21) {
             card.setElevation(dp(this, 24));
@@ -7310,18 +7333,21 @@ public class MainActivity extends Activity {
             ViewGroup.LayoutParams.MATCH_PARENT, Math.min(card.getMeasuredHeight(), maxH));
         clp.gravity = Gravity.BOTTOM;
         clp.leftMargin = dp(this, 12); clp.rightMargin = dp(this, 12);
-        clp.bottomMargin = dp(this, 12) + navBarH(); // Q26：浮窗底边抬到手势条之上，不拖白带
-        // Q11：关于窗下垫冻结模糊快照，与窗同位同尺寸
-        FrameLayout.LayoutParams aglp = new FrameLayout.LayoutParams(clp.width, clp.height);
-        aglp.gravity = clp.gravity; aglp.leftMargin = clp.leftMargin; aglp.rightMargin = clp.rightMargin; aglp.bottomMargin = clp.bottomMargin;
-        sheet.addView(glassLayer(card, 22, false), aglp);
-        sheet.addView(card, clp);
+        clp.bottomMargin = 0; // Q45：窗底直达屏底（手势区靠窗内底部留白避让，沿 Q26 口径），不再悬空露角
+        // Q45：玻璃与窗体装进同一贴底容器——玻璃高出窗体 22dp、底圆角沉到容器外被裁掉，
+        // 与窗体同升同降；关窗时 closeAbout 取到的最后一层即此容器，动画口径不变
+        FrameLayout aboutWrap = new FrameLayout(this);
+        aboutWrap.addView(glassLayer(card, 22, false), new FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, clp.height + dp(this, 22)));
+        aboutWrap.addView(card, new FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        sheet.addView(aboutWrap, clp);
         content.addView(sheet);
         aboutSheet = sheet;
         sheet.setAlpha(0f);
         sheet.animate().alpha(1f).setDuration(200).setInterpolator(ANIM_ENTER).start();
-        card.setTranslationY(dp(this, 42));
-        card.animate().translationY(0f).setDuration(260)
+        aboutWrap.setTranslationY(dp(this, 42));
+        aboutWrap.animate().translationY(0f).setDuration(260)
             .setInterpolator(ANIM_ENTER).start();
     }
 
@@ -7350,7 +7376,7 @@ public class MainActivity extends Activity {
     LinearLayout buildAboutBody() {
         LinearLayout page = new LinearLayout(this);
         page.setOrientation(LinearLayout.VERTICAL);
-        page.setPadding(dp(this, 18), dp(this, 18), dp(this, 18), dp(this, 18));
+        page.setPadding(dp(this, 18), dp(this, 18), dp(this, 18), dp(this, 18) + navBarH()); // Q45：关于窗贴底后关闭钮靠底部留白避开手势条
 
         // hero：图标 + 卡盒 + 版本（对照 .about-hero）
         LinearLayout hero = new LinearLayout(this);
