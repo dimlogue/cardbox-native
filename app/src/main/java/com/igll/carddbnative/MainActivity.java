@@ -235,16 +235,20 @@ public class MainActivity extends Activity {
     class TopIconView extends View {
         TopIconView(Context c) { super(c); }
         @Override protected void onDraw(Canvas cv) {
+            // Q23：照混合版 qfTop svg（viewBox 24、path M12 19V5 M5.5 11.5L12 5l6.5 6.5、stroke-width 2）
+            // 在 .qf-top svg 19×19 盒内绘制——必须按内衬区缩放（旧实现用整钮 44dp 直算，箭头撑满圆显粗大）。
             Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);
             p.setStyle(Paint.Style.STROKE);
             p.setStrokeCap(Paint.Cap.ROUND);
             p.setStrokeJoin(Paint.Join.ROUND);
-            p.setStrokeWidth(dp(getContext(), 2.0f));
-            p.setColor(Color.rgb(0x1C, 0x1C, 0x1E)); // Q5：对照混合版 .qf-top 深色箭头（原蓝箭头废除）
-            float sx = getWidth() / 24f, sy = getHeight() / 24f;
-            cv.drawLine(12f * sx, 19.5f * sy, 12f * sx, 5.5f * sy, p);
-            cv.drawLine(6.2f * sx, 11.2f * sy, 12f * sx, 5.2f * sy, p);
-            cv.drawLine(17.8f * sx, 11.2f * sy, 12f * sx, 5.2f * sy, p);
+            p.setColor(Color.rgb(0x1C, 0x1C, 0x1E)); // 对照混合版 .qf-top 深色箭头
+            float ox = getPaddingLeft(), oy = getPaddingTop();
+            float sx = (getWidth() - getPaddingLeft() - getPaddingRight()) / 24f;
+            float sy = (getHeight() - getPaddingTop() - getPaddingBottom()) / 24f;
+            p.setStrokeWidth(2f * sx);
+            cv.drawLine(ox + 12f * sx, oy + 19f * sy, ox + 12f * sx, oy + 5f * sy, p);
+            cv.drawLine(ox + 5.5f * sx, oy + 11.5f * sy, ox + 12f * sx, oy + 5f * sy, p);
+            cv.drawLine(ox + 18.5f * sx, oy + 11.5f * sy, ox + 12f * sx, oy + 5f * sy, p);
         }
     }
     View buildTopFab() {
@@ -259,6 +263,8 @@ public class MainActivity extends Activity {
         // （用户 18:34 截图土黄饼根因：钮正压黄卡、饱和 1.4 放大底色且旧染色 108/96 在图层之下不起作用）。
         // 故托底改盖在图层之上，用固定浅白渐变把底色压回可认形、不染色的区间。
         View wash = new View(this);
+        wash.setClickable(false); wash.setFocusable(false);
+        wash.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
         GradientDrawable washBg = new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
             new int[]{Color.argb(170, 255, 255, 255), Color.argb(156, 244, 248, 253)});
         washBg.setShape(GradientDrawable.OVAL);
