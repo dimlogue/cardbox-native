@@ -2625,22 +2625,95 @@ public class MainActivity extends Activity {
 
     // Q24 首页瓷砖加卡钮（对照混合版 .mine-btn：32dp 半透圆钮，3 列 26dp）：未加入灰半透底＋白色加号、
     // 已加入蓝半透底＋白色勾（rgba(0,122,255,.38)），细线 Canvas 绘制禁用 emoji；按下 .9 回弹照 .mine-btn:active。
+    // Q47 磨砂玻璃化（用户 22:24 点名，现行平色「塑料感」）：混合版 .mine-btn 本就有 backdrop-filter:blur(8px)，
+    // 原生改取钮身下卡图一次性预渲染低清高斯片（降采样 14px 再放大回落柔糊+饱和 1.5，随卡图路径缓存、
+    // 滚动零采样、禁 Bitmap.recycle 同 Q21），盖半透明白提亮/蓝调染色与 1dp 细描边；字形按底片明暗取白或深。
+    static class MineFrost {
+        Bitmap bmp; int lum = 255;
+    }
+    static final LruCache<String, MineFrost> mineFrostCache = new LruCache<String, MineFrost>(4 * 1024) {
+        protected int sizeOf(String k, MineFrost f) { return f == null || f.bmp == null ? 1 : Math.max(1, f.bmp.getByteCount() / 1024); }
+    };
+    static MineFrost makeMineFrost(Bitmap src, String key) {
+        if (src == null || src.isRecycled() || src.getWidth() <= 0 || src.getHeight() <= 0) return null;
+        if (key != null) {
+            MineFrost hit = mineFrostCache.get(key);
+            if (hit != null) return hit;
+        }
+        try {
+            int sw = src.getWidth(), sh = src.getHeight();
+            int cw = Math.max(2, Math.round(sw * 0.30f));
+            int ch = Math.max(2, Math.round(sh * 0.42f));
+            Bitmap crop = Bitmap.createBitmap(src, Math.max(0, sw - cw), 0, Math.min(cw, sw), Math.min(ch, sh));
+            Bitmap small = Bitmap.createScaledBitmap(crop, 14, 14, true);
+            // 饱和 1.5 把卡面颜色透进来（同 applyGlass 口径），小图放大绘制即高斯柔糊感
+            Bitmap out = Bitmap.createBitmap(28, 28, Bitmap.Config.ARGB_8888);
+            Canvas oc = new Canvas(out);
+            Paint sp = new Paint(Paint.FILTER_BITMAP_FLAG | Paint.ANTI_ALIAS_FLAG);
+            ColorMatrix cm = new ColorMatrix();
+            cm.setSaturation(1.5f);
+            sp.setColorFilter(new ColorMatrixColorFilter(cm));
+            oc.drawBitmap(small, null, new RectF(0, 0, 28, 28), sp);
+            long sum = 0;
+            for (int y = 0; y < small.getHeight(); y++) {
+                for (int x = 0; x < small.getWidth(); x++) {
+                    int px = small.getPixel(x, y);
+                    sum += Math.round(0.2126f * Color.red(px) + 0.7152f * Color.green(px) + 0.0722f * Color.blue(px));
+                }
+            }
+            MineFrost f = new MineFrost();
+            f.bmp = out;
+            f.lum = (int) (sum / Math.max(1, small.getWidth() * small.getHeight()));
+            if (key != null) mineFrostCache.put(key, f);
+            return f;
+        } catch (Throwable t) {
+            return null; // 生成失败回落浅白玻璃兜底，不为钮底冒崩点
+        }
+    }
+
     class MineAddBtn extends View {
         boolean on = false;
+        MineFrost frost = null;
         MineAddBtn(Context ctx) { super(ctx); setClickable(true); setFocusable(false); }
         void setOn(boolean v) { on = v; invalidate(); }
+        void setCardImage(Bitmap src, String key) { frost = makeMineFrost(src, key == null ? null : "minefrost:" + key); }
         @Override protected void onDraw(Canvas cv) {
-            Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);
+            Paint p = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.FILTER_BITMAP_FLAG);
             float cx = getWidth() / 2f, cy = getHeight() / 2f;
             float r = Math.min(getWidth(), getHeight()) / 2f;
+            if (r <= 0) return;
+            // 圆形裁切内铺磨砂片（钮身下卡图的低清高斯），无卡图时浅白提亮兜底
+            cv.save();
+            android.graphics.Path circle = new android.graphics.Path();
+            circle.addCircle(cx, cy, r, android.graphics.Path.Direction.CW);
+            cv.clipPath(circle);
+            if (frost != null && frost.bmp != null && !frost.bmp.isRecycled()) {
+                cv.drawBitmap(frost.bmp, null, new RectF(cx - r, cy - r, cx + r, cy + r), p);
+            } else {
+                p.setStyle(Paint.Style.FILL);
+                p.setColor(Color.argb(205, 246, 247, 250));
+                cv.drawCircle(cx, cy, r, p);
+            }
+            // 半透明白提亮（未加）/ 蓝调染色（已加），与 dock 玻璃一脉，不再平色塑料面
             p.setStyle(Paint.Style.FILL);
-            p.setColor(on ? Color.argb(97, 0, 122, 255) : Color.argb(64, 120, 120, 128));
+            p.setColor(on ? Color.argb(92, 0, 122, 255) : Color.argb(88, 255, 255, 255));
             cv.drawCircle(cx, cy, r, p);
+            cv.restore();
+            // 1dp 细描边（白色半透，玻璃边缘口径）
+            p.setStyle(Paint.Style.STROKE);
+            p.setStrokeWidth(dp(getContext(), 1f));
+            p.setColor(Color.argb(150, 255, 255, 255));
+            cv.drawCircle(cx, cy, r - dp(getContext(), 0.5f), p);
+            // 字形按底色明暗取白/深保可辨：亮底深字、暗底或已加蓝态白字（白字带轻影压浅图）
+            boolean lightBg = frost != null && frost.lum > 168;
+            int glyph = (on || !lightBg) ? Color.WHITE : Color.rgb(0x1C, 0x1C, 0x1E);
             p.setStyle(Paint.Style.STROKE);
             p.setStrokeCap(Paint.Cap.ROUND);
             p.setStrokeJoin(Paint.Join.ROUND);
             p.setStrokeWidth(dp(getContext(), 1.8f));
-            p.setColor(Color.WHITE);
+            p.setColor(glyph);
+            if (glyph == Color.WHITE) p.setShadowLayer(dp(getContext(), 1.5f), 0, dp(getContext(), 0.5f), Color.argb(110, 0, 0, 0));
+            else p.clearShadowLayer();
             float s = r * 0.42f;
             if (on) {
                 android.graphics.Path path = new android.graphics.Path();
@@ -2652,6 +2725,7 @@ public class MainActivity extends Activity {
                 cv.drawLine(cx - s, cy, cx + s, cy, p);
                 cv.drawLine(cx, cy - s, cx, cy + s, p);
             }
+            p.clearShadowLayer();
         }
     }
 
@@ -2716,6 +2790,7 @@ public class MainActivity extends Activity {
         // 反馈走既有悬浮提示条/撤销）；钮态与「已添加」chip 在切换/撤销后就地同步，不整页重绘。
         final MineAddBtn mineBtn = new MineAddBtn(this);
         mineBtn.setOn(mine.contains(c.id));
+        mineBtn.setCardImage(b, c.image); // Q47：钮下卡图磨砂片一次性生成并缓存，无图回落浅白玻璃
         int btnSize = nc == 3 ? dp(this, 26) : dp(this, 32);
         int btnEdge = nc == 3 ? dp(this, 6) : dp(this, 8);
         FrameLayout.LayoutParams blp2 = new FrameLayout.LayoutParams(btnSize, btnSize);
