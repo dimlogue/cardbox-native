@@ -241,6 +241,25 @@ public class MainActivity extends Activity {
         g.setColor(color); g.setCornerRadius(dp(c, radiusDp));
         return g;
     }
+    // P5 视觉细修：图片占位改柔和渐变（混合版无灰块口径）——浅蓝→浅紫对角渐变，不再用整块灰蓝
+    static GradientDrawable placeholderGrad(float radiusDp, Context c) {
+        GradientDrawable g = new GradientDrawable(GradientDrawable.Orientation.TL_BR,
+            new int[]{ Color.rgb(0xED, 0xF2, 0xFB), Color.rgb(0xE3, 0xE9, 0xF8), Color.rgb(0xEF, 0xEAF, 0xF7) });
+        g.setCornerRadius(dp(c, radiusDp));
+        return g;
+    }
+    // P5 空状态：对照混合版 .empty（居中、灰字、上下 36px 留白），包进白卡（圆角 14）不裸贴页面底
+    View emptyState(String s) {
+        LinearLayout box = new LinearLayout(this);
+        box.setOrientation(LinearLayout.VERTICAL);
+        box.setBackground(roundRect(Color.WHITE, 14, this));
+        box.setPadding(dp(this, 20), dp(this, 32), dp(this, 20), dp(this, 32));
+        TextView t = tv(this, s, 13.5f, Color.rgb(0x8E, 0x8E, 0x93), false);
+        t.setGravity(android.view.Gravity.CENTER);
+        t.setLineSpacing(dp(this, 3), 1f);
+        box.addView(t, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        return box;
+    }
     // ---------- 显示偏好（Phase 4a：字体三档/界面大小/高刷/触感） ----------
     static String fontMode = "default"; // default=软件默认栈 / system=本机 / serif=内置宋体
     static float uiScale = 1f;          // 界面大小：0.9 紧凑 / 1 标准 / 1.12 大号（作用于 sp）
@@ -1396,7 +1415,7 @@ public class MainActivity extends Activity {
 
         ImageView iv = new ImageView(this);
         iv.setScaleType(ImageView.ScaleType.CENTER_CROP);
-        iv.setBackground(roundRect(Color.rgb(0xE9, 0xEE, 0xF5), 9, this));
+        iv.setBackground(placeholderGrad(9, this));
         int nc = (nCols == 1 || nCols == 3) ? nCols : 2;
         int availW = getResources().getDisplayMetrics().widthPixels - dp(this, 28) - (nc - 1) * dp(this, 10);
         int innerW = availW / nc - dp(this, 16);
@@ -1731,7 +1750,7 @@ public class MainActivity extends Activity {
     void renderHomeList(List<Card> list) {
         homeList.removeAllViews();
         if (list.isEmpty()) {
-            homeList.addView(tv(this, "没有符合条件的卡", 13.5f, Color.rgb(0x8E, 0x8E, 0x93), false));
+            homeList.addView(emptyState("没有符合条件的卡\n换个筛选条件或清空筛选试试"));
             return;
         }
         if (query.isEmpty() && activeFilterCount() == 0) homeList.addView(wizardBanner());
@@ -2700,7 +2719,7 @@ public class MainActivity extends Activity {
 
         ImageView iv = new ImageView(this);
         iv.setScaleType(ImageView.ScaleType.CENTER_CROP);
-        iv.setBackground(roundRect(Color.rgb(0xE9, 0xEE, 0xF5), 9, this));
+        iv.setBackground(placeholderGrad(9, this));
         row.addView(iv, new LinearLayout.LayoutParams(dp(this, 76), dp(this, 48)));
         Bitmap b = Img.get(this, c.image);
         if (b != null) iv.setImageBitmap(b);
@@ -2837,7 +2856,7 @@ public class MainActivity extends Activity {
         ImageView iv = new ImageView(this);
         // 卡面图按原比例完整显示不裁剪（对照混合版 .p-slide img：object-fit:contain、圆角 12、最大高 260）
         iv.setScaleType(ImageView.ScaleType.FIT_CENTER);
-        iv.setBackground(roundRect(Color.rgb(0xF1, 0xF1, 0xF4), 12, this));
+        iv.setBackground(placeholderGrad(12, this));
         iv.setClipToOutline(true);
         Bitmap b = Img.get(this, c.image);
         int availW = getResources().getDisplayMetrics().widthPixels - dp(this, 32);
@@ -3113,7 +3132,7 @@ public class MainActivity extends Activity {
             cardBox.addView(top);
             ImageView iv = new ImageView(this);
             iv.setScaleType(ImageView.ScaleType.CENTER_CROP);
-            iv.setBackground(roundRect(Color.rgb(0xE9, 0xEE, 0xF5), 9, this));
+            iv.setBackground(placeholderGrad(9, this));
             top.addView(iv, new LinearLayout.LayoutParams(dp(this, 72), dp(this, 44)));
             Bitmap b = Img.get(this, c.image);
             if (b != null) iv.setImageBitmap(b);
@@ -3408,10 +3427,9 @@ public class MainActivity extends Activity {
         inner.addView(buildCustomSection());
 
         if (mineCards.isEmpty()) {
-            TextView empty = tv(this, "还没有从卡库收藏的卡。去「全部卡片」点开任意一张，加入我的卡片。", 13.5f, Color.rgb(0x8E, 0x8E, 0x93), false);
             LinearLayout.LayoutParams elp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
             elp.topMargin = dp(this, 12);
-            inner.addView(empty, elp);
+            inner.addView(emptyState("还没有从卡库收藏的卡\n去「全部卡片」点开任意一张，加入我的卡片"), elp);
             return page;
         }
 
@@ -4155,7 +4173,7 @@ public class MainActivity extends Activity {
         final int keepY = savedPageScrollY("news", newsScroll);
         newsListBox.removeAllViews();
         if (newsItems == null || newsItems.isEmpty()) {
-            newsListBox.addView(tv(this, "暂时还没有资讯，过段时间再来看看。", 13.5f, Color.rgb(0x8E, 0x8E, 0x93), false));
+            newsListBox.addView(emptyState("暂时还没有资讯\n过段时间再来看看"));
             return;
         }
         if (newsMeta != null) newsMeta.setText("共 " + newsItems.size() + " 条 · 公开信息整理，仅供参考");
