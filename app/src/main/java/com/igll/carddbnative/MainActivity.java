@@ -346,7 +346,7 @@ public class MainActivity extends Activity {
             Canvas cv = new Canvas(out);
             Paint pt = new Paint(Paint.FILTER_BITMAP_FLAG);
             ColorMatrix cm = new ColorMatrix();
-            cm.setSaturation(1.4f); // 饱和锚点 1.2~1.5（LIQUID-GLASS-NOTES），近似混合版 backdrop saturate
+            cm.setSaturation(1.5f); // Q4：取 LIQUID-GLASS-NOTES 锚点上限 1.5，往混合版 backdrop saturate(2) 再靠一档（原生 ColorMatrix 过 1.5 易溢色，不追 2）
             pt.setColorFilter(new ColorMatrixColorFilter(cm));
             android.graphics.Matrix m = new android.graphics.Matrix();
             m.setTranslate(-left * s, -top * s);
@@ -357,7 +357,8 @@ public class MainActivity extends Activity {
         if (old != null && old != out && !old.isRecycled()) old.recycle();
         iv.setImageBitmap(out);
         if (Build.VERSION.SDK_INT >= 31) {
-            try { iv.setRenderEffect(RenderEffect.createBlurEffect(18f, 18f, Shader.TileMode.CLAMP)); }
+            // Q4：模糊半径 18→24 往混合版 blur(28px) 靠（快照已 0.2 降采样，24 在小图上等效更糊、开销可控）
+            try { iv.setRenderEffect(RenderEffect.createBlurEffect(24f, 24f, Shader.TileMode.CLAMP)); }
             catch (Exception e) { /* 个别机型不支持就保留降采样柔糊 */ }
         }
     }
@@ -1115,7 +1116,8 @@ public class MainActivity extends Activity {
             p.setStrokeCap(Paint.Cap.ROUND);
             p.setStrokeJoin(Paint.Join.ROUND);
             p.setStrokeWidth(dp(getContext(), 1.7f));
-            p.setColor(on ? Color.rgb(0x1C, 0x1C, 0x1E) : Color.rgb(0x63, 0x63, 0x66));
+            // Q4：未选色对照混合版 .dock-glass button 的 #3A3A3C（旧 #636366 在亮玻璃+花背景上发飘读不清），选中仍 #1C1C1E
+            p.setColor(on ? Color.rgb(0x1C, 0x1C, 0x1E) : Color.rgb(0x3A, 0x3A, 0x3C));
             float w = getWidth(), h = getHeight();
             float sx = w / 24f, sy = h / 24f;
             // 在 24x24 网格上画，坐标随控件尺寸缩放
@@ -1172,23 +1174,28 @@ public class MainActivity extends Activity {
     }
 
     Drawable floatingBarBg() {
-        // P1c：贴混合版 .dock-glass——带极淡蓝灰的半透白（rgba .58 量级，内容滚过能透出）、
-        // 顶部高光（三段渐变首段提亮模拟 inset 0 1px 高光）、白色半透描边
+        // Q4 复核（对照混合版 .dock-glass：background rgba(255,255,255,.58) 均匀单色 +
+        // border 1px rgba(255,255,255,.55) + 顶部 inset 高光）：旧三段渐变顶 172/底 138
+        // 上下透光不均、顶过亮底偏灰，改均匀染色 argb 150(.59) 贴 .58，顶部高光只靠描边带出；
+        // 真糊由玻璃层（applyGlass blur+saturate）承担，此处只剩染色不许再抢不透明度，
+        // 否则底下卡片透不过来、图标反而发飘。
         GradientDrawable g = new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
-            new int[]{Color.argb(172, 255, 255, 255), Color.argb(150, 247, 250, 255),
-                Color.argb(138, 228, 236, 246)});
+            new int[]{Color.argb(153, 255, 255, 255), Color.argb(148, 248, 250, 255),
+                Color.argb(145, 238, 243, 250)});
         g.setCornerRadius(dp(this, 26));
         g.setStroke(dp(this, 1), Color.argb(140, 255, 255, 255));
         return g;
     }
 
     Drawable navPillBg() {
-        // P1c：选中胶囊贴混合版 .dock-pill——半透白（.68 量级）+ 顶部高光渐变 + 白色高光描边
+        // Q4 复核（对照混合版 .dock-pill：background rgba(255,255,255,.68) 均匀 +
+        // inset 0 1px 高光 + 0 2px 10px 软影）：旧顶段 198(.78) 过实、压住玻璃透光且与
+        // dock 本体 .58 拉出两截色，改均匀 argb 174(.68) 贴原值，高光靠描边。
         GradientDrawable g = new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
-            new int[]{Color.argb(198, 255, 255, 255), Color.argb(173, 244, 248, 253),
-                Color.argb(164, 234, 241, 250)});
+            new int[]{Color.argb(176, 255, 255, 255), Color.argb(173, 247, 250, 254),
+                Color.argb(170, 240, 245, 251)});
         g.setCornerRadius(dp(this, 18));
-        g.setStroke(dp(this, 1), Color.argb(160, 255, 255, 255));
+        g.setStroke(dp(this, 1), Color.argb(150, 255, 255, 255));
         return g;
     }
 
@@ -1206,7 +1213,8 @@ public class MainActivity extends Activity {
         navBar.setOrientation(LinearLayout.HORIZONTAL);
         navBar.setBackground(floatingBarBg());
         navBar.setPadding(dp(this, 8), dp(this, 8), dp(this, 8), dp(this, 8));
-        if (Build.VERSION.SDK_INT >= 21) navBar.setElevation(dp(this, 24));
+        // Q4：elevation 24→18——混合版是 0 8px 32px 大扩散柔影（偏移小、糊边大），24 在原生上影心偏沉发黑，18 更贴
+        if (Build.VERSION.SDK_INT >= 21) navBar.setElevation(dp(this, 18));
         if (Build.VERSION.SDK_INT >= 28) {
             // 大扩散柔影：阴影色压到混合版 rgba(20,30,60,.14) 量级，不让默认黑影发死
             navBar.setOutlineAmbientShadowColor(Color.argb(36, 20, 30, 60));
@@ -1221,10 +1229,11 @@ public class MainActivity extends Activity {
             LinearLayout item = new LinearLayout(this);
             item.setOrientation(LinearLayout.VERTICAL);
             item.setGravity(Gravity.CENTER_HORIZONTAL);
-            item.setPadding(dp(this, 4), dp(this, 6), dp(this, 4), dp(this, 6));
+            item.setPadding(dp(this, 4), dp(this, 8), dp(this, 4), dp(this, 8));
             NavIconView icon = new NavIconView(this, key);
             item.addView(icon, new LinearLayout.LayoutParams(dp(this, 23), dp(this, 23)));
-            TextView label = tv(this, t[1], 10f, Color.rgb(0x8E, 0x8E, 0x93), false);
+            // Q4：标签未选色对照混合版 button 的 #3A3A3C（旧 #8E8E93 浅灰在玻璃上几乎读不出字）
+            TextView label = tv(this, t[1], 10f, Color.rgb(0x3A, 0x3A, 0x3C), false);
             label.setGravity(Gravity.CENTER);
             LinearLayout.LayoutParams llp = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
@@ -1286,7 +1295,7 @@ public class MainActivity extends Activity {
             if (ic != null) ic.setOn(on);
             TextView lb = navLabels.get(e.getKey());
             if (lb != null) {
-                lb.setTextColor(on ? Color.rgb(0x1C, 0x1C, 0x1E) : Color.rgb(0x8E, 0x8E, 0x93));
+                lb.setTextColor(on ? Color.rgb(0x1C, 0x1C, 0x1E) : Color.rgb(0x3A, 0x3A, 0x3C));
                 android.graphics.Typeface cur = lb.getTypeface();
                 if (cur != null) lb.setTypeface(cur, on ? android.graphics.Typeface.BOLD : android.graphics.Typeface.NORMAL);
             }
