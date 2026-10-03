@@ -480,6 +480,39 @@ public class MainActivity extends Activity {
         g.setCornerRadius(dp(c, radiusDp));
         return g;
     }
+    // Q70：无图占位面按卡 id 哈希从 10 色沉稳渐变里固定取一色（同卡恒定、不随机乱跳，全局一套色板）
+    static final int[][] PLACEHOLDER_PALETTE = {
+        {0x2B4C7E, 0x4A7BB5}, {0x1F6B6B, 0x3A9A8C}, {0x4A3F78, 0x7A6BA5},
+        {0x6B2A3A, 0x9E4A5E}, {0x2E5A3C, 0x4E8A5F}, {0x2F3A4A, 0x55677F},
+        {0x6B4A2F, 0x9A7350}, {0x343A7A, 0x5A62B5}, {0x1E4A5F, 0x2F7A9A},
+        {0x5A2A4E, 0x8A4A78}
+    };
+    static int placeholderIdx(String id) {
+        if (id == null || id.isEmpty()) return 0;
+        return Math.abs(id.hashCode()) % PLACEHOLDER_PALETTE.length;
+    }
+    static GradientDrawable placeholderGradFor(String id, float radiusDp, Context c) {
+        int[] pair = PLACEHOLDER_PALETTE[placeholderIdx(id)];
+        GradientDrawable g = new GradientDrawable(GradientDrawable.Orientation.TL_BR,
+            new int[]{ Color.rgb(Color.red(pair[0]), Color.green(pair[0]), Color.blue(pair[0])),
+                       Color.rgb(Color.red(pair[1]), Color.green(pair[1]), Color.blue(pair[1])) });
+        g.setCornerRadius(dp(c, radiusDp));
+        return g;
+    }
+    static boolean hasOrgBadge(String org) {
+        if (org == null) return false;
+        String o = org.trim();
+        return o.equals("unionpay") || o.equals("mastercard") || o.equals("mastercard-nucc")
+            || o.equals("visa") || o.equals("jcb") || o.equals("amex-cn");
+    }
+    static int orgBadgeWidthDp(String org) {
+        if (org == null) return 36;
+        String o = org.trim();
+        if (o.equals("mastercard-nucc")) return 54;
+        if (o.equals("unionpay") || o.equals("visa") || o.equals("amex-cn")) return 44;
+        if (o.equals("jcb")) return 40;
+        return 36; // mastercard 双圆
+    }
     // Q27：圆角裁切不能只靠默认 BACKGROUND outline（GradientDrawable/RippleDrawable 的 outline 在部分机型上
     // 退化为直角矩形，ImageView 的方形位图四角便盖过圆角背景、elevation 阴影也按直角轮廓打出黑角）。
     // 显式给视图装 RoundRect outline 并 clipToOutline，位图/背景/阴影三者共用同一圆角半径。
@@ -3568,6 +3601,122 @@ public class MainActivity extends Activity {
         }
     }
 
+    // Q70：占位卡面右下角卡组织小标——按 org 自绘，禁用 emoji、绝不用万事达双圆充一切；org 空/未知不画
+    class OrgBadgeView extends View {
+        final String org;
+        OrgBadgeView(Context ctx, String o) { super(ctx); org = o == null ? "" : o.trim(); setClickable(false); setFocusable(false); }
+        @Override protected void onDraw(Canvas cv) {
+            int w = getWidth(), h = getHeight();
+            if (w <= 0 || h <= 0 || org.isEmpty()) return;
+            Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);
+            float pad = dp(getContext(), 1);
+            RectF box = new RectF(pad, pad, w - pad, h - pad);
+            try {
+                if (org.equals("mastercard") || org.equals("mastercard-nucc")) {
+                    float r = h * (org.equals("mastercard-nucc") ? 0.30f : 0.38f);
+                    float cy = org.equals("mastercard-nucc") ? h * 0.36f : h / 2f;
+                    float cx = w / 2f;
+                    p.setStyle(Paint.Style.FILL);
+                    p.setColor(Color.rgb(0xEB, 0x00, 0x1B));
+                    cv.drawCircle(cx - r * 0.55f, cy, r, p);
+                    p.setColor(Color.argb(215, 0xF7, 0x9E, 0x1B));
+                    cv.drawCircle(cx + r * 0.55f, cy, r, p);
+                    if (org.equals("mastercard-nucc")) {
+                        p.setColor(Color.WHITE);
+                        p.setTextSize(h * 0.26f);
+                        p.setTypeface(weightTypeface(getContext(), 600));
+                        p.setTextAlign(Paint.Align.CENTER);
+                        p.setShadowLayer(dp(getContext(), 1), 0, dp(getContext(), 0.5f), Color.argb(120, 0, 0, 0));
+                        cv.drawText("万事达·网联", cx, h * 0.92f, p);
+                        p.clearShadowLayer();
+                    }
+                } else if (org.equals("unionpay")) {
+                    // 银联：白底圆角 + 红/蓝/绿三色斜纹 + 「银联」
+                    p.setStyle(Paint.Style.FILL);
+                    p.setColor(Color.WHITE);
+                    cv.drawRoundRect(box, dp(getContext(), 4), dp(getContext(), 4), p);
+                    cv.save();
+                    android.graphics.Path clip = new android.graphics.Path();
+                    clip.addRoundRect(box, dp(getContext(), 4), dp(getContext(), 4), android.graphics.Path.Direction.CW);
+                    cv.clipPath(clip);
+                    int[] cols = { Color.rgb(0xE2, 0x18, 0x36), Color.rgb(0x00, 0x44, 0x7C), Color.rgb(0x00, 0x9B, 0x77) };
+                    float stripeW = w * 0.30f;
+                    for (int i = 0; i < 3; i++) {
+                        p.setColor(cols[i]);
+                        android.graphics.Path poly = new android.graphics.Path();
+                        float x0 = i * stripeW;
+                        poly.moveTo(x0, h);
+                        poly.lineTo(x0 + stripeW * 0.55f, 0);
+                        poly.lineTo(x0 + stripeW * 1.35f, 0);
+                        poly.lineTo(x0 + stripeW * 0.80f, h);
+                        poly.close();
+                        cv.drawPath(poly, p);
+                    }
+                    cv.restore();
+                    p.setColor(Color.WHITE);
+                    p.setTextSize(h * 0.40f);
+                    p.setTypeface(weightTypeface(getContext(), 700));
+                    p.setTextAlign(Paint.Align.CENTER);
+                    p.setShadowLayer(dp(getContext(), 1.2f), 0, dp(getContext(), 0.5f), Color.argb(140, 0, 0, 0));
+                    cv.drawText("银联", w / 2f, h * 0.68f, p);
+                    p.clearShadowLayer();
+                    p.setStyle(Paint.Style.STROKE);
+                    p.setStrokeWidth(dp(getContext(), 0.7f));
+                    p.setColor(Color.argb(70, 20, 30, 60));
+                    cv.drawRoundRect(box, dp(getContext(), 4), dp(getContext(), 4), p);
+                } else if (org.equals("visa")) {
+                    p.setStyle(Paint.Style.FILL);
+                    p.setColor(Color.WHITE);
+                    cv.drawRoundRect(box, dp(getContext(), 4), dp(getContext(), 4), p);
+                    p.setColor(Color.rgb(0x1A, 0x1F, 0x71));
+                    p.setTextSize(h * 0.46f);
+                    p.setTypeface(weightTypeface(getContext(), 800));
+                    p.setTextSkewX(-0.25f);
+                    p.setTextAlign(Paint.Align.CENTER);
+                    cv.drawText("VISA", w / 2f, h * 0.70f, p);
+                    p.setTextSkewX(0);
+                } else if (org.equals("jcb")) {
+                    int[] cols = { Color.rgb(0x0B, 0x4E, 0xA2), Color.rgb(0xCC, 0x00, 0x2E), Color.rgb(0x00, 0x8A, 0x3C) };
+                    float bw = box.width() / 3f;
+                    p.setStyle(Paint.Style.FILL);
+                    for (int i = 0; i < 3; i++) {
+                        p.setColor(cols[i]);
+                        cv.drawRect(box.left + i * bw, box.top, box.left + (i + 1) * bw, box.bottom, p);
+                    }
+                    p.setColor(Color.WHITE);
+                    p.setTextSize(h * 0.42f);
+                    p.setTypeface(weightTypeface(getContext(), 800));
+                    p.setTextAlign(Paint.Align.CENTER);
+                    p.setShadowLayer(dp(getContext(), 1), 0, dp(getContext(), 0.5f), Color.argb(110, 0, 0, 0));
+                    cv.drawText("JCB", w / 2f, h * 0.70f, p);
+                    p.clearShadowLayer();
+                } else if (org.equals("amex-cn")) {
+                    p.setStyle(Paint.Style.FILL);
+                    p.setColor(Color.rgb(0x2E, 0x77, 0xBC));
+                    cv.drawRoundRect(box, dp(getContext(), 4), dp(getContext(), 4), p);
+                    p.setColor(Color.WHITE);
+                    p.setTextSize(h * 0.38f);
+                    p.setTypeface(weightTypeface(getContext(), 800));
+                    p.setTextAlign(Paint.Align.CENTER);
+                    cv.drawText("AMEX", w / 2f, h * 0.68f, p);
+                }
+            } catch (Throwable ignored) { /* 小标绘制失败只不显示，不为占位冒崩点 */ }
+        }
+    }
+    void addOrgBadge(FrameLayout parent, String org, float scale) {
+        if (parent == null || !hasOrgBadge(org)) return;
+        try {
+            OrgBadgeView badge = new OrgBadgeView(this, org);
+            int bw = Math.round(dp(this, orgBadgeWidthDp(org) * scale));
+            int bh = Math.round(dp(this, 24 * scale));
+            FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(bw, bh);
+            lp.gravity = Gravity.BOTTOM | Gravity.RIGHT;
+            lp.rightMargin = dp(this, 6);
+            lp.bottomMargin = dp(this, 6);
+            parent.addView(badge, lp);
+        } catch (Throwable ignored) { }
+    }
+
     class MineAddBtn extends View {
         boolean on = false;
         MineFrost frost = null;
@@ -3662,10 +3811,10 @@ public class MainActivity extends Activity {
         box.addView(art, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, imgH));
         ImageView iv = new ImageView(this);
         iv.setScaleType(ImageView.ScaleType.CENTER_CROP); // cover：铺满不留白、等比不拉伸
-        iv.setBackground(placeholderGrad(0, this));
+        iv.setBackground(placeholderGradFor(c.id, 0, this));
         art.addView(iv, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         Bitmap b = Img.get(this, c.image);
-        if (b != null) iv.setImageBitmap(b); else iv.setImageBitmap(null);
+        if (b != null) iv.setImageBitmap(b); else { iv.setImageBitmap(null); addOrgBadge(art, c.org, 1f); }
 
         LinearLayout body = new LinearLayout(this);
         body.setOrientation(LinearLayout.VERTICAL);
@@ -5688,13 +5837,16 @@ public class MainActivity extends Activity {
         rlp.topMargin = dp(this, 9);
         row.setLayoutParams(rlp);
 
+        FrameLayout wizThumb = new FrameLayout(this);
+        row.addView(wizThumb, new LinearLayout.LayoutParams(dp(this, 76), dp(this, 48)));
         ImageView iv = new ImageView(this);
         iv.setScaleType(ImageView.ScaleType.CENTER_CROP);
-        iv.setBackground(placeholderGrad(9, this));
+        iv.setBackground(placeholderGradFor(c.id, 9, this));
         roundClip(iv, 9, this); // Q27 同机制：缩略图自身圆角裁切，不靠父行轮廓
-        row.addView(iv, new LinearLayout.LayoutParams(dp(this, 76), dp(this, 48)));
+        wizThumb.addView(iv, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        roundClip(wizThumb, 9, this);
         Bitmap b = Img.get(this, c.image);
-        if (b != null) iv.setImageBitmap(b);
+        if (b != null) iv.setImageBitmap(b); else addOrgBadge(wizThumb, c.org, 0.75f);
 
         LinearLayout info = new LinearLayout(this);
         info.setOrientation(LinearLayout.VERTICAL);
@@ -6212,7 +6364,7 @@ public class MainActivity extends Activity {
             LinearLayout.LayoutParams ilp = new LinearLayout.LayoutParams(imgW, imgH);
             ilp.gravity = Gravity.CENTER_HORIZONTAL;
             slide.addView(imgFrame, ilp);
-            if (b == null) iv.setBackground(placeholderGrad(cardR, this));
+            if (b == null) { iv.setBackground(placeholderGradFor(c.id, cardR, this)); addOrgBadge(imgFrame, c.org, 1.5f); }
             else {
                 // 第二层：位图级同半径切角（半径按位图/显示宽比换算）；副本失败回落源图时控件裁切仍保四角
                 float rScale = imgW > 0 ? (float) b.getWidth() / (float) imgW : 1f;
@@ -6522,13 +6674,16 @@ public class MainActivity extends Activity {
             top.setOrientation(LinearLayout.HORIZONTAL);
             top.setGravity(Gravity.CENTER_VERTICAL);
             cardBox.addView(top);
+            FrameLayout stuThumb = new FrameLayout(this);
+            top.addView(stuThumb, new LinearLayout.LayoutParams(dp(this, 72), dp(this, 44)));
             ImageView iv = new ImageView(this);
             iv.setScaleType(ImageView.ScaleType.CENTER_CROP);
-            iv.setBackground(placeholderGrad(9, this));
+            iv.setBackground(placeholderGradFor(c.id, 9, this));
             roundClip(iv, 9, this); // Q27 同机制：缩略图自身圆角裁切，不靠父卡轮廓
-            top.addView(iv, new LinearLayout.LayoutParams(dp(this, 72), dp(this, 44)));
+            stuThumb.addView(iv, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+            roundClip(stuThumb, 9, this);
             Bitmap b = Img.get(this, c.image);
-            if (b != null) iv.setImageBitmap(b);
+            if (b != null) iv.setImageBitmap(b); else addOrgBadge(stuThumb, c.org, 0.7f);
             LinearLayout tx = new LinearLayout(this);
             tx.setOrientation(LinearLayout.VERTICAL);
             LinearLayout.LayoutParams txLp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
@@ -9642,13 +9797,18 @@ public class MainActivity extends Activity {
             LinearLayout.LayoutParams rlp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
             rlp.topMargin = dp(this, 8);
             extResultBox.addView(row, rlp);
-            // 占位面：无图卡统一柔和渐变 + 组织短标，不预置扩展图进包（Q68 体积口径）
+            // 占位面：无图卡统一按 id 哈希配色 + Q70 组织小标，不预置扩展图进包（Q68 体积口径）
             FrameLayout thumb = new FrameLayout(this);
-            thumb.setBackground(placeholderGrad(8, this));
+            thumb.setBackground(placeholderGradFor(e.id != null && !e.id.isEmpty() ? e.id : ((e.bank == null ? "" : e.bank) + (e.name == null ? "" : e.name)), 8, this));
             roundClip(thumb, 8, this);
-            TextView orgShort = tv(this, (e.org == null || e.org.trim().isEmpty()) ? "卡" : orgLabel(e.org.trim()), 10, Color.rgb(0x0A, 0x5C, 0xD6), true);
-            orgShort.setGravity(Gravity.CENTER);
-            thumb.addView(orgShort, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+            if (hasOrgBadge(e.org)) {
+                addOrgBadge(thumb, e.org, 0.7f);
+            } else {
+                TextView orgShort = tv(this, (e.org == null || e.org.trim().isEmpty()) ? "卡" : orgLabel(e.org.trim()), 10, Color.WHITE, true);
+                orgShort.setGravity(Gravity.CENTER);
+                orgShort.setShadowLayer(dp(this, 1), 0, dp(this, 0.5f), Color.argb(120, 0, 0, 0));
+                thumb.addView(orgShort, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+            }
             row.addView(thumb, new LinearLayout.LayoutParams(dp(this, 56), dp(this, 36)));
             LinearLayout mid = new LinearLayout(this);
             mid.setOrientation(LinearLayout.VERTICAL);
