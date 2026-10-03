@@ -842,6 +842,12 @@ public class MainActivity extends Activity {
     static int hapticLevel = 2; // P3 触感分档：0 关 / 1 轻(10ms) / 2 中(20ms) / 3 强(40ms)，存 prefs haptic_level（旧 boolean haptic 自动迁移）
     static android.graphics.Typeface sansRegularTf = null, sansMediumTf = null, sansBoldTf = null;
     static boolean sansLoadTried = false;
+    // Q55 自定义字体：用户导入的单文件 .ttf/.otf 存私有目录，字重由系统合成；异常回退链 自定义→软件字体→系统无衬线
+    static android.graphics.Typeface customTf = null;
+    static boolean customLoadTried = false;
+    static String customFontName = "";
+    static final int REQ_PICK_FONT = 7711;
+    static final long MAX_CUSTOM_FONT_BYTES = 20L * 1024L * 1024L;
 
     static void ensureSansLoaded(Context c) {
         if (sansLoadTried) return;
@@ -862,8 +868,49 @@ public class MainActivity extends Activity {
         return weight >= 600 ? android.graphics.Typeface.create(base, android.graphics.Typeface.BOLD) : base;
     }
 
+    static File customFontFile(Context c) {
+        File d = new File(c.getFilesDir(), "fonts");
+        if (!d.exists()) d.mkdirs();
+        return new File(d, "custom-font.dat");
+    }
+
+    static File customFontTmpFile(Context c) {
+        File d = new File(c.getFilesDir(), "fonts");
+        if (!d.exists()) d.mkdirs();
+        return new File(d, "custom-font.tmp");
+    }
+
+    static boolean hasCustomFont(Context c) {
+        try { File f = customFontFile(c); return f.exists() && f.length() > 0; } catch (Throwable e) { return false; }
+    }
+
+    static android.graphics.Typeface ensureCustomLoaded(Context c) {
+        if (customTf != null) return customTf;
+        if (customLoadTried) return null;
+        customLoadTried = true;
+        try {
+            File f = customFontFile(c);
+            if (f.exists() && f.length() > 0) customTf = android.graphics.Typeface.createFromFile(f);
+        } catch (Throwable e) { customTf = null; }
+        return customTf;
+    }
+
+    static void resetCustomFontCache() { customTf = null; customLoadTried = false; }
+
+    static android.graphics.Typeface customSansTypeface(Context c, int weight) {
+        android.graphics.Typeface base = null;
+        try { base = ensureCustomLoaded(c); } catch (Throwable ignored) { base = null; }
+        if (base == null) return builtinSansTypeface(c, weight); // 回退链：自定义→软件字体（其内部再回落系统无衬线）
+        if (android.os.Build.VERSION.SDK_INT >= 28) {
+            int w = Math.max(100, Math.min(1000, weight));
+            try { return android.graphics.Typeface.create(base, w, false); } catch (Throwable e) { return base; }
+        }
+        return weight >= 600 ? android.graphics.Typeface.create(base, android.graphics.Typeface.BOLD) : base;
+    }
+
     // Q39 排字字距/行高口径不变；字形来源按 Q42：软件字体=内置 Noto Sans SC 三档，系统字体=系统无衬线。
     static android.graphics.Typeface weightTypeface(Context c, int weight) {
+        if ("custom".equals(fontMode)) return customSansTypeface(c, weight);
         if (!"system".equals(fontMode)) return builtinSansTypeface(c, weight);
         android.graphics.Typeface base = android.graphics.Typeface.SANS_SERIF;
         if (android.os.Build.VERSION.SDK_INT >= 28) {
@@ -1515,7 +1562,14 @@ public class MainActivity extends Activity {
         loadCrashLog();
         installCrashHandler();
         fontMode = prefs.getString("font_mode", "builtin");
-        if (!"system".equals(fontMode)) fontMode = "builtin"; // Q42 迁移：旧 default/serif 统一落软件字体（无衬线）
+        customFontName = prefs.getString("custom_font_name", "");
+        if ("custom".equals(fontMode)) {
+            // Q55：自定义字体已删/损坏时自动回退软件字体，不带病启动
+            if (ensureCustomLoaded(this) == null) {
+                fontMode = "builtin";
+                try { prefs.edit().putString("font_mode", "builtin").apply(); } catch (Throwable ignored) {}
+            }
+        } else if (!"system".equals(fontMode) && !"builtin".equals(fontMode)) fontMode = "builtin"; // Q42 迁移：旧 default/serif 统一落软件字体（无衬线）
         uiScale = prefs.getFloat("ui_scale", 1f);
         if (uiScale != 0.9f && uiScale != 1f && uiScale != 1.12f) uiScale = 1f;
         if (prefs.contains("haptic_level")) hapticLevel = prefs.getInt("haptic_level", 2);
@@ -1728,6 +1782,160 @@ public class MainActivity extends Activity {
         pages.clear();
         if (content != null) content.removeAllViews();
         showTab(tab);
+    }
+
+    // Q55 自定义字体导入：系统文件选择 .ttf/.otf，先下到临时文件校验（大小+文件头+试加载），成功才替换正式文件并即时启用
+    void openFontPicker() {
+        try {
+            Intent it = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+            it.addCategory(Intent.CATEGORY_OPENABLE);
+            it.setType("*/*");
+            it.putExtra(Intent.EXTRA_MIME_TYPES, new String[]{"font/ttf", "font/otf", "application/x-font-ttf", "application/x-font-otf", "application/octet-stream"});
+            startActivityForResult(it, REQ_PICK_FONT);
+        } catch (Throwable e) { showFloatToast("打不开文件选择器"); }
+    }
+
+    String queryFontDisplayName(Uri uri) {
+        String name = "";
+        android.database.Cursor cur = null;
+        try {
+            cur = getContentResolver().query(uri, null, null, null, null);
+            if (cur != null && cur.moveToFirst()) {
+                int idx = cur.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME);
+                if (idx >= 0) { String v = cur.getString(idx); if (v != null) name = v; }
+            }
+        } catch (Throwable ignored) {} finally { if (cur != null) try { cur.close(); } catch (Throwable ignored) {} }
+        return name;
+    }
+
+    void importCustomFont(final Uri uri, final String displayName) {
+        showFloatToast("正在导入字体…");
+        new Thread(() -> {
+            String failMsg = null;
+            String okName = displayName == null ? "" : displayName;
+            File tmp = null;
+            try {
+                if (okName != null && okName.length() > 0) {
+                    String low = okName.toLowerCase(java.util.Locale.ROOT);
+                    if (!low.endsWith(".ttf") && !low.endsWith(".otf")) failMsg = "只支持 .ttf / .otf 字体文件，已取消导入";
+                }
+                tmp = customFontTmpFile(MainActivity.this);
+                if (failMsg == null) {
+                    try { if (tmp.exists()) tmp.delete(); } catch (Throwable ignored) {}
+                    java.io.InputStream in = null;
+                    java.io.FileOutputStream out = null;
+                    long total = 0;
+                    try {
+                        in = getContentResolver().openInputStream(uri);
+                        if (in == null) failMsg = "读不到这个文件，已回退软件字体";
+                        else {
+                            out = new java.io.FileOutputStream(tmp);
+                            byte[] buf = new byte[32768];
+                            int n;
+                            while ((n = in.read(buf)) > 0) {
+                                total += n;
+                                if (total > MAX_CUSTOM_FONT_BYTES) { failMsg = "字体文件太大了（上限 20MB），没有导入"; break; }
+                                out.write(buf, 0, n);
+                            }
+                            out.flush();
+                        }
+                    } finally {
+                        if (out != null) try { out.close(); } catch (Throwable ignored) {}
+                        if (in != null) try { in.close(); } catch (Throwable ignored) {}
+                    }
+                    if (failMsg == null && total == 0) failMsg = "这个文件是空的，已回退软件字体";
+                }
+                if (failMsg == null) {
+                    // 文件头校验：TrueType 0x00010000 / OpenType OTTO / Collection ttcf / true
+                    java.io.FileInputStream fis = null;
+                    try {
+                        fis = new java.io.FileInputStream(tmp);
+                        byte[] head = new byte[4];
+                        int got = fis.read(head);
+                        boolean magicOk = got == 4 && ((head[0] == 0 && head[1] == 1 && head[2] == 0 && head[3] == 0)
+                            || (head[0] == 'O' && head[1] == 'T' && head[2] == 'T' && head[3] == 'O')
+                            || (head[0] == 't' && head[1] == 't' && head[2] == 'c' && head[3] == 'f')
+                            || (head[0] == 't' && head[1] == 'r' && head[2] == 'u' && head[3] == 'e'));
+                        if (!magicOk) failMsg = "这个字体文件读不了，已回退软件字体";
+                    } finally { if (fis != null) try { fis.close(); } catch (Throwable ignored) {} }
+                }
+                android.graphics.Typeface trial = null;
+                if (failMsg == null) {
+                    try { trial = android.graphics.Typeface.createFromFile(tmp); } catch (Throwable e) { trial = null; }
+                    if (trial == null) failMsg = "这个字体文件读不了，已回退软件字体";
+                }
+                if (failMsg == null) {
+                    File dst = customFontFile(MainActivity.this);
+                    try { if (dst.exists()) dst.delete(); } catch (Throwable ignored) {}
+                    if (!tmp.renameTo(dst)) {
+                        // 跨卷兜底：流式拷贝
+                        java.io.FileInputStream cin = null; java.io.FileOutputStream cout = null;
+                        try {
+                            cin = new java.io.FileInputStream(tmp); cout = new java.io.FileOutputStream(dst);
+                            byte[] buf = new byte[32768]; int n;
+                            while ((n = cin.read(buf)) > 0) cout.write(buf, 0, n);
+                            cout.flush();
+                        } finally {
+                            if (cout != null) try { cout.close(); } catch (Throwable ignored) {}
+                            if (cin != null) try { cin.close(); } catch (Throwable ignored) {}
+                        }
+                        try { tmp.delete(); } catch (Throwable ignored) {}
+                    }
+                    if (okName == null || okName.length() == 0) okName = "自定义字体";
+                    final String finalName = okName;
+                    runOnUiThread(() -> {
+                        resetCustomFontCache();
+                        customFontName = finalName;
+                        fontMode = "custom";
+                        try { prefs.edit().putString("font_mode", "custom").putString("custom_font_name", finalName).apply(); } catch (Throwable ignored) {}
+                        // 启用后再验一次，加载失败立即回退软件字体，不许带半截状态
+                        if (ensureCustomLoaded(MainActivity.this) == null) {
+                            fontMode = "builtin";
+                            try { prefs.edit().putString("font_mode", "builtin").apply(); } catch (Throwable ignored) {}
+                            rebuildPages();
+                            showFloatToast("这个字体文件读不了，已回退软件字体");
+                            return;
+                        }
+                        haptic();
+                        rebuildPages();
+                        showFloatToast("自定义字体已启用：" + finalName);
+                    });
+                    return;
+                }
+            } catch (Throwable e) {
+                failMsg = "导入失败，已回退软件字体";
+            }
+            // 失败路径：清临时文件、不动已生效字体文件，但模式回退软件字体（Q55 口径），全程不闪退
+            try { if (tmp != null && tmp.exists()) tmp.delete(); } catch (Throwable ignored) {}
+            final String msg = failMsg == null ? "导入失败，已回退软件字体" : failMsg;
+            runOnUiThread(() -> {
+                fontMode = "builtin";
+                try { prefs.edit().putString("font_mode", "builtin").apply(); } catch (Throwable ignored) {}
+                rebuildPages();
+                showFloatToast(msg);
+            });
+        }).start();
+    }
+
+    void deleteCustomFont() {
+        try { customFontFile(this).delete(); } catch (Throwable ignored) {}
+        try { customFontTmpFile(this).delete(); } catch (Throwable ignored) {}
+        resetCustomFontCache();
+        customFontName = "";
+        fontMode = "builtin";
+        try { prefs.edit().putString("font_mode", "builtin").remove("custom_font_name").apply(); } catch (Throwable ignored) {}
+        haptic();
+        rebuildPages();
+        showFloatToast("自定义字体已删除，已回退软件字体");
+    }
+
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode != REQ_PICK_FONT) return;
+        if (resultCode != RESULT_OK || data == null || data.getData() == null) { showFloatToast("已取消导入字体"); return; }
+        Uri uri = data.getData();
+        importCustomFont(uri, queryFontDisplayName(uri));
     }
 
     // ---------- 底部导航（P1 悬浮底栏：对照混合版 .dock-glass） ----------
@@ -7986,9 +8194,20 @@ public class MainActivity extends Activity {
         page.addView(wizEntry);
 
         sectionHead(page, "显示");
-        segRow(page, "字体", new String[][]{{"builtin","软件字体"},{"system","系统字体"}}, fontMode, v -> {
+        segRow(page, "字体", new String[][]{{"builtin","软件字体"},{"system","系统字体"},{"custom","自定义"}}, fontMode, v -> {
+            if ("custom".equals(v) && !hasCustomFont(this)) { haptic(); showFloatToast("先导入一个字体文件再用自定义"); openFontPicker(); return; }
             fontMode = v; prefs.edit().putString("font_mode", v).apply(); haptic(); rebuildPages();
         });
+        View fontImpRow = settingRow("导入字体文件", hasCustomFont(this)
+            ? ("已导入：" + (customFontName == null || customFontName.length() == 0 ? "自定义字体" : customFontName) + " · 点此更换 ›")
+            : "选择 .ttf / .otf 字体文件 ›");
+        fontImpRow.setOnClickListener(v -> { haptic(); openFontPicker(); });
+        page.addView(fontImpRow);
+        if (hasCustomFont(this)) {
+            View fontDelRow = settingRow("删除自定义字体", "删掉后回到软件字体 ›");
+            fontDelRow.setOnClickListener(v -> { deleteCustomFont(); });
+            page.addView(fontDelRow);
+        }
         segRow(page, "界面大小", new String[][]{{"0.9","紧凑"},{"1","标准"},{"1.12","大号"}}, String.valueOf(uiScale), v -> {
             uiScale = Float.parseFloat(v); prefs.edit().putFloat("ui_scale", uiScale).apply(); haptic(); rebuildPages();
         });
