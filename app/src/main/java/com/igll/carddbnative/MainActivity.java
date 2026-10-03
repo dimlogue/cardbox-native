@@ -1300,7 +1300,7 @@ public class MainActivity extends Activity {
         filterBtn.setAllCaps(false);
         filterBtn.setMinWidth(0);
         filterBtn.setBackground(roundRect(Color.WHITE, 11, this));
-        filterBtn.setOnClickListener(v -> openFilterSheet());
+        filterBtn.setOnClickListener(v -> { haptic(); openFilterSheet(); });
         frow.addView(filterBtn, new LinearLayout.LayoutParams(dp(this, 92), dp(this, 34)));
 
         // 已选标签栏（Phase 2a-2，对照 renderActiveFilters：点标签即移除该项筛选）
@@ -1603,6 +1603,7 @@ public class MainActivity extends Activity {
         TextView clearT = tv(this, "\u6e05\u7a7a", 13, Color.rgb(0x8E, 0x8E, 0x93), false);
         clearT.setPadding(dp(this, 8), dp(this, 6), dp(this, 8), dp(this, 6));
         clearT.setOnClickListener(v -> {
+            haptic();
             filterType = null; filterOrg = null; filterStatus = null;
             filterFeats.clear(); filterBank = null;
             sortMode = null; groupBank = false; persistViewPrefs();
@@ -1611,7 +1612,7 @@ public class MainActivity extends Activity {
         chead.addView(clearT);
         TextView doneT = tv(this, "\u5b8c\u6210", 13, Color.rgb(0x0A, 0x5C, 0xD6), true);
         doneT.setPadding(dp(this, 8), dp(this, 6), dp(this, 10), dp(this, 6));
-        doneT.setOnClickListener(v -> closeFilterSheet());
+        doneT.setOnClickListener(v -> { haptic(); closeFilterSheet(); });
         chead.addView(doneT);
         card.addView(chead);
         ScrollView sc = new ScrollView(this);
@@ -1883,7 +1884,7 @@ public class MainActivity extends Activity {
         tx.addView(tv(this, "情景选卡", 15, Color.WHITE, true));
         tx.addView(tv(this, "按场景答几题，从在发卡里挑适合你的", 11.5f, Color.argb(215, 255, 255, 255), false));
         b.addView(tv(this, "开始 ›", 13, Color.WHITE, true));
-        b.setOnClickListener(v -> openWizard());
+        b.setOnClickListener(v -> { haptic(); openWizard(); });
         return b;
     }
 
@@ -2203,6 +2204,7 @@ public class MainActivity extends Activity {
             row.addView(val, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
             row.addView(tv(this, "修改", 11.5f, Color.rgb(0x0A, 0x5C, 0xD6), true));
             row.setOnClickListener(v -> {
+                haptic();
                 if (step == 0) { wizSc = null; wizStep = 0; wizA.clear(); }
                 else wizStep = step;
                 showWizardPage();
@@ -2247,7 +2249,7 @@ public class MainActivity extends Activity {
         back.setText("‹ 返回"); back.setTextSize(14); back.setAllCaps(false);
         back.setBackground(roundRect(Color.WHITE, 12, this));
         back.setVisibility(wizSc == null ? View.INVISIBLE : View.VISIBLE);
-        back.setOnClickListener(v -> wizGoBack());
+        back.setOnClickListener(v -> { haptic(); wizGoBack(); });
         top.addView(back, new LinearLayout.LayoutParams(dp(this, 84), dp(this, 38)));
         TextView ttl = tv(this, title, 16, Color.rgb(0x1C, 0x1C, 0x1E), true);
         LinearLayout.LayoutParams ttlp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
@@ -2256,7 +2258,7 @@ public class MainActivity extends Activity {
         Button close = new Button(this);
         close.setText("✕"); close.setTextSize(14); close.setAllCaps(false);
         close.setBackground(roundRect(Color.WHITE, 12, this));
-        close.setOnClickListener(v -> closeWizard());
+        close.setOnClickListener(v -> { haptic(); closeWizard(); });
         top.addView(close, new LinearLayout.LayoutParams(dp(this, 44), dp(this, 38)));
 
         if (wizSc == null) {
@@ -2279,7 +2281,7 @@ public class MainActivity extends Activity {
                 tx.addView(tv(this, s.name, 16, Color.rgb(0x1C, 0x1C, 0x1E), true));
                 tx.addView(tv(this, s.desc, 12, Color.rgb(0x8E, 0x8E, 0x93), false));
                 tile.addView(tv(this, "›", 18, Color.rgb(0x8E, 0x8E, 0x93), false));
-                tile.setOnClickListener(v -> { wizSc = s.id; wizStep = 1; showWizardPage(); });
+                tile.setOnClickListener(v -> { haptic(); wizSc = s.id; wizStep = 1; showWizardPage(); });
                 page.addView(tile);
             }
             return col;
@@ -2312,7 +2314,7 @@ public class MainActivity extends Activity {
                 LinearLayout.LayoutParams olp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
                 olp.topMargin = dp(this, 8);
                 page.addView(opt, olp);
-                opt.setOnClickListener(v -> { wizA.put(q.k, o[0]); wizStep++; showWizardPage(); });
+                opt.setOnClickListener(v -> { haptic(); wizA.put(q.k, o[0]); wizStep++; showWizardPage(); });
             }
             return col;
         }
@@ -2349,7 +2351,7 @@ public class MainActivity extends Activity {
         LinearLayout.LayoutParams rlp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(this, 44));
         rlp.topMargin = dp(this, 16);
         page.addView(redo, rlp);
-        redo.setOnClickListener(v -> { wizSc = null; wizStep = 0; wizA.clear(); showWizardPage(); });
+        redo.setOnClickListener(v -> { haptic(); wizSc = null; wizStep = 0; wizA.clear(); showWizardPage(); });
         return col;
     }
 
@@ -2471,7 +2473,7 @@ public class MainActivity extends Activity {
         Button back = new Button(this);
         back.setText("‹ 返回"); back.setTextSize(14); back.setAllCaps(false);
         back.setBackground(roundRect(Color.WHITE, 12, this));
-        back.setOnClickListener(v -> closeDetail());
+        back.setOnClickListener(v -> { haptic(); closeDetail(); });
         top.addView(back, new LinearLayout.LayoutParams(dp(this, 84), dp(this, 38)));
         TextView title = tv(this, c.bank, 15, Color.rgb(0x1C, 0x1C, 0x1E), true);
         LinearLayout.LayoutParams ttlp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
@@ -3197,14 +3199,14 @@ public class MainActivity extends Activity {
         addBtn.setText("＋ 添加"); addBtn.setTextSize(12.5f); addBtn.setAllCaps(false);
         addBtn.setTextColor(Color.WHITE);
         addBtn.setBackground(roundRect(Color.rgb(0x0A, 0x5C, 0xD6), 999, this));
-        addBtn.setOnClickListener(v -> openCustomForm(null));
+        addBtn.setOnClickListener(v -> { haptic(); openCustomForm(null); });
         head.addView(addBtn, new LinearLayout.LayoutParams(dp(this, 76), dp(this, 36)));
         TextView arrow = tv(this, customCards.isEmpty() ? "" : (customOpen ? "收起 ‹" : "展开 ›"), 12, Color.rgb(0x0A, 0x5C, 0xD6), true);
         LinearLayout.LayoutParams alp2 = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         alp2.leftMargin = dp(this, 8);
         head.addView(arrow, alp2);
         if (!customCards.isEmpty()) {
-            head.setOnClickListener(v -> { customOpen = !customOpen; refreshMineKeepScroll(); });
+            head.setOnClickListener(v -> { haptic(); customOpen = !customOpen; refreshMineKeepScroll(); });
         }
 
         if (customCards.isEmpty()) {
@@ -3556,7 +3558,7 @@ public class MainActivity extends Activity {
             LinearLayout.LayoutParams blp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
             blp.rightMargin = dp(this, 6);
             b.setLayoutParams(blp);
-            b.setOnClickListener(v -> { orgSel[0] = o.equals(orgSel[0]) ? "" : o; paintOrgs.run(); });
+            b.setOnClickListener(v -> { haptic(); orgSel[0] = o.equals(orgSel[0]) ? "" : o; paintOrgs.run(); });
             orgBtns.add(b);
             orgRow.addView(b);
         }
@@ -3587,7 +3589,7 @@ public class MainActivity extends Activity {
             LinearLayout.LayoutParams blp = new LinearLayout.LayoutParams(dp(this, 44), dp(this, 32));
             blp.rightMargin = dp(this, 7);
             b.setLayoutParams(blp);
-            b.setOnClickListener(v -> { styleSel[0] = si; paintStyles.run(); });
+            b.setOnClickListener(v -> { haptic(); styleSel[0] = si; paintStyles.run(); });
             styleBtns.add(b);
             styleRow.addView(b);
         }
@@ -3613,7 +3615,7 @@ public class MainActivity extends Activity {
         Button cancel = new Button(this);
         cancel.setText("取消"); cancel.setTextSize(14); cancel.setAllCaps(false);
         cancel.setBackground(roundRect(Color.rgb(0xF5, 0xF6, 0xF8), 12, this));
-        cancel.setOnClickListener(v -> { customDialog = null; dlg.dismiss(); });
+        cancel.setOnClickListener(v -> { haptic(); customDialog = null; dlg.dismiss(); });
         acts.addView(cancel, new LinearLayout.LayoutParams(0, dp(this, 46), 1f));
         Button save = new Button(this);
         save.setText("保存"); save.setTextSize(14); save.setAllCaps(false);
@@ -3623,6 +3625,7 @@ public class MainActivity extends Activity {
         saveLp.leftMargin = dp(this, 10);
         acts.addView(save, saveLp);
         save.setOnClickListener(v -> {
+            haptic();
             String name = inName.getText().toString().trim();
             if (name.isEmpty()) { Toast.makeText(this, "请填写卡片名称", Toast.LENGTH_SHORT).show(); inName.requestFocus(); return; }
             if (isNew) {
@@ -3858,6 +3861,7 @@ public class MainActivity extends Activity {
                     llp.topMargin = dp(this, 6);
                     det.addView(link, llp);
                     link.setOnClickListener(v -> {
+                        haptic();
                         try { startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(n.url))); }
                         catch (Exception e) { Toast.makeText(this, "打不开这个链接", Toast.LENGTH_SHORT).show(); }
                     });
@@ -3867,6 +3871,7 @@ public class MainActivity extends Activity {
             }
 
             card.setOnClickListener(v -> {
+                haptic();
                 if (newsOpen.contains(n.id)) newsOpen.remove(n.id); else newsOpen.add(n.id);
                 renderNews();
             });
@@ -4045,7 +4050,7 @@ public class MainActivity extends Activity {
         Button back = new Button(this);
         back.setText("‹ 返回"); back.setTextSize(14); back.setAllCaps(false);
         back.setBackground(roundRect(Color.WHITE, 12, this));
-        back.setOnClickListener(v -> closeChangelog());
+        back.setOnClickListener(v -> { haptic(); closeChangelog(); });
         head.addView(back, new LinearLayout.LayoutParams(dp(this, 84), dp(this, 38)));
         TextView ht = tv(this, "更新日志", 17, Color.rgb(0x1C, 0x1C, 0x1E), true);
         LinearLayout.LayoutParams htlp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
@@ -4088,12 +4093,12 @@ public class MainActivity extends Activity {
         Button top = new Button(this);
         top.setText("↑ 回到顶部"); top.setTextSize(13); top.setAllCaps(false);
         top.setBackground(roundRect(Color.rgb(0xEE, 0xF1, 0xF6), 999, this));
-        top.setOnClickListener(v -> { if (changelogScroll != null) changelogScroll.smoothScrollTo(0, 0); });
+        top.setOnClickListener(v -> { haptic(); if (changelogScroll != null) changelogScroll.smoothScrollTo(0, 0); });
         actions.addView(top, new LinearLayout.LayoutParams(0, dp(this, 40), 1f));
         Button fold = new Button(this);
         fold.setText("收起日志"); fold.setTextSize(13); fold.setAllCaps(false);
         fold.setBackground(roundRect(Color.rgb(0xEE, 0xF1, 0xF6), 999, this));
-        fold.setOnClickListener(v -> closeChangelog());
+        fold.setOnClickListener(v -> { haptic(); closeChangelog(); });
         LinearLayout.LayoutParams flp = new LinearLayout.LayoutParams(0, dp(this, 40), 1f);
         flp.leftMargin = dp(this, 10);
         actions.addView(fold, flp);
