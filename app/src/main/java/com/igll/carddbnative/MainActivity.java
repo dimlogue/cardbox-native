@@ -1023,6 +1023,12 @@ public class MainActivity extends Activity {
     View homeSearchBar = null;
     boolean homeSearchBarShown = true;
     int lastHomeScrollY = 0;
+    // Q10 float search capsule (only over mid-page scroll positions; never moves the list)
+    View floatSearchBar = null;
+    EditText floatSearchBox = null;
+    boolean floatSearchOpen = false;
+    boolean syncingSearchText = false;
+    View inlineClearBtn = null;
     // Q1 长按贴卡菜单（对照混合版现行 openCardMenu：按住 450ms、原卡蓝框高亮、贴卡小菜单）
     View cardMenuBackdrop = null;
     View cardMenuClone = null;
@@ -1739,6 +1745,25 @@ public class MainActivity extends Activity {
             cv.drawLine(ox + 15.8f * sx, oy + 15.8f * sy, ox + 20.5f * sx, oy + 20.5f * sy, p);
         }
     }
+    // Q10: thin-line X for search capsules (mixed .clear-btn / #floatSearchClose), Canvas-drawn, no emoji font glyph
+    class CloseIconView extends View {
+        int iconColor = Color.rgb(0x1C, 0x1C, 0x1E);
+        float lineDp = 1.6f;
+        CloseIconView(Context c) { super(c); }
+        @Override protected void onDraw(Canvas cv) {
+            Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);
+            p.setStyle(Paint.Style.STROKE);
+            p.setStrokeCap(Paint.Cap.ROUND);
+            p.setColor(iconColor);
+            float w = getWidth() - getPaddingLeft() - getPaddingRight();
+            float h = getHeight() - getPaddingTop() - getPaddingBottom();
+            float m = Math.min(w, h) * 0.26f;
+            float cx = getPaddingLeft() + w / 2f, cy = getPaddingTop() + h / 2f;
+            p.setStrokeWidth(dp(getContext(), lineDp));
+            cv.drawLine(cx - m, cy - m, cx + m, cy + m, p);
+            cv.drawLine(cx + m, cy - m, cx - m, cy + m, p);
+        }
+    }
     // Q3 滑杆图标（对照混合版 qfFilter svg：两横线+两圆钮，废除旧漏斗）
     class FilterIconView extends View {
         int iconColor = Color.rgb(0x1C, 0x1C, 0x1E);
@@ -1890,69 +1915,141 @@ public class MainActivity extends Activity {
         return fab;
     }
 
-    // P-searchfix：收起搜索——清焦点 + 收键盘（点框外、滚动列表时调用）
-    void dismissSearch() {
-        if (searchBox == null) return;
-        if (searchBox.hasFocus()) searchBox.clearFocus();
+    // Q10: blur whichever search box has focus + hide keyboard (inline or float)
+    void blurSearchBoxes() {
         try {
             InputMethodManager imm = (InputMethodManager) getSystemService(INPUT_METHOD_SERVICE);
-            if (imm != null) imm.hideSoftInputFromWindow(searchBox.getWindowToken(), 0);
-        } catch (Exception e) { /* 静默 */ }
+            if (searchBox != null && searchBox.hasFocus()) searchBox.clearFocus();
+            if (floatSearchBox != null && floatSearchBox.hasFocus()) floatSearchBox.clearFocus();
+            View foc = getCurrentFocus();
+            if (imm != null && foc != null) imm.hideSoftInputFromWindow(foc.getWindowToken(), 0);
+        } catch (Exception e) { /* no IME: silent */ }
     }
 
-    // P-searchfix：悬浮搜索栏显隐（减速曲线，上滑隐藏、回顶/上滑显现，不再跟着视角赖住）
+    void dismissSearch() {
+        if (floatSearchOpen) { closeFloatSearch(); return; }
+        blurSearchBoxes();
+    }
+
+    // Legacy hook kept as no-op: the inline bar lives in the scroll flow now and scrolls away by itself.
     void setHomeSearchBarShown(boolean show, boolean animate) {
-        if (homeSearchBar == null || homeSearchBarShown == show) return;
-        homeSearchBarShown = show;
-        float ty = show ? 0f : -(statusBarH() + dp(this, 76));
-        if (animate) {
-            homeSearchBar.animate().translationY(ty).alpha(show ? 1f : 0f)
-                .setDuration(show ? 240 : 200)
-                .setInterpolator(ANIM_ENTER).start();
-        } else {
-            homeSearchBar.setTranslationY(ty);
-            homeSearchBar.setAlpha(show ? 1f : 0f);
-        }
-        homeSearchBar.setClickable(show);
-        homeSearchBar.setFocusable(show);
+        homeSearchBarShown = true;
     }
 
-    // P-searchfix ③：点搜索栏以外任意区域收起搜索（全局分发，不依赖某个子视图是否消费触摸）
+    void syncInlineClearBtn() {
+        if (inlineClearBtn == null) return;
+        boolean has = query != null && !query.isEmpty();
+        inlineClearBtn.setVisibility(has ? View.VISIBLE : View.GONE);
+    }
+
+    // Keep inline/float boxes mirrored without re-entrant watcher loops; single refresh per real change.
+    void applySearchText(String text, EditText from) {
+        String t = text == null ? "" : text;
+        query = t.trim();
+        if (!syncingSearchText) {
+            syncingSearchText = true;
+            try {
+                if (from != searchBox && searchBox != null && !t.equals(searchBox.getText().toString()))
+                    searchBox.setText(t);
+                if (from != floatSearchBox && floatSearchBox != null && !t.equals(floatSearchBox.getText().toString()))
+                    floatSearchBox.setText(t);
+            } finally { syncingSearchText = false; }
+        }
+        syncInlineClearBtn();
+        refreshHome();
+    }
+
+    void openFloatSearch() {
+        if (floatSearchBar == null || floatSearchOpen) return;
+        floatSearchOpen = true;
+        if (searchBox != null && floatSearchBox != null) {
+            syncingSearchText = true;
+            try { floatSearchBox.setText(searchBox.getText().toString()); } finally { syncingSearchText = false; }
+        }
+        final View bar = floatSearchBar;
+        bar.setVisibility(View.VISIBLE);
+        bar.setAlpha(0f);
+        bar.setTranslationY(-dp(this, 8));
+        bar.animate().alpha(1f).translationY(0f).setDuration(ANIM_DUR_FADE)
+            .setInterpolator(ANIM_ENTER).start();
+        // The glass layer inside was laid out while GONE (applyGlass gave up after retries):
+        // re-sample once now that it has a position, so the capsule is blurred glass, not blank.
+        bar.post(() -> refreshLiveGlass());
+        if (floatSearchBox != null) floatSearchBox.postDelayed(() -> {
+            if (!floatSearchOpen || floatSearchBox == null) return;
+            floatSearchBox.requestFocus();
+            try { floatSearchBox.setSelection(floatSearchBox.getText().length()); } catch (Exception e) { /* ignore */ }
+            showKeyboard(floatSearchBox);
+        }, 60);
+    }
+
+    void closeFloatSearch() {
+        if (!floatSearchOpen) { blurSearchBoxes(); return; }
+        floatSearchOpen = false;
+        // Keep the list exactly where it is (Q10 red line): no scrollTo here, unlike the old P-searchfix path.
+        blurSearchBoxes();
+        final View bar = floatSearchBar;
+        if (bar == null) return;
+        bar.animate().alpha(0f).translationY(-dp(this, 8)).setDuration(180)
+            .setInterpolator(ANIM_EXIT)
+            .withEndAction(() -> { if (!floatSearchOpen) bar.setVisibility(View.GONE); }).start();
+    }
+
+    void showKeyboard(View target) {
+        try {
+            InputMethodManager imm = (InputMethodManager) getSystemService(INPUT_METHOD_SERVICE);
+            if (imm != null) imm.showSoftInput(target, InputMethodManager.SHOW_IMPLICIT);
+        } catch (Exception e) { /* no IME: silent */ }
+    }
+
+    // Tap outside whichever capsule is focused -> that search goes away.
     @Override public boolean dispatchTouchEvent(MotionEvent ev) {
-        if (ev != null && ev.getAction() == MotionEvent.ACTION_DOWN
-            && searchBox != null && searchBox.hasFocus() && homeSearchBar != null && homeSearchBarShown) {
-            int[] loc = new int[2];
-            homeSearchBar.getLocationOnScreen(loc);
-            float x = ev.getRawX(), y = ev.getRawY();
-            boolean inside = x >= loc[0] && x <= loc[0] + homeSearchBar.getWidth()
-                && y >= loc[1] && y <= loc[1] + homeSearchBar.getHeight();
-            if (!inside) dismissSearch();
+        if (ev != null && ev.getAction() == MotionEvent.ACTION_DOWN) {
+            boolean foc = (searchBox != null && searchBox.hasFocus())
+                || (floatSearchBox != null && floatSearchBox.hasFocus());
+            if (foc) {
+                float x = ev.getRawX(), y = ev.getRawY();
+                boolean inside = false;
+                for (View cap : new View[]{homeSearchBar, floatSearchBar}) {
+                    if (cap == null || cap.getVisibility() != View.VISIBLE || cap.getWidth() <= 0) continue;
+                    int[] loc = new int[2];
+                    cap.getLocationOnScreen(loc);
+                    if (x >= loc[0] && x <= loc[0] + cap.getWidth()
+                        && y >= loc[1] && y <= loc[1] + cap.getHeight()) { inside = true; break; }
+                }
+                if (!inside) dismissSearch();
+            }
         }
         return super.dispatchTouchEvent(ev);
     }
 
     void focusSearch() {
-        // P-searchfix：先让搜索栏显现，再平滑滚回顶，等滚动落稳后才聚焦弹键盘，避免瞬间弹飞的硬切
-        setHomeSearchBarShown(true, true);
-        long scrollDur = 0;
-        if (homeScroll != null && homeScroll.getScrollY() > 0) {
-            int from = homeScroll.getScrollY();
-            scrollDur = Math.min(420, 200 + from / 6);
-            ValueAnimator va = ValueAnimator.ofInt(from, 0);
-            va.setDuration(scrollDur);
-            va.setInterpolator(ANIM_ENTER);
-            va.addUpdateListener(a -> { if (homeScroll != null) homeScroll.scrollTo(0, (int) a.getAnimatedValue()); });
-            va.start();
+        // Q10 (mixed openFloatSearch): near the top the inline capsule is already on screen;
+        // mid-page must pop the float capsule in place without touching the list position.
+        int y = homeScroll != null ? homeScroll.getScrollY() : 0;
+        if (y < dp(this, 120)) {
+            if (y > 0 && homeScroll != null) {
+                int from = y;
+                long dur = Math.min(420, 200 + from / 6);
+                ValueAnimator va = ValueAnimator.ofInt(from, 0);
+                va.setDuration(dur);
+                va.setInterpolator(ANIM_ENTER);
+                va.addUpdateListener(a -> { if (homeScroll != null) homeScroll.scrollTo(0, (int) a.getAnimatedValue()); });
+                va.start();
+                if (searchBox != null) searchBox.postDelayed(() -> {
+                    if (searchBox == null) return;
+                    searchBox.requestFocus();
+                    try { searchBox.setSelection(searchBox.getText().length()); } catch (Exception e) { /* ignore */ }
+                    showKeyboard(searchBox);
+                }, dur + 60);
+            } else if (searchBox != null) {
+                searchBox.requestFocus();
+                try { searchBox.setSelection(searchBox.getText().length()); } catch (Exception e) { /* ignore */ }
+                showKeyboard(searchBox);
+            }
+            return;
         }
-        if (searchBox == null) return;
-        searchBox.postDelayed(() -> {
-            if (searchBox == null) return;
-            searchBox.requestFocus();
-            try {
-                InputMethodManager imm = (InputMethodManager) getSystemService(INPUT_METHOD_SERVICE);
-                if (imm != null) imm.showSoftInput(searchBox, InputMethodManager.SHOW_IMPLICIT);
-            } catch (Exception e) { /* 无输入法静默 */ }
-        }, scrollDur + 60);
+        openFloatSearch();
     }
 
     // ---------- 通用：卡片瓷砖 ----------
@@ -2293,6 +2390,15 @@ public class MainActivity extends Activity {
         return g;
     }
 
+    // Q10 float-search shell: shallow glass, slight blue (mixed .float-search rgba(255,255,255,.85)+blur24 saturate1.7)
+    GradientDrawable glassFloatBg() {
+        GradientDrawable g = new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
+            new int[]{Color.argb(222, 255, 255, 255), Color.argb(212, 238, 245, 255)});
+        g.setCornerRadius(dp(this, 999));
+        g.setStroke(dp(this, 1), Color.argb(153, 255, 255, 255));
+        return g;
+    }
+
     // P2d：整页改单 ScrollView 流，内容从悬浮栏底下滚过；英雄卡与网格同流 10dp 间隔，不再压首排
     View buildHomePage() {
         FrameLayout page = new FrameLayout(this);
@@ -2302,18 +2408,15 @@ public class MainActivity extends Activity {
         homeScroll.setFillViewport(true);
         homeScroll.setClipToPadding(false);
         // P-searchfix：列表滚动时搜索自动收起/失焦；点列表区域（框外）收键盘
+        // Q10: any list scroll dismisses the float capsule (mixed onscroll closeFloatSearch);
+        // the inline capsule needs no handler here - it scrolls off with the content by itself.
         homeScroll.setOnTouchListener((v, e) -> {
-            if (e.getAction() == MotionEvent.ACTION_DOWN) dismissSearch();
+            if (e.getAction() == MotionEvent.ACTION_DOWN && floatSearchOpen) closeFloatSearch();
             return false;
         });
         homeScroll.setOnScrollChangeListener((v, scrollX, scrollY, oldScrollX, oldScrollY) -> {
             pageScrollSaveY.put("home", scrollY);
-            if (scrollY > oldScrollY + dp(this, 6) && scrollY > statusBarH() + dp(this, 72)) {
-                dismissSearch();
-                setHomeSearchBarShown(false, true);
-            } else if (scrollY < oldScrollY - dp(this, 6) || scrollY <= dp(this, 10)) {
-                setHomeSearchBarShown(true, true);
-            }
+            if (floatSearchOpen && scrollY != oldScrollY) closeFloatSearch();
             lastHomeScrollY = scrollY;
             updateTopFabVisibility(scrollY);
         });
@@ -2322,8 +2425,8 @@ public class MainActivity extends Activity {
 
         LinearLayout col = new LinearLayout(this);
         col.setOrientation(LinearLayout.VERTICAL);
-        // 顶部让出悬浮栏（状态栏 + 栏高约 50 + 间距），底部留白让最后一项滚出悬浮底栏
-        col.setPadding(dp(this, 14), statusBarH() + dp(this, 70), dp(this, 14), dockPad());
+        // Q10: title + inline search flow together under the status bar; nothing floats over them.
+        col.setPadding(dp(this, 14), statusBarH() + dp(this, 16), dp(this, 14), dockPad());
         homeScroll.addView(col, new ScrollView.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
 
@@ -2395,42 +2498,117 @@ public class MainActivity extends Activity {
         homeList.setOrientation(LinearLayout.VERTICAL);
         col.addView(homeList, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
 
-        // 悬浮搜索栏：左右留 12dp、浮在列表之上，内容从栏下滚过（对照混合版 .float-search / #search 玻璃胶囊）
-        // Q11：搜索胶囊垫 live 真模糊层（滚动停稳刷新快照），外壳半透染色
-        FrameLayout barWrap = new FrameLayout(this);
-        barWrap.setBackground(glassPillBg());
-        if (Build.VERSION.SDK_INT >= 21) barWrap.setElevation(dp(this, 10));
-        barWrap.addView(glassLayer(barWrap, 28, true), new FrameLayout.LayoutParams(
+        // Q10 inline search capsule (mixed header .top/#search): in-flow under the title, pill 999,
+        // glass white rgba(255,255,255,.78)+blur20, thin magnifier, clear-X circle appears once typing.
+        FrameLayout inlineWrap = new FrameLayout(this);
+        inlineWrap.setBackground(glassPillBg());
+        if (Build.VERSION.SDK_INT >= 21) inlineWrap.setElevation(dp(this, 6));
+        inlineWrap.addView(glassLayer(inlineWrap, 28, true), new FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
-        LinearLayout bar = new LinearLayout(this);
-        bar.setOrientation(LinearLayout.HORIZONTAL);
-        bar.setGravity(Gravity.CENTER_VERTICAL);
-        bar.setPadding(dp(this, 16), dp(this, 5), dp(this, 12), dp(this, 5));
-        barWrap.addView(bar, new FrameLayout.LayoutParams(
+        LinearLayout inlineRow = new LinearLayout(this);
+        inlineRow.setOrientation(LinearLayout.HORIZONTAL);
+        inlineRow.setGravity(Gravity.CENTER_VERTICAL);
+        inlineRow.setPadding(dp(this, 14), dp(this, 4), dp(this, 8), dp(this, 4));
+        inlineWrap.addView(inlineRow, new FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
         SearchIconView sicon = new SearchIconView(this);
         sicon.iconColor = Color.rgb(0x63, 0x63, 0x66);
-        bar.addView(sicon, new LinearLayout.LayoutParams(dp(this, 20), dp(this, 20)));
+        inlineRow.addView(sicon, new LinearLayout.LayoutParams(dp(this, 20), dp(this, 20)));
         searchBox = new EditText(this);
         searchBox.setHint("搜索卡名 / 银行 / BIN…");
         searchBox.setTextSize(15);
         searchBox.setSingleLine(true);
         searchBox.setBackground(null);
         searchBox.setPadding(dp(this, 8), dp(this, 7), dp(this, 4), dp(this, 7));
-        bar.addView(searchBox, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
-        searchBox.addTextChangedListener(new TextWatcher() {
-            public void beforeTextChanged(CharSequence s, int a, int b, int c) {}
-            public void onTextChanged(CharSequence s, int a, int b, int c) { query = s.toString().trim(); refreshHome(); }
-            public void afterTextChanged(Editable s) {}
+        if (query != null && !query.isEmpty()) searchBox.setText(query);
+        inlineRow.addView(searchBox, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+        FrameLayout clearWrap = new FrameLayout(this);
+        GradientDrawable cbg = new GradientDrawable();
+        cbg.setShape(GradientDrawable.OVAL);
+        cbg.setColor(Color.rgb(0xD1, 0xD1, 0xD6));
+        clearWrap.setBackground(cbg);
+        CloseIconView clearIcon = new CloseIconView(this);
+        clearIcon.iconColor = Color.WHITE;
+        clearIcon.lineDp = 1.4f;
+        int cpad = dp(this, 8);
+        clearIcon.setPadding(cpad, cpad, cpad, cpad);
+        clearWrap.addView(clearIcon, new FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        clearWrap.setOnClickListener(v -> {
+            haptic();
+            if (searchBox != null) { searchBox.setText(""); searchBox.requestFocus(); }
         });
-        FrameLayout.LayoutParams blp = new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        blp.gravity = Gravity.TOP;
-        blp.leftMargin = dp(this, 12);
-        blp.rightMargin = dp(this, 12);
-        blp.topMargin = statusBarH() + dp(this, 8);
-        page.addView(barWrap, blp);
-        homeSearchBar = barWrap;
+        inlineRow.addView(clearWrap, new LinearLayout.LayoutParams(dp(this, 28), dp(this, 28)));
+        inlineClearBtn = clearWrap;
+        searchBox.addTextChangedListener(new TextWatcher() {
+            public void beforeTextChanged(CharSequence t, int a, int b, int c) {}
+            public void onTextChanged(CharSequence t, int a, int b, int c) {
+                if (!syncingSearchText) applySearchText(t.toString(), searchBox);
+            }
+            public void afterTextChanged(Editable t) {}
+        });
+        LinearLayout.LayoutParams ilp = new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        ilp.topMargin = dp(this, 12);
+        // Insert directly under the title (index 1), matching mixed order: title -> search -> stats.
+        col.addView(inlineWrap, Math.min(1, col.getChildCount()), ilp);
+        homeSearchBar = inlineWrap;
         homeSearchBarShown = true;
+        syncInlineClearBtn();
+
+        // Q10 float search capsule (mixed #floatSearch): fixed top pill, shallow glass + slight blue,
+        // thin magnifier, 28dp X circle; only shown mid-page via the search fab, list never moves for it.
+        FrameLayout floatWrap = new FrameLayout(this);
+        floatWrap.setBackground(glassFloatBg());
+        if (Build.VERSION.SDK_INT >= 21) floatWrap.setElevation(dp(this, 14));
+        floatWrap.addView(glassLayer(floatWrap, 28, true), new FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        LinearLayout floatRow = new LinearLayout(this);
+        floatRow.setOrientation(LinearLayout.HORIZONTAL);
+        floatRow.setGravity(Gravity.CENTER_VERTICAL);
+        floatRow.setPadding(dp(this, 14), dp(this, 4), dp(this, 8), dp(this, 4));
+        floatWrap.addView(floatRow, new FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        SearchIconView ficon = new SearchIconView(this);
+        ficon.iconColor = Color.rgb(0x63, 0x63, 0x66);
+        floatRow.addView(ficon, new LinearLayout.LayoutParams(dp(this, 20), dp(this, 20)));
+        floatSearchBox = new EditText(this);
+        floatSearchBox.setHint("搜索卡名 / 银行 / BIN…");
+        floatSearchBox.setTextSize(15);
+        floatSearchBox.setSingleLine(true);
+        floatSearchBox.setBackground(null);
+        floatSearchBox.setPadding(dp(this, 8), dp(this, 7), dp(this, 4), dp(this, 7));
+        floatRow.addView(floatSearchBox, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+        FrameLayout closeWrap = new FrameLayout(this);
+        GradientDrawable xbg = new GradientDrawable();
+        xbg.setShape(GradientDrawable.OVAL);
+        xbg.setColor(Color.argb(46, 120, 120, 128));
+        closeWrap.setBackground(xbg);
+        CloseIconView closeIcon = new CloseIconView(this);
+        closeIcon.iconColor = Color.rgb(0x1C, 0x1C, 0x1E);
+        int xpad = dp(this, 8);
+        closeIcon.setPadding(xpad, xpad, xpad, xpad);
+        closeWrap.addView(closeIcon, new FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        closeWrap.setOnClickListener(v -> { haptic(); closeFloatSearch(); });
+        floatRow.addView(closeWrap, new LinearLayout.LayoutParams(dp(this, 28), dp(this, 28)));
+        floatSearchBox.addTextChangedListener(new TextWatcher() {
+            public void beforeTextChanged(CharSequence t, int a, int b, int c) {}
+            public void onTextChanged(CharSequence t, int a, int b, int c) {
+                if (!syncingSearchText) applySearchText(t.toString(), floatSearchBox);
+            }
+            public void afterTextChanged(Editable t) {}
+        });
+        FrameLayout.LayoutParams flp2 = new FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        flp2.gravity = Gravity.TOP;
+        flp2.leftMargin = dp(this, 12);
+        flp2.rightMargin = dp(this, 12);
+        flp2.topMargin = statusBarH() + dp(this, 8);
+        floatWrap.setVisibility(View.GONE);
+        page.addView(floatWrap, flp2);
+        floatSearchBar = floatWrap;
+        floatSearchOpen = false;
 
         refreshHome();
         return page;
