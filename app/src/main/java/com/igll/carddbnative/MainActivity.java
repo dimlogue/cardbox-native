@@ -1367,10 +1367,10 @@ public class MainActivity extends Activity {
         }
         navBar.setClipToOutline(false);
 
-        View dockBg = new View(this);
-        dockBg.setBackground(floatingBarBg());
-        navBar.addView(dockBg, new FrameLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        // Q20 根因（主会话 18:31 定案）：此处原先塞过一块 MATCH_PARENT 的 dockBg 背景 View——
+        // 裸 View 按 MATCH_PARENT 在 WRAP_CONTENT 父容器里会量到整屏高，把底栏撑成全屏巨卡（0.63 起真机实锤）。
+        // 背景一律直接设在 navBar 自己身上，禁止再往底栏里塞 MATCH_PARENT 背景板。
+        navBar.setBackground(floatingBarBg());
 
         // liquid glass drop: glass layer (live, shared snapshot) + pill tint on top edge.
         navIndicator = new FrameLayout(this);
