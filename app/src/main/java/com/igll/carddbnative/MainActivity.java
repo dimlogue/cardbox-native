@@ -1294,7 +1294,8 @@ public class MainActivity extends Activity {
         TextView nm = tv(this, c.name, 14, Color.rgb(0x1C, 0x1C, 0x1E), true);
         nm.setMaxLines(2);
         info.addView(nm);
-        info.addView(tv(this, c.bank + " · " + orgLabel(c.org) + " · " + (c.isCredit() ? "信用卡" : "借记卡"), 11, Color.rgb(0x8E, 0x8E, 0x93), false));
+        String orgTxt = (c.org == null || c.org.isEmpty()) ? "—" : orgLabel(c.org);
+        info.addView(tv(this, c.bank + " · " + orgTxt + " · " + (c.isCredit() ? "信用卡" : "借记卡"), 11, Color.rgb(0x8E, 0x8E, 0x93), false));
         if (!r.reasons.isEmpty()) {
             LinearLayout rr = new LinearLayout(this);
             rr.setOrientation(LinearLayout.HORIZONTAL);
@@ -1317,7 +1318,7 @@ public class MainActivity extends Activity {
         LinearLayout.LayoutParams slp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         slp.leftMargin = dp(this, 8);
         row.addView(side, slp);
-        TextView score = tv(this, c.hasScore && c.score > 0 ? String.format(java.util.Locale.US, "%.1f分", c.score) : "新卡",
+        TextView score = tv(this, c.hasScore ? String.format(java.util.Locale.US, "%.1f分", c.score) : "待评分",
             11, Color.rgb(0x0A, 0x5C, 0xD6), true);
         score.setBackground(roundRect(Color.rgb(0xE8, 0xF1, 0xFD), 999, this));
         score.setPadding(dp(this, 8), dp(this, 3), dp(this, 8), dp(this, 3));
