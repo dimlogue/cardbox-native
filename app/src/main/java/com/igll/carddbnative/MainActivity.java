@@ -563,7 +563,7 @@ public class MainActivity extends Activity {
             Canvas cv = new Canvas(out);
             Paint pt = new Paint(Paint.FILTER_BITMAP_FLAG);
             ColorMatrix cm = new ColorMatrix();
-            cm.setSaturation(1.4f);
+            cm.setSaturation(1.65f); // Q29：1.4→1.65 往混合版 saturate(2) 靠，让身后颜色透进来（彩色毛玻璃不死白）
             pt.setColorFilter(new ColorMatrixColorFilter(cm));
             android.graphics.Matrix m = new android.graphics.Matrix();
             m.setTranslate(-left * s, -top * s);
@@ -571,9 +571,9 @@ public class MainActivity extends Activity {
             iv.setImageBitmap(out);
             glassCrops.put(iv, out); // Q21：旧裁片只解引用不 recycle（黑匣子定案：显示列表在用时 recycle 必崩，见 noteGlassFailure）
             if (Build.VERSION.SDK_INT >= 31) {
-                // Q18 (4): blur 13 -> 11 + saturation 1.4 kept: snapshot already 0.2-downsampled,
-                // lower radius keeps background colour/shape recognisable (no milky wall)
-                try { iv.setRenderEffect(RenderEffect.createBlurEffect(11f, 11f, Shader.TileMode.CLAMP)); }
+                // Q29：模糊 11→13、配合降采样快照呈彩色高斯柔糊；快照本身已 0.2 降采样，半径不许再堆到乳白糊墙，
+                // 隔着玻璃要能认出身后卡片的颜色与大致形状（Q16/Q18 的通透红线继续有效）。
+                try { iv.setRenderEffect(RenderEffect.createBlurEffect(13f, 13f, Shader.TileMode.CLAMP)); }
                 catch (Throwable t) { noteGlassFailure(); }
             }
             noteGlassSuccess();
@@ -583,7 +583,8 @@ public class MainActivity extends Activity {
         }
     }
 
-    /** 滚动停稳后刷新 live 玻璃（底栏/悬浮钮/回顶/搜索胶囊）；有浮窗在场时不刷，浮窗用的是冻结快照。 */
+    /** Q29：静态帧刷新——只在停稳/切页这两个时刻调用（底栏/悬浮钮/回顶/搜索胶囊共用一帧）；
+     *  有浮窗在场时不刷，浮窗用的是各自升起时的冻结快照。 */
     void refreshLiveGlass() {
         if (glassDisabled || glassCapturing || rootView == null || rootView.getWidth() <= 0) return;
         // Q21 ③：底栏拖动/弹簧进行中不做整屏抓图——capture 是全树 draw，正是滑动发卡与 MOVE 被饿死的主因之一；落稳后防抖任务会补上最终帧。
@@ -597,19 +598,13 @@ public class MainActivity extends Activity {
     }
 
     void scheduleGlassRefresh() {
-        // Q16 (2) live glass: while scrolling, re-sample throttled at 140ms (dock / fabs / search capsule track the
-        // background instead of showing one frozen frame), then the existing 380ms debounce settles a final frame.
-        // refreshLiveGlass() itself skips while any overlay sheet is open.
+        // Q29（推翻 Q16 的滚动中实时追色）：滚动事件里绝不抓图——每次事件只重置这个防抖计时，
+        // 滚动态势下计时永不跑完即零截图；滚动静默满 650ms（真停稳）后才由 glassRefreshTask 补一帧，
+        // 保住底下颜色透进来的静态毛玻璃。切页路径的 refreshLiveGlass 是另一个允许更新帧的时刻。
         // Q21：底栏手势优先——拖动/弹簧期间连排队都免了，避免手势一结束就被积压的抓图任务堵住切页。
         if (navDragging || navSpringRunning) return;
-        long now = android.os.SystemClock.elapsedRealtime();
-        if (now - lastLiveGlassMs >= 140) {
-            lastLiveGlassMs = now;
-            mainHandler.removeCallbacks(liveGlassTask);
-            mainHandler.post(liveGlassTask);
-        }
         mainHandler.removeCallbacks(glassRefreshTask);
-        mainHandler.postDelayed(glassRefreshTask, 380);
+        mainHandler.postDelayed(glassRefreshTask, 650);
     }
 
     // P5 空状态：对照混合版 .empty（居中、灰字、上下 36px 留白），包进白卡（圆角 14）不裸贴页面底
@@ -1020,17 +1015,20 @@ public class MainActivity extends Activity {
     Runnable floatToastTimer = null;
     final android.os.Handler mainHandler = new android.os.Handler(android.os.Looper.getMainLooper());
 
-    // Q11 真毛玻璃地基（自研零三方）：抓底层快照（降采样+饱和 1.6 近似混合版 saturate）垫在玻璃面之下，
-    // API 31+ 再叠 RenderEffect 硬件模糊；低版本靠降采样放大回落柔糊，不再是纯染色。
-    // live 面（底栏/悬浮钮/回顶/搜索胶囊）滚动停稳 380ms 后刷新快照；frozen 面（各浮窗）升起时抓一次冻结。
+    // Q29 静态毛玻璃（用户 19:26 拍板，推翻 Q16 的实时追色）：全 App 玻璃面统一为静态毛玻璃——
+    // 身后颜色透进来的彩色高斯模糊（对照混合版 .dock-glass blur(28px) saturate(2)+rgba(.58) 的彩色透色，
+    // 不是固定死白奶糊）。实现纪律：滚动中零截图、不实时重采样；只在页面停稳（滚动事件静默
+    // 650ms 后）或切页时更新一帧，保住彩色透色即可，以流畅为先。
+    // Q11 地基保留：自研零三方，抓底层快照（0.2 降采样+饱和）垫在玻璃面之下，API 31+ 叠 RenderEffect；
+    // frozen 面（各浮窗）升起时抓一次冻结，live 面（底栏/悬浮钮/回顶/搜索胶囊）用停稳/切页帧。
+    // Q21 纪律不破：快照与裁片只解引用交系统回收，绝不主动 Bitmap.recycle()。
     final java.util.List<ImageView> glassViews = new java.util.ArrayList<>();
     final java.util.Map<ImageView, View> glassHosts = new java.util.HashMap<>();
     final java.util.Map<ImageView, Bitmap> glassCrops = new java.util.HashMap<>();
     Bitmap glassSnap = null;
     boolean glassCapturing = false;
     final Runnable glassRefreshTask = new Runnable() { public void run() { refreshLiveGlass(); } };
-    long lastLiveGlassMs = 0; // Q16: throttle stamp for scrolling-time live re-sampling
-    final Runnable liveGlassTask = new Runnable() { public void run() { refreshLiveGlass(); } };
+    // Q29：旧 Q16 的滚动中 140ms 节流实时重采样（liveGlassTask/lastLiveGlassMs）整套删除——滚动零截图。
     final java.util.Map<ImageView, Integer> glassRetry = new java.util.HashMap<>(); // Q16: layout retry cap per glass layer
     // Q18: glass consecutive-failure auto-disable + crash trace
     int glassFailCount = 0;
@@ -1255,7 +1253,7 @@ public class MainActivity extends Activity {
         root.addView(content, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         buildNav(root);
         setContentView(root);
-        // Q11：任意滚动停稳后刷新 live 玻璃快照（380ms 防抖，不逐帧抓图保流畅）
+        // Q29：滚动只重置停稳计时、滚动中零截图（scheduleGlassRefresh 内 650ms 防抖，见其注释）
         root.getViewTreeObserver().addOnScrollChangedListener(() -> scheduleGlassRefresh());
 
         showTab("home");
@@ -1318,7 +1316,7 @@ public class MainActivity extends Activity {
         bar.setOrientation(LinearLayout.HORIZONTAL);
         bar.setGravity(Gravity.CENTER_VERTICAL);
         GradientDrawable bg = new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
-            new int[]{Color.argb(196, 255, 255, 255), Color.argb(186, 246, 249, 253)}); // Q11：半透染色盖在冻结模糊层上
+            new int[]{Color.argb(170, 255, 255, 255), Color.argb(160, 246, 249, 253)}); // Q29：196/186→170/160 减薄，冻结模糊的彩色透进来
         bg.setCornerRadius(dp(this, 16));
         bg.setStroke(dp(this, 1), Color.argb(20, 20, 30, 60));
         bar.setBackground(bg);
@@ -2431,7 +2429,7 @@ public class MainActivity extends Activity {
         LinearLayout pop = new LinearLayout(this);
         pop.setOrientation(LinearLayout.VERTICAL);
         GradientDrawable pbg = new GradientDrawable();
-        pbg.setColor(Color.argb(198, 255, 255, 255)); // Q11：半透染色盖在冻结模糊层上
+        pbg.setColor(Color.argb(172, 255, 255, 255)); // Q29：198→172 减薄，冻结模糊的彩色透进来
         pbg.setCornerRadius(dp(this, 16));
         pbg.setStroke(dp(this, 1), Color.argb(46, 20, 30, 60));
         pop.setBackground(pbg);
@@ -2558,9 +2556,10 @@ public class MainActivity extends Activity {
     }
 
     // Q10 float-search shell: shallow glass, slight blue (mixed .float-search rgba(255,255,255,.85)+blur24 saturate1.7)
+    // Q29：染色 222/212→176/166 减薄，身后彩色模糊透进来，不做死白胶囊
     GradientDrawable glassFloatBg() {
         GradientDrawable g = new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
-            new int[]{Color.argb(222, 255, 255, 255), Color.argb(212, 238, 245, 255)});
+            new int[]{Color.argb(176, 255, 255, 255), Color.argb(166, 238, 245, 255)});
         g.setCornerRadius(dp(this, 999));
         g.setStroke(dp(this, 1), Color.argb(153, 255, 255, 255));
         return g;
@@ -3031,7 +3030,7 @@ public class MainActivity extends Activity {
         LinearLayout card = new LinearLayout(this);
         card.setOrientation(LinearLayout.VERTICAL);
         GradientDrawable cg = new GradientDrawable();
-        cg.setColor(Color.argb(192, 255, 255, 255)); // Q11：半透染色盖在冻结模糊层上
+        cg.setColor(Color.argb(168, 255, 255, 255)); // Q29：192→168 减薄，冻结模糊的彩色透进来
         cg.setCornerRadius(dp(this, 24));
         cg.setStroke(dp(this, 1), Color.argb(18, 20, 30, 60));
         card.setBackground(cg);
@@ -3588,7 +3587,7 @@ public class MainActivity extends Activity {
         LinearLayout card = new LinearLayout(this);
         card.setOrientation(LinearLayout.VERTICAL);
         GradientDrawable cg = new GradientDrawable();
-        cg.setColor(Color.argb(198, 0xF2, 0xF3, 0xF7)); // Q11：半透染色盖在冻结模糊层上
+        cg.setColor(Color.argb(172, 0xF2, 0xF3, 0xF7)); // Q29：198→172 减薄，冻结模糊的彩色透进来
         float rTop = dp(this, 26);
         cg.setCornerRadii(new float[]{rTop, rTop, rTop, rTop, 0, 0, 0, 0});
         card.setBackground(cg);
@@ -5775,7 +5774,7 @@ public class MainActivity extends Activity {
         LinearLayout card = new LinearLayout(this);
         card.setOrientation(LinearLayout.VERTICAL);
         GradientDrawable cg = new GradientDrawable();
-        cg.setColor(Color.argb(190, 255, 255, 255)); // Q16: about sheet tint thinned, glass underneath shows through
+        cg.setColor(Color.argb(164, 255, 255, 255)); // Q29：190→164 减薄，冻结玻璃下身后彩色透进来（Q16 已先行 219→190）
         cg.setStroke(dp(this, 1), Color.argb(140, 255, 255, 255));
         cg.setCornerRadius(dp(this, 22));
         card.setBackground(cg);
