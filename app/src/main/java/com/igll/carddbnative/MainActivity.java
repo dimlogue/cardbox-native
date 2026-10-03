@@ -249,15 +249,24 @@ public class MainActivity extends Activity {
     }
     View buildTopFab() {
         FrameLayout fab = new FrameLayout(this);
-        // Q5：浅透玻璃染色（对照混合版 .qf-top rgba(255,255,255,.32)+白色 .5 描边），真模糊由 glassLayer 垫底
-        GradientDrawable bg = new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
-            new int[]{Color.argb(108, 255, 255, 255), Color.argb(96, 244, 248, 253)});
-        bg.setShape(GradientDrawable.OVAL);
-        bg.setStroke(dp(this, 1), Color.argb(128, 255, 255, 255));
-        fab.setBackground(bg);
-        if (Build.VERSION.SDK_INT >= 21) fab.setElevation(dp(this, 10));
+        // Q23：与 Q3 悬浮钮同款玻璃底（glassFabBg + applyGlassFabShadow + live 玻璃层），对照混合版 .qf-top/.qf-btn
+        // 同语言：44dp 圆钮、白色 .5 描边、深色细线箭头；玻璃模糊由 glassLayer 垫底。
+        fab.setBackground(glassFabBg());
         fab.addView(glassLayer(fab, -1, true), new FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        // Q23 固定浅白染色托底（盖在模糊层之上、箭头之下）：对照混合版 .qf-top 的 background:rgba(255,255,255,.32)
+        // 在 backdrop 模糊之上叠染的层序——原生玻璃层为不透明位图，托底若垫在其下会被背景色整片染透
+        // （用户 18:34 截图土黄饼根因：钮正压黄卡、饱和 1.4 放大底色且旧染色 108/96 在图层之下不起作用）。
+        // 故托底改盖在图层之上，用固定浅白渐变把底色压回可认形、不染色的区间。
+        View wash = new View(this);
+        GradientDrawable washBg = new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
+            new int[]{Color.argb(170, 255, 255, 255), Color.argb(156, 244, 248, 253)});
+        washBg.setShape(GradientDrawable.OVAL);
+        washBg.setStroke(dp(this, 1), Color.argb(140, 255, 255, 255));
+        wash.setBackground(washBg);
+        fab.addView(wash, new FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        applyGlassFabShadow(fab);
         TopIconView icon = new TopIconView(this);
         int pad = dp(this, 12);
         icon.setPadding(pad, pad, pad, pad);
