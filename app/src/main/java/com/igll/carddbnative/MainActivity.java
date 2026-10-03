@@ -3280,9 +3280,9 @@ public class MainActivity extends Activity {
         hero.setOrientation(LinearLayout.VERTICAL);
         GradientDrawable hg = new GradientDrawable(GradientDrawable.Orientation.TL_BR,
             new int[]{Color.rgb(0x14, 0x1C, 0x2C), Color.rgb(0x1D, 0x2F, 0x4D)});
-        hg.setCornerRadius(dp(this, 18));
+        hg.setCornerRadius(dp(this, 20)); // P5：对照混合版 .mine-bento 圆角 20
         hero.setBackground(hg);
-        hero.setPadding(dp(this, 16), dp(this, 14), dp(this, 16), dp(this, 14));
+        hero.setPadding(dp(this, 14), dp(this, 14), dp(this, 14), dp(this, 14));
         wrap.addView(hero, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
         LinearLayout row1 = new LinearLayout(this); row1.setOrientation(LinearLayout.HORIZONTAL);
         LinearLayout row2 = new LinearLayout(this); row2.setOrientation(LinearLayout.HORIZONTAL);
@@ -3358,12 +3358,12 @@ public class MainActivity extends Activity {
     View mineHeroTile(String value, String label, String sub) {
         LinearLayout t = new LinearLayout(this);
         t.setOrientation(LinearLayout.VERTICAL);
-        // 对照混合版 .bn-tile：玻璃底+内边距，四格同高同底，内容绝不裸贴深蓝底
-        t.setBackground(roundRect(Color.argb(38, 255, 255, 255), 12, this));
-        t.setPadding(dp(this, 10), dp(this, 9), dp(this, 10), dp(this, 9));
+        // 对照混合版 .bn-tile：玻璃底+圆角 14+内边距 13，四格同高同底，内容绝不裸贴深蓝底
+        t.setBackground(roundRect(Color.argb(38, 255, 255, 255), 14, this));
+        t.setPadding(dp(this, 13), dp(this, 13), dp(this, 13), dp(this, 13));
         t.setMinimumHeight(dp(this, 64));
-        t.addView(tv(this, value, 17, Color.WHITE, true));
-        TextView l = tv(this, label, 11, Color.argb(205, 255, 255, 255), false);
+        t.addView(tv(this, value, 23, Color.WHITE, true)); // .bn-v 1.55rem
+        TextView l = tv(this, label, 10.5f, Color.argb(205, 255, 255, 255), false);
         LinearLayout.LayoutParams llp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         llp.topMargin = dp(this, 3);
         t.addView(l, llp);
