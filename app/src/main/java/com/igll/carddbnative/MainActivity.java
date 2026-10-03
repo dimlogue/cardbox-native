@@ -1862,7 +1862,8 @@ public class MainActivity extends Activity {
                 android.graphics.Typeface trial = null;
                 if (failMsg == null) {
                     try { trial = android.graphics.Typeface.createFromFile(tmp); } catch (Throwable e) { trial = null; }
-                    if (trial == null) failMsg = "这个字体文件读不了，已回退软件字体";
+                    // createFromFile 对坏文件在部分机型回落 DEFAULT 而非 null，一并判坏拒绝
+                    if (trial == null || trial == android.graphics.Typeface.DEFAULT) failMsg = "这个字体文件读不了，已回退软件字体";
                 }
                 if (failMsg == null) {
                     File dst = customFontFile(MainActivity.this);
