@@ -346,7 +346,7 @@ public class MainActivity extends Activity {
             Canvas cv = new Canvas(out);
             Paint pt = new Paint(Paint.FILTER_BITMAP_FLAG);
             ColorMatrix cm = new ColorMatrix();
-            cm.setSaturation(1.6f); // 近似混合版 backdrop saturate(1.6~2)
+            cm.setSaturation(1.4f); // 饱和锚点 1.2~1.5（LIQUID-GLASS-NOTES），近似混合版 backdrop saturate
             pt.setColorFilter(new ColorMatrixColorFilter(cm));
             android.graphics.Matrix m = new android.graphics.Matrix();
             m.setTranslate(-left * s, -top * s);
@@ -792,6 +792,7 @@ public class MainActivity extends Activity {
     View cardMenuBackdrop = null;
     View cardMenuClone = null;
     View cardMenuPop = null;
+    View cardMenuGlass = null; // Q11：长按菜单下的冻结模糊层
 
     // 筛选状态（Phase 2a-1：与混合版 chipRow 相同的单选切换语义，点已选项再点一次取消）
     String filterType = null;   // "debit" / "credit" / null
@@ -994,7 +995,7 @@ public class MainActivity extends Activity {
         bar.setOrientation(LinearLayout.HORIZONTAL);
         bar.setGravity(Gravity.CENTER_VERTICAL);
         GradientDrawable bg = new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
-            new int[]{Color.argb(242, 255, 255, 255), Color.argb(232, 246, 249, 253)});
+            new int[]{Color.argb(230, 255, 255, 255), Color.argb(218, 246, 249, 253)}); // Q11：半透染色盖在冻结模糊层上
         bg.setCornerRadius(dp(this, 16));
         bg.setStroke(dp(this, 1), Color.argb(20, 20, 30, 60));
         bar.setBackground(bg);
@@ -1035,13 +1036,19 @@ public class MainActivity extends Activity {
         lp.leftMargin = dp(this, 16);
         lp.rightMargin = dp(this, 16);
         lp.bottomMargin = dp(this, 106);
-        rootView.addView(bar, lp);
-        bar.bringToFront();
-        floatToastView = bar;
-        bar.setAlpha(0f);
-        bar.setTranslationY(dp(this, 12));
-        bar.setScaleX(0.98f); bar.setScaleY(0.98f);
-        bar.animate().alpha(1f).translationY(0f).scaleX(1f).scaleY(1f)
+        // Q11：提示条垫冻结模糊层，外壳只剩半透染色
+        FrameLayout toastWrap = new FrameLayout(this);
+        toastWrap.addView(glassLayer(toastWrap, 16, false), new FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        toastWrap.addView(bar, new FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        rootView.addView(toastWrap, lp);
+        toastWrap.bringToFront();
+        floatToastView = toastWrap;
+        toastWrap.setAlpha(0f);
+        toastWrap.setTranslationY(dp(this, 12));
+        toastWrap.setScaleX(0.98f); toastWrap.setScaleY(0.98f);
+        toastWrap.animate().alpha(1f).translationY(0f).scaleX(1f).scaleY(1f)
             .setDuration(250).setInterpolator(ANIM_ENTER).start();
         floatToastTimer = () -> dismissFloatToast(false);
         mainHandler.postDelayed(floatToastTimer, (actionLabel != null && onAction != null) ? 4500 : 2200);
@@ -1750,7 +1757,7 @@ public class MainActivity extends Activity {
         LinearLayout pop = new LinearLayout(this);
         pop.setOrientation(LinearLayout.VERTICAL);
         GradientDrawable pbg = new GradientDrawable();
-        pbg.setColor(Color.argb(235, 255, 255, 255));
+        pbg.setColor(Color.argb(228, 255, 255, 255)); // Q11：半透染色盖在冻结模糊层上
         pbg.setCornerRadius(dp(this, 16));
         pbg.setStroke(dp(this, 1), Color.argb(46, 20, 30, 60));
         pop.setBackground(pbg);
@@ -1782,6 +1789,9 @@ public class MainActivity extends Activity {
 
         // 定位：优先贴在卡下方 8dp，放不下改上方；左右夹在屏内 12dp（对照 openCardMenu 的 W=224 定位）
         int popW = dp(this, 224);
+        // Q11：菜单入树前先备好冻结模糊层（快照含轻暗遮罩之下的页面，与 backdrop-filter 叠序一致）
+        final ImageView menuGlass = glassLayer(pop, 16, false);
+        cardMenuGlass = menuGlass;
         FrameLayout.LayoutParams plp = new FrameLayout.LayoutParams(popW, ViewGroup.LayoutParams.WRAP_CONTENT);
         rootView.addView(pop, plp);
         cardMenuPop = pop;
@@ -1794,6 +1804,9 @@ public class MainActivity extends Activity {
         int pt = below ? top + h + dp(this, 8) : Math.max(dp(this, 12), top - dp(this, 8) - popH);
         plp.leftMargin = pl; plp.topMargin = pt;
         pop.setLayoutParams(plp);
+        FrameLayout.LayoutParams mglp = new FrameLayout.LayoutParams(popW, popH);
+        mglp.leftMargin = pl; mglp.topMargin = pt;
+        rootView.addView(menuGlass, Math.max(0, rootView.indexOfChild(pop)), mglp);
         pop.setPivotX(Math.max(0, Math.min(popW, left + w / 2 - pl)));
         pop.setPivotY(below ? 0 : popH);
         pop.setAlpha(0f); pop.setScaleX(0.94f); pop.setScaleY(0.94f);
@@ -1810,8 +1823,9 @@ public class MainActivity extends Activity {
 
     // 关闭走 140ms 缩小淡出（对照 closeCardMenu），遮罩与高亮立即撤，底栏立即恢复
     void closeCardMenu() {
-        final View pop = cardMenuPop, bd = cardMenuBackdrop, cl = cardMenuClone;
-        cardMenuPop = null; cardMenuBackdrop = null; cardMenuClone = null;
+        final View pop = cardMenuPop, bd = cardMenuBackdrop, cl = cardMenuClone, mg = cardMenuGlass;
+        cardMenuPop = null; cardMenuBackdrop = null; cardMenuClone = null; cardMenuGlass = null;
+        removeViewNow(mg);
         if (navWrap != null) navWrap.setVisibility(View.VISIBLE);
         removeViewNow(bd);
         removeViewNow(cl);
@@ -1824,8 +1838,9 @@ public class MainActivity extends Activity {
 
     // 立即关闭（切页/开详情/返回拦截）：不走动画，避免浮层残留
     void dismissCardMenu() {
-        View pop = cardMenuPop, bd = cardMenuBackdrop, cl = cardMenuClone;
-        cardMenuPop = null; cardMenuBackdrop = null; cardMenuClone = null;
+        View pop = cardMenuPop, bd = cardMenuBackdrop, cl = cardMenuClone, mg = cardMenuGlass;
+        cardMenuPop = null; cardMenuBackdrop = null; cardMenuClone = null; cardMenuGlass = null;
+        removeViewNow(mg);
         if (navWrap != null) navWrap.setVisibility(View.VISIBLE);
         removeViewNow(pop);
         removeViewNow(bd);
@@ -1861,7 +1876,7 @@ public class MainActivity extends Activity {
     // P2d：毛玻璃白悬浮搜索栏（圆角 + 淡描边 + 投影，半透近似混合版 backdrop blur）
     GradientDrawable glassPillBg() {
         GradientDrawable g = new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
-            new int[]{Color.argb(238, 255, 255, 255), Color.argb(218, 246, 247, 250)});
+            new int[]{Color.argb(226, 255, 255, 255), Color.argb(204, 246, 247, 250)});
         g.setCornerRadius(dp(this, 999));
         g.setStroke(dp(this, 1), Color.argb(70, 20, 30, 60));
         return g;
@@ -1970,12 +1985,18 @@ public class MainActivity extends Activity {
         col.addView(homeList, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
 
         // 悬浮搜索栏：左右留 12dp、浮在列表之上，内容从栏下滚过（对照混合版 .float-search / #search 玻璃胶囊）
+        // Q11：搜索胶囊垫 live 真模糊层（滚动停稳刷新快照），外壳半透染色
+        FrameLayout barWrap = new FrameLayout(this);
+        barWrap.setBackground(glassPillBg());
+        if (Build.VERSION.SDK_INT >= 21) barWrap.setElevation(dp(this, 10));
+        barWrap.addView(glassLayer(barWrap, 28, true), new FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         LinearLayout bar = new LinearLayout(this);
         bar.setOrientation(LinearLayout.HORIZONTAL);
         bar.setGravity(Gravity.CENTER_VERTICAL);
-        bar.setBackground(glassPillBg());
         bar.setPadding(dp(this, 16), dp(this, 5), dp(this, 12), dp(this, 5));
-        if (Build.VERSION.SDK_INT >= 21) bar.setElevation(dp(this, 10));
+        barWrap.addView(bar, new FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
         SearchIconView sicon = new SearchIconView(this);
         sicon.iconColor = Color.rgb(0x63, 0x63, 0x66);
         bar.addView(sicon, new LinearLayout.LayoutParams(dp(this, 20), dp(this, 20)));
@@ -1996,8 +2017,8 @@ public class MainActivity extends Activity {
         blp.leftMargin = dp(this, 12);
         blp.rightMargin = dp(this, 12);
         blp.topMargin = statusBarH() + dp(this, 8);
-        page.addView(bar, blp);
-        homeSearchBar = bar;
+        page.addView(barWrap, blp);
+        homeSearchBar = barWrap;
         homeSearchBarShown = true;
 
         refreshHome();
@@ -2212,7 +2233,7 @@ public class MainActivity extends Activity {
         LinearLayout card = new LinearLayout(this);
         card.setOrientation(LinearLayout.VERTICAL);
         GradientDrawable cg = new GradientDrawable();
-        cg.setColor(Color.WHITE);
+        cg.setColor(Color.argb(228, 255, 255, 255)); // Q11：半透染色盖在冻结模糊层上
         cg.setCornerRadius(dp(this, 24));
         cg.setStroke(dp(this, 1), Color.argb(18, 20, 30, 60));
         card.setBackground(cg);
@@ -2276,6 +2297,10 @@ public class MainActivity extends Activity {
         card.measure(View.MeasureSpec.makeMeasureSpec(cardW, View.MeasureSpec.EXACTLY),
             View.MeasureSpec.makeMeasureSpec(maxH, View.MeasureSpec.AT_MOST));
         clp.height = card.getMeasuredHeight();
+        // Q11：窗下垫冻结模糊快照（升起前抓的底层画面），与窗同位同尺寸
+        FrameLayout.LayoutParams fglp = new FrameLayout.LayoutParams(clp.width, clp.height);
+        fglp.gravity = clp.gravity; fglp.rightMargin = clp.rightMargin; fglp.bottomMargin = clp.bottomMargin;
+        sheet.addView(glassLayer(card, 24, false), fglp);
         sheet.addView(card, clp);
         content.addView(sheet);
         filterSheet = sheet;
@@ -2298,7 +2323,7 @@ public class MainActivity extends Activity {
         filterSheet = null;
         if (sheet.getParent() == null) { syncSearchFab(); return; }
         View card = sheet instanceof ViewGroup && ((ViewGroup) sheet).getChildCount() > 0
-            ? ((ViewGroup) sheet).getChildAt(0) : null;
+            ? ((ViewGroup) sheet).getChildAt(((ViewGroup) sheet).getChildCount() - 1) : null; // Q11：玻璃层在窗下，窗体是最后一层
         if (card != null) {
             card.animate().alpha(0f).scaleX(0.96f).scaleY(0.96f).translationY(dp(this, 10))
                 .setDuration(180).setInterpolator(ANIM_ENTER)
@@ -2724,7 +2749,7 @@ public class MainActivity extends Activity {
         if (sheet != null && sheet.getParent() != null) {
             // 关闭：窗下沉淡出（180ms 减速，与筛选窗同一套手感），落位后摘窗、底栏与悬浮钮再回来
             View card = sheet instanceof ViewGroup && ((ViewGroup) sheet).getChildCount() > 1
-                ? ((ViewGroup) sheet).getChildAt(1) : null;
+                ? ((ViewGroup) sheet).getChildAt(((ViewGroup) sheet).getChildCount() - 1) : null; // Q11：玻璃层垫在窗下，窗体是最后一层
             if (card != null) {
                 card.animate().translationY(dp(this, 42)).alpha(0f)
                     .setDuration(180).setInterpolator(ANIM_ENTER)
@@ -2765,7 +2790,7 @@ public class MainActivity extends Activity {
         LinearLayout card = new LinearLayout(this);
         card.setOrientation(LinearLayout.VERTICAL);
         GradientDrawable cg = new GradientDrawable();
-        cg.setColor(Color.rgb(0xF2, 0xF3, 0xF7));
+        cg.setColor(Color.argb(232, 0xF2, 0xF3, 0xF7)); // Q11：半透染色盖在冻结模糊层上
         float rTop = dp(this, 26);
         cg.setCornerRadii(new float[]{rTop, rTop, rTop, rTop, 0, 0, 0, 0});
         card.setBackground(cg);
@@ -2784,7 +2809,13 @@ public class MainActivity extends Activity {
         card.measure(View.MeasureSpec.makeMeasureSpec(sw, View.MeasureSpec.EXACTLY),
             View.MeasureSpec.makeMeasureSpec(maxH, View.MeasureSpec.AT_MOST));
         clp.height = card.getMeasuredHeight();
-        sheet.addView(card, clp);
+        // Q11：贴底窗下垫冻结模糊层——玻璃层向下多延 26dp，让顶圆角对齐窗体、底圆角沉到屏外
+        FrameLayout wizGlassWrap = new FrameLayout(this);
+        wizGlassWrap.addView(glassLayer(card, 26, false), new FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, clp.height + dp(this, 26)));
+        wizGlassWrap.addView(card, new FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        sheet.addView(wizGlassWrap, clp);
         content.addView(sheet);
         wizardSheet = sheet;
         // P4：首次打开走遮罩淡入+窗从下方 42dp 上浮（260ms，混合版 wizUp 口径）；步骤切换只让
@@ -4681,6 +4712,10 @@ public class MainActivity extends Activity {
         clp.gravity = Gravity.BOTTOM;
         clp.leftMargin = dp(this, 12); clp.rightMargin = dp(this, 12);
         clp.bottomMargin = dp(this, 12);
+        // Q11：关于窗下垫冻结模糊快照，与窗同位同尺寸
+        FrameLayout.LayoutParams aglp = new FrameLayout.LayoutParams(clp.width, clp.height);
+        aglp.gravity = clp.gravity; aglp.leftMargin = clp.leftMargin; aglp.rightMargin = clp.rightMargin; aglp.bottomMargin = clp.bottomMargin;
+        sheet.addView(glassLayer(card, 22, false), aglp);
         sheet.addView(card, clp);
         content.addView(sheet);
         aboutSheet = sheet;
