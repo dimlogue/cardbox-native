@@ -1101,6 +1101,7 @@ public class MainActivity extends Activity {
     static final String[] CUSTOM_ORGS = {"Visa", "万事达", "美国运通", "银联", "JCB"};
     java.util.List<CustomCard> customCards = new ArrayList<>();
     boolean customOpen = false;
+    LinearLayout customTilesBox = null; // Q56：展开态色带容器，就地重排/重衔接用，不整页重建
     View customFormSheet = null; // Q8：表单改为根层浮卡（原 Dialog 全宽平纸已废）
     // Q19：自定义卡详情改为与 Q6 数据库详情同规范的贴底浮窗（原居中 AlertDialog 白框已废）
     View customDetailSheet = null;
@@ -5772,6 +5773,7 @@ public class MainActivity extends Activity {
         } catch (Throwable ignored) {}
         // 展开态：整叠色带河——外框 16dp 裁圆+柔影，每带 18/14/30 内边距，带底 48dp 竖向淡接至下一带顶色（Q40 照 .csk-tile::after）
         LinearLayout tilesBox = new LinearLayout(this);
+        customTilesBox = tilesBox;
         tilesBox.setOrientation(LinearLayout.VERTICAL);
         tilesBox.setBackground(roundRect(Color.WHITE, 16, this));
         if (Build.VERSION.SDK_INT >= 21) tilesBox.setElevation(dp(this, 2));
@@ -5800,7 +5802,10 @@ public class MainActivity extends Activity {
                 flp.gravity = Gravity.BOTTOM;
                 tile.addView(fade, flp);
             }
-            tilesBox.addView(tile, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+            LinearLayout.LayoutParams tileLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            // Q56 ②：相邻色带上叠 1dp，压掉交界处露出的容器白发丝线，整叠只在首尾见圆角
+            if (i > 0) tileLp.topMargin = -dp(this, 1);
+            tilesBox.addView(tile, tileLp);
             TextView idxTv = tv(this, String.valueOf(i + 1), 11, Color.WHITE, true);
             idxTv.setBackground(roundRect(Color.argb(71, 255, 255, 255), 999, this));
             idxTv.setGravity(Gravity.CENTER);
@@ -5820,16 +5825,81 @@ public class MainActivity extends Activity {
             mtv.setEllipsize(android.text.TextUtils.TruncateAt.END);
             tx.addView(mtv);
             // 三颗 30dp 半透玻璃小圆钮：上移/下移/删除（细字形，禁用态半透明；删除走二次确认+撤销）
-            row.addView(customMoveBtn("↑", i == 0, v -> moveCustom(idx, -1)));
-            row.addView(customMoveBtn("↓", i == customCards.size() - 1, v -> moveCustom(idx, 1)));
-            row.addView(customMoveBtn("✕", false, v -> confirmDeleteCustom(c)));
+            final FrameLayout tileF = tile;
+            row.addView(customMoveBtn("↑", i == 0, v -> moveCustom(customTileIndex(tileF), -1)));
+            row.addView(customMoveBtn("↓", i == customCards.size() - 1, v -> moveCustom(customTileIndex(tileF), 1)));
+            row.addView(customMoveBtn("✕", false, v -> { int ci = customTileIndex(tileF); if (ci >= 0 && ci < customCards.size()) confirmDeleteCustom(customCards.get(ci)); }));
             tile.setOnClickListener(v -> {
                 if (System.currentTimeMillis() - lastDragEndAt < 450) return;
-                openCustomDetail(c);
+                int ci = customTileIndex(tileF);
+                if (ci >= 0 && ci < customCards.size()) openCustomDetail(customCards.get(ci));
             });
-            tile.setOnLongClickListener(v -> { startCustomDrag(tile, idx); return true; });
+            tile.setOnLongClickListener(v -> { startCustomDrag(tile, customTileIndex(tileF)); return true; });
         }
         return sec;
+    }
+
+    // Q56：色带在其容器中的当前位置（换位/拖动落位后以此为准，监听里不吃旧下标）
+    int customTileIndex(View tile) {
+        try {
+            if (tile != null && tile.getParent() instanceof ViewGroup)
+                return ((ViewGroup) tile.getParent()).indexOfChild(tile);
+        } catch (Throwable ignored) {}
+        return -1;
+    }
+
+    void setCustomMoveBtnState(TextView b, boolean disabled, final View tile, final int dir) {
+        if (b == null) return;
+        b.setTextColor(disabled ? Color.argb(120, 255, 255, 255) : Color.WHITE);
+        GradientDrawable g = new GradientDrawable();
+        g.setShape(GradientDrawable.OVAL);
+        g.setColor(Color.argb(disabled ? 30 : 64, 255, 255, 255));
+        g.setStroke(dp(this, 1), Color.argb(60, 255, 255, 255));
+        b.setBackground(g);
+        if (disabled) b.setOnClickListener(null);
+        else b.setOnClickListener(v -> { haptic(); moveCustom(customTileIndex(tile), dir); });
+    }
+
+    // Q56 对照混合版 endTileDrag→restyleTiles(wrap)：只就地重算编号/渐变衔接/首尾圆角/钮态，不整页重建、不闪
+    void restyleCustomTilesInPlace() {
+        ViewGroup box = customTilesBox;
+        if (box == null) return;
+        int n = Math.min(box.getChildCount(), customCards.size());
+        for (int i = 0; i < n; i++) {
+            View child = box.getChildAt(i);
+            if (!(child instanceof FrameLayout)) continue;
+            FrameLayout tile = (FrameLayout) child;
+            CustomCard c = customCards.get(i);
+            boolean last = i == customCards.size() - 1;
+            tile.setBackground(customBandGradient(c.style, i == 0, last));
+            // 衔接层：非末带底部 48dp 淡接下一张顶色，末带移除
+            if (!last) {
+                int nextStyle = customCards.get(i + 1).style;
+                if (tile.getChildCount() > 1) {
+                    View fade = tile.getChildAt(1);
+                    fade.setBackground(customNextFade(nextStyle));
+                    fade.setVisibility(View.VISIBLE);
+                } else {
+                    View fade = new View(this);
+                    fade.setBackground(customNextFade(nextStyle));
+                    fade.setClickable(false);
+                    fade.setFocusable(false);
+                    FrameLayout.LayoutParams flp = new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(this, 48));
+                    flp.gravity = Gravity.BOTTOM;
+                    tile.addView(fade, flp);
+                }
+            } else if (tile.getChildCount() > 1) {
+                tile.removeViewAt(1);
+            }
+            if (tile.getChildCount() == 0 || !(tile.getChildAt(0) instanceof LinearLayout)) continue;
+            LinearLayout row = (LinearLayout) tile.getChildAt(0);
+            if (row.getChildCount() > 0 && row.getChildAt(0) instanceof TextView)
+                ((TextView) row.getChildAt(0)).setText(String.valueOf(i + 1));
+            if (row.getChildCount() > 3) {
+                if (row.getChildAt(2) instanceof TextView) setCustomMoveBtnState((TextView) row.getChildAt(2), i == 0, tile, -1);
+                if (row.getChildAt(3) instanceof TextView) setCustomMoveBtnState((TextView) row.getChildAt(3), last, tile, 1);
+            }
+        }
     }
 
     // Q7：三颗半透玻璃小圆钮（照混合版 .csk-mv/.csk-del 30dp、rgba(255,255,255,.25)，按下 .4）
@@ -5872,7 +5942,7 @@ public class MainActivity extends Activity {
         tile.setTag(origBg);
         setCustomTileDragFrame(tile, true, origBg);
         tile.setScaleX(1.02f); tile.setScaleY(1.02f); tile.setAlpha(0.98f);
-        if (tile.getParent() instanceof ViewGroup) ((ViewGroup) tile.getParent()).bringChildToFront(tile);
+        // Q56：不再 bringChildToFront 改子序（那一下正是起拖闪烁源）；靠 setCustomTileDragFrame 的 elevation 18 浮在兄弟之上
         if (mineScrollView != null) mineScrollView.requestDisallowInterceptTouchEvent(true);
         tile.setOnTouchListener(new View.OnTouchListener() {
             float downY = -1;
@@ -5953,7 +6023,18 @@ public class MainActivity extends Activity {
             saveCustomCards();
             showFloatToast("顺序已保存");
         }
-        refreshMineKeepScroll();
+        // Q56：落位只就地重衔接（对照 restyleTiles），不再 refreshMineKeepScroll 整页重建闪一下；
+        // live 换位已使物理子序与新顺序一致，兜底路径（未实时换位）先把带体挪到目标位再重算
+        try {
+            ViewGroup box = (tile.getParent() instanceof ViewGroup) ? (ViewGroup) tile.getParent() : null;
+            if (box != null && customTilesBox == box) {
+                int cur = box.indexOfChild(tile);
+                if (cur >= 0 && cur != toIdx) { box.removeView(tile); box.addView(tile, Math.min(toIdx, box.getChildCount())); }
+                restyleCustomTilesInPlace();
+            } else {
+                refreshMineKeepScroll();
+            }
+        } catch (Throwable ignored) { refreshMineKeepScroll(); }
     }
 
     Button customActBtn(String label, boolean disabled, View.OnClickListener onClick) {
@@ -5978,6 +6059,21 @@ public class MainActivity extends Activity {
         customCards.set(idx, customCards.get(j));
         customCards.set(j, t);
         saveCustomCards();
+        // Q56 ①：↑/↓ 换位与拖动同法——物理交换两带后就地重衔接，不整页重建
+        try {
+            ViewGroup box = customTilesBox;
+            if (box != null && j < box.getChildCount()) {
+                View a = box.getChildAt(idx);
+                View b = box.getChildAt(j);
+                int lo = Math.min(idx, j), hi = Math.max(idx, j);
+                box.removeViewAt(hi);
+                box.removeViewAt(lo);
+                box.addView(idx == lo ? b : a, lo);
+                box.addView(idx == lo ? a : b, hi);
+                restyleCustomTilesInPlace();
+                return;
+            }
+        } catch (Throwable ignored) {}
         refreshMineKeepScroll();
     }
 
