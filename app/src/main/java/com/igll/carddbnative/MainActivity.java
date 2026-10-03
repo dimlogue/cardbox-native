@@ -802,7 +802,7 @@ public class MainActivity extends Activity {
     static final String[] CUSTOM_ORGS = {"Visa", "万事达", "美国运通", "银联", "JCB"};
     java.util.List<CustomCard> customCards = new ArrayList<>();
     boolean customOpen = false;
-    Dialog customDialog = null;
+    View customFormSheet = null; // Q8：表单改为根层浮卡（原 Dialog 全宽平纸已废）
     // P-deck：我的卡片页滚动位置保持（换序/开合不甩回顶部）
     ScrollView mineScrollView = null;
     int mineScrollSaveY = 0;
@@ -5324,30 +5324,138 @@ public class MainActivity extends Activity {
         return row;
     }
 
-    EditText customInput(String hint, String value, boolean multi) {
-        EditText e = new EditText(this);
+    // Q8 对照混合版 styles.css .dlg input：#f8f8fa 近白底+1px #e2e2e6 边+圆角 10dp、内边距 12/11、
+    // 聚焦边转 #007AFF 且底转纯白（废原 F5F6F8 无边灰石板面）。
+    EditText customInput(String hint, String value, int maxLen) {
+        final EditText e = new EditText(this);
         e.setHint(hint);
         e.setText(value == null ? "" : value);
-        e.setTextSize(14);
-        e.setSingleLine(!multi);
-        if (multi) { e.setMinLines(2); e.setGravity(Gravity.TOP); }
-        e.setBackground(roundRect(Color.rgb(0xF5, 0xF6, 0xF8), 10, this));
-        e.setPadding(dp(this, 12), dp(this, 10), dp(this, 12), dp(this, 10));
+        e.setTextSize(15);
+        e.setSingleLine(true);
+        if (maxLen > 0) e.setFilters(new android.text.InputFilter[]{new android.text.InputFilter.LengthFilter(maxLen)});
+        e.setPadding(dp(this, 12), dp(this, 11), dp(this, 12), dp(this, 11));
+        Runnable paint = () -> {
+            boolean foc = e.hasFocus();
+            GradientDrawable g = new GradientDrawable();
+            g.setColor(foc ? Color.WHITE : Color.rgb(0xF8, 0xF8, 0xFA));
+            g.setCornerRadius(dp(this, 10));
+            g.setStroke(dp(this, 1), foc ? Color.rgb(0x00, 0x7A, 0xFF) : Color.rgb(0xE2, 0xE2, 0xE6));
+            e.setBackground(g);
+        };
+        paint.run();
+        e.setOnFocusChangeListener((v, has) -> paint.run());
         LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        lp.topMargin = dp(this, 8);
+        lp.topMargin = dp(this, 6);
         e.setLayoutParams(lp);
         return e;
     }
 
+    // Q8 对照混合版 .dlg label/.dlg-label：.85rem #555 非粗，组标签上距 12 下距 6（废原 12sp 粗灰）
     TextView customFormLabel(String s) {
-        TextView t = tv(this, s, 12, Color.rgb(0x8E, 0x8E, 0x93), true);
+        TextView t = tv(this, s, 13, Color.rgb(0x55, 0x55, 0x55), false);
         LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         lp.topMargin = dp(this, 12);
+        lp.bottomMargin = dp(this, 6);
         t.setLayoutParams(lp);
         return t;
     }
 
+    // Q8：表单收键盘——先抓令牌再清焦点（Q25 纪律，清焦后取不到令牌键盘会残留）
+    void hideKeyboardNow() {
+        android.os.IBinder token = null;
+        View foc = null;
+        try { foc = getCurrentFocus(); if (foc != null) token = foc.getWindowToken(); } catch (Throwable ignored) {}
+        if (token == null) {
+            try {
+                if (getWindow() != null && getWindow().getDecorView() != null)
+                    token = getWindow().getDecorView().getWindowToken();
+            } catch (Throwable ignored) {}
+        }
+        try {
+            InputMethodManager imm = (InputMethodManager) getSystemService(INPUT_METHOD_SERVICE);
+            if (imm != null && token != null) imm.hideSoftInputFromWindow(token, 0);
+        } catch (Throwable ignored) {}
+        try { if (foc != null) foc.clearFocus(); } catch (Throwable ignored) {}
+    }
+
+    // Q8 表单浮卡关闭：与 openAbout 同手感（窗下沉 42dp+遮罩淡出 180ms），落定后恢复底栏与悬浮钮
+    void closeCustomForm() {
+        final View sheet = customFormSheet;
+        if (sheet == null) return;
+        customFormSheet = null;
+        hideKeyboardNow();
+        if (sheet.getParent() != null) {
+            View card = sheet instanceof ViewGroup && ((ViewGroup) sheet).getChildCount() > 1
+                ? ((ViewGroup) sheet).getChildAt(((ViewGroup) sheet).getChildCount() - 1) : null;
+            if (card != null) {
+                card.animate().translationY(dp(this, 42)).alpha(0f)
+                    .setDuration(180).setInterpolator(ANIM_ENTER)
+                    .withEndAction(() -> {
+                        if (sheet.getParent() != null) ((ViewGroup) sheet.getParent()).removeView(sheet);
+                        if (navWrap != null) navWrap.setVisibility(View.VISIBLE); // Q32
+                        syncSearchFab();
+                    }).start();
+                sheet.animate().alpha(0f).setDuration(180).start();
+                return;
+            }
+            ((ViewGroup) sheet.getParent()).removeView(sheet);
+        }
+        if (navWrap != null) navWrap.setVisibility(View.VISIBLE); // Q32
+        syncSearchFab();
+    }
+
+    void closeCustomFormNow() {
+        View sheet = customFormSheet;
+        if (sheet == null) return;
+        customFormSheet = null;
+        if (sheet.getParent() != null) ((ViewGroup) sheet.getParent()).removeView(sheet);
+    }
+
+    // Q8 组织 chips（对照混合版 openCustomForm 的 .chips button 与 .dlg .chips 数值）：
+    // 胶囊圆角、内边距 13/7、选中蓝渐变白字（同 .chips button.on），未选走筛选 chips 的近白口径保可读
+    TextView formOrgChip(String label) {
+        TextView t = tv(this, label, 13, Color.rgb(0x1C, 0x1C, 0x1E), false);
+        t.setSingleLine(true);
+        t.setGravity(Gravity.CENTER);
+        t.setPadding(dp(this, 13), dp(this, 7), dp(this, 13), dp(this, 7));
+        t.setOnTouchListener((v, e) -> {
+            if (e.getAction() == MotionEvent.ACTION_DOWN) pressBounce(v, true);
+            else if (e.getAction() == MotionEvent.ACTION_UP || e.getAction() == MotionEvent.ACTION_CANCEL)
+                pressBounce(v, false);
+            return false;
+        });
+        return t;
+    }
+
+    void paintFormOrgChip(TextView t, boolean on) {
+        if (on) {
+            GradientDrawable g = new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
+                new int[]{Color.rgb(0x0A, 0x84, 0xFF), Color.rgb(0x00, 0x66, 0xE6)});
+            g.setCornerRadius(dp(this, 999));
+            t.setBackground(g);
+            t.setTextColor(Color.WHITE);
+            try { t.setTypeface(t.getTypeface(), android.graphics.Typeface.BOLD); } catch (Throwable ignored) {}
+        } else {
+            GradientDrawable g = new GradientDrawable();
+            g.setColor(Color.rgb(0xF2, 0xF3, 0xF7));
+            g.setCornerRadius(dp(this, 999));
+            g.setStroke(dp(this, 1), Color.argb(13, 20, 30, 60));
+            t.setBackground(g);
+            t.setTextColor(Color.rgb(0x1C, 0x1C, 0x1E));
+            try { t.setTypeface(android.graphics.Typeface.DEFAULT, android.graphics.Typeface.NORMAL); } catch (Throwable ignored) {}
+        }
+    }
+
+    // Q8 对照返工：施工前核对混合版 index.html #customDlg 与 styles.css .dlg/.dlg input/.chips/.swatches/
+    // .dlg-actions 及 app.js openCustomForm——表单改根层贴底浮卡（左右/底部 12dp、圆角 22、最高 82vh、
+    // 遮罩 rgba(0,0,0,.4)、升窗 280ms 上浮淡入，混合版开表单即藏 dock、原生藏整条 navWrap 同 Q32 口径）；
+    // 输入框换 customInput 近白圆角带边；卡组织改 chips 流式换行（废原单行横排裁掉第四项）且选中走
+    // .chips button.on 蓝渐变（废原整坨实心蓝）；卡面样式改 3×2 大渐变色块（.swatch 64×40 量级、
+    // 圆角 8、选中 #007AFF 边+外圈 rgba(0,122,255,.25)，废原一排小药丸加勾）；标题/必填星/占位/
+    // 字数上限照 index.html（名称*、如：我的工资卡/30、如：招商银行/20、备注 可空/60）；动作行
+    // 取消 flex1/保存 flex2（.dlg-actions 口径），保存走 .primary-btn 蓝渐变。NFC 行归 Q9 本段不加。
     void openCustomForm(final CustomCard edit) {
+        closeCustomFormNow();
         final boolean isNew = edit == null;
         final CustomCard draft = new CustomCard();
         if (!isNew) {
@@ -5359,105 +5467,156 @@ public class MainActivity extends Activity {
         final String[] orgSel = {draft.org == null ? "" : draft.org};
         final int[] styleSel = {draft.style};
 
+        captureCurrentPageScroll();
+        if (navWrap != null) navWrap.setVisibility(View.GONE); // 混合版 openCustomForm 即 setDockVisible(false)
+        final FrameLayout sheet = new FrameLayout(this);
+        View shade = new View(this);
+        shade.setBackgroundColor(Color.argb(102, 0, 0, 0)); // .dlg-backdrop rgba(0,0,0,.4)
+        shade.setOnClickListener(v -> closeCustomForm());
+        sheet.addView(shade, new FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+
+        LinearLayout card = new LinearLayout(this);
+        card.setOrientation(LinearLayout.VERTICAL);
+        GradientDrawable cg = new GradientDrawable();
+        cg.setColor(Color.argb(219, 255, 255, 255)); // .dlg rgba(255,255,255,.86)
+        cg.setStroke(dp(this, 1), Color.argb(140, 255, 255, 255));
+        cg.setCornerRadius(dp(this, 22));
+        card.setBackground(cg);
+        if (Build.VERSION.SDK_INT >= 21) {
+            card.setElevation(dp(this, 24));
+            card.setClipToOutline(true);
+        }
+        card.setOnClickListener(v -> {}); // 窗体吃掉点击，防穿透遮罩误关
+
         ScrollView sv = new ScrollView(this);
         thinScrollbar(sv);
         LinearLayout form = new LinearLayout(this);
         form.setOrientation(LinearLayout.VERTICAL);
-        form.setPadding(dp(this, 18), dp(this, 14), dp(this, 18), dp(this, 18));
+        form.setPadding(dp(this, 18), dp(this, 18), dp(this, 18), dp(this, 18)); // .dlg padding 18px
         sv.addView(form);
+        card.addView(sv, new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+
         form.addView(tv(this, isNew ? "添加自定义卡片" : "编辑自定义卡片", 17, Color.rgb(0x1C, 0x1C, 0x1E), true));
-        form.addView(customFormLabel("卡片名称 *"));
-        final EditText inName = customInput("例如：我的旅行卡", draft.name, false);
+        form.addView(customFormLabel("卡片名称*"));
+        final EditText inName = customInput("如：我的工资卡", draft.name, 30);
         form.addView(inName);
         form.addView(customFormLabel("发卡银行"));
-        final EditText inBank = customInput("例如：招商银行（可不填）", draft.bank, false);
+        final EditText inBank = customInput("如：招商银行", draft.bank, 20);
         form.addView(inBank);
         form.addView(customFormLabel("卡组织"));
-        final LinearLayout orgRow = new LinearLayout(this);
-        orgRow.setOrientation(LinearLayout.HORIZONTAL);
-        LinearLayout.LayoutParams orgLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        orgLp.topMargin = dp(this, 8);
-        form.addView(orgRow, orgLp);
-        final java.util.List<Button> orgBtns = new ArrayList<>();
+        // 组织 chips 流式换行：按文字量宽逐行打包（行距/间距 6dp，同 .dlg .chips），任何一项不裁
+        final LinearLayout orgFlow = new LinearLayout(this);
+        orgFlow.setOrientation(LinearLayout.VERTICAL);
+        form.addView(orgFlow, new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        final java.util.List<TextView> orgChips = new ArrayList<>();
         Runnable paintOrgs = () -> {
-            for (Button b : orgBtns) {
-                boolean on = b.getText().toString().equals(orgSel[0]);
-                b.setTextColor(on ? Color.WHITE : Color.rgb(0x3A, 0x3A, 0x3C));
-                b.setBackground(roundRect(on ? Color.rgb(0x0A, 0x5C, 0xD6) : Color.rgb(0xF5, 0xF6, 0xF8), 999, MainActivity.this));
-            }
+            for (TextView b : orgChips) paintFormOrgChip(b, b.getText().toString().equals(orgSel[0]));
         };
         for (final String o : CUSTOM_ORGS) {
-            Button b = new Button(this);
-            b.setText(o); b.setTextSize(11.5f); b.setAllCaps(false);
-            b.setMinWidth(0); b.setMinHeight(0);
-            b.setPadding(dp(this, 10), dp(this, 6), dp(this, 10), dp(this, 6));
-            LinearLayout.LayoutParams blp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-            blp.rightMargin = dp(this, 6);
-            b.setLayoutParams(blp);
+            TextView b = formOrgChip(o);
             b.setOnClickListener(v -> { haptic(); orgSel[0] = o.equals(orgSel[0]) ? "" : o; paintOrgs.run(); });
-            orgBtns.add(b);
-            orgRow.addView(b);
+            orgChips.add(b);
+        }
+        {
+            int avail = getResources().getDisplayMetrics().widthPixels - dp(this, 24) - dp(this, 36);
+            Paint mp = new Paint();
+            mp.setTextSize(13f * uiScale * getResources().getDisplayMetrics().scaledDensity);
+            LinearLayout row = null;
+            int rowW = 0;
+            for (TextView chip : orgChips) {
+                int w = (int) mp.measureText(chip.getText().toString()) + dp(this, 28);
+                if (row == null || (rowW > 0 && rowW + dp(this, 6) + w > avail)) {
+                    row = new LinearLayout(this);
+                    row.setOrientation(LinearLayout.HORIZONTAL);
+                    LinearLayout.LayoutParams rlp = new LinearLayout.LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+                    if (orgFlow.getChildCount() > 0) rlp.topMargin = dp(this, 6);
+                    row.setLayoutParams(rlp);
+                    orgFlow.addView(row);
+                    rowW = 0;
+                }
+                LinearLayout.LayoutParams clp = new LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+                if (rowW > 0) clp.leftMargin = dp(this, 6);
+                chip.setLayoutParams(clp);
+                row.addView(chip);
+                rowW += (rowW > 0 ? dp(this, 6) : 0) + w;
+            }
         }
         paintOrgs.run();
-        form.addView(customFormLabel("卡面颜色"));
-        final LinearLayout styleRow = new LinearLayout(this);
-        styleRow.setOrientation(LinearLayout.HORIZONTAL);
-        LinearLayout.LayoutParams styleLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        styleLp.topMargin = dp(this, 8);
-        form.addView(styleRow, styleLp);
-        final java.util.List<Button> styleBtns = new ArrayList<>();
+        form.addView(customFormLabel("卡面样式"));
+        // 卡面 3×2 大色块：每块高 40dp、间隔 10dp、圆角 8（.swatch 量级），选中蓝边+浅蓝外圈
+        final java.util.List<View> swatchCells = new ArrayList<>();
+        final java.util.List<View> swatchInners = new ArrayList<>();
         Runnable paintStyles = () -> {
-            for (int i = 0; i < styleBtns.size(); i++) {
-                Button b = styleBtns.get(i);
+            for (int i = 0; i < swatchInners.size(); i++) {
                 boolean on = i == styleSel[0];
-                b.setText(on ? "✓" : "");
-                b.setTextColor(Color.WHITE);
                 GradientDrawable g = customGradient(i);
-                if (on) g.setStroke(dp(MainActivity.this, 2), Color.rgb(0x1C, 0x1C, 0x1E));
-                b.setBackground(g);
+                g.setCornerRadius(dp(this, 8));
+                g.setStroke(dp(this, 2), on ? Color.rgb(0x00, 0x7A, 0xFF) : Color.TRANSPARENT);
+                swatchInners.get(i).setBackground(g);
+                GradientDrawable ring = new GradientDrawable();
+                ring.setColor(on ? Color.argb(64, 0, 122, 255) : Color.TRANSPARENT);
+                ring.setCornerRadius(dp(this, 10));
+                swatchCells.get(i).setBackground(ring);
             }
         };
-        for (int i = 0; i < CUSTOM_STYLES.length; i++) {
-            final int si = i;
-            Button b = new Button(this);
-            b.setTextSize(13); b.setAllCaps(false);
-            b.setMinWidth(0); b.setMinHeight(0);
-            LinearLayout.LayoutParams blp = new LinearLayout.LayoutParams(dp(this, 44), dp(this, 32));
-            blp.rightMargin = dp(this, 7);
-            b.setLayoutParams(blp);
-            b.setOnClickListener(v -> { haptic(); styleSel[0] = si; paintStyles.run(); });
-            styleBtns.add(b);
-            styleRow.addView(b);
+        LinearLayout styleGrid = new LinearLayout(this);
+        styleGrid.setOrientation(LinearLayout.VERTICAL);
+        form.addView(styleGrid, new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        for (int r = 0; r < 2; r++) {
+            LinearLayout srow = new LinearLayout(this);
+            srow.setOrientation(LinearLayout.HORIZONTAL);
+            LinearLayout.LayoutParams srlp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            if (r > 0) srlp.topMargin = dp(this, 10);
+            srow.setLayoutParams(srlp);
+            styleGrid.addView(srow);
+            for (int cix = 0; cix < 3; cix++) {
+                final int si = r * 3 + cix;
+                FrameLayout cell = new FrameLayout(this);
+                cell.setPadding(dp(this, 2), dp(this, 2), dp(this, 2), dp(this, 2));
+                LinearLayout.LayoutParams celp = new LinearLayout.LayoutParams(0, dp(this, 44), 1f);
+                if (cix > 0) celp.leftMargin = dp(this, 6);
+                cell.setLayoutParams(celp);
+                View inner = new View(this);
+                cell.addView(inner, new FrameLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+                cell.setOnClickListener(v -> { haptic(); styleSel[0] = si; paintStyles.run(); });
+                swatchCells.add(cell);
+                swatchInners.add(inner);
+                srow.addView(cell);
+            }
         }
         paintStyles.run();
         form.addView(customFormLabel("备注"));
-        final EditText inNote = customInput("例如：额度、到期日、主要用途（可不填）", draft.note, true);
+        final EditText inNote = customInput("可空", draft.note, 60);
         form.addView(inNote);
-
-        final Dialog dlg = new Dialog(this);
-        dlg.setContentView(sv);
-        if (dlg.getWindow() != null) {
-            dlg.getWindow().setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-            dlg.getWindow().setBackgroundDrawable(roundRect(Color.WHITE, 18, this));
-        }
-        customDialog = dlg;
 
         LinearLayout acts = new LinearLayout(this);
         acts.setOrientation(LinearLayout.HORIZONTAL);
-        acts.setGravity(Gravity.CENTER_VERTICAL);
-        LinearLayout.LayoutParams actLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        LinearLayout.LayoutParams actLp = new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         actLp.topMargin = dp(this, 16);
         form.addView(acts, actLp);
         Button cancel = new Button(this);
-        cancel.setText("取消"); cancel.setTextSize(14); cancel.setAllCaps(false);
-        cancel.setBackground(roundRect(Color.rgb(0xF5, 0xF6, 0xF8), 12, this));
-        cancel.setOnClickListener(v -> { haptic(); customDialog = null; dlg.dismiss(); });
-        acts.addView(cancel, new LinearLayout.LayoutParams(0, dp(this, 46), 1f));
+        cancel.setText("取消"); cancel.setTextSize(15); cancel.setAllCaps(false);
+        cancel.setBackground(roundRect(Color.rgb(0xF2, 0xF3, 0xF7), 14, this));
+        cancel.setOnClickListener(v -> { haptic(); closeCustomForm(); });
+        acts.addView(cancel, new LinearLayout.LayoutParams(0, dp(this, 48), 1f));
         Button save = new Button(this);
-        save.setText("保存"); save.setTextSize(14); save.setAllCaps(false);
+        save.setText("保存"); save.setTextSize(15); save.setAllCaps(false);
         save.setTextColor(Color.WHITE);
-        save.setBackground(roundRect(Color.rgb(0x0A, 0x5C, 0xD6), 12, this));
-        LinearLayout.LayoutParams saveLp = new LinearLayout.LayoutParams(0, dp(this, 46), 1f);
+        try { save.setTypeface(save.getTypeface(), android.graphics.Typeface.BOLD); } catch (Throwable ignored) {}
+        GradientDrawable saveBg = new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
+            new int[]{Color.rgb(0x0A, 0x84, 0xFF), Color.rgb(0x00, 0x66, 0xE6)}); // .primary-btn 蓝渐变
+        saveBg.setCornerRadius(dp(this, 14));
+        save.setBackground(saveBg);
+        LinearLayout.LayoutParams saveLp = new LinearLayout.LayoutParams(0, dp(this, 48), 2f);
         saveLp.leftMargin = dp(this, 10);
         acts.addView(save, saveLp);
         save.setOnClickListener(v -> {
@@ -5484,12 +5643,31 @@ public class MainActivity extends Activity {
                 showFloatToast("已保存「" + name + "」");
             }
             saveCustomCards();
-            customDialog = null;
-            dlg.dismiss();
+            closeCustomForm();
             refreshMineKeepScroll();
         });
-        dlg.setOnDismissListener(d -> { if (customDialog == dlg) customDialog = null; });
-        dlg.show();
+
+        int sw = getResources().getDisplayMetrics().widthPixels;
+        int maxH = (int) (getResources().getDisplayMetrics().heightPixels * 0.82); // .dlg max-height 82vh
+        card.measure(View.MeasureSpec.makeMeasureSpec(sw - dp(this, 24), View.MeasureSpec.EXACTLY),
+            View.MeasureSpec.makeMeasureSpec(maxH, View.MeasureSpec.AT_MOST));
+        FrameLayout.LayoutParams clp = new FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, Math.min(card.getMeasuredHeight(), maxH));
+        clp.gravity = Gravity.BOTTOM;
+        clp.leftMargin = dp(this, 12); clp.rightMargin = dp(this, 12);
+        clp.bottomMargin = dp(this, 12) + navBarH(); // .dlg bottom 12px+手势条避让（Q26 口径）
+        FrameLayout.LayoutParams fglp = new FrameLayout.LayoutParams(clp.width, clp.height);
+        fglp.gravity = clp.gravity; fglp.leftMargin = clp.leftMargin; fglp.rightMargin = clp.rightMargin; fglp.bottomMargin = clp.bottomMargin;
+        sheet.addView(glassLayer(card, 22, false), fglp); // Q11 冻结玻璃垫底
+        sheet.addView(card, clp);
+        content.addView(sheet);
+        customFormSheet = sheet;
+        sheet.setAlpha(0f);
+        sheet.animate().alpha(1f).setDuration(200).setInterpolator(ANIM_ENTER).start();
+        card.setTranslationY(dp(this, 40)); // dlgIn：40px 上浮淡入 .28s
+        card.setAlpha(0f);
+        card.animate().translationY(0f).alpha(1f).setDuration(280)
+            .setInterpolator(ANIM_ENTER).start();
     }
 
     // ---------- 资讯 / 设置 ----------
@@ -6598,6 +6776,7 @@ public class MainActivity extends Activity {
         if (settingsLogOpen && "settings".equals(tab)) { settingsLogOpen = false; rebuildPages(); return; }
         if (detailCard != null) { closeDetail(); return; }
         if (filterSheet != null) { closeFilterSheet(); return; }
+        if (customFormSheet != null) { closeCustomForm(); return; }
         if (wizardOpen) {
             if (wizSc == null) closeWizard(); else wizGoBack();
             return;
