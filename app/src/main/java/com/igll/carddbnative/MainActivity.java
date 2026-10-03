@@ -1177,6 +1177,7 @@ public class MainActivity extends Activity {
         if (Build.VERSION.SDK_INT >= 26) uiFlags |= View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR;
         w.getDecorView().setSystemUiVisibility(uiFlags);
         if (Build.VERSION.SDK_INT >= 30) {
+            w.setDecorFitsSystemWindows(false); // Q26：与上面的 LAYOUT 标志双保险，内容真正铺满全屏
             w.getDecorView().setOnApplyWindowInsetsListener((v, insets) -> {
                 try {
                     int b = insets.getInsets(android.view.WindowInsets.Type.navigationBars()).bottom;
@@ -6060,7 +6061,7 @@ public class MainActivity extends Activity {
         sc.setFillViewport(true);
         LinearLayout page = new LinearLayout(this);
         page.setOrientation(LinearLayout.VERTICAL);
-        page.setPadding(dp(this, 26), statusBarH() + dp(this, 22), dp(this, 26), dp(this, 18));
+        page.setPadding(dp(this, 26), statusBarH() + dp(this, 22), dp(this, 26), dp(this, 18) + navBarH()); // Q26：欢迎页底部按钮避开手势条
         sc.addView(page);
 
         TextView logo = tv(this, "卡", 30, Color.WHITE, true);
