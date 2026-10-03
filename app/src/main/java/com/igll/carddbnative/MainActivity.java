@@ -2608,6 +2608,67 @@ public class MainActivity extends Activity {
         }
     }
 
+    // Q14：选卡场景细线图标（SF 风自绘禁用 emoji，语义对混合版 🎓✈️🛒☕；
+    // 24 网格、stroke 1.7、#1C1C1E，与 SearchIconView/FilterIconView 同语言）
+    class SceneIconView extends View {
+        String kind = "study";
+        SceneIconView(Context c) { super(c); }
+        @Override protected void onDraw(Canvas cv) {
+            Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);
+            p.setStyle(Paint.Style.STROKE);
+            p.setStrokeCap(Paint.Cap.ROUND);
+            p.setStrokeJoin(Paint.Join.ROUND);
+            p.setColor(Color.rgb(0x1C, 0x1C, 0x1E));
+            float ox = getPaddingLeft(), oy = getPaddingTop();
+            float sx = (getWidth() - getPaddingLeft() - getPaddingRight()) / 24f;
+            float sy = (getHeight() - getPaddingTop() - getPaddingBottom()) / 24f;
+            p.setStrokeWidth(1.7f * sx);
+            android.graphics.Path path = new android.graphics.Path();
+            if ("study".equals(kind)) { // 学士帽：帽板菱形+帽身+流苏
+                path.moveTo(ox + 12f * sx, oy + 5f * sy);
+                path.lineTo(ox + 20.5f * sx, oy + 9.5f * sy);
+                path.lineTo(ox + 12f * sx, oy + 14f * sy);
+                path.lineTo(ox + 3.5f * sx, oy + 9.5f * sy);
+                path.close();
+                cv.drawPath(path, p);
+                path.reset();
+                path.moveTo(ox + 7.5f * sx, oy + 11.8f * sy);
+                path.lineTo(ox + 7.5f * sx, oy + 15.5f * sy);
+                path.cubicTo(ox + 7.5f * sx, oy + 18f * sy, ox + 16.5f * sx, oy + 18f * sy, ox + 16.5f * sx, oy + 15.5f * sy);
+                path.lineTo(ox + 16.5f * sx, oy + 11.8f * sy);
+                cv.drawPath(path, p);
+                cv.drawLine(ox + 20.5f * sx, oy + 9.5f * sy, ox + 20.5f * sx, oy + 15f * sy, p);
+            } else if ("travel".equals(kind)) { // 纸飞机（SF paperplane）
+                path.moveTo(ox + 21f * sx, oy + 3.5f * sy);
+                path.lineTo(ox + 10.5f * sx, oy + 13.5f * sy);
+                path.lineTo(ox + 21f * sx, oy + 3.5f * sy);
+                path.lineTo(ox + 14f * sx, oy + 20.5f * sy);
+                path.lineTo(ox + 10.5f * sx, oy + 13.5f * sy);
+                path.lineTo(ox + 3.5f * sx, oy + 10f * sy);
+                path.close();
+                cv.drawPath(path, p);
+            } else if ("shop".equals(kind)) { // 购物袋：袋身+提手弧
+                android.graphics.RectF bag = new android.graphics.RectF(ox + 5.5f * sx, oy + 8f * sy, ox + 18.5f * sx, oy + 20f * sy);
+                cv.drawRoundRect(bag, 2f * sx, 2f * sy, p);
+                path.moveTo(ox + 9f * sx, oy + 11f * sy);
+                path.cubicTo(ox + 9f * sx, oy + 5.5f * sy, ox + 15f * sx, oy + 5.5f * sy, ox + 15f * sx, oy + 11f * sy);
+                cv.drawPath(path, p);
+            } else { // daily 咖啡杯：杯身+耳+碟
+                path.moveTo(ox + 5.5f * sx, oy + 9f * sy);
+                path.lineTo(ox + 17f * sx, oy + 9f * sy);
+                path.lineTo(ox + 16f * sx, oy + 18.5f * sy);
+                path.lineTo(ox + 6.5f * sx, oy + 18.5f * sy);
+                path.close();
+                cv.drawPath(path, p);
+                path.reset();
+                path.moveTo(ox + 17.2f * sx, oy + 10.5f * sy);
+                path.cubicTo(ox + 20.5f * sx, oy + 10.5f * sy, ox + 20.5f * sx, oy + 15.5f * sy, ox + 16.8f * sx, oy + 15.5f * sy);
+                cv.drawPath(path, p);
+                cv.drawLine(ox + 4.5f * sx, oy + 21f * sy, ox + 18f * sx, oy + 21f * sy, p);
+            }
+        }
+    }
+
     // 只在首页、且没有整屏覆盖层时出现；覆盖层（详情/向导/欢迎/日志）都会
     // content.removeAllViews()，天然把它清掉，回到首页时 showTab 会再挂回来。
     void syncSearchFab() {
@@ -4578,7 +4639,7 @@ public class MainActivity extends Activity {
         LinearLayout card = new LinearLayout(this);
         card.setOrientation(LinearLayout.VERTICAL);
         GradientDrawable cg = new GradientDrawable();
-        cg.setColor(Color.rgb(0xF2, 0xF3, 0xF7)); // Q54：172 半透→同色提实，窗身一整块同色到底、不许底部色差横带（色相未动，白底化归 Q14）
+        cg.setColor(Color.rgb(0xFC, 0xFC, 0xFE)); // Q14：对照混合版 .wiz-sheet rgba(252,252,254,.98) 窗体改近白不透（Q54 灰底 F2F3F7 在此销账），窗身一整块同色到底无底部色差横带
         float rTop = dp(this, 26);
         cg.setCornerRadii(new float[]{rTop, rTop, rTop, rTop, 0, 0, 0, 0});
         card.setBackground(cg);
@@ -4668,16 +4729,31 @@ public class MainActivity extends Activity {
             LinearLayout row = new LinearLayout(this);
             row.setOrientation(LinearLayout.HORIZONTAL);
             row.setGravity(Gravity.CENTER_VERTICAL);
-            row.setBackground(roundRect(Color.rgb(0xE9, 0xF7, 0xEE), 10, this));
-            row.setPadding(dp(this, 10), dp(this, 7), dp(this, 10), dp(this, 7));
+            // Q14：轨迹行照混合版 .wiz-done——#F2FBF4 浅底+rgba(46,140,60,.16) 描边、圆角 13、内边距 12/10，
+            // 废旧整行厚绿 #E9F7EE（改浅底细边，层级标签改绿 chip、值 600、「修改」改灰字）
+            GradientDrawable trailBg = new GradientDrawable();
+            trailBg.setColor(Color.rgb(0xF2, 0xFB, 0xF4));
+            trailBg.setCornerRadius(dp(this, 13));
+            trailBg.setStroke(Math.max(1, dp(this, 1)), Color.argb(41, 46, 140, 60));
+            row.setBackground(trailBg);
+            row.setPadding(dp(this, 12), dp(this, 10), dp(this, 12), dp(this, 10));
             LinearLayout.LayoutParams rlp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-            rlp.topMargin = dp(this, 6);
+            rlp.topMargin = dp(this, 7);
             row.setLayoutParams(rlp);
-            TextView kv = tv(this, (String) it[1] + "  ", 11, Color.rgb(0x8E, 0x8E, 0x93), true);
+            TextView kv = tv(this, (String) it[1], 11, Color.rgb(0x22, 0x86, 0x3A), true);
+            kv.setBackground(roundRect(Color.rgb(0xE0, 0xF5, 0xE4), 6, this));
+            kv.setPadding(dp(this, 7), dp(this, 3), dp(this, 7), dp(this, 3));
             row.addView(kv);
-            TextView val = tv(this, (String) it[2], 12.5f, Color.rgb(0x1C, 0x1C, 0x1E), true);
-            row.addView(val, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
-            row.addView(tv(this, "修改", 11.5f, Color.rgb(0x0A, 0x5C, 0xD6), true));
+            TextView val = tv(this, (String) it[2], 14, Color.rgb(0x1C, 0x1C, 0x1E), true);
+            val.setSingleLine(true);
+            val.setEllipsize(android.text.TextUtils.TruncateAt.END);
+            LinearLayout.LayoutParams valLp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+            valLp.leftMargin = dp(this, 8);
+            row.addView(val, valLp);
+            TextView ed = tv(this, "修改", 11.5f, Color.rgb(0x9A, 0x9A, 0xA0), false);
+            LinearLayout.LayoutParams edLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            edLp.leftMargin = dp(this, 8);
+            row.addView(ed, edLp);
             row.setOnClickListener(v -> {
                 haptic();
                 if (step == 0) { wizSc = null; wizStep = 0; wizA.clear(); }
@@ -4696,8 +4772,8 @@ public class MainActivity extends Activity {
         grab.setBackground(roundRect(Color.rgb(0xD9, 0xD9, 0xDE), 3, this));
         LinearLayout.LayoutParams glp = new LinearLayout.LayoutParams(dp(this, 38), dp(this, 5));
         glp.gravity = Gravity.CENTER_HORIZONTAL;
-        glp.topMargin = dp(this, 8);
-        glp.bottomMargin = dp(this, 4);
+        glp.topMargin = dp(this, 10);
+        glp.bottomMargin = dp(this, 8);
         col.addView(grab, glp);
         LinearLayout headWrap = new LinearLayout(this);
         headWrap.setOrientation(LinearLayout.VERTICAL);
@@ -4721,45 +4797,73 @@ public class MainActivity extends Activity {
         top.setOrientation(LinearLayout.HORIZONTAL);
         top.setGravity(Gravity.CENTER_VERTICAL);
         headWrap.addView(top);
-        Button back = new Button(this);
-        back.setText("‹ 返回"); back.setTextSize(14); back.setAllCaps(false);
-        back.setBackground(roundRect(Color.WHITE, 12, this));
-        back.setVisibility(wizSc == null ? View.INVISIBLE : View.VISIBLE);
+        // Q14 头部照混合版 .wiz-head/.wiz-nav/.wiz-title：返回/关闭同为 34dp 圆钮 #F0F0F4、
+        // 返回仅细线 ‹（废 84dp 大药丸）、标题 flex 居中 1.02rem/700、✕ 走 CloseIconView 细线自绘
+        FrameLayout back = new FrameLayout(this);
+        back.setBackground(roundRect(Color.rgb(0xF0, 0xF0, 0xF4), 999, this));
+        TextView backGlyph = tv(this, "‹", 24, Color.rgb(0x1C, 0x1C, 0x1E), false);
+        backGlyph.setGravity(Gravity.CENTER);
+        back.addView(backGlyph, new FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        back.setVisibility(wizSc == null ? View.GONE : View.VISIBLE);
         back.setOnClickListener(v -> { haptic(); wizGoBack(); });
-        top.addView(back, new LinearLayout.LayoutParams(dp(this, 84), dp(this, 38)));
+        top.addView(back, new LinearLayout.LayoutParams(dp(this, 34), dp(this, 34)));
         TextView ttl = tv(this, title, 16, Color.rgb(0x1C, 0x1C, 0x1E), true);
+        ttl.setGravity(Gravity.CENTER);
         LinearLayout.LayoutParams ttlp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
-        ttlp.leftMargin = dp(this, 10);
+        ttlp.leftMargin = dp(this, 8);
+        ttlp.rightMargin = dp(this, 8);
         top.addView(ttl, ttlp);
-        Button close = new Button(this);
-        close.setText("✕"); close.setTextSize(14); close.setAllCaps(false);
-        close.setBackground(roundRect(Color.WHITE, 12, this));
+        FrameLayout close = new FrameLayout(this);
+        close.setBackground(roundRect(Color.rgb(0xF0, 0xF0, 0xF4), 999, this));
+        CloseIconView closeIc = new CloseIconView(this);
+        closeIc.iconColor = Color.rgb(0x1C, 0x1C, 0x1E);
+        closeIc.lineDp = 1.6f;
+        closeIc.setPadding(dp(this, 10), dp(this, 10), dp(this, 10), dp(this, 10));
+        close.addView(closeIc, new FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         close.setOnClickListener(v -> { haptic(); closeWizard(); });
-        top.addView(close, new LinearLayout.LayoutParams(dp(this, 44), dp(this, 38)));
+        top.addView(close, new LinearLayout.LayoutParams(dp(this, 34), dp(this, 34)));
 
         if (wizSc == null) {
             TextView sub = tv(this, "打算拿卡做什么？选个场景往下答，每答完一题上面都会留一条，随时看清走到哪一步。", 12.5f, Color.rgb(0x8E, 0x8E, 0x93), false);
             LinearLayout.LayoutParams subLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
             subLp.topMargin = dp(this, 12);
             page.addView(sub, subLp);
-            for (final WizSc s : WIZ_SCENARIOS) {
-                LinearLayout tile = new LinearLayout(this);
-                tile.setOrientation(LinearLayout.HORIZONTAL);
-                tile.setGravity(Gravity.CENTER_VERTICAL);
-                tile.setBackground(rippleBg(Color.WHITE, 14));
-                tile.setClipToOutline(true);
-                tile.setPadding(dp(this, 14), dp(this, 12), dp(this, 14), dp(this, 12));
-                LinearLayout.LayoutParams tlp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-                tlp.topMargin = dp(this, 10);
-                tile.setLayoutParams(tlp);
-                LinearLayout tx = new LinearLayout(this);
-                tx.setOrientation(LinearLayout.VERTICAL);
-                tile.addView(tx, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
-                tx.addView(tv(this, s.name, 16, Color.rgb(0x1C, 0x1C, 0x1E), true));
-                tx.addView(tv(this, s.desc, 12, Color.rgb(0x8E, 0x8E, 0x93), false));
-                tile.addView(tv(this, "›", 18, Color.rgb(0x8E, 0x8E, 0x93), false));
-                tile.setOnClickListener(v -> { haptic(); wizSc = s.id; wizStep = 1; showWizardPage(); });
-                page.addView(tile);
+            // Q14：场景改混合版 .sc-grid 2×2 网格卡（.wz-scene：纵列、SF 细线图标禁用 emoji、
+            // 名称 1rem+描述 .74rem、内边距 15/14、圆角 18、1dp 淡描边、按压回弹），废横排整行+› 箭头
+            for (int i = 0; i < WIZ_SCENARIOS.length; i += 2) {
+                LinearLayout gridRow = new LinearLayout(this);
+                gridRow.setOrientation(LinearLayout.HORIZONTAL);
+                LinearLayout.LayoutParams grLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+                grLp.topMargin = dp(this, 10);
+                gridRow.setLayoutParams(grLp);
+                page.addView(gridRow);
+                for (int j = i; j < Math.min(i + 2, WIZ_SCENARIOS.length); j++) {
+                    final WizSc s = WIZ_SCENARIOS[j];
+                    LinearLayout tile = new LinearLayout(this);
+                    tile.setOrientation(LinearLayout.VERTICAL);
+                    tile.setBackground(rippleBg(Color.WHITE, 18));
+                    tile.setClipToOutline(true);
+                    if (Build.VERSION.SDK_INT >= 21) tile.setElevation(dp(this, 3));
+                    tile.setPadding(dp(this, 14), dp(this, 15), dp(this, 14), dp(this, 15));
+                    LinearLayout.LayoutParams tlp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+                    if (j > i) tlp.leftMargin = dp(this, 10);
+                    tile.setLayoutParams(tlp);
+                    SceneIconView ic = new SceneIconView(this);
+                    ic.kind = s.id;
+                    LinearLayout.LayoutParams icLp = new LinearLayout.LayoutParams(dp(this, 26), dp(this, 26));
+                    icLp.bottomMargin = dp(this, 6);
+                    tile.addView(ic, icLp);
+                    tile.addView(tv(this, s.name, 16, Color.rgb(0x1C, 0x1C, 0x1E), true));
+                    TextView dsc = tv(this, s.desc, 12, Color.rgb(0x8E, 0x8E, 0x93), false);
+                    dsc.setLineSpacing(0, 1.45f);
+                    LinearLayout.LayoutParams dsLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+                    dsLp.topMargin = dp(this, 4);
+                    tile.addView(dsc, dsLp);
+                    tile.setOnClickListener(v -> { haptic(); wizSc = s.id; wizStep = 1; showWizardPage(); });
+                    gridRow.addView(tile);
+                }
             }
             return col;
         }
@@ -4786,9 +4890,15 @@ public class MainActivity extends Activity {
             qHead.addView(qt, qtLp);
             for (final String[] o : q.opts) {
                 TextView opt = tv(this, o[1], 14, Color.rgb(0x1C, 0x1C, 0x1E), false);
-                opt.setBackground(rippleBg(Color.WHITE, 12));
+                // Q14：选项照混合版 .wiz-opt——#F4F5F9 浅底+rgba(20,30,60,.06) 描边、圆角 14、内边距 14/13
+                GradientDrawable optBgBase = new GradientDrawable();
+                optBgBase.setColor(Color.rgb(0xF4, 0xF5, 0xF9));
+                optBgBase.setCornerRadius(dp(this, 14));
+                optBgBase.setStroke(Math.max(1, dp(this, 1)), Color.argb(15, 20, 30, 60));
+                opt.setBackground(new RippleDrawable(
+                    android.content.res.ColorStateList.valueOf(Color.argb(38, 10, 92, 214)), optBgBase, null));
                 opt.setClipToOutline(true);
-                opt.setPadding(dp(this, 14), dp(this, 12), dp(this, 14), dp(this, 12));
+                opt.setPadding(dp(this, 14), dp(this, 13), dp(this, 14), dp(this, 13));
                 LinearLayout.LayoutParams olp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
                 olp.topMargin = dp(this, 8);
                 page.addView(opt, olp);
@@ -4823,11 +4933,11 @@ public class MainActivity extends Activity {
 
         for (final WizResult r : list) page.addView(wizResultRow(r));
 
-        Button redo = new Button(this);
-        redo.setText("换个场景重新选"); redo.setTextSize(13.5f); redo.setAllCaps(false);
-        redo.setBackground(roundRect(Color.WHITE, 12, this));
-        LinearLayout.LayoutParams rlp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(this, 44));
-        rlp.topMargin = dp(this, 16);
+        TextView redo = tv(this, "换个场景重新选", 14, Color.rgb(0x0A, 0x5C, 0xD6), true);
+        redo.setGravity(Gravity.CENTER);
+        redo.setPadding(dp(this, 8), dp(this, 8), dp(this, 8), dp(this, 8));
+        LinearLayout.LayoutParams rlp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        rlp.topMargin = dp(this, 14);
         page.addView(redo, rlp);
         redo.setOnClickListener(v -> { haptic(); wizSc = null; wizStep = 0; wizA.clear(); showWizardPage(); });
         return col;
@@ -4837,12 +4947,14 @@ public class MainActivity extends Activity {
         final Card c = r.c;
         LinearLayout row = new LinearLayout(this);
         row.setOrientation(LinearLayout.HORIZONTAL);
-        row.setBackground(roundRect(Color.WHITE, 14, this));
-        row.setBackground(rippleBg(Color.WHITE, 14));
+        row.setGravity(Gravity.CENTER_VERTICAL);
+        // Q14：结果行照混合版 .wiz-row——白卡圆角 16+rgba(20,30,60,.06) 描边+柔影、内边距 10、gap 11
+        row.setBackground(rippleBg(Color.WHITE, 16));
         row.setClipToOutline(true);
-        row.setPadding(dp(this, 12), dp(this, 10), dp(this, 12), dp(this, 10));
+        if (Build.VERSION.SDK_INT >= 21) row.setElevation(dp(this, 3));
+        row.setPadding(dp(this, 10), dp(this, 10), dp(this, 10), dp(this, 10));
         LinearLayout.LayoutParams rlp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        rlp.topMargin = dp(this, 10);
+        rlp.topMargin = dp(this, 9);
         row.setLayoutParams(rlp);
 
         ImageView iv = new ImageView(this);
@@ -4856,24 +4968,57 @@ public class MainActivity extends Activity {
         LinearLayout info = new LinearLayout(this);
         info.setOrientation(LinearLayout.VERTICAL);
         LinearLayout.LayoutParams ilp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
-        ilp.leftMargin = dp(this, 10);
+        ilp.leftMargin = dp(this, 11);
         row.addView(info, ilp);
-        TextView nm = tv(this, c.name, 14, Color.rgb(0x1C, 0x1C, 0x1E), true);
+        TextView nm = tv(this, c.name, 14.5f, Color.rgb(0x1C, 0x1C, 0x1E), true);
         nm.setMaxLines(2);
+        nm.setEllipsize(android.text.TextUtils.TruncateAt.END);
         info.addView(nm);
         String orgTxt = (c.org == null || c.org.isEmpty()) ? "—" : orgLabel(c.org);
-        info.addView(tv(this, c.bank + " · " + orgTxt + " · " + (c.isCredit() ? "信用卡" : "借记卡"), 11, Color.rgb(0x8E, 0x8E, 0x93), false));
+        TextView meta = tv(this, c.bank + " · " + orgTxt + " · " + (c.isCredit() ? "信用卡" : "借记卡"), 11.5f, Color.rgb(0x8E, 0x8E, 0x93), false);
+        meta.setSingleLine(true);
+        meta.setEllipsize(android.text.TextUtils.TruncateAt.END);
+        LinearLayout.LayoutParams metaLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        metaLp.topMargin = dp(this, 2);
+        info.addView(meta, metaLp);
         if (!r.reasons.isEmpty()) {
-            LinearLayout rr = new LinearLayout(this);
-            rr.setOrientation(LinearLayout.HORIZONTAL);
-            LinearLayout.LayoutParams rrLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-            rrLp.topMargin = dp(this, 6);
-            info.addView(rr, rrLp);
-            for (String reason : r.reasons) rr.addView(chip(reason, Color.rgb(0xE8, 0xF1, 0xFD), Color.rgb(0x0A, 0x5C, 0xD6)));
+            // Q14：理由 chips 照 .wiz-reasons 流式换行（#F0F7FF/#2F6FD0、圆角 6、gap 4），
+            // 废旧单行横排——长标签曾被右列挤成竖条
+            int availPx = getResources().getDisplayMetrics().widthPixels
+                - dp(this, 36) - dp(this, 20) - dp(this, 76) - dp(this, 11) - dp(this, 52);
+            LinearLayout wrap = new LinearLayout(this);
+            wrap.setOrientation(LinearLayout.VERTICAL);
+            LinearLayout.LayoutParams wrapLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            wrapLp.topMargin = dp(this, 6);
+            info.addView(wrap, wrapLp);
+            Paint mp = new Paint();
+            mp.setTextSize(10.5f * uiScale * getResources().getDisplayMetrics().scaledDensity);
+            int gap = dp(this, 4);
+            LinearLayout crow = null;
+            int crowW = 0;
+            for (String reason : r.reasons) {
+                int w = (int) Math.ceil(mp.measureText(reason)) + dp(this, 12);
+                if (crow == null || (crowW > 0 && crowW + gap + w > availPx)) {
+                    crow = new LinearLayout(this);
+                    crow.setOrientation(LinearLayout.HORIZONTAL);
+                    LinearLayout.LayoutParams crLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+                    if (wrap.getChildCount() > 0) crLp.topMargin = gap;
+                    crow.setLayoutParams(crLp);
+                    wrap.addView(crow);
+                    crowW = 0;
+                }
+                TextView t = chip(reason, Color.rgb(0xF0, 0xF7, 0xFF), Color.rgb(0x2F, 0x6F, 0xD0), 10.5f);
+                LinearLayout.LayoutParams clp2 = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+                if (crowW > 0) clp2.leftMargin = gap;
+                clp2.rightMargin = 0;
+                t.setLayoutParams(clp2);
+                crow.addView(t);
+                crowW += (crowW > 0 ? gap : 0) + w;
+            }
         }
         String limit = c.spec("发行情况");
         if (limit.contains("仅")) {
-            TextView note = tv(this, "⚠ " + limit, 11, Color.rgb(0xB0, 0x23, 0x2B), false);
+            TextView note = tv(this, "⚠ " + limit, 11, Color.rgb(0xB2, 0x50, 0x00), false);
             LinearLayout.LayoutParams nlp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
             nlp.topMargin = dp(this, 5);
             info.addView(note, nlp);
@@ -4885,18 +5030,24 @@ public class MainActivity extends Activity {
         LinearLayout.LayoutParams slp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         slp.leftMargin = dp(this, 8);
         row.addView(side, slp);
+        // Q14：评分胶囊照混合版 .score+scoreCls（≥8 hi/≥6 mid/余 lo 三色），文案 %.1f分/待评分（scoreTxt 口径）
+        int scoreBg, scoreFg;
+        if (!c.hasScore) { scoreBg = Color.rgb(0xEE, 0xF0, 0xF3); scoreFg = Color.rgb(0x8E, 0x8E, 0x93); }
+        else if (c.score >= 8) { scoreBg = Color.rgb(0xE7, 0xF0, 0xFE); scoreFg = Color.rgb(0x0A, 0x5C, 0xD6); }
+        else if (c.score >= 6) { scoreBg = Color.rgb(0xFD, 0xF1, 0xE0); scoreFg = Color.rgb(0xB2, 0x5B, 0x09); }
+        else { scoreBg = Color.rgb(0xEE, 0xF0, 0xF3); scoreFg = Color.rgb(0x8E, 0x8E, 0x93); }
         TextView score = tv(this, c.hasScore ? String.format(java.util.Locale.US, "%.1f分", c.score) : "待评分",
-            11, Color.rgb(0x0A, 0x5C, 0xD6), true);
-        score.setBackground(roundRect(Color.rgb(0xE8, 0xF1, 0xFD), 999, this));
-        score.setPadding(dp(this, 8), dp(this, 3), dp(this, 8), dp(this, 3));
+            11, scoreFg, true);
+        score.setBackground(roundRect(scoreBg, 999, this));
+        score.setPadding(dp(this, 9), dp(this, 4), dp(this, 9), dp(this, 4));
         side.addView(score);
+        // Q14：加卡钮照 .wiz-add——30dp 浅色圆（未加 #EEF4FF 蓝字＋、已加 #0A84FF 白字 ✓），废 38dp 大实心蓝圆
         final boolean inMine = mine.contains(c.id);
-        Button add = new Button(this);
-        add.setText(inMine ? "✓" : "＋"); add.setTextSize(15); add.setAllCaps(false);
-        add.setTextColor(inMine ? Color.rgb(0x1D, 0x8A, 0x49) : Color.WHITE);
-        add.setBackground(roundRect(inMine ? Color.rgb(0xE6, 0xF6, 0xEC) : Color.rgb(0x0A, 0x5C, 0xD6), 999, this));
-        LinearLayout.LayoutParams alp = new LinearLayout.LayoutParams(dp(this, 38), dp(this, 38));
-        alp.topMargin = dp(this, 8);
+        TextView add = tv(this, inMine ? "✓" : "＋", 15, inMine ? Color.WHITE : Color.rgb(0x0A, 0x5C, 0xD6), true);
+        add.setGravity(Gravity.CENTER);
+        add.setBackground(roundRect(inMine ? Color.rgb(0x0A, 0x84, 0xFF) : Color.rgb(0xEE, 0xF4, 0xFF), 999, this));
+        LinearLayout.LayoutParams alp = new LinearLayout.LayoutParams(dp(this, 30), dp(this, 30));
+        alp.topMargin = dp(this, 7);
         alp.gravity = Gravity.RIGHT;
         side.addView(add, alp);
         add.setOnClickListener(v -> {
