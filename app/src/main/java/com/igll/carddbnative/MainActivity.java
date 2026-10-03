@@ -1514,7 +1514,8 @@ public class MainActivity extends Activity {
         for (Card c : cs) if (!c.isCredit()) nd++;
         LinearLayout box = new LinearLayout(this);
         box.setOrientation(LinearLayout.VERTICAL);
-        box.setBackground(roundRect(Color.WHITE, 14, this));
+        box.setBackground(rippleBg(Color.WHITE, 14));
+        box.setClipToOutline(true);
         box.setPadding(dp(this, 12), dp(this, 10), dp(this, 12), dp(this, 10));
         LinearLayout.LayoutParams blp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         blp.topMargin = dp(this, 10);
@@ -2300,7 +2301,8 @@ public class MainActivity extends Activity {
                 LinearLayout tile = new LinearLayout(this);
                 tile.setOrientation(LinearLayout.HORIZONTAL);
                 tile.setGravity(Gravity.CENTER_VERTICAL);
-                tile.setBackground(roundRect(Color.WHITE, 14, this));
+                tile.setBackground(rippleBg(Color.WHITE, 14));
+                tile.setClipToOutline(true);
                 tile.setPadding(dp(this, 14), dp(this, 12), dp(this, 14), dp(this, 12));
                 LinearLayout.LayoutParams tlp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
                 tlp.topMargin = dp(this, 10);
@@ -2339,7 +2341,8 @@ public class MainActivity extends Activity {
             qHead.addView(qt, qtLp);
             for (final String[] o : q.opts) {
                 TextView opt = tv(this, o[1], 14, Color.rgb(0x1C, 0x1C, 0x1E), false);
-                opt.setBackground(roundRect(Color.WHITE, 12, this));
+                opt.setBackground(rippleBg(Color.WHITE, 12));
+                opt.setClipToOutline(true);
                 opt.setPadding(dp(this, 14), dp(this, 12), dp(this, 14), dp(this, 12));
                 LinearLayout.LayoutParams olp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
                 olp.topMargin = dp(this, 8);
@@ -2390,6 +2393,8 @@ public class MainActivity extends Activity {
         LinearLayout row = new LinearLayout(this);
         row.setOrientation(LinearLayout.HORIZONTAL);
         row.setBackground(roundRect(Color.WHITE, 14, this));
+        row.setBackground(rippleBg(Color.WHITE, 14));
+        row.setClipToOutline(true);
         row.setPadding(dp(this, 12), dp(this, 10), dp(this, 12), dp(this, 10));
         LinearLayout.LayoutParams rlp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         rlp.topMargin = dp(this, 10);
@@ -2799,7 +2804,8 @@ public class MainActivity extends Activity {
         for (final Card c : stu) {
             LinearLayout cardBox = new LinearLayout(this);
             cardBox.setOrientation(LinearLayout.VERTICAL);
-            cardBox.setBackground(roundRect(Color.WHITE, 14, this));
+            cardBox.setBackground(rippleBg(Color.WHITE, 14));
+            cardBox.setClipToOutline(true);
             cardBox.setPadding(dp(this, 12), dp(this, 10), dp(this, 12), dp(this, 12));
             LinearLayout.LayoutParams clp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
             clp.topMargin = dp(this, 10);
@@ -3854,7 +3860,8 @@ public class MainActivity extends Activity {
             final boolean open = newsOpen.contains(n.id);
             LinearLayout card = new LinearLayout(this);
             card.setOrientation(LinearLayout.VERTICAL);
-            card.setBackground(roundRect(Color.WHITE, 16, this));
+            card.setBackground(rippleBg(Color.WHITE, 16));
+            card.setClipToOutline(true);
             card.setPadding(dp(this, 14), dp(this, 12), dp(this, 14), dp(this, 12));
             LinearLayout.LayoutParams clp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
             clp.topMargin = dp(this, 10);
@@ -4263,7 +4270,8 @@ public class MainActivity extends Activity {
         LinearLayout row = new LinearLayout(this);
         row.setOrientation(LinearLayout.HORIZONTAL);
         row.setGravity(Gravity.CENTER_VERTICAL);
-        row.setBackground(roundRect(Color.WHITE, 12, this));
+        row.setBackground(rippleBg(Color.WHITE, 12));
+        row.setClipToOutline(true);
         row.setPadding(dp(this, 14), dp(this, 10), dp(this, 12), dp(this, 10));
         LinearLayout.LayoutParams rlp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         rlp.topMargin = dp(this, 8);
@@ -4285,7 +4293,8 @@ public class MainActivity extends Activity {
     View settingRow(String k, String v) {
         LinearLayout row = new LinearLayout(this);
         row.setOrientation(LinearLayout.VERTICAL);
-        row.setBackground(roundRect(Color.WHITE, 12, this));
+        row.setBackground(rippleBg(Color.WHITE, 12));
+        row.setClipToOutline(true);
         row.setPadding(dp(this, 14), dp(this, 10), dp(this, 14), dp(this, 10));
         LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         lp.topMargin = dp(this, 8);
