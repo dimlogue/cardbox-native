@@ -147,7 +147,7 @@ public class MainActivity extends Activity {
         return welcomeOpen || changelogOpen || wizardOpen || aboutOpen
             || filterSheet != null || detailCard != null || cardMenuPop != null
             || customFormSheet != null || customDetailSheet != null || binSheet != null || addSheetView != null
-            || delConfirmSheet != null;
+            || delConfirmSheet != null || updateTipSheet != null || updateConfirmSheet != null;
     }
     void hideFabsNow() {
         cancelTopFabShow();
@@ -1252,6 +1252,9 @@ public class MainActivity extends Activity {
     View customFormSheet = null; // Q8：表单改为根层浮卡（原 Dialog 全宽平纸已废）
     View delConfirmSheet = null; // Q52：删卡确认贴底小窗（废系统 AlertDialog）
     boolean delConfirmClosing = false;
+    View updateTipSheet = null; boolean updateTipClosing = false;
+    View updateConfirmSheet = null; boolean updateConfirmClosing = false;
+    String pendingUpdateJson = null; int pendingUpdateVer = -1; boolean updateApplying = false;
     // Q19：自定义卡详情改为与 Q6 数据库详情同规范的贴底浮窗（原居中 AlertDialog 白框已废）
     View customDetailSheet = null;
     View customDetailWrap = null;
@@ -1767,7 +1770,7 @@ public class MainActivity extends Activity {
         root.getViewTreeObserver().addOnScrollChangedListener(() -> { scheduleGlassRefresh(); followBandScroll(); });
 
         showTab("home");
-        checkDataUpdate(false);
+        if (prefs == null || prefs.getBoolean("auto_check_update", true)) checkDataUpdate(false); // Q62: auto only detects
         if (!prefs.getBoolean("welcomed", false)) showWelcome();
     }
 
@@ -8346,7 +8349,7 @@ public class MainActivity extends Activity {
     // 启动自动查一次；设置页手动查 manual=true 给 toast 反馈。
     // Q59 修：双线都取，以 data_version 高者为准（jsDelivr 200 但回旧缓存时不被其骗成「已是最新」）。
     void checkDataUpdate(final boolean manual) { checkDataUpdate(manual, false, null); }
-    // Q61：fromPull 表示来自首页下拉刷新（失败 toast 用「检查失败，请稍后再试」），onDone 在 UI 线程收尾拿来收指示
+    // Q62: check = detect only (never applies). Apply happens in applyPendingUpdate after confirm.
     void checkDataUpdate(final boolean manual, final boolean fromPull, final Runnable onDone) {
         if (!manual && otaFetchStarted) { if (onDone != null) onDone.run(); return; }
         otaFetchStarted = true;
@@ -8355,62 +8358,116 @@ public class MainActivity extends Activity {
             "https://raw.githubusercontent.com/dimlogue/cardbox-data/main/cards.json"
         };
         new Thread(() -> {
-            String bestJson = null;
-            int bestVer = -1;
+            String bestJson = null; int bestVer = -1;
             for (String u : urls) {
                 try {
                     HttpURLConnection conn = (HttpURLConnection) new URL(u + "?t=" + System.currentTimeMillis()).openConnection();
                     conn.setConnectTimeout(8000); conn.setReadTimeout(8000);
                     conn.setRequestProperty("Cache-Control", "no-cache");
                     if (conn.getResponseCode() != 200) { conn.disconnect(); continue; }
-                    String json = Store.readAll(conn.getInputStream());
-                    conn.disconnect();
+                    String json = Store.readAll(conn.getInputStream()); conn.disconnect();
                     int remoteVer = Store.versionOf(json);
-                    // 校验卡数>0 再入选，避免把坏数据当候选
-                    try {
-                        JSONObject probe = new JSONObject(json);
-                        JSONArray pa = probe.getJSONArray("cards");
-                        if (pa == null || pa.length() == 0) continue;
-                    } catch (Exception e) { continue; }
+                    try { JSONObject probe = new JSONObject(json); JSONArray pa = probe.getJSONArray("cards"); if (pa == null || pa.length() == 0) continue; } catch (Exception e) { continue; }
                     if (remoteVer > bestVer) { bestVer = remoteVer; bestJson = json; }
-                } catch (Exception e) { /* 换下一条线路，另一条线的结果仍可入选 */ }
+                } catch (Exception e) {}
             }
             if (bestJson == null) {
-                runOnUiThread(() -> {
-                    if (fromPull) showFloatToast("检查失败，请稍后再试");
-                    else if (manual) showFloatToast("检查更新失败，请检查网络");
-                    if (onDone != null) onDone.run();
-                });
+                runOnUiThread(() -> { if (fromPull) showFloatToast("检查失败，请稍后再试"); else if (manual) showFloatToast("检查更新失败，请检查网络"); if (onDone != null) onDone.run(); });
                 return;
             }
             if (bestVer <= Store.dataVersion) {
-                runOnUiThread(() -> {
-                    if (manual || fromPull) showFloatToast("已是最新数据（v" + Store.dataVersion + "）");
-                    if (onDone != null) onDone.run();
-                });
+                pendingUpdateJson = null; pendingUpdateVer = -1;
+                if (prefs != null) prefs.edit().remove("pending_update_version").apply();
+                runOnUiThread(() -> { if (manual || fromPull) showFloatToast("已是最新数据（v" + Store.dataVersion + "）"); if (onDone != null) onDone.run(); });
                 return;
             }
-            final String json = bestJson;
-            try {
-                FileOutputStream fos = new FileOutputStream(new File(getFilesDir(), "cards-ota.json"));
-                fos.write(json.getBytes("UTF-8")); fos.close();
-            } catch (Exception e) { /* 落盘失败也继续用本次拉到的数据刷新界面 */ }
-            final boolean ok = Store.parseInto(json);
-            if (!ok) {
-                runOnUiThread(() -> {
-                    if (fromPull) showFloatToast("检查失败，请稍后再试");
-                    else if (manual) showFloatToast("检查更新失败，请检查网络");
-                    if (onDone != null) onDone.run();
-                });
-                return;
-            }
+            pendingUpdateJson = bestJson; pendingUpdateVer = bestVer;
+            if (prefs != null) prefs.edit().putInt("pending_update_version", bestVer).apply();
+            final int ver = bestVer;
             runOnUiThread(() -> {
-                showFloatToast("卡片数据已更新到 v" + Store.dataVersion + "（" + Store.all.size() + " 张）");
-                pages.clear(); // 页面缓存一律作废，下次进页用新数据重建（rebuildPages 先 capture 各页滚动位再恢复，不跳顶）
-                if (detailCard == null) rebuildPages(); // 正看详情时不打断，关掉详情自然用新数据
                 if (onDone != null) onDone.run();
+                if ("settings".equals(tab)) rebuildPages();
+                if (manual || fromPull) { showUpdateConfirm(); }
+                else {
+                    int prompted = prefs == null ? -1 : prefs.getInt("update_prompted_version", -1);
+                    if (prompted != ver && !isChromeCovered()) {
+                        if (prefs != null) prefs.edit().putInt("update_prompted_version", ver).apply();
+                        showUpdateTip(ver);
+                    }
+                }
             });
         }).start();
+    }
+    void applyPendingUpdate() {
+        if (updateApplying) return;
+        final String json = pendingUpdateJson; final int ver = pendingUpdateVer;
+        if (json == null || ver <= Store.dataVersion) { showFloatToast("已是最新数据（v" + Store.dataVersion + "）"); return; }
+        updateApplying = true; showFloatToast("正在更新数据…");
+        new Thread(() -> {
+            boolean ok = false;
+            try { FileOutputStream fos = new FileOutputStream(new File(getFilesDir(), "cards-ota.json")); fos.write(json.getBytes("UTF-8")); fos.close(); ok = Store.parseInto(json); } catch (Exception e) { ok = false; }
+            final boolean fok = ok;
+            runOnUiThread(() -> {
+                updateApplying = false;
+                if (!fok) { showFloatToast("检查更新失败，请检查网络"); return; }
+                pendingUpdateJson = null; pendingUpdateVer = -1;
+                if (prefs != null) prefs.edit().remove("pending_update_version").apply();
+                showFloatToast("卡片数据已更新到 v" + Store.dataVersion + "（" + Store.all.size() + " 张）");
+                pages.clear(); if (detailCard == null) rebuildPages();
+            });
+        }).start();
+    }
+    FrameLayout buildUpdateSheet(String title, String msg, String cancelTxt, String okTxt, Runnable onOk) {
+        hideChrome();
+        final FrameLayout sheet = new FrameLayout(this);
+        View shade = new View(this); shade.setBackgroundColor(Color.argb(102,0,0,0)); shade.setAlpha(0f);
+        sheet.addView(shade, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        LinearLayout card = new LinearLayout(this); card.setOrientation(LinearLayout.VERTICAL);
+        GradientDrawable cg = new GradientDrawable(); cg.setColor(Color.rgb(0xFF,0xFF,0xFF));
+        float rTop = dp(this,22); cg.setCornerRadii(new float[]{rTop,rTop,rTop,rTop,0,0,0,0}); card.setBackground(cg);
+        if (Build.VERSION.SDK_INT >= 21) { card.setElevation(dp(this,24)); topSheetClip(card,22,this); }
+        card.setOnClickListener(v->{}); card.setPadding(dp(this,18),dp(this,18),dp(this,18),dp(this,14)+navBarH());
+        card.addView(tv(this,title,17,Color.rgb(0x1C,0x1C,0x1E),true));
+        TextView m = tv(this,msg,13.5f,Color.rgb(0x3A,0x3A,0x3C),false); LinearLayout.LayoutParams mlp=new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,ViewGroup.LayoutParams.WRAP_CONTENT); mlp.topMargin=dp(this,8); card.addView(m,mlp);
+        LinearLayout btns=new LinearLayout(this); btns.setOrientation(LinearLayout.HORIZONTAL); LinearLayout.LayoutParams blp=new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,ViewGroup.LayoutParams.WRAP_CONTENT); blp.topMargin=dp(this,18); card.addView(btns,blp);
+        TextView cb=tv(this,cancelTxt,15,Color.rgb(0x1C,0x1C,0x1E),false); cb.setGravity(Gravity.CENTER); cb.setBackground(rippleBg(Color.rgb(0xF2,0xF3,0xF7),14));
+        btns.addView(cb,new LinearLayout.LayoutParams(0,dp(this,48),1f));
+        TextView ob=tv(this,okTxt,15,Color.WHITE,true); ob.setGravity(Gravity.CENTER); ob.setBackground(rippleBg(Color.rgb(0x0A,0x5C,0xD6),14));
+        LinearLayout.LayoutParams olp=new LinearLayout.LayoutParams(0,dp(this,48),1f); olp.leftMargin=dp(this,10); btns.addView(ob,olp);
+        FrameLayout.LayoutParams clp=new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,ViewGroup.LayoutParams.WRAP_CONTENT); clp.gravity=Gravity.BOTTOM; clp.leftMargin=dp(this,12); clp.rightMargin=dp(this,12);
+        FrameLayout wrap=new FrameLayout(this); View glass=glassLayer(card,22,false); topSheetClip(glass,22,this);
+        wrap.addView(glass,new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,ViewGroup.LayoutParams.MATCH_PARENT));
+        wrap.addView(card,new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,ViewGroup.LayoutParams.MATCH_PARENT));
+        sheet.addView(wrap,clp);
+        sheet.setTag(new Object[]{wrap, cb, ob, shade});
+        cb.setOnClickListener(v->{haptic(); closeUpdateSheet(sheet);});
+        shade.setOnClickListener(v->closeUpdateSheet(sheet));
+        ob.setOnClickListener(v->{haptic(); closeUpdateSheet(sheet); if(onOk!=null) mainHandlerPost(onOk);});
+        return sheet;
+    }
+    void mainHandlerPost(Runnable r){ try{ new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(r,190);}catch(Throwable e){ r.run(); } }
+    void showUpdateTip(final int ver){
+        if(updateTipSheet!=null||updateConfirmSheet!=null) return; updateTipClosing=false;
+        FrameLayout sheet=buildUpdateSheet("有新数据","检测到新数据 v"+ver+"，去更新？","知道了","去更新",()->showUpdateConfirm());
+        updateTipSheet=sheet; content.addView(sheet); animateUpdateSheetIn(sheet);
+    }
+    void showUpdateConfirm(){
+        if(updateConfirmSheet!=null) return; if(pendingUpdateVer<=Store.dataVersion){ if(pendingUpdateJson==null){ checkDataUpdate(true); return; } }
+        updateConfirmClosing=false;
+        FrameLayout sheet=buildUpdateSheet("更新数据","确定要更新数据吗？更新会覆盖当前卡库数据；你自己添加的卡片和收藏不会被改动，重复的卡会被合并删除。","取消","去更新",()->applyPendingUpdate());
+        updateConfirmSheet=sheet; content.addView(sheet); animateUpdateSheetIn(sheet);
+    }
+    void animateUpdateSheetIn(FrameLayout sheet){
+        Object[] t=(Object[])sheet.getTag(); View wrap=(View)t[0];
+        sheet.setAlpha(0f); sheet.animate().alpha(1f).setDuration(200).setInterpolator(ANIM_ENTER).start();
+        wrap.setTranslationY(dp(this,42)); wrap.animate().translationY(0f).setDuration(ANIM_DUR_SHEET_IN).setInterpolator(ANIM_ENTER).start();
+    }
+    void closeUpdateSheet(final View sheet){
+        if(sheet==null) return; boolean isTip=(sheet==updateTipSheet); boolean isConf=(sheet==updateConfirmSheet);
+        if(isTip){ if(updateTipClosing) return; updateTipClosing=true; } if(isConf){ if(updateConfirmClosing) return; updateConfirmClosing=true; }
+        Object[] t=sheet.getTag() instanceof Object[] ? (Object[])sheet.getTag() : null; View wrap=t!=null?(View)t[0]:null;
+        Runnable done=()->{ if(sheet.getParent()!=null) ((ViewGroup)sheet.getParent()).removeView(sheet); if(isTip){updateTipSheet=null;updateTipClosing=false;} if(isConf){updateConfirmSheet=null;updateConfirmClosing=false;} restoreChrome(); };
+        if(wrap!=null){ wrap.animate().translationY(dp(this,42)).alpha(0f).setDuration(ANIM_DUR_SHEET_OUT).setInterpolator(ANIM_EXIT).withEndAction(done).start(); sheet.animate().alpha(0f).setDuration(ANIM_DUR_SHEET_OUT).start(); } else done.run();
     }
 
     // ---------- 资讯（Phase 2c，对照 app.js renderNews/loadNews/checkNewsUpdate） ----------
@@ -9440,10 +9497,14 @@ public class MainActivity extends Activity {
         });
 
         sectionHead(page, "数据");
-        // Q44: 纯显示行与检查行合并为一行——副行实时显示版本与张数，整行可点直接联网检查更新
-        View updRow = settingRow("数据更新", "v" + Store.dataVersion + " · " + Store.all.size() + " 张卡 · 点此直接检查更新 ›");
-        updRow.setOnClickListener(v -> { haptic(); showFloatToast("正在检查数据更新…"); checkDataUpdate(true); });
+        int pendVer = prefs == null ? -1 : prefs.getInt("pending_update_version", -1); if (pendVer <= Store.dataVersion) pendVer = -1; else if (pendingUpdateVer > Store.dataVersion) pendVer = pendingUpdateVer;
+        String updSub = pendVer > 0 ? ("v" + Store.dataVersion + " · " + Store.all.size() + " 张卡 · 有新版 v" + pendVer + " 可更新 ›") : ("v" + Store.dataVersion + " · " + Store.all.size() + " 张卡 · 点此直接检查更新 ›");
+        View updRow = settingRow("数据更新" + (pendVer > 0 ? "  ●" : ""), updSub);
+        if (pendVer > 0) { try { TextView ut = (TextView)((ViewGroup)updRow).getChildAt(0); ut.setTextColor(Color.rgb(0x1C,0x1C,0x1E)); TextView us = (TextView)((ViewGroup)updRow).getChildAt(1); us.setText(updSub); } catch(Throwable ignored){} }
+        final int pendFinal = pendVer;
+        updRow.setOnClickListener(v -> { haptic(); if (pendFinal > 0 && pendingUpdateJson != null) showUpdateConfirm(); else { showFloatToast("正在检查数据更新…"); checkDataUpdate(true); } });
         page.addView(updRow);
+        switchRow(page, "启动时自动检测更新", "开启只检测并提示，不自动应用；关闭则仅手动检查", prefs == null || prefs.getBoolean("auto_check_update", true), on -> { if(prefs!=null) prefs.edit().putBoolean("auto_check_update", on).apply(); haptic(); rebuildPages(); });
 
         sectionHead(page, "关于");
         // Q18: last-crash trace at top of About (copyable / clearable); empty when no crash recorded
@@ -9644,6 +9705,8 @@ public class MainActivity extends Activity {
         if (filterSheet != null) { closeFilterSheet(); return; }
         if (binSheet != null) { closeBinQuery(); return; }
         if (delConfirmSheet != null) { closeDelConfirm(); return; }
+        if (updateConfirmSheet != null) { closeUpdateSheet(updateConfirmSheet); return; }
+        if (updateTipSheet != null) { closeUpdateSheet(updateTipSheet); return; }
         if (addSheetView != null) { closeAddSheet(addSheetView); return; }
         if (customFormSheet != null) { closeCustomForm(); return; }
         if (wizardOpen) {
