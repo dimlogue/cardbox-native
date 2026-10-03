@@ -1129,6 +1129,9 @@ public class MainActivity extends Activity {
         boolean studentPick;
         int studentOrder;
         String studentReason;
+        // Q67：数据线下发的逐维度分项分（score_dims）。只读展示，不在端上按权重重算。
+        java.util.LinkedHashMap<String, Double> scoreDims = new java.util.LinkedHashMap<>();
+        Double scoreDim(String dim) { return scoreDims.get(dim); }
         String spec(String key) {
             if (specs == null) return "";
             String v = specs.optString(key, "");
@@ -1150,6 +1153,22 @@ public class MainActivity extends Activity {
             return new String(bos.toByteArray(), "UTF-8");
         }
 
+        static java.util.LinkedHashMap<String, Double> parseScoreDims(JSONObject o) {
+            java.util.LinkedHashMap<String, Double> out = new java.util.LinkedHashMap<>();
+            if (o == null) return out;
+            try {
+                JSONArray names = o.names();
+                if (names == null) return out;
+                for (int i = 0; i < names.length(); i++) {
+                    String k = names.optString(i, "");
+                    if (k.isEmpty() || o.isNull(k)) continue;
+                    Object v = o.opt(k);
+                    if (v instanceof Number) out.put(k, ((Number) v).doubleValue());
+                }
+            } catch (Exception ignored) { }
+            return out;
+        }
+
         // 解析一整份 cards.json 成功返回 true，并替换当前数据（先解到临时表，成功才换，避免半截数据）
         static boolean parseInto(String json) {
             try {
@@ -1167,6 +1186,7 @@ public class MainActivity extends Activity {
                     cd.review = o.optString("review"); cd.image = o.optString("image");
                     cd.keywords = o.optString("keywords"); cd.url = o.optString("url");
                     cd.score = o.optDouble("score", 0); cd.hasScore = o.has("score") && !o.isNull("score"); cd.scoreLabel = o.optString("score_label");
+                    cd.scoreDims = parseScoreDims(o.optJSONObject("score_dims"));
                     cd.specs = o.optJSONObject("specs");
                     cd.variants = o.optJSONArray("variants");
                     JSONObject sp = o.optJSONObject("student_pick");
@@ -1753,10 +1773,12 @@ public class MainActivity extends Activity {
     LinearLayout activeFilterBar = null;
 
     // 排序 / 列数 / 显示方式（Phase 2a-3，对照 app.js applySort/colsNowVal/groupBank+bankOpen）
-    String sortMode = null; // null=默认 / score-desc / score-asc / name / bank
+    String sortMode = null; // null=默认 / score-desc / score-asc / name / bank / dim:<维度名>
     int cols = 2; // 1/2/3
     boolean groupBank = false;
     java.util.Set<String> bankOpen = new java.util.HashSet<>();
+    // Q67：只看这些评分（维度名用数据线 score_dims 的全名；空=维持现行总分展示）
+    java.util.Set<String> scoreDimsSel = new java.util.LinkedHashSet<>();
     LinearLayout homeList = null;
     ScrollView homeScroll = null;
     LinearLayout homeHero = null; // Q15：卡库总览英雄卡（仅无搜索/无筛选时显示，同混合版 lib-hero 口径）
@@ -1773,11 +1795,89 @@ public class MainActivity extends Activity {
         if ("score-asc".equals(v)) return "评分由低到高";
         if ("name".equals(v)) return "名称";
         if ("bank".equals(v)) return "银行";
+        if (v != null && v.startsWith("dim:")) return "按" + scoreDimShort(v.substring(4)) + "评分";
         return v;
     }
 
+    // Q67 维度顺序：先按《评分表》核心维度，再接备选池；数据里出现的新维度按中文序补在后面。
+    static final String[] SCORE_DIM_ORDER = {
+        "3DS 支持", "网付支持", "年费与免年费条件", "境外与线上支付能力", "积分与返现价值",
+        "货币转换费", "自动购汇", "优惠政策", "权益", "冻结比例", "免息期与取现成本",
+        "Apple Pay", "收费情况", "收费与其他持有成本", "办理难度",
+        "境外 ATM 取现费", "境外消费返现", "多币种账户/原币支付覆盖", "卡组织等级自带权益",
+        "卡面等级", "挂失补卡费", "机场贵宾厅", "高额旅行/航空保险", "酒店与接送机权益",
+        "取现额度比例", "分期费率", "年费积分抵扣率", "附属卡政策"
+    };
+    static int scoreDimOrderIdx(String dim) {
+        for (int i = 0; i < SCORE_DIM_ORDER.length; i++) if (SCORE_DIM_ORDER[i].equals(dim)) return i;
+        return 1000;
+    }
+    static String scoreDimShort(String dim) {
+        if (dim == null) return "";
+        switch (dim) {
+            case "3DS 支持": return "3DS";
+            case "网付支持": return "网付";
+            case "年费与免年费条件": return "年费";
+            case "境外与线上支付能力": return "支付能力";
+            case "积分与返现价值": return "积分返现";
+            case "货币转换费": return "转换费";
+            case "自动购汇": return "自动购汇";
+            case "优惠政策": return "优惠";
+            case "冻结比例": return "冻结";
+            case "免息期与取现成本": return "免息取现";
+            case "收费情况": case "收费与其他持有成本": return "收费";
+            case "境外 ATM 取现费": return "境外取现费";
+            case "多币种账户/原币支付覆盖": return "多币种";
+            case "卡组织等级自带权益": return "组织权益";
+            default: return dim;
+        }
+    }
+    List<String> availableScoreDims() {
+        java.util.LinkedHashSet<String> found = new java.util.LinkedHashSet<>();
+        for (Card c : Store.all) found.addAll(c.scoreDims.keySet());
+        List<String> out = new ArrayList<>(found);
+        final java.text.Collator zh = java.text.Collator.getInstance(java.util.Locale.CHINA);
+        out.sort((a, b) -> {
+            int r = Integer.compare(scoreDimOrderIdx(a), scoreDimOrderIdx(b));
+            return r != 0 ? r : zh.compare(a, b);
+        });
+        return out;
+    }
+    List<String> selectedScoreDimsOrdered() {
+        List<String> out = new ArrayList<>();
+        for (String d : availableScoreDims()) if (scoreDimsSel.contains(d)) out.add(d);
+        return out;
+    }
+    static String formatDimScore(double v) {
+        String s = String.format(java.util.Locale.US, "%.2f", v);
+        if (s.contains(".")) s = s.replaceAll("0+$", "").replaceAll("\\.$", "");
+        return s;
+    }
+    boolean isDimSort() { return sortMode != null && sortMode.startsWith("dim:"); }
+    String dimSortName() { return isDimSort() ? sortMode.substring(4) : null; }
+
     void applySort(List<Card> list) {
         final java.text.Collator zh = java.text.Collator.getInstance(java.util.Locale.CHINA);
+        if (isDimSort()) {
+            final String dim = dimSortName();
+            java.util.Comparator<Card> byDim = (a, b) -> {
+                Double av = a.scoreDim(dim), bv = b.scoreDim(dim);
+                if (av == null && bv == null) return Double.compare(b.score, a.score);
+                if (av == null) return 1; // 未下发该维度分项分的卡排后面，不冒充 0 分
+                if (bv == null) return -1;
+                int r = Double.compare(bv, av);
+                return r != 0 ? r : Double.compare(b.score, a.score);
+            };
+            if (groupBank) {
+                list.sort((a, b) -> {
+                    int r = zh.compare(a.bank == null ? "" : a.bank, b.bank == null ? "" : b.bank);
+                    return r != 0 ? r : byDim.compare(a, b);
+                });
+            } else {
+                list.sort(byDim);
+            }
+            return;
+        }
         java.util.Comparator<Card> byScoreDesc = (a, b) -> Double.compare(b.score, a.score);
         if (groupBank) {
             // 混合版：分组时先银行中文序，组内按评分（选了升序则升序，否则默认降序）
@@ -1800,6 +1900,7 @@ public class MainActivity extends Activity {
     void persistViewPrefs() {
         SharedPreferences.Editor e = prefs.edit();
         if (sortMode == null) e.remove("sort_mode"); else e.putString("sort_mode", sortMode);
+        if (scoreDimsSel.isEmpty()) e.remove("score_dims_sel"); else e.putStringSet("score_dims_sel", new HashSet<>(scoreDimsSel));
         e.putInt("cols", cols);
         e.putBoolean("group_bank", groupBank);
         e.putStringSet("bank_open", new HashSet<>(bankOpen));
@@ -1897,6 +1998,7 @@ public class MainActivity extends Activity {
         applyHighRefresh();
         try { mine = new HashSet<>(prefs.getStringSet("mine_ids", new HashSet<String>())); } catch (Exception e) { mine = new HashSet<>(); }
         sortMode = prefs.getString("sort_mode", null);
+        try { scoreDimsSel = new java.util.LinkedHashSet<>(prefs.getStringSet("score_dims_sel", new HashSet<String>())); } catch (Exception e) { scoreDimsSel = new java.util.LinkedHashSet<>(); }
         cols = prefs.getInt("cols", 2); if (cols != 1 && cols != 2 && cols != 3) cols = 2;
         groupBank = prefs.getBoolean("group_bank", false);
         try { bankOpen = new HashSet<>(prefs.getStringSet("bank_open", new HashSet<String>())); } catch (Exception e) { bankOpen = new HashSet<>(); }
@@ -1904,6 +2006,7 @@ public class MainActivity extends Activity {
         loadMineOrder();
         loadMineEntries();
         Store.load(this);
+        scoreDimsSel.retainAll(availableScoreDims()); // Q67：旧 OTA 已下线维度不残留成幽灵选择
         try { nfcAdapter = NfcAdapter.getDefaultAdapter(this); } catch (Throwable ignored) { nfcAdapter = null; }
 
         FrameLayout root = new FrameLayout(this);
@@ -3135,7 +3238,7 @@ public class MainActivity extends Activity {
 
     void updateFilterFabBadge() {
         if (filterFabBadge == null || filterFab == null) return;
-        int n = activeFilterCount();
+        int n = activeFilterCount() + scoreDimsSel.size(); // Q67：维度选择也让筛选钮角标有反馈（不计入 activeFilterCount，不影响英雄卡显隐）
         // Q3：混合版已选只靠蓝角标计数，钮体玻璃底恒定不变（废除旧淡蓝底切换）
         if (n <= 0) {
             filterFabBadge.setVisibility(View.GONE);
@@ -3494,14 +3597,18 @@ public class MainActivity extends Activity {
     // Q24：卡图改全幅 cover 铺满图区（对照混合版 .art/.art-img object-fit:cover，图区贴瓷砖顶边满宽、不留白、
     // 不拉伸；圆角靠瓷砖外框 clipToOutline 平滑裁切，冲突时保铺满）+ 图右上半透圆加卡钮（.mine-btn）。
     View cardTile(final Card c, ViewGroup parent, int nCols) {
-        return cardTile(c, parent, nCols, "", false);
+        return cardTile(c, parent, nCols, "", false, true);
     }
 
     View cardTile(final Card c, ViewGroup parent, int nCols, final String acctClass) {
-        return cardTile(c, parent, nCols, acctClass, true);
+        return cardTile(c, parent, nCols, acctClass, true, false);
     }
 
     View cardTile(final Card c, ViewGroup parent, int nCols, final String acctClass, final boolean mineTile) {
+        return cardTile(c, parent, nCols, acctClass, mineTile, false);
+    }
+
+    View cardTile(final Card c, ViewGroup parent, int nCols, final String acctClass, final boolean mineTile, final boolean showScoreDims) {
         LinearLayout box = new LinearLayout(this);
         box.setOrientation(LinearLayout.VERTICAL);
         box.setClipToOutline(true);
@@ -3549,7 +3656,14 @@ public class MainActivity extends Activity {
         clp.topMargin = dp(this, 6);
         body.addView(chips, clp);
         float chipSp = nc == 3 ? 8.5f : 10f;
-        chips.addView(chip(String.format(java.util.Locale.US, "%.1f分", c.score), Color.rgb(0xE8, 0xF1, 0xFD), Color.rgb(0x0A, 0x5C, 0xD6), chipSp));
+        List<String> selDims = showScoreDims ? selectedScoreDimsOrdered() : new ArrayList<>();
+        if (showScoreDims && !selDims.isEmpty()) {
+            // Q67：选了维度后总分退居其次（灰胶囊），分项分在下方单独成流展示。
+            chips.addView(chip(c.hasScore ? String.format(java.util.Locale.US, "总分 %.1f", c.score) : "总分待评分",
+                Color.rgb(0xEE, 0xF0, 0xF3), Color.rgb(0x63, 0x63, 0x66), chipSp));
+        } else {
+            chips.addView(chip(String.format(java.util.Locale.US, "%.1f分", c.score), Color.rgb(0xE8, 0xF1, 0xFD), Color.rgb(0x0A, 0x5C, 0xD6), chipSp));
+        }
         chips.addView(chip("已停发".equals(c.status) ? "已停发" : "在发",
             "已停发".equals(c.status) ? Color.rgb(0xF3, 0xE8, 0xE8) : Color.rgb(0xE6, 0xF6, 0xEC),
             "已停发".equals(c.status) ? Color.rgb(0xB0, 0x23, 0x2B) : Color.rgb(0x1D, 0x8A, 0x49), chipSp));
@@ -3559,6 +3673,15 @@ public class MainActivity extends Activity {
         // Q65：类别标签只在用户自有条目瓷砖出现（我的卡片传入 acctClass），未标完全不占位；样式同现行 chips
         if (acctClass != null && !acctClass.isEmpty())
             chips.addView(chip(acctClass, Color.rgb(0xF0, 0xF7, 0xFF), Color.rgb(0x2F, 0x6F, 0xD0), chipSp));
+
+        if (showScoreDims && !selDims.isEmpty()) {
+            View dimFlow = buildScoreDimFlow(c, tileW - dp(this, 16), nc, selDims);
+            if (dimFlow != null) {
+                LinearLayout.LayoutParams dlp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+                dlp.topMargin = dp(this, 5);
+                body.addView(dimFlow, dlp);
+            }
+        }
 
         // Q51：特点标签行（对照混合版 featChips——FEATS 顺序逐卡渲染命中的标签，
         // .feats 流式换行、最多两行溢出截断；此前原生瓷砖只出评分/状态行，标签全缺）
@@ -3883,6 +4006,44 @@ public class MainActivity extends Activity {
                 rowW = 0; rows++;
             }
             TextView t = chip(label, Color.rgb(0xF0, 0xF7, 0xFF), Color.rgb(0x2F, 0x6F, 0xD0), sp);
+            LinearLayout.LayoutParams clp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            if (rowW > 0) clp.leftMargin = gap;
+            t.setLayoutParams(clp);
+            row.addView(t);
+            rowW += (rowW > 0 ? gap : 0) + w;
+        }
+        return wrap.getChildCount() > 0 ? wrap : null;
+    }
+
+    // Q67：所选评分维度流。已下发分项分用蓝 chip，未下发用灰 chip 标「—」，不拿 0 分冒充。
+    View buildScoreDimFlow(Card c, int availPx, int nc, List<String> dims) {
+        if (dims == null || dims.isEmpty()) return null;
+        float sp = nc == 3 ? 8f : 9.5f;
+        int maxRows = nc == 1 ? 99 : 3;
+        LinearLayout wrap = new LinearLayout(this);
+        wrap.setOrientation(LinearLayout.VERTICAL);
+        Paint mp = new Paint();
+        mp.setTextSize(sp * uiScale * getResources().getDisplayMetrics().scaledDensity);
+        int gap = dp(this, 4);
+        LinearLayout row = null;
+        int rowW = 0, rows = 0;
+        for (String dim : dims) {
+            Double v = c.scoreDim(dim);
+            String label = scoreDimShort(dim) + " " + (v == null ? "—" : formatDimScore(v));
+            int w = (int) Math.ceil(mp.measureText(label)) + dp(this, 13);
+            if (row == null || (rowW > 0 && rowW + gap + w > availPx)) {
+                if (rows >= maxRows) break;
+                row = new LinearLayout(this);
+                row.setOrientation(LinearLayout.HORIZONTAL);
+                LinearLayout.LayoutParams rlp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+                if (rows > 0) rlp.topMargin = gap;
+                row.setLayoutParams(rlp);
+                wrap.addView(row);
+                rowW = 0; rows++;
+            }
+            TextView t = v == null
+                ? chip(label, Color.rgb(0xEE, 0xF0, 0xF3), Color.rgb(0x8E, 0x8E, 0x93), sp)
+                : chip(label, Color.rgb(0xE8, 0xF1, 0xFD), Color.rgb(0x0A, 0x5C, 0xD6), sp);
             LinearLayout.LayoutParams clp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
             if (rowW > 0) clp.leftMargin = gap;
             t.setLayoutParams(clp);
@@ -4310,6 +4471,7 @@ public class MainActivity extends Activity {
         StringBuilder sb = new StringBuilder();
         sb.append(query).append('|').append(filterType).append('|').append(filterOrg).append('|')
           .append(filterStatus).append('|').append(filterBank).append('|').append(filterFeats).append('|')
+          .append(selectedScoreDimsOrdered()).append('|')
           .append(sortMode).append('|').append(cols).append('|').append(groupBank).append('|')
           .append(new java.util.TreeSet<>(bankOpen)).append('|').append(Store.dataVersion).append('|')
           .append(Store.all.size()).append('|').append(mine.size()).append(':');
@@ -4489,6 +4651,12 @@ public class MainActivity extends Activity {
         for (final String f : new ArrayList<>(filterFeats))
             activeFilterBar.addView(afPill(featLabel(f), () -> { filterFeats.remove(f); refreshHome(); }));
         if (filterType != null) activeFilterBar.addView(afPill("credit".equals(filterType) ? "信用卡" : "借记卡", () -> { filterType = null; refreshHome(); }));
+        for (final String dim : selectedScoreDimsOrdered())
+            activeFilterBar.addView(afPill("评分·" + scoreDimShort(dim), () -> {
+                scoreDimsSel.remove(dim);
+                if (("dim:" + dim).equals(sortMode)) sortMode = null;
+                persistViewPrefs(); refreshHome();
+            }));
         if (sortMode != null) activeFilterBar.addView(afPill(sortLabel(sortMode), () -> { sortMode = null; persistViewPrefs(); refreshHome(); }));
         View wrap = (View) activeFilterBar.getParent();
         if (wrap != null) wrap.setVisibility(activeFilterBar.getChildCount() == 0 ? View.GONE : View.VISIBLE);
@@ -4540,14 +4708,16 @@ public class MainActivity extends Activity {
             final String sType = filterType, sOrg = filterOrg, sStatus = filterStatus, sBank = filterBank, sSort = sortMode;
             final boolean sGroup = groupBank;
             final java.util.Set<String> sFeats = new java.util.LinkedHashSet<>(filterFeats);
+            final java.util.Set<String> sDims = new java.util.LinkedHashSet<>(scoreDimsSel);
             filterType = null; filterOrg = null; filterStatus = null;
-            filterFeats.clear(); filterBank = null;
+            filterFeats.clear(); filterBank = null; scoreDimsSel.clear();
             sortMode = null; groupBank = false; persistViewPrefs();
             rebuildFilterPanel(filterPanelRef); refreshHome();
             showFloatToast("已清空筛选", "撤销", () -> {
                 filterType = sType; filterOrg = sOrg; filterStatus = sStatus; filterBank = sBank; sortMode = sSort;
                 groupBank = sGroup;
                 filterFeats.clear(); filterFeats.addAll(sFeats);
+                scoreDimsSel.clear(); scoreDimsSel.addAll(sDims);
                 persistViewPrefs();
                 if (filterPanelRef != null) rebuildFilterPanel(filterPanelRef);
                 refreshHome();
@@ -4684,6 +4854,28 @@ public class MainActivity extends Activity {
         }
         addChipFlow(panel, featChips);
 
+        panel.addView(filterSectionTitle("只看这些评分（可多选）"));
+        List<String> dims = availableScoreDims();
+        if (dims.isEmpty()) {
+            TextView noDims = tv(this, "分项分随数据更新下发，当前卡库暂无可选维度", 11.5f, Color.rgb(0x8E, 0x8E, 0x93), false);
+            panel.addView(noDims);
+        } else {
+            List<View> dimChips = new ArrayList<>();
+            for (final String dim : dims) {
+                dimChips.add(filterChip(scoreDimShort(dim), scoreDimsSel.contains(dim), () -> {
+                    if (scoreDimsSel.contains(dim)) {
+                        scoreDimsSel.remove(dim);
+                        if (("dim:" + dim).equals(sortMode)) sortMode = null; // 维度已不展示时，不再按它隐形排序
+                    } else {
+                        scoreDimsSel.add(dim);
+                    }
+                    persistViewPrefs();
+                    rebuildFilterPanel(panel); refreshHome();
+                }));
+            }
+            addChipFlow(panel, dimChips);
+        }
+
         panel.addView(filterSectionTitle("\u53d1\u5361\u884c"));
         addBankGrid(panel, distinctBanks());
 
@@ -4698,6 +4890,19 @@ public class MainActivity extends Activity {
             }));
         }
         addChipFlow(panel, sortChips);
+        List<String> selDimsForSort = selectedScoreDimsOrdered();
+        if (!selDimsForSort.isEmpty()) {
+            List<View> dimSortChips = new ArrayList<>();
+            for (final String dim : selDimsForSort) {
+                final String mode = "dim:" + dim;
+                dimSortChips.add(filterChip("按" + scoreDimShort(dim) + "评分", mode.equals(sortMode), () -> {
+                    sortMode = mode.equals(sortMode) ? null : mode;
+                    persistViewPrefs();
+                    rebuildFilterPanel(panel); refreshHome();
+                }));
+            }
+            addChipFlow(panel, dimSortChips);
+        }
 
         panel.addView(filterSectionTitle("\u663e\u793a\u65b9\u5f0f"));
         List<View> dispChips = new ArrayList<>();
