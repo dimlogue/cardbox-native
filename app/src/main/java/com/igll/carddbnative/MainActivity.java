@@ -5657,7 +5657,24 @@ public class MainActivity extends Activity {
     }
 
     View buildStudentPage() {
-        LinearLayout page = basePage("学生推荐");
+        // Q60：整页连贯滚动——标题/统计卡/说明条与卡片同在一根 ScrollView 里随滚走，
+        // 不再把上半块钉死在列表上方（对照首页沉浸滚动口径：标题也在流内）。
+        FrameLayout page = new FrameLayout(this);
+        ScrollView sv = new ScrollView(this);
+        thinScrollbar(sv);
+        sv.setClipToPadding(false);
+        studentScroll = sv;
+        if (Build.VERSION.SDK_INT >= 23) sv.setOnScrollChangeListener((v, sx, sy, ox, oy) -> { pageScrollSaveY.put("student", sy); updateTopFabVisibility(sy); });
+        page.addView(sv, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        // Q49：学生页同为长列表（混合版 syncSbar onList 含 student），挂可拖拽滚动条
+        attachDragBar(page, sv, false, 8, 100);
+        LinearLayout col = new LinearLayout(this);
+        col.setOrientation(LinearLayout.VERTICAL);
+        col.setPadding(dp(this, 14), pageTopPad(), dp(this, 14), dockPad());
+        sv.addView(col, new ScrollView.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        TextView stuTitle = tvW(this, "学生推荐", 24, Color.rgb(0x1C, 0x1C, 0x1E), 800);
+        stuTitle.setLetterSpacing(0.02f); stuTitle.setLineSpacing(0, 1.15f);
+        col.addView(stuTitle);
         List<Card> stu = new ArrayList<>();
         for (Card c : Store.all) if (c.studentPick) stu.add(c);
         stu.sort((a, b2) -> {
@@ -5680,7 +5697,7 @@ public class MainActivity extends Activity {
         hero.setPadding(dp(this, 16), dp(this, 14), dp(this, 16), dp(this, 14));
         LinearLayout.LayoutParams hlp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         hlp.topMargin = dp(this, 12);
-        page.addView(hero, hlp);
+        col.addView(hero, hlp);
         LinearLayout left = new LinearLayout(this);
         left.setOrientation(LinearLayout.VERTICAL);
         hero.addView(left, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
@@ -5704,27 +5721,12 @@ public class MainActivity extends Activity {
         quote.setPadding(dp(this, 12), dp(this, 10), dp(this, 12), dp(this, 10));
         LinearLayout.LayoutParams qlp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         qlp.topMargin = dp(this, 10);
-        page.addView(quote, qlp);
+        col.addView(quote, qlp);
 
         TextView sect = tv(this, "为什么推荐这些卡", 15, Color.rgb(0x1C, 0x1C, 0x1E), true);
         LinearLayout.LayoutParams sectLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         sectLp.topMargin = dp(this, 14);
-        page.addView(sect, sectLp);
-
-        ScrollView sv = new ScrollView(this);
-        thinScrollbar(sv);
-        sv.setClipToPadding(false);
-        studentScroll = sv;
-        if (Build.VERSION.SDK_INT >= 23) sv.setOnScrollChangeListener((v, sx, sy, ox, oy) -> { pageScrollSaveY.put("student", sy); updateTopFabVisibility(sy); });
-        LinearLayout listBox = new LinearLayout(this);
-        listBox.setOrientation(LinearLayout.VERTICAL);
-        listBox.setPadding(0, dp(this, 10), 0, dockPad());
-        sv.addView(listBox);
-        // Q49：学生页同为长列表（混合版 syncSbar onList 含 student），挂可拖拽滚动条
-        FrameLayout stuWrap = new FrameLayout(this);
-        stuWrap.addView(sv, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
-        attachDragBar(stuWrap, sv, false, 8, 100);
-        page.addView(stuWrap, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
+        col.addView(sect, sectLp);
 
         for (final Card c : stu) {
             LinearLayout cardBox = new LinearLayout(this);
@@ -5734,7 +5736,7 @@ public class MainActivity extends Activity {
             cardBox.setPadding(dp(this, 12), dp(this, 10), dp(this, 12), dp(this, 12));
             LinearLayout.LayoutParams clp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
             clp.topMargin = dp(this, 10);
-            listBox.addView(cardBox, clp);
+            col.addView(cardBox, clp);
             cardBox.setOnClickListener(v -> openDetail(c));
             attachCardMenuLongPress(cardBox, c, false);
 
@@ -5787,7 +5789,7 @@ public class MainActivity extends Activity {
         note.setGravity(Gravity.CENTER);
         LinearLayout.LayoutParams nlp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         nlp.topMargin = dp(this, 12);
-        listBox.addView(note, nlp);
+        col.addView(note, nlp);
         restorePageScroll("student", sv);
         return page;
     }
