@@ -18,6 +18,10 @@ import android.graphics.RectF;
 import android.graphics.drawable.Drawable;
 import android.graphics.drawable.GradientDrawable;
 import android.graphics.drawable.RippleDrawable;
+import android.graphics.ColorMatrix;
+import android.graphics.ColorMatrixColorFilter;
+import android.graphics.RenderEffect;
+import android.graphics.Shader;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.VibrationEffect;
@@ -223,6 +227,8 @@ public class MainActivity extends Activity {
         bg.setStroke(dp(this, 1), Color.argb(70, 20, 30, 60));
         fab.setBackground(bg);
         if (Build.VERSION.SDK_INT >= 21) fab.setElevation(dp(this, 10));
+        fab.addView(glassLayer(fab, -1, true), new FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         TopIconView icon = new TopIconView(this);
         int pad = dp(this, 11);
         icon.setPadding(pad, pad, pad, pad);
@@ -248,6 +254,130 @@ public class MainActivity extends Activity {
         g.setCornerRadius(dp(c, radiusDp));
         return g;
     }
+
+    // ---------- Q11 真毛玻璃地基 ----------
+    void pruneGlass() {
+        java.util.Iterator<ImageView> it = glassViews.iterator();
+        while (it.hasNext()) {
+            ImageView iv = it.next();
+            if (!iv.isAttachedToWindow()) {
+                Bitmap b = glassCrops.remove(iv);
+                if (b != null && !b.isRecycled()) b.recycle();
+                glassHosts.remove(iv);
+                it.remove();
+            }
+        }
+    }
+
+    /** 建一层玻璃模糊层：host 是它要贴合的玻璃面（定位/抓图时整面让开），radiusDp<0 为椭圆。 */
+    ImageView glassLayer(View host, float radiusDp, boolean live) {
+        if (!live) captureGlassSnapshot(); // 浮窗升起前先抓底层（此时浮窗本体还没入树，抓到的就是它身后的画面）
+        final ImageView iv = new ImageView(this);
+        iv.setScaleType(ImageView.ScaleType.FIT_XY);
+        iv.setClickable(false);
+        iv.setFocusable(false);
+        iv.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
+        iv.setTag(live ? "live" : "frozen");
+        if (Build.VERSION.SDK_INT >= 21) {
+            iv.setClipToOutline(true);
+            final float r = radiusDp < 0 ? -1f : dp(this, radiusDp);
+            iv.setOutlineProvider(new android.view.ViewOutlineProvider() {
+                @Override public void getOutline(View v, android.graphics.Outline o) {
+                    if (r < 0) o.setOval(0, 0, Math.max(1, v.getWidth()), Math.max(1, v.getHeight()));
+                    else o.setRoundRect(0, 0, Math.max(1, v.getWidth()), Math.max(1, v.getHeight()), r);
+                }
+            });
+        }
+        glassViews.add(iv);
+        if (host != null) glassHosts.put(iv, host);
+        iv.post(() -> applyGlass(iv));
+        return iv;
+    }
+
+    /** 抓当前根视图快照（0.2 降采样）：抓图时把所有已登记玻璃面整面隐藏，避免把玻璃自己拍进背景。 */
+    Bitmap captureGlassSnapshot() {
+        if (rootView == null || rootView.getWidth() <= 0 || rootView.getHeight() <= 0 || glassCapturing) return glassSnap;
+        pruneGlass();
+        glassCapturing = true;
+        java.util.Map<View, Integer> saved = new java.util.HashMap<>();
+        for (ImageView iv : new java.util.ArrayList<>(glassViews)) {
+            View h = glassHosts.get(iv);
+            View t = h != null ? h : iv;
+            if (t != null && t.isAttachedToWindow() && !saved.containsKey(t)) {
+                saved.put(t, t.getVisibility());
+                t.setVisibility(View.INVISIBLE);
+            }
+        }
+        Bitmap out = null;
+        try {
+            int w = rootView.getWidth(), h = rootView.getHeight();
+            float s = 0.20f;
+            out = Bitmap.createBitmap(Math.max(1, Math.round(w * s)), Math.max(1, Math.round(h * s)), Bitmap.Config.ARGB_8888);
+            Canvas cv = new Canvas(out);
+            cv.scale(s, s);
+            rootView.draw(cv);
+        } catch (Exception e) { out = null; }
+        for (java.util.Map.Entry<View, Integer> e : saved.entrySet()) e.getKey().setVisibility(e.getValue());
+        glassCapturing = false;
+        if (out != null) {
+            Bitmap old = glassSnap;
+            glassSnap = out;
+            if (old != null && old != out && !old.isRecycled()) old.recycle();
+        }
+        return glassSnap;
+    }
+
+    /** 把全屏快照按本层在根视图中的位置裁出对应区域（带饱和），API 31+ 再叠硬件模糊。 */
+    void applyGlass(final ImageView iv) {
+        if (iv == null || rootView == null || !iv.isAttachedToWindow()) return;
+        if (iv.getWidth() <= 0 || iv.getHeight() <= 0) { iv.post(() -> applyGlass(iv)); return; }
+        if (glassSnap == null || glassSnap.isRecycled()) captureGlassSnapshot();
+        Bitmap full = glassSnap;
+        if (full == null || full.isRecycled()) return;
+        int[] rl = new int[2]; rootView.getLocationOnScreen(rl);
+        int[] il = new int[2]; iv.getLocationOnScreen(il);
+        int left = il[0] - rl[0], top = il[1] - rl[1];
+        int w = iv.getWidth(), h = iv.getHeight();
+        if (rootView.getWidth() <= 0) return;
+        float s = (float) full.getWidth() / (float) rootView.getWidth();
+        Bitmap out = null;
+        try {
+            out = Bitmap.createBitmap(Math.max(1, Math.round(w * s)), Math.max(1, Math.round(h * s)), Bitmap.Config.ARGB_8888);
+            Canvas cv = new Canvas(out);
+            Paint pt = new Paint(Paint.FILTER_BITMAP_FLAG);
+            ColorMatrix cm = new ColorMatrix();
+            cm.setSaturation(1.6f); // 近似混合版 backdrop saturate(1.6~2)
+            pt.setColorFilter(new ColorMatrixColorFilter(cm));
+            android.graphics.Matrix m = new android.graphics.Matrix();
+            m.setTranslate(-left * s, -top * s);
+            cv.drawBitmap(full, m, pt);
+        } catch (Exception e) { out = null; }
+        if (out == null) return;
+        Bitmap old = glassCrops.put(iv, out);
+        if (old != null && old != out && !old.isRecycled()) old.recycle();
+        iv.setImageBitmap(out);
+        if (Build.VERSION.SDK_INT >= 31) {
+            try { iv.setRenderEffect(RenderEffect.createBlurEffect(18f, 18f, Shader.TileMode.CLAMP)); }
+            catch (Exception e) { /* 个别机型不支持就保留降采样柔糊 */ }
+        }
+    }
+
+    /** 滚动停稳后刷新 live 玻璃（底栏/悬浮钮/回顶/搜索胶囊）；有浮窗在场时不刷，浮窗用的是冻结快照。 */
+    void refreshLiveGlass() {
+        if (glassCapturing || rootView == null || rootView.getWidth() <= 0) return;
+        if (cardMenuPop != null || filterSheet != null || wizardOpen || aboutOpen
+            || detailCard != null || welcomeOpen || changelogOpen) return;
+        captureGlassSnapshot();
+        for (ImageView iv : new java.util.ArrayList<>(glassViews)) {
+            if ("live".equals(iv.getTag()) && iv.isAttachedToWindow()) applyGlass(iv);
+        }
+    }
+
+    void scheduleGlassRefresh() {
+        mainHandler.removeCallbacks(glassRefreshTask);
+        mainHandler.postDelayed(glassRefreshTask, 380);
+    }
+
     // P5 空状态：对照混合版 .empty（居中、灰字、上下 36px 留白），包进白卡（圆角 14）不裸贴页面底
     View emptyState(String s) {
         LinearLayout box = new LinearLayout(this);
@@ -621,6 +751,16 @@ public class MainActivity extends Activity {
     Runnable floatToastTimer = null;
     final android.os.Handler mainHandler = new android.os.Handler(android.os.Looper.getMainLooper());
 
+    // Q11 真毛玻璃地基（自研零三方）：抓底层快照（降采样+饱和 1.6 近似混合版 saturate）垫在玻璃面之下，
+    // API 31+ 再叠 RenderEffect 硬件模糊；低版本靠降采样放大回落柔糊，不再是纯染色。
+    // live 面（底栏/悬浮钮/回顶/搜索胶囊）滚动停稳 380ms 后刷新快照；frozen 面（各浮窗）升起时抓一次冻结。
+    final java.util.List<ImageView> glassViews = new java.util.ArrayList<>();
+    final java.util.Map<ImageView, View> glassHosts = new java.util.HashMap<>();
+    final java.util.Map<ImageView, Bitmap> glassCrops = new java.util.HashMap<>();
+    Bitmap glassSnap = null;
+    boolean glassCapturing = false;
+    final Runnable glassRefreshTask = new Runnable() { public void run() { refreshLiveGlass(); } };
+
     FrameLayout content;
     LinearLayout navBar;
     FrameLayout navWrap;
@@ -791,6 +931,8 @@ public class MainActivity extends Activity {
         root.addView(content, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         buildNav(root);
         setContentView(root);
+        // Q11：任意滚动停稳后刷新 live 玻璃快照（380ms 防抖，不逐帧抓图保流畅）
+        root.getViewTreeObserver().addOnScrollChangedListener(() -> scheduleGlassRefresh());
 
         showTab("home");
         checkDataUpdate(false);
@@ -1087,6 +1229,9 @@ public class MainActivity extends Activity {
             navLabels.put(key, label);
             navBar.addView(item, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
         }
+        // Q11：底栏垫真模糊层（抓内容区快照），上层 floatingBarBg 只剩半透染色
+        navWrap.addView(glassLayer(navWrap, 26, true), new FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         navWrap.addView(navBar, new FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
         root.addView(navWrap);
@@ -1112,6 +1257,7 @@ public class MainActivity extends Activity {
             pages.put(key, page);
         }
         content.addView(page);
+        if (rootView != null) rootView.post(() -> refreshLiveGlass()); // Q11：切页后按新页画面刷新玻璃
         // P4：切页淡入 + 轻微上移（220ms 减速曲线，与全 App 开合手感同一语言）
         page.animate().cancel();
         page.setAlpha(0f);
@@ -1143,7 +1289,7 @@ public class MainActivity extends Activity {
     // ---------- Q3 悬浮钮玻璃化（对照混合版 .qf-btn/.quick-fab） ----------
     // 混合版数值：48dp 圆钮、右 20dp、竖列（搜索上/筛选下）gap 10dp、列底距屏底 108dp；
     // 底 rgba(255,255,255,.45)+blur28、描边 rgba(255,255,255,.55) 1dp、图标深色 #1C1C1E 细线 1.8/24 网格、svg 本体 22dp。
-    // 原生无 backdrop 实时模糊，底色用半透渐变提至约 .74/.66/.61 近似其发亮观感（非真模糊，完成说明如实标注）。
+    // Q11 起钮内已垫真模糊快照层（见 glassLayer），此渐变只作半透染色盖在模糊上。
     Drawable glassFabBg() {
         GradientDrawable g = new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
             new int[]{Color.argb(190, 255, 255, 255), Color.argb(168, 248, 250, 255),
@@ -1267,6 +1413,8 @@ public class MainActivity extends Activity {
         fab.setClipToPadding(false);
         int n0 = activeFilterCount();
         fab.setBackground(glassFabBg());
+        fab.addView(glassLayer(fab, -1, true), new FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         applyGlassFabShadow(fab);
         FilterIconView icon = new FilterIconView(this);
         int pad = dp(this, 13); // 48 钮内 svg 本体 22dp：(48-22)/2
@@ -1304,6 +1452,8 @@ public class MainActivity extends Activity {
     View buildSearchFab() {
         FrameLayout fab = new FrameLayout(this);
         fab.setBackground(glassFabBg());
+        fab.addView(glassLayer(fab, -1, true), new FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         applyGlassFabShadow(fab);
         SearchIconView icon = new SearchIconView(this);
         int pad = dp(this, 13); // 48 钮内 svg 本体 22dp
