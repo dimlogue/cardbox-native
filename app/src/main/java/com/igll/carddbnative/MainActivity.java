@@ -1064,6 +1064,8 @@ public class MainActivity extends Activity {
     final java.util.List<String> navOrder = java.util.Arrays.asList("home", "student", "mine", "news", "settings");
     float navPos = 0f;              // indicator position in tab-index units (fractional while dragging/springing)
     int navSettled = 0;
+    int navTintIdx = 0;             // Q38: tab index currently tinted as "under the lens" (icon+label follow the lens, not only the settled page)
+    View currentPageView;           // Q38: currently displayed page view - only pages crossfade on switch; FABs/sheets in content keep removeAll semantics
     boolean navDragging = false;
     int navDragIdx = -1;
     float navSpringV = 0f;
@@ -1073,6 +1075,7 @@ public class MainActivity extends Activity {
     int navSpringGen = 0;
     Runnable navSpringTask = null;
     float navDownRawX = 0f;
+    float navDownRawY = 0f; // Q38: lift-off-dock abort guard for the press-first-move path
     // Q21 ②：首页渲染签名（查询/筛选/排序/列数/分组/展开集/收藏集/数据版本）——未变时切页回来不重搭 213 张瓷砖。
     String homeRenderSig = null;
     int homeRenderGen = 0; // 分帧渲染代次：新的 refresh 作废上一轮未跑完的续帧任务
@@ -1568,12 +1571,18 @@ public class MainActivity extends Activity {
         // Q20 紧急拆弹（主会话 2026-10-03 18:23 亲手）：指示块内的实时玻璃层在真机上撑成全屏巨卡且拖动卡死，
         // 先整层摘除——指示块保留 navPillBg 药丸+拖动+弹簧，只是不再采样玻璃；液态玻璃等黑匣子证据齐了再议。
         navIndicatorGlass = null;
-        if (Build.VERSION.SDK_INT >= 21) navIndicator.setElevation(dp(this, 2));
+        // Q38/Q35: the lens must stay UNDER the item row (mixed version: .dock-pill sits below the buttons,
+        // which carry z-index 1 and only change text color/weight when .on). The old elevation 2dp raised the
+        // pill above the row and painted over the selected cell's icon+label - the "empty light block" bug.
+        if (Build.VERSION.SDK_INT >= 21) navIndicator.setElevation(0f);
         FrameLayout.LayoutParams indLp = new FrameLayout.LayoutParams(dp(this, 60), dp(this, 52));
         navBar.addView(navIndicator, indLp);
 
         navRow = new LinearLayout(this);
         navRow.setOrientation(LinearLayout.HORIZONTAL);
+        // Q38/Q35: row rides above the lens so every cell's icon+label stays visible; the lens shows through
+        // only in the gaps (items have no background), exactly like the mixed version's buttons over .dock-pill.
+        if (Build.VERSION.SDK_INT >= 21) navRow.setElevation(dp(this, 3));
         navRow.setPadding(dp(this, 8), dp(this, 8), dp(this, 8), dp(this, 8));
         navBar.addView(navRow, new FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
@@ -1597,17 +1606,21 @@ public class MainActivity extends Activity {
                 ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
             llp.topMargin = dp(this, 2);
             item.addView(label, llp);
-            item.setOnClickListener(v -> { if (!navDragging) { haptic(); showTab(key); } });
+            // Q38 (FClash-style lens, mechanism re-implemented by hand): press starts the lens gliding,
+            // lifting the finger commits the page switch on spring settle - never mid-flight.
+            item.setOnClickListener(v -> { if (!navDragging) { haptic(); springNavTo(idx, true); } });
             // Q17/Q21: drag on the dock itself - finger drags the drop, passing a tab ticks haptic, release springs to nearest and only then switches page.
             // Q21 ③ 触摸竞争治理：按下即向父级声明不许拦截（底栏整条手势归条目独占），坐标统一用 rawX 换算到 navRow，
             // 手指滑出起始条目后仍由按下条目独占 MOVE 流，不再出现滑到一半被别的视图抢走而「滑不动」。
             item.setOnTouchListener((v, e) -> {
                 switch (e.getActionMasked()) {
                     case MotionEvent.ACTION_DOWN:
-                        navDownRawX = e.getRawX(); navDownMs = android.os.SystemClock.uptimeMillis();
+                        navDownRawX = e.getRawX(); navDownRawY = e.getRawY(); navDownMs = android.os.SystemClock.uptimeMillis();
                         try { v.getParent().requestDisallowInterceptTouchEvent(true); } catch (Throwable ignored) {}
-                        // 手指已落到底栏：正在跑的弹簧立刻让位给手指（代次作废旧回路），不许弹簧与手指同驱指示块。
-                        if (navSpringRunning) cancelNavSpring();
+                        // Q38: press moves first - the lens starts gliding to the pressed tab right away
+                        // (retarget keeps spring velocity); the page itself switches only on lift.
+                        // A following drag still cancels the spring and takes the lens over (MOVE branch).
+                        springNavTo(idx, false);
                         return false;
                     case MotionEvent.ACTION_MOVE:
                         if (!navDragging && Math.abs(e.getRawX() - navDownRawX) > dp(this, 9)) {
@@ -1616,10 +1629,19 @@ public class MainActivity extends Activity {
                         if (navDragging) { navDragTo(e.getRawX()); return true; }
                         return false;
                     case MotionEvent.ACTION_UP:
+                        try { v.getParent().requestDisallowInterceptTouchEvent(false); } catch (Throwable ignored) {}
+                        if (navDragging) { navDragging = false; settleNav(); return true; }
+                        // Q38: lift commits - spring to the pressed tab, page switches on settle.
+                        // Guard: a press that slid far off the dock vertically is an abort, not a tap.
+                        if (Math.abs(e.getRawY() - navDownRawY) > dp(this, 48)) {
+                            springNavTo(Math.max(0, navOrder.indexOf(tab)), false); return true;
+                        }
+                        haptic(); springNavTo(idx, true); return true;
                     case MotionEvent.ACTION_CANCEL:
                         try { v.getParent().requestDisallowInterceptTouchEvent(false); } catch (Throwable ignored) {}
                         if (navDragging) { navDragging = false; settleNav(); return true; }
-                        return false;
+                        // press aborted without lift-commit: glide the lens back to the current page's tab.
+                        springNavTo(Math.max(0, navOrder.indexOf(tab)), false); return true;
                 }
                 return false;
             });
@@ -1643,6 +1665,27 @@ public class MainActivity extends Activity {
         return (navRow.getWidth() - dp(this, 16)) / 5f;
     }
 
+    // Q38/Q35: tint follows the lens - the cell under the moving lens gets the dark icon + bold label,
+    // like the mixed version's button.on (color #1C1C1E + font-weight 700; its svg strokes use currentColor,
+    // so icon and label tint together). Fires only on discrete tab crossings; lens motion itself stays
+    // pure drawing-layer (translation/scale/alpha), no layout passes per frame.
+    void tintNavTo(int idx) {
+        if (idx < 0 || idx >= navOrder.size()) return;
+        navTintIdx = idx;
+        String key = navOrder.get(idx);
+        for (Map.Entry<String, LinearLayout> e : navItems.entrySet()) {
+            boolean on = e.getKey().equals(key);
+            NavIconView ic = navIcons.get(e.getKey());
+            if (ic != null) ic.setOn(on);
+            TextView lb = navLabels.get(e.getKey());
+            if (lb != null) {
+                lb.setTextColor(on ? Color.rgb(0x1C, 0x1C, 0x1E) : Color.rgb(0x3A, 0x3A, 0x3C));
+                android.graphics.Typeface cur = lb.getTypeface();
+                if (cur != null) lb.setTypeface(cur, on ? android.graphics.Typeface.BOLD : android.graphics.Typeface.NORMAL);
+            }
+        }
+    }
+
     void layoutNavIndicator(int idx, boolean snap) {
         if (navIndicator == null) return;
         float slot = navSlotW();
@@ -1662,7 +1705,8 @@ public class MainActivity extends Activity {
         float slot = navSlotW(); if (slot <= 0) return;
         float x = dp(this, 8) + navPos * slot + dp(this, 3);
         navIndicator.setTranslationX(x);
-        float stretch = Math.min(1.30f, 1f + Math.abs(vel) * 0.045f);
+        // Q38: jelly stretch follows speed, capped at about +25% wide (squash inversely on Y).
+        float stretch = Math.min(1.25f, 1f + Math.abs(vel) * 0.012f);
         navIndicator.setScaleX(stretch);
         navIndicator.setScaleY(1f - (stretch - 1f) * 0.38f);
         // Q20 拆弹：拖动/弹簧帧里不再做 applyGlass 位图裁图（曾是卡死与巨卡来源之一）。
@@ -1677,9 +1721,10 @@ public class MainActivity extends Activity {
         p = Math.max(-0.12f, Math.min(4.12f, p));
         float vel = (p - navPos) * 18f;
         navPos = p;
+        navSpringV = vel; // Q38: hand the finger's velocity to the spring on release (no dead stop)
         placeNavIndicator(vel);
         int idx = Math.max(0, Math.min(4, Math.round(navPos)));
-        if (idx != navDragIdx) { navDragIdx = idx; haptic(); } // one tick per tab passed
+        if (idx != navDragIdx) { navDragIdx = idx; haptic(); tintNavTo(idx); } // one tick per tab passed
     }
 
     void cancelNavSpring() {
@@ -1690,25 +1735,28 @@ public class MainActivity extends Activity {
 
     void settleNav() { springNavTo(Math.max(0, Math.min(4, Math.round(navPos))), true); }
 
-    // hand-written damped spring (no libs): stiffness 240, damping ratio ~0.62 -> snappy settle with slight overshoot.
+    // hand-written damped spring (no libs), Q38 tuning: stiffness 210, damping ratio ~0.68 -> about 500ms
+    // settle with a slight overshoot; retargeting mid-flight KEEPS the current velocity (FClash-style lens).
     // Q21 ①：全程只许一条回路——启动时摘除旧任务并自增代次，帧内先验代次再推进；取消/新弹簧/手指接管任一发生，旧回路当帧自尽。
-    // Q21 ②：刚度 170→240 缩短落位时长，落位才切页的等待随之压短；拖动中不切页的防闪烁语义不变。
+    // 落位才切页的防闪烁语义不变（switchPage 时弹簧落稳那一帧才 showTab）。
     void springNavTo(final int target, final boolean switchPage) {
         final int gen = ++navSpringGen;
         if (navSpringTask != null) mainHandler.removeCallbacks(navSpringTask);
         navSpringRunning = true;
-        navSpringV = 0f;
+        // velocity intentionally NOT zeroed: a mid-flight retarget continues with its momentum.
         final long[] last = { android.os.SystemClock.uptimeMillis() };
         navSpringTask = new Runnable() {
             public void run() {
                 if (gen != navSpringGen || !navSpringRunning) return; // 已被更新的回路/取消取代
                 long now = android.os.SystemClock.uptimeMillis();
                 float dt = Math.min(0.032f, Math.max(0.001f, (now - last[0]) / 1000f)); last[0] = now;
-                float k = 240f, c = 2f * 0.62f * (float) Math.sqrt(k);
+                float k = 210f, c = 2f * 0.68f * (float) Math.sqrt(k);
                 float a = -k * (navPos - target) - c * navSpringV;
                 navSpringV += a * dt;
                 navPos += navSpringV * dt;
                 placeNavIndicator(navSpringV);
+                int tintIdx = Math.max(0, Math.min(4, Math.round(navPos)));
+                if (tintIdx != navTintIdx) tintNavTo(tintIdx); // Q38: icon+label tint rides with the lens
                 if (Math.abs(navPos - target) < 0.002f && Math.abs(navSpringV) < 0.08f) {
                     navPos = target; navSpringV = 0f; navSpringRunning = false; navSpringTask = null;
                     placeNavIndicator(0f);
@@ -1733,6 +1781,9 @@ public class MainActivity extends Activity {
         dismissCardMenu();
         tab = key;
         sCrashTab = key;
+        // Q38: page switch crossfades in about 220ms and keeps cached pages alive (no rebuild).
+        // Only the tracked page view participates; FABs/sheets/overlays in content keep the old semantics.
+        final View oldPage = currentPageView;
         content.removeAllViews();
         View page = null;
         try {
@@ -1770,7 +1821,20 @@ public class MainActivity extends Activity {
             }
             try { showFloatToast("页面打开失败，已回到首页"); } catch (Throwable ignored) {}
         }
+        if (oldPage != null && oldPage != page) content.addView(oldPage); // outgoing page rides below
         content.addView(page);
+        currentPageView = page;
+        if (oldPage != null && oldPage != page) {
+            // Q38 crossfade-out: old page stays below for 220ms, then detaches and resets for reuse.
+            final View fading = oldPage;
+            fading.animate().cancel();
+            fading.setTranslationY(0f);
+            fading.animate().alpha(0f).setDuration(220).setInterpolator(ANIM_ENTER)
+                .withEndAction(() -> {
+                    if (fading.getParent() == content) content.removeView(fading);
+                    fading.setAlpha(1f);
+                }).start();
+        }
         // Q21：弹簧/拖动未落稳时不抓玻璃全图（整屏 draw 会抢主线程、拖动随之发卡）；落稳后由滚动停稳防抖补刷。
         if (rootView != null && !navSpringRunning && !navDragging) rootView.post(() -> refreshLiveGlass()); // Q11：切页后按新页画面刷新玻璃
         // P4：切页淡入 + 轻微上移（220ms 减速曲线，与全 App 开合手感同一语言）
@@ -1793,6 +1857,7 @@ public class MainActivity extends Activity {
                 if (cur != null) lb.setTypeface(cur, on ? android.graphics.Typeface.BOLD : android.graphics.Typeface.NORMAL);
             }
         }
+        navTintIdx = navOrder.indexOf(key); // Q38: settled tint matches the page; lens tint rides during flight
         // Q17: move the liquid drop (spring if layout ready; the tap path also lands here)
         // Q21：navSettled 只在弹簧真正落稳时写入（弹簧帧内），此处提前写入会让「已落位」与动画中的实际位置脱节。
         int targetIdx = navOrder.indexOf(key);
