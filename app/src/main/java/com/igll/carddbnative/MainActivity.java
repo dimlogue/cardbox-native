@@ -2807,7 +2807,10 @@ public class MainActivity extends Activity {
         tilesBox.setOrientation(LinearLayout.VERTICAL);
         tilesBox.setBackground(roundRect(Color.WHITE, 14, this));
         if (Build.VERSION.SDK_INT >= 21) tilesBox.setElevation(dp(this, 2));
-        tilesBox.setClipToOutline(true);
+        // 不裁子视图：拖动时色带要能滑出整叠边界跟手（首尾圆角由色带自身渐变给出）
+        tilesBox.setClipChildren(false);
+        tilesBox.setClipToPadding(false);
+        sec.setClipChildren(false);
         LinearLayout.LayoutParams boxLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         boxLp.topMargin = dp(this, 6);
         sec.addView(tilesBox, boxLp);
