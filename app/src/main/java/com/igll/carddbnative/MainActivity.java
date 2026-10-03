@@ -1748,31 +1748,36 @@ public class MainActivity extends Activity {
         hg.setCornerRadius(dp(this, 18));
         hero.setBackground(hg);
         hero.setPadding(dp(this, 16), dp(this, 14), dp(this, 16), dp(this, 14));
-        LinearLayout.LayoutParams hlp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        hlp.topMargin = dp(this, 10);
-        page.addView(hero, hlp);
         hero.addView(tv(this, mineCards.size() + " 张卡 · 我的卡包", 18, Color.WHITE, true));
         hero.addView(tv(this, "组织覆盖 " + orgs.size() + " 家 · 无转换费 " + noFtf + " 张", 12.5f, Color.argb(205, 255, 255, 255), false));
 
-        page.addView(buildCustomSection());
+        // 整页可滚：自定义卡展开后不会把卡库收藏网格挤没（色带多时纵向滚动看）
+        ScrollView sv = new ScrollView(this);
+        sv.setFillViewport(true);
+        LinearLayout inner = new LinearLayout(this);
+        inner.setOrientation(LinearLayout.VERTICAL);
+        inner.setPadding(0, dp(this, 10), 0, dp(this, 16));
+        sv.addView(inner, new ScrollView.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        page.addView(sv, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
+        inner.addView(hero, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        inner.addView(buildCustomSection());
 
         if (mineCards.isEmpty()) {
             TextView empty = tv(this, "还没有从卡库收藏的卡。去「全部卡片」点开任意一张，加入我的卡片。", 13.5f, Color.rgb(0x8E, 0x8E, 0x93), false);
             LinearLayout.LayoutParams elp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
             elp.topMargin = dp(this, 12);
-            page.addView(empty, elp);
+            inner.addView(empty, elp);
             return page;
         }
 
-        GridView g = new GridView(this);
-        g.setNumColumns(2);
-        g.setHorizontalSpacing(dp(this, 10));
-        g.setVerticalSpacing(dp(this, 10));
-        g.setPadding(0, dp(this, 10), 0, dp(this, 16));
-        final CardAdapter ad = new CardAdapter(mineCards);
-        g.setAdapter(ad);
-        g.setOnItemClickListener((p, v, i, id) -> openDetail(ad.data.get(i)));
-        page.addView(g, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
+        TextView sect = tv(this, "卡库收藏", 15, Color.rgb(0x1C, 0x1C, 0x1E), true);
+        LinearLayout.LayoutParams sectLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        sectLp.topMargin = dp(this, 16);
+        inner.addView(sect, sectLp);
+        int oldCols = cols;
+        cols = 2;
+        addCardRows(inner, mineCards);
+        cols = oldCols;
         return page;
     }
 
@@ -1970,30 +1975,26 @@ public class MainActivity extends Activity {
         box.addView(customDetailRow("卡组织", c.org == null || c.org.isEmpty() ? "—" : c.org));
         if (c.note != null && !c.note.isEmpty()) box.addView(customDetailRow("备注", c.note));
 
+        final AlertDialog[] holder = new AlertDialog[1];
+        if (c.bank != null && !c.bank.isEmpty()) {
+            TextView find = tv(this, "在卡库里搜「" + c.bank + "」 ›", 13, Color.rgb(0x0A, 0x5C, 0xD6), true);
+            find.setPadding(0, dp(this, 10), 0, dp(this, 8));
+            find.setOnClickListener(v -> {
+                if (holder[0] != null) holder[0].dismiss();
+                query = c.bank;
+                showTab("home");
+                if (searchBox != null) searchBox.setText(c.bank);
+            });
+            box.addView(find);
+        }
         AlertDialog dlg = new AlertDialog.Builder(this)
             .setView(box)
             .setNegativeButton("关闭", null)
             .setNeutralButton("删除", (d, w) -> confirmDeleteCustom(c))
             .setPositiveButton("编辑", (d, w) -> openCustomForm(c))
             .create();
-        if (c.bank != null && !c.bank.isEmpty()) {
-            dlg.setButton(AlertDialog.BUTTON_NEUTRAL, "删除", (d, w) -> confirmDeleteCustom(c));
-            // 搜银行放在关闭后执行，避免与编辑/删除挤同一个按钮位：用标题区下小字提示替代
-        }
+        holder[0] = dlg;
         dlg.show();
-        // 在卡库里搜这家银行（详情底部附加一行可点文字，点完关详情跳首页搜索）
-        if (c.bank != null && !c.bank.isEmpty()) {
-            TextView find = tv(this, "在卡库里搜「" + c.bank + "」 ›", 13, Color.rgb(0x0A, 0x5C, 0xD6), true);
-            find.setPadding(dp(this, 18), dp(this, 8), dp(this, 18), dp(this, 10));
-            find.setOnClickListener(v -> {
-                try { dlg.dismiss(); } catch (Exception e) {}
-                query = c.bank;
-                showTab("home");
-                if (searchBox != null) searchBox.setText(c.bank);
-            });
-            // AlertDialog 内容区外无法直接追加，改为塞进 box（对话框已 show，追加后需请求重排）
-            box.addView(find);
-        }
     }
 
     View customDetailRow(String k, String v) {
@@ -2368,9 +2369,9 @@ public class MainActivity extends Activity {
         View wizEntry = settingRow("情景选卡", "出国留学 / 出境旅游 / 海淘网购 / 日常使用，按场景挑卡 ›");
         wizEntry.setOnClickListener(v -> openWizard());
         page.addView(wizEntry);
-        page.addView(settingRow("版本", "0.7-native（Phase 3a）"));
+        page.addView(settingRow("版本", "0.8-native（Phase 3b）"));
         page.addView(settingRow("关于卡盒", "原生版：纯 Java 手写界面，数据与现行版共用同一份卡库"));
-        page.addView(settingRow("迁移进度", "全部卡片 / 详情 / 我的卡片 / 学生推荐 / 筛选 / 资讯 / 情景选卡 已迁移；自定义卡、我的卡片拖动、字体与界面大小在后续阶段"));
+        page.addView(settingRow("迁移进度", "全部卡片 / 详情 / 我的卡片 / 学生推荐 / 筛选 / 资讯 / 情景选卡 / 自定义卡 已迁移；我的卡片拖动、字体与界面大小在后续阶段"));
         return page;
     }
 
