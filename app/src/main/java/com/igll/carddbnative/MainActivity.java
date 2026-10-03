@@ -420,6 +420,8 @@ public class MainActivity extends Activity {
     // 情景选卡状态（Phase 3a，对照 app.js 的 wiz 全局状态）
     boolean wizardOpen = false;
     boolean detailFromWiz = false;
+    // P2b：选卡悬浮窗根视图（遮罩+底部升起的大圆角窗），底层页面保留不切页，关窗回到原页原位
+    View wizardSheet = null;
     String wizSc = null;
     int wizStep = 0;
     Map<String, String> wizA = new HashMap<>();
@@ -2070,8 +2072,27 @@ public class MainActivity extends Activity {
 
     void closeWizard() {
         wizardOpen = false;
+        final View sheet = wizardSheet;
+        wizardSheet = null;
+        if (sheet != null && sheet.getParent() != null) {
+            // 关闭：窗下沉淡出（180ms 减速，与筛选窗同一套手感），落位后摘窗、底栏与悬浮钮再回来
+            View card = sheet instanceof ViewGroup && ((ViewGroup) sheet).getChildCount() > 1
+                ? ((ViewGroup) sheet).getChildAt(1) : null;
+            if (card != null) {
+                card.animate().translationY(dp(this, 42)).alpha(0f)
+                    .setDuration(180).setInterpolator(new DecelerateInterpolator())
+                    .withEndAction(() -> {
+                        if (sheet.getParent() != null) ((ViewGroup) sheet.getParent()).removeView(sheet);
+                        navBar.setVisibility(View.VISIBLE);
+                        syncSearchFab();
+                    }).start();
+                sheet.animate().alpha(0f).setDuration(180).start();
+                return;
+            }
+            ((ViewGroup) sheet.getParent()).removeView(sheet);
+        }
         navBar.setVisibility(View.VISIBLE);
-        showTab(tab);
+        syncSearchFab();
     }
 
     // 同 app.js wizBack：已在第一题（含未选场景由关闭键处理）就回到选场景，否则上一步
@@ -2080,10 +2101,50 @@ public class MainActivity extends Activity {
         else { wizStep--; showWizardPage(); }
     }
 
+    // P2b：选卡改悬浮窗——对照混合版 .wizard/.wiz-shade/.wiz-sheet：全屏轻遮罩（rgba(15,20,40,.46)）
+    // +贴底大圆角窗（顶圆角 26、max-height 88vh、柔影），底层页面留在后面，关窗回到原页原位。
     void showWizardPage() {
         navBar.setVisibility(View.GONE);
-        content.removeAllViews();
-        content.addView(buildWizardPage());
+        if (wizardSheet != null && wizardSheet.getParent() != null)
+            ((ViewGroup) wizardSheet.getParent()).removeView(wizardSheet);
+        final FrameLayout sheet = new FrameLayout(this);
+        View shade = new View(this);
+        shade.setBackgroundColor(Color.argb(117, 15, 20, 40));
+        shade.setOnClickListener(v -> closeWizard());
+        sheet.addView(shade, new FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        LinearLayout card = new LinearLayout(this);
+        card.setOrientation(LinearLayout.VERTICAL);
+        GradientDrawable cg = new GradientDrawable();
+        cg.setColor(Color.rgb(0xF2, 0xF3, 0xF7));
+        float rTop = dp(this, 26);
+        cg.setCornerRadii(new float[]{rTop, rTop, rTop, rTop, 0, 0, 0, 0});
+        card.setBackground(cg);
+        if (Build.VERSION.SDK_INT >= 21) {
+            card.setElevation(dp(this, 24));
+            card.setClipToOutline(true);
+        }
+        card.setOnClickListener(v -> {}); // 窗体本体吃掉点击，防穿透到遮罩误关（同筛选窗）
+        card.addView(buildWizardPage(), new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        int sw = getResources().getDisplayMetrics().widthPixels;
+        int maxH = (int) (getResources().getDisplayMetrics().heightPixels * 0.88);
+        FrameLayout.LayoutParams clp = new FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        clp.gravity = Gravity.BOTTOM;
+        card.measure(View.MeasureSpec.makeMeasureSpec(sw, View.MeasureSpec.EXACTLY),
+            View.MeasureSpec.makeMeasureSpec(maxH, View.MeasureSpec.AT_MOST));
+        clp.height = card.getMeasuredHeight();
+        sheet.addView(card, clp);
+        content.addView(sheet);
+        wizardSheet = sheet;
+        // 开场：遮罩淡入 + 窗从下方 42dp 上浮，260ms（混合版 wizUp .26s cubic-bezier(.2,.9,.3,1) 口径）
+        sheet.setAlpha(0f);
+        sheet.animate().alpha(1f).setDuration(200)
+            .setInterpolator(new DecelerateInterpolator()).start();
+        card.setTranslationY(dp(this, 42));
+        card.animate().translationY(0f)
+            .setDuration(260).setInterpolator(new DecelerateInterpolator(1.8f)).start();
     }
 
     WizSc wizScenario() {
@@ -2146,12 +2207,28 @@ public class MainActivity extends Activity {
     }
 
     View buildWizardPage() {
+        // P2b：窗内结构——抓手 + 固定头部（返回/标题/关闭不随内容滚）+ 内容滚动区，对照混合版 .wiz-sheet/.wiz-head/.wiz-body
+        LinearLayout col = new LinearLayout(this);
+        col.setOrientation(LinearLayout.VERTICAL);
+        View grab = new View(this);
+        grab.setBackground(roundRect(Color.rgb(0xD9, 0xD9, 0xDE), 3, this));
+        LinearLayout.LayoutParams glp = new LinearLayout.LayoutParams(dp(this, 38), dp(this, 5));
+        glp.gravity = Gravity.CENTER_HORIZONTAL;
+        glp.topMargin = dp(this, 8);
+        glp.bottomMargin = dp(this, 4);
+        col.addView(grab, glp);
+        LinearLayout headWrap = new LinearLayout(this);
+        headWrap.setOrientation(LinearLayout.VERTICAL);
+        headWrap.setPadding(dp(this, 18), dp(this, 2), dp(this, 18), 0);
+        col.addView(headWrap);
         ScrollView sv = new ScrollView(this);
-        sv.setBackgroundColor(Color.rgb(0xF2, 0xF3, 0xF7));
+        sv.setBackgroundColor(Color.TRANSPARENT);
         LinearLayout page = new LinearLayout(this);
         page.setOrientation(LinearLayout.VERTICAL);
-        page.setPadding(dp(this, 16), pageTopPad(), dp(this, 16), dp(this, 28));
+        page.setPadding(dp(this, 18), dp(this, 4), dp(this, 18), dp(this, 24));
         sv.addView(page);
+        col.addView(sv, new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
 
         List<WizQ> qs = wizQs();
         WizSc sc = wizScenario();
@@ -2160,7 +2237,7 @@ public class MainActivity extends Activity {
         LinearLayout top = new LinearLayout(this);
         top.setOrientation(LinearLayout.HORIZONTAL);
         top.setGravity(Gravity.CENTER_VERTICAL);
-        page.addView(top);
+        headWrap.addView(top);
         Button back = new Button(this);
         back.setText("‹ 返回"); back.setTextSize(14); back.setAllCaps(false);
         back.setBackground(roundRect(Color.WHITE, 12, this));
@@ -2200,7 +2277,7 @@ public class MainActivity extends Activity {
                 tile.setOnClickListener(v -> { wizSc = s.id; wizStep = 1; showWizardPage(); });
                 page.addView(tile);
             }
-            return sv;
+            return col;
         }
 
         addWizardTrail(page, qs);
@@ -2232,7 +2309,7 @@ public class MainActivity extends Activity {
                 page.addView(opt, olp);
                 opt.setOnClickListener(v -> { wizA.put(q.k, o[0]); wizStep++; showWizardPage(); });
             }
-            return sv;
+            return col;
         }
 
         // 结果页：先按场景打分排序，再按「卡种」答复过滤（候选不足 4 张则不滤，同 renderWiz）
@@ -2268,7 +2345,7 @@ public class MainActivity extends Activity {
         rlp.topMargin = dp(this, 16);
         page.addView(redo, rlp);
         redo.setOnClickListener(v -> { wizSc = null; wizStep = 0; wizA.clear(); showWizardPage(); });
-        return sv;
+        return col;
     }
 
     View wizResultRow(final WizResult r) {
@@ -2362,10 +2439,11 @@ public class MainActivity extends Activity {
     void closeDetail() {
         detailCard = null;
         if (detailFromWiz && wizardOpen) {
-            // 从选卡结果点进来的详情：关掉必回选卡且进度还在（同混合版 detailFromWiz）
+            // P2b：从选卡结果点进来的详情：关掉必回悬浮选卡窗且进度还在（wizSc/wizStep/wizA 未动，同混合版 detailFromWiz）；
+            // 先恢复选卡窗底下那一页，再把选卡窗叠回最上层
             detailFromWiz = false;
-            content.removeAllViews();
-            content.addView(buildWizardPage());
+            showTab(tab);
+            showWizardPage();
             return;
         }
         detailFromWiz = false;
