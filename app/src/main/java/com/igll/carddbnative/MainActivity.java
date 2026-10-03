@@ -24,6 +24,7 @@ import android.graphics.RenderEffect;
 import android.graphics.Shader;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.IBinder;
 import android.os.VibrationEffect;
 import android.os.Vibrator;
 import android.text.Editable;
@@ -1637,6 +1638,10 @@ public class MainActivity extends Activity {
     }
 
     void showTab(String key) {
+        // Q25: tab switch is a dismiss path too - close the float capsule and the IME
+        // before content.removeAllViews() detaches the page that owns the EditText,
+        // otherwise the keyboard is orphaned on the next tab.
+        if (floatSearchOpen) closeFloatSearch(); else blurSearchBoxes();
         dismissCardMenu();
         tab = key;
         sCrashTab = key;
@@ -1916,14 +1921,33 @@ public class MainActivity extends Activity {
     }
 
     // Q10: blur whichever search box has focus + hide keyboard (inline or float)
+    // Q25: capture the window token BEFORE clearing focus. The old order cleared focus
+    // first and then read getCurrentFocus(), which is null by then, so hideSoftInput was
+    // skipped and the IME stayed on screen after scroll/outside-tap dismissal.
     void blurSearchBoxes() {
+        IBinder token = null;
+        try {
+            View foc = getCurrentFocus();
+            if (foc != null) token = foc.getWindowToken();
+        } catch (Throwable ignored) {}
+        if (token == null) {
+            try { if (floatSearchBox != null) token = floatSearchBox.getWindowToken(); } catch (Throwable ignored) {}
+        }
+        if (token == null) {
+            try { if (searchBox != null) token = searchBox.getWindowToken(); } catch (Throwable ignored) {}
+        }
+        if (token == null) {
+            try {
+                if (getWindow() != null && getWindow().getDecorView() != null)
+                    token = getWindow().getDecorView().getWindowToken();
+            } catch (Throwable ignored) {}
+        }
         try {
             InputMethodManager imm = (InputMethodManager) getSystemService(INPUT_METHOD_SERVICE);
-            if (searchBox != null && searchBox.hasFocus()) searchBox.clearFocus();
-            if (floatSearchBox != null && floatSearchBox.hasFocus()) floatSearchBox.clearFocus();
-            View foc = getCurrentFocus();
-            if (imm != null && foc != null) imm.hideSoftInputFromWindow(foc.getWindowToken(), 0);
-        } catch (Exception e) { /* no IME: silent */ }
+            if (imm != null && token != null) imm.hideSoftInputFromWindow(token, 0);
+        } catch (Throwable ignored) { /* no IME: focus is still cleared below */ }
+        try { if (floatSearchBox != null && floatSearchBox.hasFocus()) floatSearchBox.clearFocus(); } catch (Throwable ignored) {}
+        try { if (searchBox != null && searchBox.hasFocus()) searchBox.clearFocus(); } catch (Throwable ignored) {}
     }
 
     void dismissSearch() {
@@ -1977,6 +2001,8 @@ public class MainActivity extends Activity {
         bar.post(() -> refreshLiveGlass());
         if (floatSearchBox != null) floatSearchBox.postDelayed(() -> {
             if (!floatSearchOpen || floatSearchBox == null) return;
+            // Q25: reopen from a clean focus state, never on top of a stale inline focus.
+            try { if (searchBox != null && searchBox.hasFocus()) searchBox.clearFocus(); } catch (Throwable ignored) {}
             floatSearchBox.requestFocus();
             try { floatSearchBox.setSelection(floatSearchBox.getText().length()); } catch (Exception e) { /* ignore */ }
             showKeyboard(floatSearchBox);
@@ -6416,6 +6442,7 @@ public class MainActivity extends Activity {
 
     @Override
     public void onBackPressed() {
+        if (floatSearchOpen) { closeFloatSearch(); return; }
         if (cardMenuPop != null) { closeCardMenu(); return; }
         if (aboutOpen) { closeAbout(); return; }
         if (welcomeOpen) { closeWelcome(); return; }
