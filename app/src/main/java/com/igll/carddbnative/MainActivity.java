@@ -378,6 +378,33 @@ public class MainActivity extends Activity {
             v.setClipToOutline(true);
         } catch (Throwable ignored) { /* 个别机型 outline 异常时保留原背景圆角，不为裁切冒崩点 */ }
     }
+    // Q45：贴底窗专用裁切——窗体背景虽已仅顶部圆角，但默认 outline 取自 GradientDrawable 时
+    // 只认统一半径、会把底部两角也裁圆，角下露出玻璃/遮罩即用户截图里的黑三角。API 29+ 用
+    // 「顶圆底直」的 Path 轮廓让裁切与阴影都只圆顶部；低版本回落统一圆角（旧行为，不冒新崩点）。
+    static void topSheetClip(final View v, final float radiusDp, final Context c) {
+        try {
+            final float r = dp(c, radiusDp);
+            v.setOutlineProvider(new ViewOutlineProvider() {
+                @Override public void getOutline(View view, Outline outline) {
+                    int w = Math.max(1, view.getWidth()), h = Math.max(1, view.getHeight());
+                    if (Build.VERSION.SDK_INT >= 29) {
+                        Path p = new Path();
+                        p.moveTo(0, h);
+                        p.lineTo(0, r);
+                        p.quadTo(0, 0, r, 0);
+                        p.lineTo(w - r, 0);
+                        p.quadTo(w, 0, w, r);
+                        p.lineTo(w, h);
+                        p.close();
+                        outline.setPath(p);
+                    } else {
+                        outline.setRoundRect(0, 0, w, h, r);
+                    }
+                }
+            });
+            v.setClipToOutline(true);
+        } catch (Throwable ignored) { /* 个别机型 outline 异常时保留原裁切，不为修角冒崩点 */ }
+    }
     // Q27（用户 19:24 钉法）：位图级四角圆角——按显示尺寸把半径换算到位图坐标里，用 SRC_IN 把源图
     // 四角真切成透明，不靠视图 outline 硬剪；源图在 Img 缓存里多处共用，只出圆角副本、绝不动源图。
     static Bitmap roundBitmap(Bitmap src, float radiusPx) {
@@ -2308,7 +2335,7 @@ public class MainActivity extends Activity {
         float addR = dp(this, 22);
         addBg.setCornerRadii(new float[]{addR, addR, addR, addR, 0, 0, 0, 0});
         card.setBackground(addBg);
-        if (Build.VERSION.SDK_INT >= 21) card.setElevation(dp(this, 24));
+        if (Build.VERSION.SDK_INT >= 21) { card.setElevation(dp(this, 24)); topSheetClip(card, 22, this); } // Q45 顶圆底直轮廓
         card.setPadding(dp(this, 18), dp(this, 16), dp(this, 18), dp(this, 12) + navBarH());
         FrameLayout.LayoutParams clp = new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         clp.gravity = Gravity.BOTTOM;
@@ -4030,7 +4057,7 @@ public class MainActivity extends Activity {
         card.setBackground(cg);
         if (Build.VERSION.SDK_INT >= 21) {
             card.setElevation(dp(this, 24));
-            card.setClipToOutline(true);
+            topSheetClip(card, 26, this); // Q45 顶圆底直轮廓
         }
         card.setOnClickListener(v -> {}); // 窗体本体吃掉点击，防穿透到遮罩误关（同筛选窗）
         card.addView(buildWizardPage(), new LinearLayout.LayoutParams(
@@ -4393,7 +4420,7 @@ public class MainActivity extends Activity {
         float rTop = dp(this, 20);
         sheetBg.setCornerRadii(new float[]{rTop, rTop, rTop, rTop, 0, 0, 0, 0});
         sheetCard.setBackground(sheetBg);
-        if (Build.VERSION.SDK_INT >= 21) { sheetCard.setElevation(dp(this, 24)); sheetCard.setClipToOutline(true); }
+        if (Build.VERSION.SDK_INT >= 21) { sheetCard.setElevation(dp(this, 24)); topSheetClip(sheetCard, 20, this); } // Q45 顶圆底直轮廓
         sheetCard.setOnClickListener(v -> {}); // 窗体吃点击防穿透遮罩
 
         // 内容滚动区 + 底部常驻收藏钮（窗内延续，不随内容滚走）
@@ -5709,7 +5736,7 @@ public class MainActivity extends Activity {
         float rTop = dp(this, 20);
         sheetBg.setCornerRadii(new float[]{rTop, rTop, rTop, rTop, 0, 0, 0, 0});
         sheetCard.setBackground(sheetBg);
-        if (Build.VERSION.SDK_INT >= 21) { sheetCard.setElevation(dp(this, 24)); sheetCard.setClipToOutline(true); }
+        if (Build.VERSION.SDK_INT >= 21) { sheetCard.setElevation(dp(this, 24)); topSheetClip(sheetCard, 20, this); } // Q45 顶圆底直轮廓
         sheetCard.setOnClickListener(v -> {}); // 窗体吃点击防穿透遮罩
 
         ScrollView sc = new ScrollView(this);
@@ -6489,7 +6516,7 @@ public class MainActivity extends Activity {
         float binR = dp(this, 22);
         cg.setCornerRadii(new float[]{binR, binR, binR, binR, 0, 0, 0, 0});
         card.setBackground(cg);
-        if (Build.VERSION.SDK_INT >= 21) { card.setElevation(dp(this, 24)); card.setClipToOutline(true); }
+        if (Build.VERSION.SDK_INT >= 21) { card.setElevation(dp(this, 24)); topSheetClip(card, 22, this); } // Q45 顶圆底直轮廓
         card.setOnClickListener(v -> {});
         card.setPadding(dp(this, 18), dp(this, 18), dp(this, 18), dp(this, 14) + navBarH());
         final EditText inBin = customInput("输入卡号前 6–8 位", "", 8);
@@ -6747,7 +6774,7 @@ public class MainActivity extends Activity {
         card.setBackground(cg);
         if (Build.VERSION.SDK_INT >= 21) {
             card.setElevation(dp(this, 24));
-            card.setClipToOutline(true);
+            topSheetClip(card, 22, this); // Q45 顶圆底直轮廓
         }
         card.setOnClickListener(v -> {}); // 窗体吃掉点击，防穿透遮罩误关
 
@@ -7314,7 +7341,7 @@ public class MainActivity extends Activity {
         card.setBackground(cg);
         if (Build.VERSION.SDK_INT >= 21) {
             card.setElevation(dp(this, 24));
-            card.setClipToOutline(true);
+            topSheetClip(card, 22, this); // Q45 顶圆底直轮廓
         }
         card.setOnClickListener(v -> {}); // 窗体吃掉点击，防穿透遮罩误关
         ScrollView sv = new ScrollView(this);
