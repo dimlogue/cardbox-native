@@ -2812,7 +2812,10 @@ public class MainActivity extends Activity {
         homeScroll.addView(col, new ScrollView.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
 
-        col.addView(tv(this, "卡盒", 24, Color.rgb(0x1C, 0x1C, 0x1E), true));
+        // Q39: .title-row h1 1.45rem/800/.02em
+        TextView homeTitle = tvW(this, "卡盒", 24, Color.rgb(0x1C, 0x1C, 0x1E), 800);
+        homeTitle.setLetterSpacing(0.02f); homeTitle.setLineSpacing(0, 1.15f);
+        col.addView(homeTitle);
 
         Set<String> banks = new HashSet<>();
         for (Card c : Store.all) banks.add(c.bank);
@@ -2857,8 +2860,12 @@ public class MainActivity extends Activity {
         LinearLayout.LayoutParams hlp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         hlp.topMargin = dp(this, 10);
         col.addView(hero, hlp);
-        hero.addView(tv(this, "卡库总览", 13, Color.argb(200, 255, 255, 255), false));
-        TextView big = tv(this, Store.all.size() + " 张卡", 34, Color.WHITE, true);
+        // Q39: .dash-kick .78rem/.14em 字距；.dash-big 800/行高1.08
+        TextView kick = tvW(this, "卡库总览", 12.5f, Color.argb(200, 255, 255, 255), 600);
+        kick.setLetterSpacing(0.14f);
+        hero.addView(kick);
+        TextView big = tvW(this, Store.all.size() + " 张卡", 34, Color.WHITE, 800);
+        big.setLineSpacing(0, 1.08f);
         hero.addView(big);
         hero.addView(tv(this, banks.size() + " 家银行 · 6 大卡组织", 13, Color.argb(220, 255, 255, 255), false));
         LinearLayout tiles = new LinearLayout(this);
@@ -4479,13 +4486,15 @@ public class MainActivity extends Activity {
         bodyInner.setPadding(dp(this, 18), dp(this, 16), dp(this, 18), dp(this, 8));
         page.addView(bodyInner);
 
-        TextView name = tv(this, c.name, 19, Color.rgb(0x1C, 0x1C, 0x1E), true);
+        // Q39: .p-title 1.2rem/800
+        TextView name = tvW(this, c.name, 19, Color.rgb(0x1C, 0x1C, 0x1E), 800);
         name.setLineSpacing(0, 1.15f);
         bodyInner.addView(name);
         // 状态直接取记录自身（与规格同源 specs 外的 status 字段），不二次加工
         String metaTxt = c.bank + " \u00B7 " + orgLabel(c.org) + " \u00B7 " + c.status
             + " \u00B7 " + (c.hasScore ? String.format(java.util.Locale.US, "%.1f\u5206", c.score) : "\u5F85\u8BC4\u5206");
-        TextView meta = tv(this, metaTxt, 12.5f, Color.rgb(0x8E, 0x8E, 0x93), false);
+        // Q39: .p-sub .88rem 次级行
+        TextView meta = tv(this, metaTxt, 13.5f, Color.rgb(0x8E, 0x8E, 0x93), false); bodyLH(meta);
         LinearLayout.LayoutParams mep = new LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         mep.topMargin = dp(this, 2);
@@ -4961,7 +4970,9 @@ public class MainActivity extends Activity {
         t.setBackground(roundRect(Color.argb(38, 255, 255, 255), 14, this));
         t.setPadding(dp(this, 13), dp(this, 13), dp(this, 13), dp(this, 13));
         t.setMinimumHeight(dp(this, 64));
-        t.addView(tv(this, value, 23, Color.WHITE, true)); // .bn-v 1.55rem
+        // Q39: .bn-v 1.55rem/800/行高1.1
+        TextView bv = tvW(this, value, 23, Color.WHITE, 800); bv.setLineSpacing(0, 1.1f);
+        t.addView(bv);
         TextView l = tv(this, label, 10.5f, Color.argb(205, 255, 255, 255), false);
         LinearLayout.LayoutParams llp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         llp.topMargin = dp(this, 3);
@@ -5002,6 +5013,11 @@ public class MainActivity extends Activity {
 
     View buildMinePage() {
         LinearLayout page = basePage("我的卡片");
+        // Q39: .mine-pagetitle 1.7rem/800/-.01em，与通用 .page-title 区分
+        if (page.getChildCount() > 0 && page.getChildAt(0) instanceof TextView) {
+            TextView mt = (TextView) page.getChildAt(0);
+            mt.setTextSize(27 * uiScale); mt.setLetterSpacing(-0.01f);
+        }
         List<Card> mineCards = new ArrayList<>();
         for (Card c : Store.all) if (mine.contains(c.id)) mineCards.add(c);
         applyMineOrder(mineCards);
@@ -7429,7 +7445,9 @@ public class MainActivity extends Activity {
     }
 
     void sectionHead(LinearLayout page, String s) {
-        TextView t = tv(this, s, 12.5f, Color.rgb(0x8E, 0x8E, 0x93), true);
+        // Q39: .set-cap .76rem/600/.02em；.set-t .98rem/600、.set-d .76rem 行高1.4
+        TextView t = tvW(this, s, 12, Color.rgb(0x8E, 0x8E, 0x93), 600);
+        t.setLetterSpacing(0.02f);
         LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         lp.topMargin = dp(this, 16); lp.leftMargin = dp(this, 2);
         t.setLayoutParams(lp);
@@ -7515,8 +7533,9 @@ public class MainActivity extends Activity {
         LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         lp.topMargin = dp(this, 8);
         row.setLayoutParams(lp);
-        row.addView(tv(this, k, 14, Color.rgb(0x1C, 0x1C, 0x1E), true));
-        row.addView(tv(this, v, 12, Color.rgb(0x8E, 0x8E, 0x93), false));
+        row.addView(tvW(this, k, 15, Color.rgb(0x1C, 0x1C, 0x1E), 600));
+        TextView sv2 = tv(this, v, 12, Color.rgb(0x8E, 0x8E, 0x93), false); bodyLH(sv2);
+        row.addView(sv2);
         return row;
     }
 
@@ -7524,7 +7543,10 @@ public class MainActivity extends Activity {
         LinearLayout page = new LinearLayout(this);
         page.setOrientation(LinearLayout.VERTICAL);
         page.setPadding(dp(this, 14), pageTopPad(), dp(this, 14), 0);
-        page.addView(tv(this, title, 24, Color.rgb(0x1C, 0x1C, 0x1E), true));
+        // Q39: .page-title 1.4rem/800/.02em、行高收紧
+        TextView pt = tvW(this, title, 24, Color.rgb(0x1C, 0x1C, 0x1E), 800);
+        pt.setLetterSpacing(0.02f); pt.setLineSpacing(0, 1.15f);
+        page.addView(pt);
         return page;
     }
 
