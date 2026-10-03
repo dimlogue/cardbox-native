@@ -8327,6 +8327,41 @@ public class MainActivity extends Activity {
         showTab(tab);
     }
 
+    // Q50：更新日志底部动作行——对照混合版 styles.css .cl-actions（display:flex;gap:10px;justify-content:center）
+    // 与 .cl-top（padding:9px 20px;border-radius:999px;background:#eef4fb;color:#0a5cd6;font-weight:700;font-size:.85rem）
+    // 两钮居中并排药丸、紧贴日志框下沿成一组，不再整宽灰钮平摊；两处（独立页/设置页内嵌）共用此助手保证口径一致。
+    LinearLayout changelogActions(final Runnable onTop, final Runnable onFold) {
+        LinearLayout actions = new LinearLayout(this);
+        actions.setOrientation(LinearLayout.HORIZONTAL);
+        actions.setGravity(Gravity.CENTER);
+        actions.setPadding(dp(this, 12), dp(this, 8), dp(this, 12), dp(this, 10));
+        TextView top = tvW(this, "↑ 回到顶部", 13.5f, Color.rgb(0x0A, 0x5C, 0xD6), 700);
+        top.setGravity(Gravity.CENTER);
+        top.setBackground(rippleBg(Color.rgb(0xEE, 0xF4, 0xFB), 999));
+        top.setPadding(dp(this, 20), dp(this, 9), dp(this, 20), dp(this, 9));
+        top.setOnTouchListener((v, ev) -> {
+            if (ev.getAction() == android.view.MotionEvent.ACTION_DOWN) pressBounce(v, true);
+            else if (ev.getAction() == android.view.MotionEvent.ACTION_UP || ev.getAction() == android.view.MotionEvent.ACTION_CANCEL) pressBounce(v, false);
+            return false;
+        });
+        top.setOnClickListener(v -> { haptic(); if (onTop != null) onTop.run(); });
+        actions.addView(top, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        TextView fold = tvW(this, "收起日志", 13.5f, Color.rgb(0x0A, 0x5C, 0xD6), 700);
+        fold.setGravity(Gravity.CENTER);
+        fold.setBackground(rippleBg(Color.rgb(0xEE, 0xF4, 0xFB), 999));
+        fold.setPadding(dp(this, 20), dp(this, 9), dp(this, 20), dp(this, 9));
+        fold.setOnTouchListener((v, ev) -> {
+            if (ev.getAction() == android.view.MotionEvent.ACTION_DOWN) pressBounce(v, true);
+            else if (ev.getAction() == android.view.MotionEvent.ACTION_UP || ev.getAction() == android.view.MotionEvent.ACTION_CANCEL) pressBounce(v, false);
+            return false;
+        });
+        fold.setOnClickListener(v -> { haptic(); if (onFold != null) onFold.run(); });
+        LinearLayout.LayoutParams flp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        flp.leftMargin = dp(this, 10);
+        actions.addView(fold, flp);
+        return actions;
+    }
+
     View buildChangelogPage() {
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
@@ -8377,24 +8412,12 @@ public class MainActivity extends Activity {
             }
         }
 
-        LinearLayout actions = new LinearLayout(this);
-        actions.setOrientation(LinearLayout.HORIZONTAL);
-        actions.setGravity(Gravity.CENTER);
-        actions.setBackgroundColor(Color.WHITE);
-        actions.setPadding(dp(this, 14), dp(this, 10), dp(this, 14), dp(this, 12));
+        LinearLayout actions = changelogActions(
+            () -> { if (changelogScroll != null) changelogScroll.smoothScrollTo(0, 0); },
+            () -> closeChangelog());
+        // 独立页 dock 已藏，底部避让手势条一次算清，两钮完整可见不半埋
+        actions.setPadding(actions.getPaddingLeft(), actions.getPaddingTop(), actions.getPaddingRight(), actions.getPaddingBottom() + navBarH());
         root.addView(actions);
-        Button top = new Button(this);
-        top.setText("↑ 回到顶部"); top.setTextSize(13); top.setAllCaps(false);
-        top.setBackground(roundRect(Color.rgb(0xEE, 0xF1, 0xF6), 999, this));
-        top.setOnClickListener(v -> { haptic(); if (changelogScroll != null) changelogScroll.smoothScrollTo(0, 0); });
-        actions.addView(top, new LinearLayout.LayoutParams(0, dp(this, 40), 1f));
-        Button fold = new Button(this);
-        fold.setText("收起日志"); fold.setTextSize(13); fold.setAllCaps(false);
-        fold.setBackground(roundRect(Color.rgb(0xEE, 0xF1, 0xF6), 999, this));
-        fold.setOnClickListener(v -> { haptic(); closeChangelog(); });
-        LinearLayout.LayoutParams flp = new LinearLayout.LayoutParams(0, dp(this, 40), 1f);
-        flp.leftMargin = dp(this, 10);
-        actions.addView(fold, flp);
         return root;
     }
 
@@ -8411,8 +8434,10 @@ public class MainActivity extends Activity {
 
         settingsLogScroll = new ScrollView(this);
         settingsLogScroll.setOverScrollMode(View.OVER_SCROLL_NEVER);
-        int h = (int) (getResources().getDisplayMetrics().heightPixels * 0.52f);
-        h = Math.max(dp(this, 240), Math.min(h, dp(this, 520)));
+        // Q50：框+钮一组——总高按 52vh 收，滚动区扣掉动作行高，两钮紧贴框底不被推出屏外半埋 dock
+        int totalH = (int) (getResources().getDisplayMetrics().heightPixels * 0.52f);
+        totalH = Math.max(dp(this, 280), Math.min(totalH, dp(this, 560)));
+        int h = Math.max(dp(this, 200), totalH - dp(this, 56));
         LinearLayout inner = new LinearLayout(this);
         inner.setOrientation(LinearLayout.VERTICAL);
         inner.setPadding(dp(this, 10), dp(this, 2), dp(this, 10), dp(this, 6));
@@ -8446,23 +8471,10 @@ public class MainActivity extends Activity {
         attachDragBar(inlineLogWrap, settingsLogScroll, true, 6, 6);
         box.addView(inlineLogWrap, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, h));
 
-        LinearLayout actions = new LinearLayout(this);
-        actions.setOrientation(LinearLayout.HORIZONTAL);
-        actions.setGravity(Gravity.CENTER);
-        actions.setPadding(dp(this, 8), dp(this, 8), dp(this, 8), dp(this, 8));
+        LinearLayout actions = changelogActions(
+            () -> { if (settingsLogScroll != null) settingsLogScroll.smoothScrollTo(0, 0); },
+            () -> { settingsLogOpen = false; rebuildPages(); });
         box.addView(actions);
-        Button top = new Button(this);
-        top.setText("↑ 回到顶部"); top.setTextSize(13); top.setAllCaps(false);
-        top.setBackground(roundRect(Color.rgb(0xEE, 0xF1, 0xF6), 999, this));
-        top.setOnClickListener(v -> { haptic(); if (settingsLogScroll != null) settingsLogScroll.smoothScrollTo(0, 0); });
-        actions.addView(top, new LinearLayout.LayoutParams(0, dp(this, 38), 1f));
-        Button fold = new Button(this);
-        fold.setText("收起日志"); fold.setTextSize(13); fold.setAllCaps(false);
-        fold.setBackground(roundRect(Color.rgb(0xEE, 0xF1, 0xF6), 999, this));
-        fold.setOnClickListener(v -> { haptic(); settingsLogOpen = false; rebuildPages(); });
-        LinearLayout.LayoutParams flp = new LinearLayout.LayoutParams(0, dp(this, 38), 1f);
-        flp.leftMargin = dp(this, 10);
-        actions.addView(fold, flp);
         return box;
     }
 
