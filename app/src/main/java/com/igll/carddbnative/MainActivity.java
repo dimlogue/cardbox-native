@@ -90,7 +90,7 @@ public class MainActivity extends Activity {
     // ---------- 显示偏好（Phase 4a：字体三档/界面大小/高刷/触感） ----------
     static String fontMode = "default"; // default=软件默认栈 / system=本机 / serif=内置宋体
     static float uiScale = 1f;          // 界面大小：0.9 紧凑 / 1 标准 / 1.12 大号（作用于 sp）
-    static boolean hapticOn = true;
+    static int hapticLevel = 2; // P3 触感分档：0 关 / 1 轻(10ms) / 2 中(20ms) / 3 强(40ms)，存 prefs haptic_level（旧 boolean haptic 自动迁移）
     static android.graphics.Typeface serifTf = null;
 
     static android.graphics.Typeface serifTypeface(Context c, boolean bold) {
@@ -572,7 +572,9 @@ public class MainActivity extends Activity {
         fontMode = prefs.getString("font_mode", "default");
         uiScale = prefs.getFloat("ui_scale", 1f);
         if (uiScale != 0.9f && uiScale != 1f && uiScale != 1.12f) uiScale = 1f;
-        hapticOn = prefs.getBoolean("haptic", true);
+        if (prefs.contains("haptic_level")) hapticLevel = prefs.getInt("haptic_level", 2);
+        else hapticLevel = prefs.getBoolean("haptic", true) ? 2 : 0; // 旧开关迁移：开→中档
+        if (hapticLevel < 0 || hapticLevel > 3) hapticLevel = 2;
         applyHighRefresh();
         try { mine = new HashSet<>(prefs.getStringSet("mine_ids", new HashSet<String>())); } catch (Exception e) { mine = new HashSet<>(); }
         sortMode = prefs.getString("sort_mode", null);
@@ -626,13 +628,16 @@ public class MainActivity extends Activity {
         catch (Exception e) { return ""; }
     }
 
+    // P3：按档位震动（Vibrator 系统服务，与铃声/静音无关，静音下照常震）；振幅等效分档，旧机型只认时长
     void haptic() {
-        if (!hapticOn) return;
+        if (hapticLevel <= 0) return;
+        int ms = hapticLevel == 1 ? 10 : (hapticLevel == 2 ? 20 : 40);
+        int amp = hapticLevel == 1 ? 70 : (hapticLevel == 2 ? 150 : 255);
         try {
             Vibrator v = (Vibrator) getSystemService(VIBRATOR_SERVICE);
             if (v == null) return;
-            if (Build.VERSION.SDK_INT >= 26) v.vibrate(VibrationEffect.createOneShot(15, VibrationEffect.DEFAULT_AMPLITUDE));
-            else v.vibrate(15);
+            if (Build.VERSION.SDK_INT >= 26) v.vibrate(VibrationEffect.createOneShot(ms, amp));
+            else v.vibrate(ms);
         } catch (Exception e) { /* 无振动器静默 */ }
     }
 
@@ -2412,6 +2417,7 @@ public class MainActivity extends Activity {
         alp.gravity = Gravity.RIGHT;
         side.addView(add, alp);
         add.setOnClickListener(v -> {
+            haptic();
             if (mine.contains(c.id)) { mine.remove(c.id); Toast.makeText(this, "已从我的卡片移除", Toast.LENGTH_SHORT).show(); }
             else { mine.add(c.id); Toast.makeText(this, "已加入我的卡片", Toast.LENGTH_SHORT).show(); }
             prefs.edit().putStringSet("mine_ids", new HashSet<>(mine)).apply();
@@ -2548,6 +2554,7 @@ public class MainActivity extends Activity {
         mineBtn.setTextSize(15); mineBtn.setAllCaps(false);
         styleMineBtn(mineBtn, c);
         mineBtn.setOnClickListener(v -> {
+            haptic();
             if (mine.contains(c.id)) { mine.remove(c.id); Toast.makeText(this, "已从我的卡片移除", Toast.LENGTH_SHORT).show(); }
             else { mine.add(c.id); Toast.makeText(this, "已加入我的卡片", Toast.LENGTH_SHORT).show(); }
             prefs.edit().putStringSet("mine_ids", new HashSet<>(mine)).apply();
@@ -4111,8 +4118,8 @@ public class MainActivity extends Activity {
         switchRow(page, "高刷新率", "把刷新率拉到屏幕最高档（耗电略增）", prefs.getBoolean("high_refresh", false), on -> {
             prefs.edit().putBoolean("high_refresh", on).apply(); haptic(); applyHighRefresh(); rebuildPages();
         });
-        switchRow(page, "触感反馈", "点按时轻震一下", hapticOn, on -> {
-            hapticOn = on; prefs.edit().putBoolean("haptic", on).apply(); haptic(); rebuildPages();
+        segRow(page, "触感反馈", new String[][]{{"0","关"},{"1","轻"},{"2","中"},{"3","强"}}, String.valueOf(hapticLevel), v -> {
+            hapticLevel = Integer.parseInt(v); prefs.edit().putInt("haptic_level", hapticLevel).apply(); haptic(); rebuildPages();
         });
 
         sectionHead(page, "数据");
