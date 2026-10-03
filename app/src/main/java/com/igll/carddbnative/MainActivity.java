@@ -166,6 +166,7 @@ public class MainActivity extends Activity {
         hideFabsNow();
     }
     void restoreChrome() {
+        if (suppressNextChromeRestore) { suppressNextChromeRestore = false; hideChrome(); return; }
         if (isChromeCovered()) { hideChrome(); return; }
         if (navWrap != null && navWrap.getVisibility() != View.VISIBLE) {
             navWrap.setVisibility(View.VISIBLE);
@@ -898,6 +899,7 @@ public class MainActivity extends Activity {
     };
     // Q9 在线 BIN 查询（对照混合版 lookupBin/openBinQuery/addBinToMine）：binlist 在线认行，可一键入卡
     View binSheet = null;
+    boolean suppressNextChromeRestore = false; // Q12: chain open (menu->detail, addSheet->form) skips one restore to avoid dock flicker
     View addSheetView = null; // Q12: 添加卡片底表，浮窗退场名单内
     String lastBin = null, lastBinScheme = null, lastBinType = null, lastBinBrand = null, lastBinBank = null, lastBinCountry = null;
     // P-deck：我的卡片页滚动位置保持（换序/开合不甩回顶部）
@@ -2143,7 +2145,7 @@ public class MainActivity extends Activity {
         r1lp.topMargin = dp(this, 12);
         card.addView(r1, r1lp);
         TextView r2 = addSheetRow("\u5728\u7EBF\u67E5\u8BE2\u5361\u4FE1\u606F", () -> {
-            closeAddSheet(sheet);
+            suppressNextChromeRestore = true; closeAddSheet(sheet);
             openBinQuery();
         });
         card.addView(r2, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(this, 52)));
@@ -2168,8 +2170,7 @@ public class MainActivity extends Activity {
     void closeAddSheet(View sheet) {
         if (sheet == addSheetView) addSheetView = null;
         if (sheet != null && sheet.getParent() != null) ((ViewGroup) sheet.getParent()).removeView(sheet);
-        // rows chain into openCustomForm/openBinQuery which hide again same frame; restore only if no next overlay took over
-        if (customFormSheet == null && binSheet == null) restoreChrome(); // Q12
+        restoreChrome(); // Q12 (chain rows set suppressNextChromeRestore first)
     }
 
     void updateFilterFabBadge() {
@@ -2715,6 +2716,7 @@ public class MainActivity extends Activity {
         SearchIconView detailIcon = new SearchIconView(this);
         detailIcon.iconColor = Color.rgb(0x1C, 0x1C, 0x1E);
         pop.addView(cardMenuRow(detailIcon, "查看详情", () -> {
+            suppressNextChromeRestore = true;
             dismissCardMenu();
             openDetail(c, fromWiz);
         }));
@@ -2779,9 +2781,10 @@ public class MainActivity extends Activity {
     // 立即关闭（切页/开详情/返回拦截）：不走动画，避免浮层残留
     void dismissCardMenu() {
         View pop = cardMenuPop, bd = cardMenuBackdrop, cl = cardMenuClone, mg = cardMenuGlass;
+        boolean wasOpen = pop != null;
         cardMenuPop = null; cardMenuBackdrop = null; cardMenuClone = null; cardMenuGlass = null;
         removeViewNow(mg);
-        restoreChrome(); // Q12
+        if (wasOpen) restoreChrome(); // Q12: no menu was open -> nothing to restore (avoids flicker on openDetail/showTab paths)
         removeViewNow(pop);
         removeViewNow(bd);
         removeViewNow(cl);
@@ -7606,6 +7609,7 @@ public class MainActivity extends Activity {
         if (detailCard != null) { closeDetail(); return; }
         if (filterSheet != null) { closeFilterSheet(); return; }
         if (binSheet != null) { closeBinQuery(); return; }
+        if (addSheetView != null) { closeAddSheet(addSheetView); return; }
         if (customFormSheet != null) { closeCustomForm(); return; }
         if (wizardOpen) {
             if (wizSc == null) closeWizard(); else wizGoBack();
