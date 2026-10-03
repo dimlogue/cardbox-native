@@ -1825,14 +1825,19 @@ public class MainActivity extends Activity {
             case "优惠政策": return "优惠";
             case "冻结比例": return "冻结";
             case "免息期与取现成本": return "免息取现";
-            case "收费情况": case "收费与其他持有成本": return "收费";
+            case "收费情况": return "收费";
+            case "收费与其他持有成本": return "持有成本";
             case "境外 ATM 取现费": return "境外取现费";
             case "多币种账户/原币支付覆盖": return "多币种";
             case "卡组织等级自带权益": return "组织权益";
             default: return dim;
         }
     }
+    static List<String> scoreDimsAvailCache = null;
+    static int scoreDimsAvailStamp = Integer.MIN_VALUE;
     List<String> availableScoreDims() {
+        int stamp = Store.dataVersion * 1000003 + Store.all.size();
+        if (scoreDimsAvailCache != null && stamp == scoreDimsAvailStamp) return new ArrayList<>(scoreDimsAvailCache);
         java.util.LinkedHashSet<String> found = new java.util.LinkedHashSet<>();
         for (Card c : Store.all) found.addAll(c.scoreDims.keySet());
         List<String> out = new ArrayList<>(found);
@@ -1841,6 +1846,8 @@ public class MainActivity extends Activity {
             int r = Integer.compare(scoreDimOrderIdx(a), scoreDimOrderIdx(b));
             return r != 0 ? r : zh.compare(a, b);
         });
+        scoreDimsAvailCache = new ArrayList<>(out);
+        scoreDimsAvailStamp = stamp;
         return out;
     }
     List<String> selectedScoreDimsOrdered() {
@@ -4019,7 +4026,7 @@ public class MainActivity extends Activity {
     View buildScoreDimFlow(Card c, int availPx, int nc, List<String> dims) {
         if (dims == null || dims.isEmpty()) return null;
         float sp = nc == 3 ? 8f : 9.5f;
-        int maxRows = nc == 1 ? 99 : 3;
+        int maxRows = 99; // Q67 是用户显式多选，所选维度不截断；选得多时瓷砖自然变高，不拿两行封顶吞掉后选维度
         LinearLayout wrap = new LinearLayout(this);
         wrap.setOrientation(LinearLayout.VERTICAL);
         Paint mp = new Paint();
