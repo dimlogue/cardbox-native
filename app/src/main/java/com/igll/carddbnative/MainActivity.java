@@ -3464,7 +3464,8 @@ public class MainActivity extends Activity {
 
     void openDetail(Card c, boolean fromWiz) {
         if (c == null) return;
-        if (detailCard != null || detailClosing) { detailQueue.add(c); return; } // 连点排队 FIFO，关一开一下一张
+        if (detailClosing) return; // 收窗途中再点既不重开也不入队（关窗意图已生效）
+        if (detailCard != null) { detailQueue.add(c); return; } // 连点排队 FIFO，关一开一下一张
         dismissCardMenu();
         if (!fromWiz) captureCurrentPageScroll();
         detailFromWiz = fromWiz;
