@@ -434,6 +434,8 @@ public class MainActivity extends Activity {
     boolean welcomeOpen = false;
     boolean changelogOpen = false;
     ScrollView changelogScroll = null;
+    boolean settingsLogOpen = false;
+    ScrollView settingsLogScroll = null;
 
     FrameLayout content;
     LinearLayout navBar;
@@ -4163,6 +4165,66 @@ public class MainActivity extends Activity {
         return root;
     }
 
+    // P-log：设置页内就地展开的更新日志框（对照混合版 .changelog：限高 52vh、右侧滑杆、底部收起/回顶常驻）
+    View buildInlineLogBox() {
+        LinearLayout box = new LinearLayout(this);
+        box.setOrientation(LinearLayout.VERTICAL);
+        box.setBackground(rippleBg(Color.WHITE, 14));
+        box.setClipToOutline(true);
+        box.setPadding(dp(this, 4), dp(this, 2), dp(this, 4), dp(this, 2));
+        LinearLayout.LayoutParams blp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        blp.topMargin = dp(this, 8);
+        box.setLayoutParams(blp);
+
+        settingsLogScroll = new ScrollView(this);
+        settingsLogScroll.setVerticalScrollBarEnabled(true);
+        settingsLogScroll.setScrollbarFadingEnabled(false);
+        settingsLogScroll.setOverScrollMode(View.OVER_SCROLL_NEVER);
+        int h = (int) (getResources().getDisplayMetrics().heightPixels * 0.52f);
+        h = Math.max(dp(this, 240), Math.min(h, dp(this, 520)));
+        LinearLayout inner = new LinearLayout(this);
+        inner.setOrientation(LinearLayout.VERTICAL);
+        inner.setPadding(dp(this, 10), dp(this, 2), dp(this, 10), dp(this, 6));
+        List<LogEntry> logs = loadChangelog();
+        if (logs.isEmpty()) {
+            inner.addView(tv(this, "更新日志读取失败", 13.5f, Color.rgb(0x8E, 0x8E, 0x93), false));
+        }
+        for (LogEntry e : logs) {
+            TextView ver = tv(this, "v" + e.v, 14.5f, Color.rgb(0x1C, 0x1C, 0x1E), true);
+            LinearLayout.LayoutParams vlp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            vlp.topMargin = dp(this, 12);
+            inner.addView(ver, vlp);
+            for (String note : e.notes) {
+                TextView nt = tv(this, "•  " + note, 12.5f, Color.rgb(0x3A, 0x3A, 0x3C), false);
+                nt.setLineSpacing(0, 1.45f);
+                LinearLayout.LayoutParams nlp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+                nlp.topMargin = dp(this, 3); nlp.leftMargin = dp(this, 4);
+                inner.addView(nt, nlp);
+            }
+        }
+        settingsLogScroll.addView(inner);
+        box.addView(settingsLogScroll, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, h));
+
+        LinearLayout actions = new LinearLayout(this);
+        actions.setOrientation(LinearLayout.HORIZONTAL);
+        actions.setGravity(Gravity.CENTER);
+        actions.setPadding(dp(this, 8), dp(this, 8), dp(this, 8), dp(this, 8));
+        box.addView(actions);
+        Button top = new Button(this);
+        top.setText("↑ 回到顶部"); top.setTextSize(13); top.setAllCaps(false);
+        top.setBackground(roundRect(Color.rgb(0xEE, 0xF1, 0xF6), 999, this));
+        top.setOnClickListener(v -> { haptic(); if (settingsLogScroll != null) settingsLogScroll.smoothScrollTo(0, 0); });
+        actions.addView(top, new LinearLayout.LayoutParams(0, dp(this, 38), 1f));
+        Button fold = new Button(this);
+        fold.setText("收起日志"); fold.setTextSize(13); fold.setAllCaps(false);
+        fold.setBackground(roundRect(Color.rgb(0xEE, 0xF1, 0xF6), 999, this));
+        fold.setOnClickListener(v -> { haptic(); settingsLogOpen = false; rebuildPages(); });
+        LinearLayout.LayoutParams flp = new LinearLayout.LayoutParams(0, dp(this, 38), 1f);
+        flp.leftMargin = dp(this, 10);
+        actions.addView(fold, flp);
+        return box;
+    }
+
     View buildSettingsPage() {
         LinearLayout page = basePage("设置");
         View wizEntry = settingRow("情景选卡", "出国留学 / 出境旅游 / 海淘网购 / 日常使用，按场景挑卡 ›");
@@ -4193,9 +4255,10 @@ public class MainActivity extends Activity {
 
         sectionHead(page, "关于");
         page.addView(settingRow("版本", appVersion() + "（原生版）"));
-        View logRow = settingRow("更新日志", "每个版本改了什么 ›");
-        logRow.setOnClickListener(v -> { haptic(); showChangelog(); });
+        View logRow = settingRow("更新日志", settingsLogOpen ? "收起更新日志" : "每个版本改了什么 ›");
+        logRow.setOnClickListener(v -> { haptic(); settingsLogOpen = !settingsLogOpen; rebuildPages(); });
         page.addView(logRow);
+        if (settingsLogOpen) page.addView(buildInlineLogBox());
         View welRow = settingRow("欢迎页", "重新看一遍首次打开的介绍 ›");
         welRow.setOnClickListener(v -> { haptic(); showWelcome(); });
         page.addView(welRow);
@@ -4317,6 +4380,7 @@ public class MainActivity extends Activity {
         if (pressPreview != null) { dismissPressPreview(); return; }
         if (welcomeOpen) { closeWelcome(); return; }
         if (changelogOpen) { closeChangelog(); return; }
+        if (settingsLogOpen && "settings".equals(tab)) { settingsLogOpen = false; rebuildPages(); return; }
         if (detailCard != null) { closeDetail(); return; }
         if (filterSheet != null) { closeFilterSheet(); return; }
         if (wizardOpen) {
