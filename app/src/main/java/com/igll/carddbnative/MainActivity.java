@@ -2491,6 +2491,7 @@ public class MainActivity extends Activity {
     View buildMineAnalysis(final List<Card> owned) {
         LinearLayout wrap = new LinearLayout(this);
         wrap.setOrientation(LinearLayout.VERTICAL);
+        wrap.setLayoutParams(new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
 
         int[] tiers = new int[4];
         for (Card c : owned) tiers[cardTier(c)]++;
@@ -2542,16 +2543,17 @@ public class MainActivity extends Activity {
         wrap.addView(hero, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
         LinearLayout row1 = new LinearLayout(this); row1.setOrientation(LinearLayout.HORIZONTAL);
         LinearLayout row2 = new LinearLayout(this); row2.setOrientation(LinearLayout.HORIZONTAL);
+        LinearLayout.LayoutParams r1lp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         LinearLayout.LayoutParams r2lp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        r2lp.topMargin = dp(this, 12);
-        hero.addView(row1);
+        r2lp.topMargin = dp(this, 10);
+        hero.addView(row1, r1lp);
         hero.addView(row2, r2lp);
-        row1.addView(mineHeroTile(owned.size() + " 张卡", "我的卡包 · " + verdict, null), new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
-        row1.addView(mineHeroTile(TIER_NAMES[topTier], "最高档次", null), new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+        row1.addView(mineHeroTile(owned.size() + " 张卡", "我的卡包 · " + verdict, null), mineTileLp(true));
+        row1.addView(mineHeroTile(TIER_NAMES[topTier], "最高档次", null), mineTileLp(false));
         row2.addView(mineHeroTile(hasOrgs.size() + " / " + ORG_LIST.length, "组织覆盖",
-            hasOrgs.isEmpty() ? null : joinCn(hasOrgs)), new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+            hasOrgs.isEmpty() ? null : joinCn(hasOrgs)), mineTileLp(true));
         row2.addView(mineHeroTile(nNoFtf + " 张", "无转换费",
-            missOrgs.isEmpty() ? "组织全覆盖了" : "还差 " + joinCn(missOrgs)), new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+            missOrgs.isEmpty() ? "组织全覆盖了" : "还差 " + joinCn(missOrgs)), mineTileLp(false));
 
         // 境外能力白卡：四条进度 + 最通用 + 短板
         TextView sect = tv(this, "境外能力", 15, Color.rgb(0x1C, 0x1C, 0x1E), true);
@@ -2604,9 +2606,19 @@ public class MainActivity extends Activity {
         return sb.toString();
     }
 
+    LinearLayout.LayoutParams mineTileLp(boolean left) {
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+        if (left) lp.rightMargin = dp(this, 5); else lp.leftMargin = dp(this, 5);
+        return lp;
+    }
+
     View mineHeroTile(String value, String label, String sub) {
         LinearLayout t = new LinearLayout(this);
         t.setOrientation(LinearLayout.VERTICAL);
+        // 对照混合版 .bn-tile：玻璃底+内边距，四格同高同底，内容绝不裸贴深蓝底
+        t.setBackground(roundRect(Color.argb(38, 255, 255, 255), 12, this));
+        t.setPadding(dp(this, 10), dp(this, 9), dp(this, 10), dp(this, 9));
+        t.setMinimumHeight(dp(this, 64));
         t.addView(tv(this, value, 17, Color.WHITE, true));
         TextView l = tv(this, label, 11, Color.argb(205, 255, 255, 255), false);
         LinearLayout.LayoutParams llp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
