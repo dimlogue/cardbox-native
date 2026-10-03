@@ -988,7 +988,6 @@ public class MainActivity extends Activity {
     TextView detailBinView = null;
     LinearLayout detailVerInfoBox = null;
     java.util.List<View> detailDots = new java.util.ArrayList<>();
-    Button detailMineBtn = null;
     final java.util.ArrayDeque<Card> detailQueue = new java.util.ArrayDeque<>();
 
     // 情景选卡状态（Phase 3a，对照 app.js 的 wiz 全局状态）
@@ -3968,25 +3967,12 @@ public class MainActivity extends Activity {
         sc.setFillViewport(false);
         detailScroll = sc;
         LinearLayout body = buildDetailSheetBody(c);
+        body.setPadding(0, 0, 0, dp(this, 10) + navBarH()); // Q28：内容落窗底，末行让开系统手势条
         sc.addView(body);
         sheetCard.addView(sc, new LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
 
-        LinearLayout footer = new LinearLayout(this);
-        footer.setOrientation(LinearLayout.HORIZONTAL);
-        footer.setPadding(dp(this, 16), dp(this, 10), dp(this, 16), dp(this, 20) + navBarH()); // Q26：贴底窗按钮避开系统手势条
-        footer.setBackgroundColor(Color.WHITE);
-        sheetCard.addView(footer);
-        final Button mineBtn = new Button(this);
-        mineBtn.setTextSize(15); mineBtn.setAllCaps(false);
-        detailMineBtn = mineBtn;
-        styleMineBtn(mineBtn, c);
-        mineBtn.setOnClickListener(v -> {
-            haptic();
-            toggleMineWithToast(c, () -> styleMineBtn(mineBtn, c));
-        });
-        footer.addView(mineBtn, new LinearLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT, dp(this, 50)));
+        // Q28：详情只看不加入，底部收藏行整行移除，滚动区直落窗底
 
         // 先量高再定版（内容可能短于封顶）
         sheetCard.measure(View.MeasureSpec.makeMeasureSpec(screenW, View.MeasureSpec.EXACTLY),
@@ -4088,7 +4074,7 @@ public class MainActivity extends Activity {
             if (overlay != null && overlay.getParent() instanceof ViewGroup)
                 ((ViewGroup) overlay.getParent()).removeView(overlay);
             detailView = null; detailSheetWrap = null; detailShade = null; detailCloseGlyph = null;
-            detailScroll = null; detailBinView = null; detailVerInfoBox = null; detailMineBtn = null;
+            detailScroll = null; detailBinView = null; detailVerInfoBox = null;
             detailDots = new java.util.ArrayList<>();
             detailCard = null; detailClosing = false; detailFromWiz = false;
             if (!wasWiz && navWrap != null) navWrap.setVisibility(View.VISIBLE);
@@ -4401,19 +4387,6 @@ public class MainActivity extends Activity {
             rows.add(new String[]{k, v});
         }
         return rows;
-    }
-
-    void styleMineBtn(Button b, Card c) {
-        // Q6 常驻收藏钮（对照混合版 .p-fab）：玻璃白底、未收藏蓝字、已收藏绿字带勾，圆角 16
-        boolean in = mine.contains(c.id);
-        b.setText(in ? "\u2713 已在我的卡片" : "+ 加入我的卡片");
-        b.setTextColor(in ? Color.rgb(0x34, 0xC7, 0x59) : Color.rgb(0x00, 0x7A, 0xFF));
-        GradientDrawable fb = new GradientDrawable();
-        fb.setColor(Color.argb(199, 255, 255, 255));
-        fb.setCornerRadius(dp(this, 16));
-        fb.setStroke(dp(this, 1), Color.argb(90, 255, 255, 255));
-        b.setBackground(fb);
-        if (Build.VERSION.SDK_INT >= 21) b.setElevation(dp(this, 8));
     }
 
     // ---------- 学生推荐（Phase 2b，对照 app.js studentReason/studentFit/studentPageHtml） ----------
