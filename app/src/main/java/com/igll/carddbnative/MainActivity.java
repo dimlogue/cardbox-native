@@ -2425,6 +2425,7 @@ public class MainActivity extends Activity {
         // otherwise the keyboard is orphaned on the next tab.
         if (floatSearchOpen) closeFloatSearch(); else blurSearchBoxes();
         dismissCardMenu();
+        dismissMoreMenuNow(); // Q58：切页前菜单即刻退场，不许残留到新页
         tab = key;
         sCrashTab = key;
         // Q38: page switch crossfades in about 220ms and keeps cached pages alive (no rebuild).
@@ -9266,6 +9267,15 @@ public class MainActivity extends Activity {
                 .start();
         } else if (ov.getParent() != null) {
             ((ViewGroup) ov.getParent()).removeView(ov);
+        }
+    }
+
+    void dismissMoreMenuNow() {
+        View ov = moreMenuOverlay;
+        moreMenuOverlay = null;
+        if (ov != null) {
+            ov.animate().cancel();
+            if (ov.getParent() != null) ((ViewGroup) ov.getParent()).removeView(ov);
         }
     }
 
