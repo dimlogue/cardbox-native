@@ -901,6 +901,11 @@ public class MainActivity extends Activity {
 
     // ---------- 通用：卡片瓷砖 ----------
     View cardTile(final Card c, ViewGroup parent) {
+        return cardTile(c, parent, cols);
+    }
+
+    // P-grid：瓷砖规格统一——图区按 1.586 卡面比例定高（同列同宽同高）、卡名预留两行、行内等高拉伸，底边齐平
+    View cardTile(final Card c, ViewGroup parent, int nCols) {
         LinearLayout box = new LinearLayout(this);
         box.setOrientation(LinearLayout.VERTICAL);
         box.setBackground(roundRect(Color.WHITE, 14, this));
@@ -911,19 +916,26 @@ public class MainActivity extends Activity {
         ImageView iv = new ImageView(this);
         iv.setScaleType(ImageView.ScaleType.CENTER_CROP);
         iv.setBackground(roundRect(Color.rgb(0xE9, 0xEE, 0xF5), 9, this));
-        LinearLayout.LayoutParams ilp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(this, 74));
+        int nc = (nCols == 1 || nCols == 3) ? nCols : 2;
+        int availW = getResources().getDisplayMetrics().widthPixels - dp(this, 28) - (nc - 1) * dp(this, 10);
+        int innerW = availW / nc - dp(this, 16);
+        int imgH = Math.max(dp(this, 40), Math.round(innerW / 1.586f));
+        LinearLayout.LayoutParams ilp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, imgH);
         box.addView(iv, ilp);
         Bitmap b = Img.get(this, c.image);
         if (b != null) iv.setImageBitmap(b); else iv.setImageBitmap(null);
 
         TextView name = tv(this, c.name, 13, Color.rgb(0x1C, 0x1C, 0x1E), true);
         name.setMaxLines(2);
+        name.setMinLines(2);
+        name.setEllipsize(android.text.TextUtils.TruncateAt.END);
         LinearLayout.LayoutParams nlp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         nlp.topMargin = dp(this, 7);
         box.addView(name, nlp);
 
         TextView sub = tv(this, c.bank + " · " + orgLabel(c.org), 10.5f, Color.rgb(0x8E, 0x8E, 0x93), false);
         sub.setMaxLines(1);
+        sub.setEllipsize(android.text.TextUtils.TruncateAt.END);
         box.addView(sub);
 
         LinearLayout chips = new LinearLayout(this);
@@ -1272,7 +1284,7 @@ public class MainActivity extends Activity {
                 if (i + j < list.size()) {
                     final Card c = list.get(i + j);
                     View tile = cardTile(c, row);
-                    LinearLayout.LayoutParams tlp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+                    LinearLayout.LayoutParams tlp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1f);
                     if (j > 0) tlp.leftMargin = dp(this, 10);
                     tile.setLayoutParams(tlp);
                     tile.setOnClickListener(v -> openDetail(c));
@@ -2798,8 +2810,8 @@ public class MainActivity extends Activity {
                 if (i + j < list.size()) {
                     final Card c = list.get(i + j);
                     final int idx = i + j;
-                    final View tile = cardTile(c, row);
-                    LinearLayout.LayoutParams tlp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+                    final View tile = cardTile(c, row, mineCols);
+                    LinearLayout.LayoutParams tlp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1f);
                     if (j > 0) tlp.leftMargin = dp(this, 10);
                     tile.setLayoutParams(tlp);
                     tile.setOnClickListener(v -> {
