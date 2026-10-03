@@ -88,6 +88,7 @@ public class MainActivity extends Activity {
         String scoreLabel;
         JSONObject specs;
         JSONArray variants;
+        boolean hasScore;
         boolean studentPick;
         int studentOrder;
         String spec(String key) {
@@ -119,7 +120,7 @@ public class MainActivity extends Activity {
                     cd.type = o.optString("type", "debit"); cd.status = o.optString("status");
                     cd.review = o.optString("review"); cd.image = o.optString("image");
                     cd.keywords = o.optString("keywords"); cd.url = o.optString("url");
-                    cd.score = o.optDouble("score", 0); cd.scoreLabel = o.optString("score_label");
+                    cd.score = o.optDouble("score", 0); cd.hasScore = o.has("score") && !o.isNull("score"); cd.scoreLabel = o.optString("score_label");
                     cd.specs = o.optJSONObject("specs");
                     cd.variants = o.optJSONArray("variants");
                     JSONObject sp = o.optJSONObject("student_pick");
@@ -156,6 +157,13 @@ public class MainActivity extends Activity {
     Set<String> mine = new HashSet<>();
     String tab = "home";
     Card detailCard = null;
+
+    // 情景选卡状态（Phase 3a，对照 app.js 的 wiz 全局状态）
+    boolean wizardOpen = false;
+    boolean detailFromWiz = false;
+    String wizSc = null;
+    int wizStep = 0;
+    Map<String, String> wizA = new HashMap<>();
 
     FrameLayout content;
     LinearLayout navBar;
@@ -554,6 +562,7 @@ public class MainActivity extends Activity {
             homeList.addView(tv(this, "没有符合条件的卡", 13.5f, Color.rgb(0x8E, 0x8E, 0x93), false));
             return;
         }
+        if (query.isEmpty() && activeFilterCount() == 0) homeList.addView(wizardBanner());
         if (!groupBank) {
             addCardRows(homeList, list);
             return;
@@ -848,8 +857,496 @@ public class MainActivity extends Activity {
         return t;
     }
 
+    View wizardBanner() {
+        LinearLayout b = new LinearLayout(this);
+        b.setOrientation(LinearLayout.HORIZONTAL);
+        b.setGravity(Gravity.CENTER_VERTICAL);
+        GradientDrawable bg = new GradientDrawable(GradientDrawable.Orientation.TL_BR,
+            new int[]{Color.rgb(0x0B, 0x3D, 0x91), Color.rgb(0x0A, 0x6E, 0xD6), Color.rgb(0x00, 0xA3, 0xC8)});
+        bg.setCornerRadius(dp(this, 16));
+        b.setBackground(bg);
+        b.setPadding(dp(this, 14), dp(this, 12), dp(this, 14), dp(this, 12));
+        LinearLayout.LayoutParams blp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        blp.topMargin = dp(this, 2);
+        b.setLayoutParams(blp);
+        LinearLayout tx = new LinearLayout(this);
+        tx.setOrientation(LinearLayout.VERTICAL);
+        b.addView(tx, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+        tx.addView(tv(this, "情景选卡", 15, Color.WHITE, true));
+        tx.addView(tv(this, "按场景答几题，从在发卡里挑适合你的", 11.5f, Color.argb(215, 255, 255, 255), false));
+        b.addView(tv(this, "开始 ›", 13, Color.WHITE, true));
+        b.setOnClickListener(v -> openWizard());
+        return b;
+    }
+
+    // ---------- 情景选卡（Phase 3a，对照 app.js WIZ_SCENARIOS/wizQs/wizScore/renderWiz 完整移植） ----------
+    static class WizQ {
+        String k, q; String[][] opts;
+        WizQ(String k, String q, String[][] opts) { this.k = k; this.q = q; this.opts = opts; }
+    }
+    static class WizSc {
+        String id, name, desc; WizQ[] qs;
+        WizSc(String id, String name, String desc, WizQ[] qs) { this.id = id; this.name = name; this.desc = desc; this.qs = qs; }
+    }
+
+    static final WizSc[] WIZ_SCENARIOS = {
+        new WizSc("study", "出国留学", "交学费、生活费、境外刷卡", new WizQ[]{
+            new WizQ("region", "去哪个国家 / 地区留学？", new String[][]{{"uk", "英国"}, {"us", "美国 / 加拿大"}, {"eu", "欧洲"}, {"jp", "日本"}, {"au", "澳洲 / 新西兰"}, {"other", "其他地区"}}),
+            new WizQ("use", "主要拿这张卡干什么？", new String[][]{{"tuition", "交学费、房租等大额支出"}, {"daily", "日常吃饭购物"}, {"both", "都用，它是主力卡"}}),
+        }),
+        new WizSc("travel", "出境旅游", "境外刷卡、取现、安全", new WizQ[]{
+            new WizQ("region", "主要去哪儿玩？", new String[][]{{"jp", "日本"}, {"eu", "欧洲"}, {"us", "美洲"}, {"sea", "东南亚"}, {"hk", "港澳台"}, {"other", "其他"}}),
+            new WizQ("care", "最在意哪一点？", new String[][]{{"fee", "刷卡别被收货币转换费"}, {"atm", "境外取现方便便宜"}, {"safe", "用卡安全、防盗刷"}}),
+        }),
+        new WizSc("shop", "海淘网购", "外网下单、绑卡支付", new WizQ[]{
+            new WizQ("region", "常买哪个地区的店？", new String[][]{{"us", "美国"}, {"jp", "日本"}, {"eu", "欧洲"}, {"other", "哪儿的都有"}}),
+            new WizQ("pay", "习惯怎么付？", new String[][]{{"direct", "直接刷卡付"}, {"wallet", "绑 Apple Pay / 钱包付"}}),
+        }),
+        new WizSc("daily", "日常使用", "学生、上班族的主力卡", new WizQ[]{
+            new WizQ("who", "你目前是？", new String[][]{{"student", "学生"}, {"worker", "上班族"}}),
+            new WizQ("use", "主要用途是？", new String[][]{{"online", "网购、外卖、线上支付"}, {"offline", "线下吃饭购物"}, {"save", "能省则省，免年费优先"}}),
+        }),
+    };
+    static final WizQ WIZ_TIER_Q = new WizQ("tier", "想要什么档次的卡？", new String[][]{{"any", "都行，合适最重要"}, {"basic", "入门就行，好办好用"}, {"mid", "有点档次的，金卡 / 白金级"}, {"high", "高端有实力的，白金、钻石、无限级"}});
+    static final WizQ WIZ_TYPE_Q = new WizQ("type", "想要借记卡还是信用卡？", new String[][]{{"debit", "借记卡"}, {"credit", "信用卡"}, {"any", "都行，好用优先"}});
+
+    static String wizQShort(String k) {
+        switch (k == null ? "" : k) {
+            case "region": return "地区";
+            case "use": return "用途";
+            case "care": return "在意";
+            case "pay": return "支付";
+            case "who": return "身份";
+            case "tier": return "档次";
+            case "type": return "卡种";
+            default: return "已选";
+        }
+    }
+
+    static String wizRegionName(String r) {
+        switch (r == null ? "" : r) {
+            case "jp": return "日本";
+            case "eu": return "欧洲";
+            case "uk": return "英国";
+            case "us": return "美洲";
+            case "au": return "澳新";
+            case "sea": return "东南亚";
+            case "hk": return "港澳台";
+            default: return "当地";
+        }
+    }
+
+    static String wizCur(String r) {
+        switch (r == null ? "" : r) {
+            case "uk": return "英镑";
+            case "us": return "美元";
+            case "eu": return "欧元";
+            case "jp": return "日元";
+            case "au": return "澳大利亚元";
+            case "hk": return "港币";
+            default: return null;
+        }
+    }
+
+    static Map<String, Double> orgWMap(Object... kv) {
+        Map<String, Double> m = new HashMap<>();
+        for (int i = 0; i + 1 < kv.length; i += 2) m.put((String) kv[i], (Double) kv[i + 1]);
+        return m;
+    }
+
+    static final Map<String, Map<String, Double>> WIZ_ORG_REGION = new HashMap<>();
+    static {
+        WIZ_ORG_REGION.put("jp", orgWMap("unionpay", 2.0, "jcb", 2.0, "visa", 1.0));
+        WIZ_ORG_REGION.put("eu", orgWMap("mastercard", 2.0, "mastercard-nucc", 1.2, "visa", 1.5));
+        WIZ_ORG_REGION.put("uk", orgWMap("mastercard", 1.5, "visa", 1.5));
+        WIZ_ORG_REGION.put("us", orgWMap("visa", 2.0, "mastercard", 1.5));
+        WIZ_ORG_REGION.put("au", orgWMap("visa", 1.5, "mastercard", 1.5));
+        WIZ_ORG_REGION.put("sea", orgWMap("unionpay", 2.0, "visa", 1.0));
+        WIZ_ORG_REGION.put("hk", orgWMap("unionpay", 2.5));
+        WIZ_ORG_REGION.put("other", orgWMap("visa", 1.0, "mastercard", 1.0));
+    }
+
+    // 按卡名粗分档次（同 app.js cardTier）：3 钻石/无限，2 白金/世界，1 金卡，0 普卡
+    static final java.util.regex.Pattern TIER3 = java.util.regex.Pattern.compile("无限|世界之极|钻石|黑金|百夫长|私人银行|私行");
+    static final java.util.regex.Pattern TIER2 = java.util.regex.Pattern.compile("白金|世界|签名|Signature|钛金|御玺|尊尚|卓越");
+    static final java.util.regex.Pattern TIER1 = java.util.regex.Pattern.compile("金卡|精英|金葵花");
+    static int cardTier(Card c) {
+        String n = c.name == null ? "" : c.name;
+        if (TIER3.matcher(n).find()) return 3;
+        if (TIER2.matcher(n).find()) return 2;
+        if (TIER1.matcher(n).find()) return 1;
+        return 0;
+    }
+
+    static class WizRW { double w; String l; WizRW(double w, String l) { this.w = w; this.l = l; } }
+    static class WizResult { Card c; double s; List<String> reasons; }
+
+    static void wizAdd(List<WizRW> R, double[] sb, double w, String label) {
+        sb[0] += w;
+        if (w >= 1 && label != null && !label.isEmpty()) R.add(new WizRW(w, label));
+    }
+
+    // 同 app.js wizScore：停发卡排除（返回 null）；理由只收权重 >= 1 的，最多 3 条
+    static WizResult wizScore(Card c, String scId, Map<String, String> a) {
+        if ("已停发".equals(c.status)) return null;
+        double[] sb = {c.hasScore ? c.score : 5};
+        if (c.spec("发行情况").contains("仅限")) sb[0] -= 4; // 资格受限的卡别霸榜，结果行会标明
+        List<WizRW> R = new ArrayList<>();
+        String region = a.get("region");
+        Map<String, Double> rm = region == null ? null : WIZ_ORG_REGION.get(region);
+        double orgW = (rm != null && c.org != null && rm.containsKey(c.org)) ? rm.get(c.org) : 0;
+        String orgWhy = orgW != 0 ? orgLabel(c.org) + "在" + wizRegionName(region) + "更通用" : "";
+        String cur = wizCur(region);
+        boolean curHit = cur != null && c.spec("币种支持").contains(cur);
+
+        if ("study".equals(scId)) {
+            if (c.name != null && c.name.contains("留学")) wizAdd(R, sb, 3, "留学专属卡");
+            if (featMatch(c, "noftf")) wizAdd(R, sb, "daily".equals(a.get("use")) ? 2.5 : 3, "无货币转换费");
+            if (featMatch(c, "online")) wizAdd(R, sb, 1.5, "可网付");
+            if (featMatch(c, "3ds")) wizAdd(R, sb, 1.5, "支持 3DS");
+            if (featMatch(c, "autofx")) wizAdd(R, sb, 1, "自动购汇");
+            if (orgW != 0) wizAdd(R, sb, orgW, orgWhy);
+            if (curHit) wizAdd(R, sb, 2, "支持" + cur);
+            if ("无".equals(c.spec("年费"))) wizAdd(R, sb, 1, "免年费");
+        } else if ("travel".equals(scId)) {
+            String care = a.get("care");
+            if (featMatch(c, "noftf")) wizAdd(R, sb, "fee".equals(care) ? 3.5 : 2.5, "无货币转换费");
+            String atm = c.spec("境外ATM取现手续费").trim();
+            if (atm.startsWith("免发卡行")) wizAdd(R, sb, "atm".equals(care) ? 2.5 : 1, "境外取现免发卡行手续费");
+            else if (java.util.regex.Pattern.compile("前\\d+笔免费").matcher(atm).find()) wizAdd(R, sb, "atm".equals(care) ? 2.5 : 1, "境外取现前几笔免费");
+            if (featMatch(c, "autofx")) wizAdd(R, sb, "atm".equals(care) ? 1.5 : 0.5, "自动购汇");
+            if (featMatch(c, "3ds")) wizAdd(R, sb, "safe".equals(care) ? 3 : 1, "支持 3DS");
+            if (featMatch(c, "online")) wizAdd(R, sb, 1, "可网付");
+            if (orgW != 0) wizAdd(R, sb, orgW, orgWhy);
+            if (curHit) wizAdd(R, sb, 1.5, "支持" + cur);
+        } else if ("shop".equals(scId)) {
+            if (featMatch(c, "online")) wizAdd(R, sb, 3, "可网付");
+            if (featMatch(c, "3ds")) wizAdd(R, sb, 3, "支持 3DS");
+            if (featMatch(c, "noftf")) wizAdd(R, sb, 2, "无货币转换费");
+            if ("wallet".equals(a.get("pay")) && featMatch(c, "applepay")) wizAdd(R, sb, 3, "支持 Apple Pay");
+            if (orgW != 0) wizAdd(R, sb, orgW, orgWhy);
+        } else {
+            String use = a.get("use");
+            if ("无".equals(c.spec("年费"))) wizAdd(R, sb, ("student".equals(a.get("who")) || "save".equals(use)) ? 3 : 2, "免年费");
+            if ("无".equals(c.spec("小额账户管理费"))) wizAdd(R, sb, 1, "无小额账户管理费");
+            if ("online".equals(use)) {
+                if (featMatch(c, "online")) wizAdd(R, sb, 2.5, "可网付");
+                if (featMatch(c, "applepay")) wizAdd(R, sb, 1.5, "支持 Apple Pay");
+            }
+        }
+        // 档次偏好（同 app.js）：想办高端卡的别老推普卡，想省事的别推门槛高的
+        int tier = cardTier(c);
+        String ta = a.get("tier");
+        if ("high".equals(ta)) {
+            if (tier >= 3) wizAdd(R, sb, 4, "钻石 / 无限级");
+            else if (tier == 2) wizAdd(R, sb, 2.5, "白金级");
+            else if (tier == 1) wizAdd(R, sb, 0.5, "");
+            else sb[0] -= 1.5;
+        } else if ("mid".equals(ta)) {
+            if (tier == 2) wizAdd(R, sb, 3, "白金级");
+            else if (tier == 1) wizAdd(R, sb, 2, "金卡级");
+            else if (tier >= 3) wizAdd(R, sb, 1, "钻石 / 无限级");
+            else sb[0] -= 1;
+        } else if ("basic".equals(ta)) {
+            if (tier == 0) wizAdd(R, sb, 2, "好办理");
+            else if (tier == 1) wizAdd(R, sb, 1.5, "金卡级");
+            else if (tier >= 2) sb[0] -= 1;
+        }
+        R.sort((x, y) -> Double.compare(y.w, x.w));
+        WizResult r = new WizResult();
+        r.c = c; r.s = sb[0];
+        r.reasons = new ArrayList<>();
+        for (int i = 0; i < Math.min(3, R.size()); i++) r.reasons.add(R.get(i).l);
+        return r;
+    }
+
+    void openWizard() {
+        wizSc = null; wizStep = 0; wizA.clear();
+        wizardOpen = true; detailFromWiz = false;
+        showWizardPage();
+    }
+
+    void closeWizard() {
+        wizardOpen = false;
+        navBar.setVisibility(View.VISIBLE);
+        showTab(tab);
+    }
+
+    // 同 app.js wizBack：已在第一题（含未选场景由关闭键处理）就回到选场景，否则上一步
+    void wizGoBack() {
+        if (wizStep <= 1) { wizSc = null; wizStep = 0; wizA.clear(); showWizardPage(); }
+        else { wizStep--; showWizardPage(); }
+    }
+
+    void showWizardPage() {
+        navBar.setVisibility(View.GONE);
+        content.removeAllViews();
+        content.addView(buildWizardPage());
+    }
+
+    WizSc wizScenario() {
+        for (WizSc s : WIZ_SCENARIOS) if (s.id.equals(wizSc)) return s;
+        return null;
+    }
+
+    List<WizQ> wizQs() {
+        List<WizQ> out = new ArrayList<>();
+        WizSc sc = wizScenario();
+        if (sc != null) {
+            java.util.Collections.addAll(out, sc.qs);
+            out.add(WIZ_TIER_Q);
+            out.add(WIZ_TYPE_Q);
+        }
+        return out;
+    }
+
+    static String wizOptLabel(WizQ q, String v) {
+        for (String[] o : q.opts) if (o[0].equals(v)) return o[1];
+        return v;
+    }
+
+    void addWizardTrail(LinearLayout page, List<WizQ> qs) {
+        WizSc sc = wizScenario();
+        if (sc == null) return;
+        boolean results = wizStep > qs.size();
+        // 轨迹项：{step, label, val}；答题中只显示当前题之前的，结果页全显示（同 renderWiz 的过滤）
+        List<Object[]> items = new ArrayList<>();
+        items.add(new Object[]{0, "场景", sc.name});
+        for (int i = 0; i < qs.size(); i++) {
+            WizQ q = qs.get(i);
+            String v = wizA.get(q.k);
+            if (v == null) continue;
+            items.add(new Object[]{i + 1, wizQShort(q.k), wizOptLabel(q, v)});
+        }
+        for (Object[] it : items) {
+            final int step = (Integer) it[0];
+            if (!results && step >= wizStep) continue;
+            LinearLayout row = new LinearLayout(this);
+            row.setOrientation(LinearLayout.HORIZONTAL);
+            row.setGravity(Gravity.CENTER_VERTICAL);
+            row.setBackground(roundRect(Color.rgb(0xE9, 0xF7, 0xEE), 10, this));
+            row.setPadding(dp(this, 10), dp(this, 7), dp(this, 10), dp(this, 7));
+            LinearLayout.LayoutParams rlp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            rlp.topMargin = dp(this, 6);
+            row.setLayoutParams(rlp);
+            TextView kv = tv(this, (String) it[1] + "  ", 11, Color.rgb(0x8E, 0x8E, 0x93), true);
+            row.addView(kv);
+            TextView val = tv(this, (String) it[2], 12.5f, Color.rgb(0x1C, 0x1C, 0x1E), true);
+            row.addView(val, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+            row.addView(tv(this, "修改", 11.5f, Color.rgb(0x0A, 0x5C, 0xD6), true));
+            row.setOnClickListener(v -> {
+                if (step == 0) { wizSc = null; wizStep = 0; wizA.clear(); }
+                else wizStep = step;
+                showWizardPage();
+            });
+            page.addView(row);
+        }
+    }
+
+    View buildWizardPage() {
+        ScrollView sv = new ScrollView(this);
+        sv.setBackgroundColor(Color.rgb(0xF2, 0xF3, 0xF7));
+        LinearLayout page = new LinearLayout(this);
+        page.setOrientation(LinearLayout.VERTICAL);
+        page.setPadding(dp(this, 16), dp(this, 12), dp(this, 16), dp(this, 28));
+        sv.addView(page);
+
+        List<WizQ> qs = wizQs();
+        WizSc sc = wizScenario();
+        String title = wizSc == null ? "情景选卡" : (wizStep <= qs.size() ? sc.name : "为你挑的卡");
+
+        LinearLayout top = new LinearLayout(this);
+        top.setOrientation(LinearLayout.HORIZONTAL);
+        top.setGravity(Gravity.CENTER_VERTICAL);
+        page.addView(top);
+        Button back = new Button(this);
+        back.setText("‹ 返回"); back.setTextSize(14); back.setAllCaps(false);
+        back.setBackground(roundRect(Color.WHITE, 12, this));
+        back.setVisibility(wizSc == null ? View.INVISIBLE : View.VISIBLE);
+        back.setOnClickListener(v -> wizGoBack());
+        top.addView(back, new LinearLayout.LayoutParams(dp(this, 84), dp(this, 38)));
+        TextView ttl = tv(this, title, 16, Color.rgb(0x1C, 0x1C, 0x1E), true);
+        LinearLayout.LayoutParams ttlp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+        ttlp.leftMargin = dp(this, 10);
+        top.addView(ttl, ttlp);
+        Button close = new Button(this);
+        close.setText("✕"); close.setTextSize(14); close.setAllCaps(false);
+        close.setBackground(roundRect(Color.WHITE, 12, this));
+        close.setOnClickListener(v -> closeWizard());
+        top.addView(close, new LinearLayout.LayoutParams(dp(this, 44), dp(this, 38)));
+
+        if (wizSc == null) {
+            TextView sub = tv(this, "打算拿卡做什么？选个场景往下答，每答完一题上面都会留一条，随时看清走到哪一步。", 12.5f, Color.rgb(0x8E, 0x8E, 0x93), false);
+            LinearLayout.LayoutParams subLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            subLp.topMargin = dp(this, 12);
+            page.addView(sub, subLp);
+            for (final WizSc s : WIZ_SCENARIOS) {
+                LinearLayout tile = new LinearLayout(this);
+                tile.setOrientation(LinearLayout.HORIZONTAL);
+                tile.setGravity(Gravity.CENTER_VERTICAL);
+                tile.setBackground(roundRect(Color.WHITE, 14, this));
+                tile.setPadding(dp(this, 14), dp(this, 12), dp(this, 14), dp(this, 12));
+                LinearLayout.LayoutParams tlp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+                tlp.topMargin = dp(this, 10);
+                tile.setLayoutParams(tlp);
+                LinearLayout tx = new LinearLayout(this);
+                tx.setOrientation(LinearLayout.VERTICAL);
+                tile.addView(tx, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+                tx.addView(tv(this, s.name, 16, Color.rgb(0x1C, 0x1C, 0x1E), true));
+                tx.addView(tv(this, s.desc, 12, Color.rgb(0x8E, 0x8E, 0x93), false));
+                tile.addView(tv(this, "›", 18, Color.rgb(0x8E, 0x8E, 0x93), false));
+                tile.setOnClickListener(v -> { wizSc = s.id; wizStep = 1; showWizardPage(); });
+                page.addView(tile);
+            }
+            return sv;
+        }
+
+        addWizardTrail(page, qs);
+
+        if (wizStep <= qs.size()) {
+            final WizQ q = qs.get(wizStep - 1);
+            LinearLayout qHead = new LinearLayout(this);
+            qHead.setOrientation(LinearLayout.VERTICAL);
+            LinearLayout.LayoutParams qhLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            qhLp.topMargin = dp(this, 14);
+            page.addView(qHead, qhLp);
+            TextView tag = tv(this, "第 " + wizStep + " 题 · 共 " + qs.size() + " 题", 11, Color.rgb(0x0A, 0x5C, 0xD6), true);
+            tag.setBackground(roundRect(Color.rgb(0xE8, 0xF1, 0xFD), 999, this));
+            tag.setPadding(dp(this, 8), dp(this, 3), dp(this, 8), dp(this, 3));
+            LinearLayout tagWrap = new LinearLayout(this);
+            tagWrap.setOrientation(LinearLayout.HORIZONTAL);
+            tagWrap.addView(tag);
+            qHead.addView(tagWrap);
+            TextView qt = tv(this, q.q, 16, Color.rgb(0x1C, 0x1C, 0x1E), true);
+            LinearLayout.LayoutParams qtLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            qtLp.topMargin = dp(this, 8);
+            qHead.addView(qt, qtLp);
+            for (final String[] o : q.opts) {
+                TextView opt = tv(this, o[1], 14, Color.rgb(0x1C, 0x1C, 0x1E), false);
+                opt.setBackground(roundRect(Color.WHITE, 12, this));
+                opt.setPadding(dp(this, 14), dp(this, 12), dp(this, 14), dp(this, 12));
+                LinearLayout.LayoutParams olp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+                olp.topMargin = dp(this, 8);
+                page.addView(opt, olp);
+                opt.setOnClickListener(v -> { wizA.put(q.k, o[0]); wizStep++; showWizardPage(); });
+            }
+            return sv;
+        }
+
+        // 结果页：先按场景打分排序，再按「卡种」答复过滤（候选不足 4 张则不滤，同 renderWiz）
+        List<WizResult> pool = new ArrayList<>();
+        for (Card c : Store.all) {
+            WizResult r = wizScore(c, wizSc, wizA);
+            if (r != null) pool.add(r);
+        }
+        pool.sort((x, y) -> Double.compare(y.s, x.s));
+        List<WizResult> list = pool;
+        String wantType = wizA.get("type");
+        if (wantType != null && !"any".equals(wantType)) {
+            List<WizResult> f = new ArrayList<>();
+            for (WizResult r : pool) {
+                String ct = (r.c.type == null || r.c.type.isEmpty()) ? "debit" : r.c.type;
+                if (wantType.equals(ct)) f.add(r);
+            }
+            if (f.size() >= 4) list = f;
+        }
+        if (list.size() > 6) list = new ArrayList<>(list.subList(0, 6));
+
+        TextView sub = tv(this, "从 " + pool.size() + " 张在发卡里按「" + sc.name + "」排的，点卡看详情，＋ 是加入我的卡片。", 12.5f, Color.rgb(0x8E, 0x8E, 0x93), false);
+        LinearLayout.LayoutParams subLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        subLp.topMargin = dp(this, 12);
+        page.addView(sub, subLp);
+
+        for (final WizResult r : list) page.addView(wizResultRow(r));
+
+        Button redo = new Button(this);
+        redo.setText("换个场景重新选"); redo.setTextSize(13.5f); redo.setAllCaps(false);
+        redo.setBackground(roundRect(Color.WHITE, 12, this));
+        LinearLayout.LayoutParams rlp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(this, 44));
+        rlp.topMargin = dp(this, 16);
+        page.addView(redo, rlp);
+        redo.setOnClickListener(v -> { wizSc = null; wizStep = 0; wizA.clear(); showWizardPage(); });
+        return sv;
+    }
+
+    View wizResultRow(final WizResult r) {
+        final Card c = r.c;
+        LinearLayout row = new LinearLayout(this);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        row.setBackground(roundRect(Color.WHITE, 14, this));
+        row.setPadding(dp(this, 12), dp(this, 10), dp(this, 12), dp(this, 10));
+        LinearLayout.LayoutParams rlp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        rlp.topMargin = dp(this, 10);
+        row.setLayoutParams(rlp);
+
+        ImageView iv = new ImageView(this);
+        iv.setScaleType(ImageView.ScaleType.CENTER_CROP);
+        iv.setBackground(roundRect(Color.rgb(0xE9, 0xEE, 0xF5), 9, this));
+        row.addView(iv, new LinearLayout.LayoutParams(dp(this, 76), dp(this, 48)));
+        Bitmap b = Img.get(this, c.image);
+        if (b != null) iv.setImageBitmap(b);
+
+        LinearLayout info = new LinearLayout(this);
+        info.setOrientation(LinearLayout.VERTICAL);
+        LinearLayout.LayoutParams ilp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+        ilp.leftMargin = dp(this, 10);
+        row.addView(info, ilp);
+        TextView nm = tv(this, c.name, 14, Color.rgb(0x1C, 0x1C, 0x1E), true);
+        nm.setMaxLines(2);
+        info.addView(nm);
+        info.addView(tv(this, c.bank + " · " + orgLabel(c.org) + " · " + (c.isCredit() ? "信用卡" : "借记卡"), 11, Color.rgb(0x8E, 0x8E, 0x93), false));
+        if (!r.reasons.isEmpty()) {
+            LinearLayout rr = new LinearLayout(this);
+            rr.setOrientation(LinearLayout.HORIZONTAL);
+            LinearLayout.LayoutParams rrLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            rrLp.topMargin = dp(this, 6);
+            info.addView(rr, rrLp);
+            for (String reason : r.reasons) rr.addView(chip(reason, Color.rgb(0xE8, 0xF1, 0xFD), Color.rgb(0x0A, 0x5C, 0xD6)));
+        }
+        String limit = c.spec("发行情况");
+        if (limit.contains("仅")) {
+            TextView note = tv(this, "⚠ " + limit, 11, Color.rgb(0xB0, 0x23, 0x2B), false);
+            LinearLayout.LayoutParams nlp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            nlp.topMargin = dp(this, 5);
+            info.addView(note, nlp);
+        }
+
+        LinearLayout side = new LinearLayout(this);
+        side.setOrientation(LinearLayout.VERTICAL);
+        side.setGravity(Gravity.RIGHT);
+        LinearLayout.LayoutParams slp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        slp.leftMargin = dp(this, 8);
+        row.addView(side, slp);
+        TextView score = tv(this, c.hasScore && c.score > 0 ? String.format(java.util.Locale.US, "%.1f分", c.score) : "新卡",
+            11, Color.rgb(0x0A, 0x5C, 0xD6), true);
+        score.setBackground(roundRect(Color.rgb(0xE8, 0xF1, 0xFD), 999, this));
+        score.setPadding(dp(this, 8), dp(this, 3), dp(this, 8), dp(this, 3));
+        side.addView(score);
+        final boolean inMine = mine.contains(c.id);
+        Button add = new Button(this);
+        add.setText(inMine ? "✓" : "＋"); add.setTextSize(15); add.setAllCaps(false);
+        add.setTextColor(inMine ? Color.rgb(0x1D, 0x8A, 0x49) : Color.WHITE);
+        add.setBackground(roundRect(inMine ? Color.rgb(0xE6, 0xF6, 0xEC) : Color.rgb(0x0A, 0x5C, 0xD6), 999, this));
+        LinearLayout.LayoutParams alp = new LinearLayout.LayoutParams(dp(this, 38), dp(this, 38));
+        alp.topMargin = dp(this, 8);
+        alp.gravity = Gravity.RIGHT;
+        side.addView(add, alp);
+        add.setOnClickListener(v -> {
+            if (mine.contains(c.id)) { mine.remove(c.id); Toast.makeText(this, "已从我的卡片移除", Toast.LENGTH_SHORT).show(); }
+            else { mine.add(c.id); Toast.makeText(this, "已加入我的卡片", Toast.LENGTH_SHORT).show(); }
+            prefs.edit().putStringSet("mine_ids", new HashSet<>(mine)).apply();
+            pages.remove("mine");
+            showWizardPage();
+        });
+        row.setOnClickListener(v -> openDetail(c, true));
+        return row;
+    }
+
     // ---------- 详情页 ----------
-    void openDetail(Card c) {
+    void openDetail(Card c) { openDetail(c, false); }
+
+    void openDetail(Card c, boolean fromWiz) {
+        detailFromWiz = fromWiz;
         detailCard = c;
         content.removeAllViews();
         navBar.setVisibility(View.GONE);
@@ -858,6 +1355,14 @@ public class MainActivity extends Activity {
 
     void closeDetail() {
         detailCard = null;
+        if (detailFromWiz && wizardOpen) {
+            // 从选卡结果点进来的详情：关掉必回选卡且进度还在（同混合版 detailFromWiz）
+            detailFromWiz = false;
+            content.removeAllViews();
+            content.addView(buildWizardPage());
+            return;
+        }
+        detailFromWiz = false;
         navBar.setVisibility(View.VISIBLE);
         showTab(tab);
     }
@@ -1392,9 +1897,12 @@ public class MainActivity extends Activity {
 
     View buildSettingsPage() {
         LinearLayout page = basePage("设置");
-        page.addView(settingRow("版本", "0.6-native（Phase 2c）"));
+        View wizEntry = settingRow("情景选卡", "出国留学 / 出境旅游 / 海淘网购 / 日常使用，按场景挑卡 ›");
+        wizEntry.setOnClickListener(v -> openWizard());
+        page.addView(wizEntry);
+        page.addView(settingRow("版本", "0.7-native（Phase 3a）"));
         page.addView(settingRow("关于卡盒", "原生版：纯 Java 手写界面，数据与现行版共用同一份卡库"));
-        page.addView(settingRow("迁移进度", "全部卡片 / 详情 / 我的卡片 / 学生推荐 / 筛选 / 资讯 已迁移；情景选卡、自定义卡、字体与界面大小在后续阶段"));
+        page.addView(settingRow("迁移进度", "全部卡片 / 详情 / 我的卡片 / 学生推荐 / 筛选 / 资讯 / 情景选卡 已迁移；自定义卡、我的卡片拖动、字体与界面大小在后续阶段"));
         return page;
     }
 
@@ -1422,6 +1930,11 @@ public class MainActivity extends Activity {
     @Override
     public void onBackPressed() {
         if (detailCard != null) { closeDetail(); return; }
+        if (filterSheet != null) { closeFilterSheet(); return; }
+        if (wizardOpen) {
+            if (wizSc == null) closeWizard(); else wizGoBack();
+            return;
+        }
         super.onBackPressed();
     }
 }
