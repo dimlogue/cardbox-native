@@ -278,6 +278,57 @@ public class MainActivity extends Activity {
     // P-deck：我的卡片页滚动位置保持（换序/开合不甩回顶部）
     ScrollView mineScrollView = null;
     int mineScrollSaveY = 0;
+    // P-keepscroll：各主页面滚动位置保存（关详情/筛选/向导/日志/欢迎页等弹层后默认回到原位，不跳顶）
+    java.util.Map<String, Integer> pageScrollSaveY = new java.util.HashMap<>();
+    ScrollView studentScroll = null;
+    ScrollView newsScroll = null;
+    ScrollView settingsScroll = null;
+
+    void savePageScroll(String key, ScrollView sv) {
+        if (sv != null) pageScrollSaveY.put(key, sv.getScrollY());
+    }
+
+    int savedPageScrollY(String key, ScrollView sv) {
+        if (sv != null && sv.getScrollY() > 0) return sv.getScrollY();
+        Integer y = pageScrollSaveY.get(key);
+        return y == null ? 0 : y;
+    }
+
+    void restorePageScroll(String key, final ScrollView sv) {
+        if (sv == null) return;
+        final int y = savedPageScrollY(key, sv);
+        if (y > 0) sv.post(() -> sv.scrollTo(0, y));
+    }
+
+    // 明确该回顶的入口（如从自定义卡跳去卡库搜这家银行看结果）专用，不走默认保位
+    void resetPageScroll(String key, ScrollView sv) {
+        pageScrollSaveY.put(key, 0);
+        if (sv != null) sv.scrollTo(0, 0);
+    }
+
+    // 打开整屏覆盖层（详情/向导/欢迎/日志）前，先记下当前主页面滚到哪
+    void captureCurrentPageScroll() {
+        savePageScroll("home", homeScroll);
+        savePageScroll("mine", mineScrollView);
+        if (mineScrollView != null) mineScrollSaveY = mineScrollView.getScrollY();
+        savePageScroll("student", studentScroll);
+        savePageScroll("news", newsScroll);
+        savePageScroll("settings", settingsScroll);
+    }
+
+    void restoreCurrentTabScroll() {
+        switch (tab) {
+            case "home": restorePageScroll("home", homeScroll); break;
+            case "student": restorePageScroll("student", studentScroll); break;
+            case "news": restorePageScroll("news", newsScroll); break;
+            case "settings": restorePageScroll("settings", settingsScroll); break;
+            case "mine":
+                if (mineScrollView != null && mineScrollSaveY > 0)
+                    mineScrollView.post(() -> mineScrollView.scrollTo(0, mineScrollSaveY));
+                break;
+            default: break;
+        }
+    }
 
     void loadCustomCards() {
         customCards = new ArrayList<>();
@@ -582,6 +633,7 @@ public class MainActivity extends Activity {
 
     // 字体/界面大小变化后整页重建（各页都是缓存 View，必须重造才生效）
     void rebuildPages() {
+        captureCurrentPageScroll(); // P-keepscroll：整页重建（字体/界面大小等）前先记下各页滚动位置
         pages.clear();
         if (content != null) content.removeAllViews();
         showTab(tab);
@@ -747,6 +799,7 @@ public class MainActivity extends Activity {
         }
         content.addView(page);
         if ("home".equals(key) && homeList != null) refreshHome();
+        restoreCurrentTabScroll();
         syncSearchFab();
         for (Map.Entry<String, LinearLayout> e : navItems.entrySet()) {
             boolean on = e.getKey().equals(key);
@@ -1073,6 +1126,7 @@ public class MainActivity extends Activity {
             return false;
         });
         homeScroll.setOnScrollChangeListener((v, scrollX, scrollY, oldScrollX, oldScrollY) -> {
+            pageScrollSaveY.put("home", scrollY);
             if (scrollY > oldScrollY + dp(this, 6) && scrollY > statusBarH() + dp(this, 72)) {
                 dismissSearch();
                 setHomeSearchBarShown(false, true);
@@ -1229,6 +1283,8 @@ public class MainActivity extends Activity {
 
     void refreshHome() {
         if (homeList == null) return;
+        // P-keepscroll：重渲染前记下滚动位置——列表一清空高度骤降，系统会把 scrollY 钳到顶，重建后按原位恢复
+        final int keepY = savedPageScrollY("home", homeScroll);
         List<Card> list = filteredHome();
         applySort(list);
         if (homeCount != null) homeCount.setText("共 " + list.size() + " 张");
@@ -1238,6 +1294,7 @@ public class MainActivity extends Activity {
         }
         renderActiveFilters();
         renderHomeList(list);
+        if (keepY > 0 && homeScroll != null) homeScroll.post(() -> homeScroll.scrollTo(0, keepY));
     }
 
     void renderHomeList(List<Card> list) {
@@ -1878,6 +1935,7 @@ public class MainActivity extends Activity {
     }
 
     void openWizard() {
+        captureCurrentPageScroll(); // P-keepscroll：关选卡后回到打开前的页面位置
         wizSc = null; wizStep = 0; wizA.clear();
         wizardOpen = true; detailFromWiz = false;
         showWizardPage();
@@ -2166,6 +2224,7 @@ public class MainActivity extends Activity {
 
     void openDetail(Card c, boolean fromWiz) {
         dismissPressPreview();
+        if (!fromWiz) captureCurrentPageScroll(); // P-keepscroll：关详情后回到打开前的位置
         detailFromWiz = fromWiz;
         detailCard = c;
         content.removeAllViews();
@@ -2464,6 +2523,8 @@ public class MainActivity extends Activity {
 
         ScrollView sv = new ScrollView(this);
         sv.setClipToPadding(false);
+        studentScroll = sv;
+        if (Build.VERSION.SDK_INT >= 23) sv.setOnScrollChangeListener((v, sx, sy, ox, oy) -> pageScrollSaveY.put("student", sy));
         LinearLayout listBox = new LinearLayout(this);
         listBox.setOrientation(LinearLayout.VERTICAL);
         listBox.setPadding(0, dp(this, 10), 0, dockPad());
@@ -2530,6 +2591,7 @@ public class MainActivity extends Activity {
         LinearLayout.LayoutParams nlp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         nlp.topMargin = dp(this, 12);
         listBox.addView(note, nlp);
+        restorePageScroll("student", sv);
         return page;
     }
 
@@ -2767,7 +2829,7 @@ public class MainActivity extends Activity {
         sv.setClipToPadding(false);
         mineScrollView = sv;
         if (Build.VERSION.SDK_INT >= 23) {
-            sv.setOnScrollChangeListener((v, sx, sy, ox, oy) -> { mineScrollSaveY = sy; });
+            sv.setOnScrollChangeListener((v, sx, sy, ox, oy) -> { mineScrollSaveY = sy; pageScrollSaveY.put("mine", sy); });
         }
         LinearLayout inner = new LinearLayout(this);
         inner.setOrientation(LinearLayout.VERTICAL);
@@ -3188,6 +3250,7 @@ public class MainActivity extends Activity {
             find.setOnClickListener(v -> {
                 if (holder[0] != null) holder[0].dismiss();
                 query = c.bank;
+                resetPageScroll("home", homeScroll); // 这是去看搜索结果，明确回顶（P-keepscroll 的例外）
                 showTab("home");
                 if (searchBox != null) searchBox.setText(c.bank);
             });
@@ -3513,6 +3576,8 @@ public class MainActivity extends Activity {
 
     void renderNews() {
         if (newsListBox == null) return;
+        // P-keepscroll：展开/收起一条资讯会整表重绘，先记位置、重绘后恢复，不跳顶
+        final int keepY = savedPageScrollY("news", newsScroll);
         newsListBox.removeAllViews();
         if (newsItems == null || newsItems.isEmpty()) {
             newsListBox.addView(tv(this, "暂时还没有资讯，过段时间再来看看。", 13.5f, Color.rgb(0x8E, 0x8E, 0x93), false));
@@ -3594,6 +3659,7 @@ public class MainActivity extends Activity {
                 renderNews();
             });
         }
+        if (keepY > 0 && newsScroll != null) newsScroll.post(() -> newsScroll.scrollTo(0, keepY));
     }
 
     View buildNewsPage() {
@@ -3611,17 +3677,21 @@ public class MainActivity extends Activity {
 
         ScrollView sv = new ScrollView(this);
         sv.setClipToPadding(false);
+        newsScroll = sv;
+        if (Build.VERSION.SDK_INT >= 23) sv.setOnScrollChangeListener((v, sx, sy, ox, oy) -> pageScrollSaveY.put("news", sy));
         newsListBox = new LinearLayout(this);
         newsListBox.setOrientation(LinearLayout.VERTICAL);
         newsListBox.setPadding(0, dp(this, 2), 0, dockPad());
         sv.addView(newsListBox);
         page.addView(sv, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
         renderNews();
+        restorePageScroll("news", sv);
         return page;
     }
 
     // ---------- 欢迎页 / 更新日志（Phase 4b） ----------
     void showWelcome() {
+        captureCurrentPageScroll();
         welcomeOpen = true;
         navBar.setVisibility(View.GONE);
         content.removeAllViews();
@@ -3737,6 +3807,7 @@ public class MainActivity extends Activity {
     }
 
     void showChangelog() {
+        captureCurrentPageScroll();
         changelogOpen = true;
         navBar.setVisibility(View.GONE);
         content.removeAllViews();
@@ -3857,9 +3928,12 @@ public class MainActivity extends Activity {
         page.addView(settingRow("迁移进度", "全部卡片 / 详情 / 我的卡片 / 学生推荐 / 筛选 / 资讯 / 情景选卡 / 自定义卡 / 拖动 / 字体与界面大小 / 高刷 / 触感 / 欢迎页 / 更新日志 / 数据 OTA 已迁移"));
         ScrollView sv = new ScrollView(this);
         sv.setClipToPadding(false);
+        settingsScroll = sv;
+        if (Build.VERSION.SDK_INT >= 23) sv.setOnScrollChangeListener((v, sx, sy, ox, oy) -> pageScrollSaveY.put("settings", sy));
         // P2d-fix：此前这里把 basePage 的顶部留白覆盖成 12dp，标题被压进状态栏；改用 pageTopPad()/dockPad()
         page.setPadding(dp(this, 14), pageTopPad(), dp(this, 14), dockPad());
         sv.addView(page);
+        restorePageScroll("settings", sv);
         return sv;
     }
 
