@@ -439,7 +439,7 @@ public class MainActivity extends Activity {
         topFab.animate().cancel();
         topFab.setVisibility(View.VISIBLE);
         topFab.setAlpha(0f); topFab.setScaleX(0.82f); topFab.setScaleY(0.82f);
-        topFab.animate().alpha(1f).scaleX(1f).scaleY(1f).setDuration(190)
+        topFab.animate().alpha(1f).scaleX(1f).scaleY(1f).setDuration(ANIM_DUR_FADE)
             .setInterpolator(ANIM_ENTER).start();
     }
     void hideTopFab() {
@@ -447,7 +447,7 @@ public class MainActivity extends Activity {
         topFabShown = false;
         final View fab = topFab;
         fab.animate().cancel();
-        fab.animate().alpha(0f).scaleX(0.85f).scaleY(0.85f).setDuration(170)
+        fab.animate().alpha(0f).scaleX(0.85f).scaleY(0.85f).setDuration(ANIM_DUR_SHEET_OUT)
             .setInterpolator(ANIM_EXIT)
             .withEndAction(() -> { if (fab == topFab && !topFabShown) fab.setVisibility(View.GONE); }).start();
     }
@@ -2447,7 +2447,7 @@ public class MainActivity extends Activity {
         toastWrap.setTranslationY(dp(this, 12));
         toastWrap.setScaleX(0.98f); toastWrap.setScaleY(0.98f);
         toastWrap.animate().alpha(1f).translationY(0f).scaleX(1f).scaleY(1f)
-            .setDuration(250).setInterpolator(ANIM_ENTER).start();
+            .setDuration(ANIM_DUR_TOAST_IN).setInterpolator(ANIM_ENTER).start();
         floatToastTimer = () -> dismissFloatToast(false);
         mainHandler.postDelayed(floatToastTimer, (actionLabel != null && onAction != null) ? 4500 : 2200);
     }
@@ -2464,7 +2464,7 @@ public class MainActivity extends Activity {
         }
         bar.animate().cancel();
         bar.animate().alpha(0f).translationY(dp(this, 8)).scaleX(0.98f).scaleY(0.98f)
-            .setDuration(180).setInterpolator(ANIM_EXIT)
+            .setDuration(ANIM_DUR_TOAST_OUT).setInterpolator(ANIM_EXIT)
             .withEndAction(() -> { if (bar.getParent() instanceof ViewGroup) ((ViewGroup) bar.getParent()).removeView(bar); })
             .start();
     }
@@ -2558,9 +2558,24 @@ public class MainActivity extends Activity {
     }
 
     void closeAcctClassPicker() {
-        View v = acctPickerView;
+        // Q74：贴底选择窗收起同走 SHEET_OUT 下沉淡出，不许硬消失；连点由 acctPickerView 先置空防重入。
+        final View v = acctPickerView;
         acctPickerView = null;
-        if (v != null && v.getParent() instanceof ViewGroup) ((ViewGroup) v.getParent()).removeView(v);
+        if (v == null) return;
+        if (!(v instanceof ViewGroup) || ((ViewGroup) v).getChildCount() < 2) {
+            if (v.getParent() instanceof ViewGroup) ((ViewGroup) v.getParent()).removeView(v);
+            return;
+        }
+        View wrap = ((ViewGroup) v).getChildAt(((ViewGroup) v).getChildCount() - 1);
+        View shade = ((ViewGroup) v).getChildAt(0);
+        if (shade != null) animShadeOut(shade);
+        if (wrap != null) {
+            wrap.animate().cancel();
+            wrap.animate().alpha(0f).translationY(dp(this, SHEET_RISE_DP))
+                .setDuration(ANIM_DUR_SHEET_OUT).setInterpolator(ANIM_EXIT)
+                .withEndAction(() -> { if (v.getParent() instanceof ViewGroup) ((ViewGroup) v.getParent()).removeView(v); }).start();
+            v.postDelayed(() -> { if (v.getParent() instanceof ViewGroup) ((ViewGroup) v.getParent()).removeView(v); }, ANIM_DUR_SHEET_OUT + 40);
+        } else if (v.getParent() instanceof ViewGroup) ((ViewGroup) v.getParent()).removeView(v);
     }
 
     // Q65 选择窗：不标/一类/二类三选 + 一句说明；manage=true 时多一条移除已有（全部）
@@ -2640,18 +2655,42 @@ public class MainActivity extends Activity {
         rootView.addView(overlay, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         acctPickerView = overlay;
         overlay.setAlpha(0f);
-        overlay.animate().alpha(1f).setDuration(200).setInterpolator(ANIM_ENTER).start();
-        shade.animate().alpha(1f).setDuration(200).setInterpolator(ANIM_ENTER).start();
+        overlay.animate().alpha(1f).setDuration(ANIM_DUR_SHADE_IN).setInterpolator(ANIM_ENTER).start();
+        shade.animate().alpha(1f).setDuration(ANIM_DUR_SHADE_IN).setInterpolator(ANIM_ENTER).start();
         wrap.setTranslationY(dp(this, 42));
         wrap.animate().translationY(0f).setDuration(ANIM_DUR_SHEET_IN).setInterpolator(ANIM_ENTER).start();
     }
 
     // Q71 占位卡面自选配色：10 色色板贴底窗，按卡 id 存本机偏好，OTA 不冲掉；真图卡不走此路
     void closePlaceholderPicker() {
-        View v = placeholderPickerView;
+        // Q74：色板窗收起同走 SHEET_OUT 下沉淡出，落定再 restoreChrome，不许硬消失。
+        final View v = placeholderPickerView;
         placeholderPickerView = null;
-        if (v != null && v.getParent() instanceof ViewGroup) ((ViewGroup) v.getParent()).removeView(v);
-        restoreChrome();
+        if (v == null) { restoreChrome(); return; }
+        if (!(v instanceof ViewGroup) || ((ViewGroup) v).getChildCount() < 2) {
+            if (v.getParent() instanceof ViewGroup) ((ViewGroup) v.getParent()).removeView(v);
+            restoreChrome();
+            return;
+        }
+        View wrap = ((ViewGroup) v).getChildAt(((ViewGroup) v).getChildCount() - 1);
+        View shade = ((ViewGroup) v).getChildAt(0);
+        if (shade != null) animShadeOut(shade);
+        if (wrap != null) {
+            wrap.animate().cancel();
+            wrap.animate().alpha(0f).translationY(dp(this, SHEET_RISE_DP))
+                .setDuration(ANIM_DUR_SHEET_OUT).setInterpolator(ANIM_EXIT)
+                .withEndAction(() -> {
+                    if (v.getParent() instanceof ViewGroup) ((ViewGroup) v.getParent()).removeView(v);
+                    restoreChrome();
+                }).start();
+            v.postDelayed(() -> {
+                if (v.getParent() instanceof ViewGroup) ((ViewGroup) v.getParent()).removeView(v);
+                restoreChrome();
+            }, ANIM_DUR_SHEET_OUT + 40);
+        } else {
+            if (v.getParent() instanceof ViewGroup) ((ViewGroup) v.getParent()).removeView(v);
+            restoreChrome();
+        }
     }
     void refreshDetailPlaceholderBody(Card c) {
         try {
@@ -2755,8 +2794,8 @@ public class MainActivity extends Activity {
         placeholderPickerView = overlay;
         hideChrome();
         overlay.setAlpha(0f);
-        overlay.animate().alpha(1f).setDuration(200).setInterpolator(ANIM_ENTER).start();
-        shade.animate().alpha(1f).setDuration(200).setInterpolator(ANIM_ENTER).start();
+        overlay.animate().alpha(1f).setDuration(ANIM_DUR_SHADE_IN).setInterpolator(ANIM_ENTER).start();
+        shade.animate().alpha(1f).setDuration(ANIM_DUR_SHADE_IN).setInterpolator(ANIM_ENTER).start();
         wrap.setTranslationY(dp(this, 42));
         wrap.animate().translationY(0f).setDuration(ANIM_DUR_SHEET_IN).setInterpolator(ANIM_ENTER).start();
     }
@@ -3319,7 +3358,7 @@ public class MainActivity extends Activity {
         page.setTranslationX(dir64 * dp(this, 18));
         page.setTranslationY(dp(this, 4));
         page.animate().alpha(1f).translationX(0f).translationY(0f)
-            .setDuration(220).setInterpolator(ANIM_ENTER).start();
+            .setDuration(ANIM_DUR_FADE).setInterpolator(ANIM_ENTER).start();
         // Q64：首页重活让一帧——先让过渡首帧出去，再做签名校验/分帧续搭，避免 213 张校验堵在点击瞬间掉帧。
         if ("home".equals(key) && homeList != null) {
             final View pg64 = page;
@@ -3632,6 +3671,9 @@ public class MainActivity extends Activity {
         cancel.setOnClickListener(v -> closeAddSheet(sheet));
         card.addView(cancel);
         content.addView(sheet);
+        // Q74：遮罩与窗体同曲线同步升起（此前只有卡动、遮罩硬现）
+        sheet.setAlpha(0f);
+        sheet.animate().alpha(1f).setDuration(ANIM_DUR_SHADE_IN).setInterpolator(ANIM_ENTER).start();
         card.setAlpha(0f); card.setTranslationY(dp(this, 28));
         card.animate().alpha(1f).translationY(0f).setDuration(ANIM_DUR_SHEET_IN).setInterpolator(ANIM_ENTER).start();
         sheet.setTag("addSheet");
@@ -3644,10 +3686,36 @@ public class MainActivity extends Activity {
         r.setOnClickListener(v -> { haptic(); act.run(); });
         return r;
     }
-    void closeAddSheet(View sheet) {
+    void closeAddSheet(final View sheet) {
         if (sheet == addSheetView) addSheetView = null;
-        if (sheet != null && sheet.getParent() != null) ((ViewGroup) sheet.getParent()).removeView(sheet);
-        restoreChrome(); // Q12 (chain rows set suppressNextChromeRestore first)
+        if (sheet == null || sheet.getParent() == null) { restoreChrome(); return; }
+        // Q74：链式打开（行点击已置 suppressNextChromeRestore 并立刻开下一窗）走即时摘除，
+        // 由下一窗的升起动画承接过渡，不叠两段收起动画拖慢链路；取消/点遮罩走精加工收起。
+        if (suppressNextChromeRestore) {
+            ((ViewGroup) sheet.getParent()).removeView(sheet);
+            restoreChrome();
+            return;
+        }
+        View card = sheet instanceof ViewGroup && ((ViewGroup) sheet).getChildCount() > 0
+            ? ((ViewGroup) sheet).getChildAt(((ViewGroup) sheet).getChildCount() - 1) : null;
+        if (card != null) {
+            card.animate().cancel();
+            card.animate().alpha(0f).translationY(dp(this, SHEET_RISE_DP))
+                .setDuration(ANIM_DUR_SHEET_OUT).setInterpolator(ANIM_EXIT)
+                .withEndAction(() -> {
+                    if (sheet.getParent() != null) ((ViewGroup) sheet.getParent()).removeView(sheet);
+                    restoreChrome();
+                }).start();
+            sheet.animate().cancel();
+            sheet.animate().alpha(0f).setDuration(ANIM_DUR_SHADE_OUT).setInterpolator(ANIM_EXIT).start();
+            sheet.postDelayed(() -> {
+                if (sheet.getParent() != null) ((ViewGroup) sheet.getParent()).removeView(sheet);
+                restoreChrome();
+            }, ANIM_DUR_SHEET_OUT + 40);
+        } else {
+            ((ViewGroup) sheet.getParent()).removeView(sheet);
+            restoreChrome();
+        }
     }
 
     void updateFilterFabBadge() {
@@ -3828,7 +3896,7 @@ public class MainActivity extends Activity {
         blurSearchBoxes();
         final View bar = floatSearchBar;
         if (bar == null) return;
-        bar.animate().alpha(0f).translationY(-dp(this, 8)).setDuration(180)
+        bar.animate().alpha(0f).translationY(-dp(this, 8)).setDuration(ANIM_DUR_SHEET_OUT)
             .setInterpolator(ANIM_EXIT)
             .withEndAction(() -> { if (!floatSearchOpen) bar.setVisibility(View.GONE); }).start();
     }
@@ -4469,7 +4537,7 @@ public class MainActivity extends Activity {
         pop.setPivotY(below ? 0 : popH);
         pop.setAlpha(0f); pop.setScaleX(0.94f); pop.setScaleY(0.94f);
         pop.animate().alpha(1f).scaleX(1f).scaleY(1f)
-            .setDuration(160).setInterpolator(ANIM_ENTER).start();
+            .setDuration(ANIM_DUR_CARDMENU_IN).setInterpolator(ANIM_ENTER).start();
 
         // 菜单出现时底栏让开，不挡靠近底部的卡（对照 setDockVisible(false)）
         hideChrome(); // Q12
@@ -4490,7 +4558,7 @@ public class MainActivity extends Activity {
         if (pop == null) return;
         pop.animate().cancel();
         pop.animate().alpha(0f).scaleX(0.94f).scaleY(0.94f)
-            .setDuration(140).setInterpolator(ANIM_EXIT)
+            .setDuration(ANIM_DUR_CARDMENU_OUT).setInterpolator(ANIM_EXIT)
             .withEndAction(() -> removeViewNow(pop)).start();
     }
 
@@ -5302,13 +5370,12 @@ public class MainActivity extends Activity {
         filterSheet = sheet;
         // 开场：淡入+放大+上浮，减速曲线（P4-fix 统一手感方向，220–320ms 档）
         sheet.setAlpha(0f);
-        sheet.animate().alpha(1f).setDuration(200)
-            .setInterpolator(ANIM_ENTER).start();
+        sheet.animate().alpha(1f).setDuration(ANIM_DUR_SHADE_IN).setInterpolator(ANIM_ENTER).start();
         card.setAlpha(0f);
         card.setScaleX(0.94f); card.setScaleY(0.94f);
         card.setTranslationY(dp(this, 14));
         card.animate().alpha(1f).scaleX(1f).scaleY(1f).translationY(0f)
-            .setDuration(260).setInterpolator(ANIM_ENTER).start();
+            .setDuration(ANIM_DUR_SHEET_IN).setInterpolator(ANIM_ENTER).start();
     }
 
     LinearLayout filterPanelRef = null;
@@ -5322,9 +5389,9 @@ public class MainActivity extends Activity {
             ? ((ViewGroup) sheet).getChildAt(((ViewGroup) sheet).getChildCount() - 1) : null; // Q11：玻璃层在窗下，窗体是最后一层
         if (card != null) {
             card.animate().alpha(0f).scaleX(0.96f).scaleY(0.96f).translationY(dp(this, 10))
-                .setDuration(180).setInterpolator(ANIM_ENTER)
+                .setDuration(ANIM_DUR_SHEET_OUT).setInterpolator(ANIM_EXIT)
                 .withEndAction(() -> { closeFilterSheetNow(sheet); restoreChrome(); }).start();
-            sheet.animate().alpha(0f).setDuration(180).start();
+            sheet.animate().alpha(0f).setDuration(ANIM_DUR_SHADE_OUT).setInterpolator(ANIM_EXIT).start();
         } else {
             closeFilterSheetNow(sheet);
             restoreChrome();
@@ -5826,12 +5893,12 @@ public class MainActivity extends Activity {
                 ? ((ViewGroup) sheet).getChildAt(((ViewGroup) sheet).getChildCount() - 1) : null; // Q11：玻璃层垫在窗下，窗体是最后一层
             if (card != null) {
                 card.animate().translationY(dp(this, 42)).alpha(0f)
-                    .setDuration(180).setInterpolator(ANIM_ENTER)
+                    .setDuration(ANIM_DUR_SHEET_OUT).setInterpolator(ANIM_EXIT)
                     .withEndAction(() -> {
                         if (sheet.getParent() != null) ((ViewGroup) sheet.getParent()).removeView(sheet);
                         restoreChrome(); // Q12
                     }).start();
-                sheet.animate().alpha(0f).setDuration(180).start();
+                sheet.animate().alpha(0f).setDuration(ANIM_DUR_SHADE_OUT).setInterpolator(ANIM_EXIT).start();
                 return;
             }
             ((ViewGroup) sheet.getParent()).removeView(sheet);
@@ -5900,14 +5967,13 @@ public class MainActivity extends Activity {
             card.setAlpha(0f);
             card.setTranslationX(dx);
             card.animate().alpha(1f).translationX(0f)
-                .setDuration(220).setInterpolator(ANIM_ENTER).start();
+                .setDuration(ANIM_DUR_FADE).setInterpolator(ANIM_ENTER).start();
         } else {
             sheet.setAlpha(0f);
-            sheet.animate().alpha(1f).setDuration(200)
-                .setInterpolator(ANIM_ENTER).start();
+            sheet.animate().alpha(1f).setDuration(ANIM_DUR_SHADE_IN).setInterpolator(ANIM_ENTER).start();
             card.setTranslationY(dp(this, 42));
             card.animate().translationY(0f)
-                .setDuration(260).setInterpolator(ANIM_ENTER).start();
+                .setDuration(ANIM_DUR_SHEET_IN).setInterpolator(ANIM_ENTER).start();
         }
         lastWizStepShown = wizStep;
     }
@@ -6413,10 +6479,10 @@ public class MainActivity extends Activity {
         syncSearchFab();
         syncTopFab();
         // 升起：遮罩 220ms 淡入 + 窗体自下方滑入 240ms 同曲线家族；✕ 长在窗内随窗同行，再略延迟淡入呈半透浮现
-        shade.animate().alpha(1f).setDuration(220).setInterpolator(ANIM_ENTER).start();
+        shade.animate().alpha(1f).setDuration(ANIM_DUR_SHADE_IN).setInterpolator(ANIM_ENTER).start();
         wrap.setTranslationY(sheetH);
-        wrap.animate().translationY(0f).setDuration(240).setInterpolator(ANIM_ENTER).start();
-        glyphFrame.animate().alpha(1f).setDuration(220).setStartDelay(70).setInterpolator(ANIM_ENTER).start();
+        wrap.animate().translationY(0f).setDuration(ANIM_DUR_SHEET_IN).setInterpolator(ANIM_ENTER).start();
+        glyphFrame.animate().alpha(1f).setDuration(ANIM_DUR_FADE).setStartDelay(70).setInterpolator(ANIM_ENTER).start();
     }
 
     void attachDetailDrag(final View wrap, final View sheetCard) {
@@ -6444,7 +6510,7 @@ public class MainActivity extends Activity {
                             float dy = e.getRawY() - downY[0];
                             dragging[0] = false;
                             if (dy > dp(this, 80)) { closeDetail(); return true; }
-                            wrap.animate().translationY(0f).setDuration(180)
+                            wrap.animate().translationY(0f).setDuration(ANIM_DUR_FADE)
                                 .setInterpolator(ANIM_ENTER).start();
                         }
                         return false;
@@ -6479,8 +6545,8 @@ public class MainActivity extends Activity {
         // Q30：✕ 是 wrap 子层，不摘出、不冻结、不单独淡出——随窗同降，overlay 销毁时一并销毁，主页不留残影。
         // 关窗与混合版同口径并行：窗体 240ms 下滑、遮罩 180ms 淡出同时进行，落定才拆浮层。
         int targetY = wrap.getHeight() > 0 ? wrap.getHeight() : dp(this, 420);
-        if (shade != null) shade.animate().alpha(0f).setDuration(180).setInterpolator(ANIM_EXIT).start();
-        wrap.animate().translationY(targetY).setDuration(240).setInterpolator(ANIM_ENTER)
+        if (shade != null) shade.animate().alpha(0f).setDuration(ANIM_DUR_SHADE_OUT).setInterpolator(ANIM_EXIT).start();
+        wrap.animate().translationY(targetY).setDuration(ANIM_DUR_SHEET_OUT).setInterpolator(ANIM_EXIT)
             .withEndAction(finish).start();
     }
 
@@ -8069,8 +8135,8 @@ public class MainActivity extends Activity {
         content.addView(sheet);
         delConfirmSheet = sheet;
         sheet.setAlpha(0f);
-        sheet.animate().alpha(1f).setDuration(200).setInterpolator(ANIM_ENTER).start();
-        shade.animate().alpha(1f).setDuration(200).setInterpolator(ANIM_ENTER).start();
+        sheet.animate().alpha(1f).setDuration(ANIM_DUR_SHADE_IN).setInterpolator(ANIM_ENTER).start();
+        shade.animate().alpha(1f).setDuration(ANIM_DUR_SHADE_IN).setInterpolator(ANIM_ENTER).start();
         wrap.setTranslationY(dp(this, 42));
         wrap.animate().translationY(0f).setDuration(ANIM_DUR_SHEET_IN).setInterpolator(ANIM_ENTER).start();
     }
@@ -8091,7 +8157,7 @@ public class MainActivity extends Activity {
                     delConfirmClosing = false;
                     restoreChrome(); // Q12
                 }).start();
-            sheet.animate().alpha(0f).setDuration(ANIM_DUR_SHEET_OUT).start();
+            sheet.animate().alpha(0f).setDuration(ANIM_DUR_SHADE_OUT).setInterpolator(ANIM_EXIT).start();
         } else {
             ((ViewGroup) sheet.getParent()).removeView(sheet);
             delConfirmSheet = null; delConfirmClosing = false;
@@ -8203,10 +8269,10 @@ public class MainActivity extends Activity {
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         overlay.bringToFront();
         customDetailSheet = overlay;
-        shade.animate().alpha(1f).setDuration(220).setInterpolator(ANIM_ENTER).start();
+        shade.animate().alpha(1f).setDuration(ANIM_DUR_SHADE_IN).setInterpolator(ANIM_ENTER).start();
         wrap.setTranslationY(sheetH);
-        wrap.animate().translationY(0f).setDuration(240).setInterpolator(ANIM_ENTER).start();
-        glyphFrame.animate().alpha(1f).setDuration(220).setStartDelay(70).setInterpolator(ANIM_ENTER).start();
+        wrap.animate().translationY(0f).setDuration(ANIM_DUR_SHEET_IN).setInterpolator(ANIM_ENTER).start();
+        glyphFrame.animate().alpha(1f).setDuration(ANIM_DUR_FADE).setStartDelay(70).setInterpolator(ANIM_ENTER).start();
     }
 
     LinearLayout buildCustomDetailBody(final CustomCard c) {
@@ -8417,7 +8483,7 @@ public class MainActivity extends Activity {
                         float dy = e.getRawY() - downY[0];
                         dragging[0] = false;
                         if (dy > dp(this, 80)) { closeCustomDetail(); return true; }
-                        wrap.animate().translationY(0f).setDuration(180)
+                        wrap.animate().translationY(0f).setDuration(ANIM_DUR_FADE)
                             .setInterpolator(ANIM_ENTER).start();
                     }
                     return false;
@@ -8445,9 +8511,9 @@ public class MainActivity extends Activity {
         if (wrap == null) { finish.run(); return; }
         View shade = overlay instanceof ViewGroup && ((ViewGroup) overlay).getChildCount() > 0
             ? ((ViewGroup) overlay).getChildAt(0) : null;
-        if (shade != null) shade.animate().alpha(0f).setDuration(180).setInterpolator(ANIM_EXIT).start();
+        if (shade != null) shade.animate().alpha(0f).setDuration(ANIM_DUR_SHADE_OUT).setInterpolator(ANIM_EXIT).start();
         int targetY = wrap.getHeight() > 0 ? wrap.getHeight() : dp(this, 420);
-        wrap.animate().translationY(targetY).setDuration(240).setInterpolator(ANIM_ENTER)
+        wrap.animate().translationY(targetY).setDuration(ANIM_DUR_SHEET_OUT).setInterpolator(ANIM_EXIT)
             .withEndAction(finish).start();
     }
 
@@ -8540,12 +8606,12 @@ public class MainActivity extends Activity {
                 ? ((ViewGroup) sheet).getChildAt(((ViewGroup) sheet).getChildCount() - 1) : null;
             if (card != null) {
                 card.animate().translationY(dp(this, 42)).alpha(0f)
-                    .setDuration(180).setInterpolator(ANIM_ENTER)
+                    .setDuration(ANIM_DUR_SHEET_OUT).setInterpolator(ANIM_EXIT)
                     .withEndAction(() -> {
                         if (sheet.getParent() != null) ((ViewGroup) sheet.getParent()).removeView(sheet);
                         restoreChrome(); // Q12
                     }).start();
-                sheet.animate().alpha(0f).setDuration(180).start();
+                sheet.animate().alpha(0f).setDuration(ANIM_DUR_SHADE_OUT).setInterpolator(ANIM_EXIT).start();
                 return;
             }
             ((ViewGroup) sheet.getParent()).removeView(sheet);
@@ -9177,9 +9243,9 @@ public class MainActivity extends Activity {
         content.addView(sheet);
         binSheet = sheet;
         sheet.setAlpha(0f);
-        sheet.animate().alpha(1f).setDuration(200).setInterpolator(ANIM_ENTER).start();
+        sheet.animate().alpha(1f).setDuration(ANIM_DUR_SHADE_IN).setInterpolator(ANIM_ENTER).start();
         binWrap.setTranslationY(dp(this, 40)); binWrap.setAlpha(0f);
-        binWrap.animate().translationY(0f).alpha(1f).setDuration(280).setInterpolator(ANIM_ENTER).start();
+        binWrap.animate().translationY(0f).alpha(1f).setDuration(ANIM_DUR_SHEET_IN).setInterpolator(ANIM_ENTER).start();
         inBin.postDelayed(() -> { try { inBin.requestFocus(); } catch (Throwable ignored) {} }, 120);
     }
 
@@ -9222,12 +9288,13 @@ public class MainActivity extends Activity {
             View card = sheet instanceof ViewGroup && ((ViewGroup) sheet).getChildCount() > 1
                 ? ((ViewGroup) sheet).getChildAt(((ViewGroup) sheet).getChildCount() - 1) : null;
             if (card != null) {
-                card.animate().translationY(dp(this, 42)).alpha(0f).setDuration(180).setInterpolator(ANIM_ENTER)
+                card.animate().translationY(dp(this, 42)).alpha(0f)
+                    .setDuration(ANIM_DUR_SHEET_OUT).setInterpolator(ANIM_EXIT)
                     .withEndAction(() -> {
                         if (sheet.getParent() != null) ((ViewGroup) sheet.getParent()).removeView(sheet);
                         restoreChrome(); // Q12
                     }).start();
-                sheet.animate().alpha(0f).setDuration(180).start();
+                sheet.animate().alpha(0f).setDuration(ANIM_DUR_SHADE_OUT).setInterpolator(ANIM_EXIT).start();
                 return;
             }
             ((ViewGroup) sheet.getParent()).removeView(sheet);
@@ -9651,10 +9718,10 @@ public class MainActivity extends Activity {
         content.addView(sheet);
         customFormSheet = sheet;
         sheet.setAlpha(0f);
-        sheet.animate().alpha(1f).setDuration(200).setInterpolator(ANIM_ENTER).start();
+        sheet.animate().alpha(1f).setDuration(ANIM_DUR_SHADE_IN).setInterpolator(ANIM_ENTER).start();
         formWrap.setTranslationY(dp(this, 40)); // dlgIn：40px 上浮淡入 .28s
         formWrap.setAlpha(0f);
-        formWrap.animate().translationY(0f).alpha(1f).setDuration(280)
+        formWrap.animate().translationY(0f).alpha(1f).setDuration(ANIM_DUR_SHEET_IN)
             .setInterpolator(ANIM_ENTER).start();
     }
 
@@ -9775,7 +9842,7 @@ public class MainActivity extends Activity {
     }
     void animateUpdateSheetIn(FrameLayout sheet){
         Object[] t=(Object[])sheet.getTag(); View wrap=(View)t[0];
-        sheet.setAlpha(0f); sheet.animate().alpha(1f).setDuration(200).setInterpolator(ANIM_ENTER).start();
+        sheet.setAlpha(0f); sheet.animate().alpha(1f).setDuration(ANIM_DUR_SHADE_IN).setInterpolator(ANIM_ENTER).start();
         wrap.setTranslationY(dp(this,42)); wrap.animate().translationY(0f).setDuration(ANIM_DUR_SHEET_IN).setInterpolator(ANIM_ENTER).start();
     }
     void closeUpdateSheet(final View sheet){
@@ -9783,7 +9850,7 @@ public class MainActivity extends Activity {
         if(isTip){ if(updateTipClosing) return; updateTipClosing=true; } if(isConf){ if(updateConfirmClosing) return; updateConfirmClosing=true; }
         Object[] t=sheet.getTag() instanceof Object[] ? (Object[])sheet.getTag() : null; View wrap=t!=null?(View)t[0]:null;
         Runnable done=()->{ if(sheet.getParent()!=null) ((ViewGroup)sheet.getParent()).removeView(sheet); if(isTip){updateTipSheet=null;updateTipClosing=false;} if(isConf){updateConfirmSheet=null;updateConfirmClosing=false;} restoreChrome(); };
-        if(wrap!=null){ wrap.animate().translationY(dp(this,42)).alpha(0f).setDuration(ANIM_DUR_SHEET_OUT).setInterpolator(ANIM_EXIT).withEndAction(done).start(); sheet.animate().alpha(0f).setDuration(ANIM_DUR_SHEET_OUT).start(); } else done.run();
+        if(wrap!=null){ wrap.animate().translationY(dp(this,42)).alpha(0f).setDuration(ANIM_DUR_SHEET_OUT).setInterpolator(ANIM_EXIT).withEndAction(done).start(); sheet.animate().alpha(0f).setDuration(ANIM_DUR_SHADE_OUT).setInterpolator(ANIM_EXIT).start(); } else done.run();
     }
 
     // ---------- 资讯（Phase 2c，对照 app.js renderNews/loadNews/checkNewsUpdate） ----------
@@ -10312,9 +10379,9 @@ public class MainActivity extends Activity {
         extSheet = sheet;
         extClosing = false;
         sheet.setAlpha(0f);
-        sheet.animate().alpha(1f).setDuration(200).setInterpolator(ANIM_ENTER).start();
+        sheet.animate().alpha(1f).setDuration(ANIM_DUR_SHADE_IN).setInterpolator(ANIM_ENTER).start();
         wrap.setTranslationY(dp(this, 40)); wrap.setAlpha(0f);
-        wrap.animate().translationY(0f).alpha(1f).setDuration(280).setInterpolator(ANIM_ENTER).start();
+        wrap.animate().translationY(0f).alpha(1f).setDuration(ANIM_DUR_SHEET_IN).setInterpolator(ANIM_ENTER).start();
         renderExtResults();
         // 进窗即拉一次新索引（有缓存先显缓存，拉到新版再刷新）；断网保持缓存并在空状态明示
         fetchExtendedUpdate(null);
@@ -10338,13 +10405,13 @@ public class MainActivity extends Activity {
             View wrap = sheet instanceof ViewGroup && ((ViewGroup) sheet).getChildCount() > 1
                 ? ((ViewGroup) sheet).getChildAt(((ViewGroup) sheet).getChildCount() - 1) : null;
             if (wrap != null) {
-                wrap.animate().translationY(dp(this, 42)).alpha(0f).setDuration(180).setInterpolator(ANIM_EXIT)
+                wrap.animate().translationY(dp(this, 42)).alpha(0f).setDuration(ANIM_DUR_SHEET_OUT).setInterpolator(ANIM_EXIT)
                     .withEndAction(() -> {
                         if (sheet.getParent() != null) ((ViewGroup) sheet.getParent()).removeView(sheet);
                         extClosing = false; extResultBox = null; extMeta = null; extInput = null;
                         restoreChrome();
                     }).start();
-                sheet.animate().alpha(0f).setDuration(180).start();
+                sheet.animate().alpha(0f).setDuration(ANIM_DUR_SHADE_OUT).setInterpolator(ANIM_EXIT).start();
                 return;
             }
             ((ViewGroup) sheet.getParent()).removeView(sheet);
@@ -10688,9 +10755,9 @@ public class MainActivity extends Activity {
         content.addView(sheet);
         aboutSheet = sheet;
         sheet.setAlpha(0f);
-        sheet.animate().alpha(1f).setDuration(200).setInterpolator(ANIM_ENTER).start();
+        sheet.animate().alpha(1f).setDuration(ANIM_DUR_SHADE_IN).setInterpolator(ANIM_ENTER).start();
         aboutWrap.setTranslationY(dp(this, 42));
-        aboutWrap.animate().translationY(0f).setDuration(260)
+        aboutWrap.animate().translationY(0f).setDuration(ANIM_DUR_SHEET_IN)
             .setInterpolator(ANIM_ENTER).start();
     }
 
@@ -10703,12 +10770,12 @@ public class MainActivity extends Activity {
                 ? ((ViewGroup) sheet).getChildAt(((ViewGroup) sheet).getChildCount() - 1) : null; // Q11：玻璃层垫在窗下，窗体是最后一层
             if (card != null) {
                 card.animate().translationY(dp(this, 42)).alpha(0f)
-                    .setDuration(180).setInterpolator(ANIM_ENTER)
+                    .setDuration(ANIM_DUR_SHEET_OUT).setInterpolator(ANIM_EXIT)
                     .withEndAction(() -> {
                         if (sheet.getParent() != null) ((ViewGroup) sheet.getParent()).removeView(sheet);
                         restoreChrome(); // Q12
                     }).start();
-                sheet.animate().alpha(0f).setDuration(180).start();
+                sheet.animate().alpha(0f).setDuration(ANIM_DUR_SHADE_OUT).setInterpolator(ANIM_EXIT).start();
                 return;
             }
             ((ViewGroup) sheet.getParent()).removeView(sheet);
@@ -10845,7 +10912,7 @@ public class MainActivity extends Activity {
             if (aboutSponsorArrow != null) aboutSponsorArrow.setRotation(aboutSponsorOpen ? 90f : 0f);
             if (aboutSponsorOpen) {
                 sponsor.setAlpha(0f); sponsor.setTranslationY(dp(this, -6));
-                sponsor.animate().alpha(1f).translationY(0f).setDuration(220)
+                sponsor.animate().alpha(1f).translationY(0f).setDuration(ANIM_DUR_FADE)
                     .setInterpolator(ANIM_ENTER).start();
             }
         });
@@ -11297,7 +11364,7 @@ public class MainActivity extends Activity {
         cardWrap.setPivotY(0f);
         cardWrap.setScaleX(0.72f); cardWrap.setScaleY(0.72f); cardWrap.setAlpha(0f);
         cardWrap.animate().scaleX(1f).scaleY(1f).alpha(1f)
-            .setDuration(260).setInterpolator(new OvershootInterpolator(1.15f)).start();
+            .setDuration(ANIM_DUR_MENU_IN).setInterpolator(ANIM_MENU_SPRING).start();
     }
 
     void closeMoreMenu() {
@@ -11308,7 +11375,7 @@ public class MainActivity extends Activity {
             View card = ((FrameLayout) ov).getChildAt(0);
             card.animate().cancel();
             card.animate().scaleX(0.78f).scaleY(0.78f).alpha(0f)
-                .setDuration(160).setInterpolator(ANIM_EXIT)
+                .setDuration(ANIM_DUR_MENU_OUT).setInterpolator(ANIM_EXIT)
                 .withEndAction(() -> { if (ov.getParent() != null) ((ViewGroup) ov.getParent()).removeView(ov); })
                 .start();
         } else if (ov.getParent() != null) {
