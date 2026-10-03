@@ -8265,7 +8265,8 @@ public class MainActivity extends Activity {
     // ---------- 数据 OTA（Phase 4c，对照 app.js checkDataUpdate/DATA_URLS） ----------
     boolean otaFetchStarted = false;
 
-    // 启动自动查一次；设置页手动查 manual=true 给 toast 反馈。双线：jsDelivr 优先，失败回落 raw。
+    // 启动自动查一次；设置页手动查 manual=true 给 toast 反馈。
+    // Q59 修：双线都取，以 data_version 高者为准（jsDelivr 200 但回旧缓存时不被其骗成「已是最新」）。
     void checkDataUpdate(final boolean manual) {
         if (!manual && otaFetchStarted) return;
         otaFetchStarted = true;
@@ -8274,6 +8275,8 @@ public class MainActivity extends Activity {
             "https://raw.githubusercontent.com/dimlogue/cardbox-data/main/cards.json"
         };
         new Thread(() -> {
+            String bestJson = null;
+            int bestVer = -1;
             for (String u : urls) {
                 try {
                     HttpURLConnection conn = (HttpURLConnection) new URL(u + "?t=" + System.currentTimeMillis()).openConnection();
@@ -8283,31 +8286,38 @@ public class MainActivity extends Activity {
                     String json = Store.readAll(conn.getInputStream());
                     conn.disconnect();
                     int remoteVer = Store.versionOf(json);
-                    if (remoteVer <= Store.dataVersion) {
-                        if (manual) runOnUiThread(() -> showFloatToast("已是最新数据（v" + Store.dataVersion + "）"));
-                        return;
-                    }
-                    // 先在临时解析校验卡数>0 再落盘，避免把坏数据写进 filesDir
+                    // 校验卡数>0 再入选，避免把坏数据当候选
                     try {
                         JSONObject probe = new JSONObject(json);
                         JSONArray pa = probe.getJSONArray("cards");
                         if (pa == null || pa.length() == 0) continue;
                     } catch (Exception e) { continue; }
-                    try {
-                        FileOutputStream fos = new FileOutputStream(new File(getFilesDir(), "cards-ota.json"));
-                        fos.write(json.getBytes("UTF-8")); fos.close();
-                    } catch (Exception e) { /* 落盘失败也继续用本次拉到的数据刷新界面 */ }
-                    final boolean ok = Store.parseInto(json);
-                    if (!ok) continue;
-                    runOnUiThread(() -> {
-                        showFloatToast("卡片数据已更新到 v" + Store.dataVersion + "（" + Store.all.size() + " 张）");
-                        pages.clear(); // 页面缓存一律作废，下次进页用新数据重建
-                        if (detailCard == null) rebuildPages(); // 正看详情时不打断，关掉详情自然用新数据
-                    });
-                    return;
-                } catch (Exception e) { /* 换下一条线路 */ }
+                    if (remoteVer > bestVer) { bestVer = remoteVer; bestJson = json; }
+                } catch (Exception e) { /* 换下一条线路，另一条线的结果仍可入选 */ }
             }
-            if (manual) runOnUiThread(() -> showFloatToast("检查更新失败，请检查网络"));
+            if (bestJson == null) {
+                if (manual) runOnUiThread(() -> showFloatToast("检查更新失败，请检查网络"));
+                return;
+            }
+            if (bestVer <= Store.dataVersion) {
+                if (manual) runOnUiThread(() -> showFloatToast("已是最新数据（v" + Store.dataVersion + "）"));
+                return;
+            }
+            final String json = bestJson;
+            try {
+                FileOutputStream fos = new FileOutputStream(new File(getFilesDir(), "cards-ota.json"));
+                fos.write(json.getBytes("UTF-8")); fos.close();
+            } catch (Exception e) { /* 落盘失败也继续用本次拉到的数据刷新界面 */ }
+            final boolean ok = Store.parseInto(json);
+            if (!ok) {
+                if (manual) runOnUiThread(() -> showFloatToast("检查更新失败，请检查网络"));
+                return;
+            }
+            runOnUiThread(() -> {
+                showFloatToast("卡片数据已更新到 v" + Store.dataVersion + "（" + Store.all.size() + " 张）");
+                pages.clear(); // 页面缓存一律作废，下次进页用新数据重建
+                if (detailCard == null) rebuildPages(); // 正看详情时不打断，关掉详情自然用新数据
+            });
         }).start();
     }
 
