@@ -768,7 +768,6 @@ public class MainActivity extends Activity {
                 cvs = Bitmap.createBitmap(cw, ch, Bitmap.Config.ARGB_8888);
                 bandCanvases.put(iv, cvs); // Q21：旧画布只解引用不 recycle
             }
-            int[] rl = new int[2]; rootView.getLocationOnScreen(rl);
             int[] il = new int[2]; iv.getLocationOnScreen(il);
             int[] sl = new int[2]; sv.getLocationOnScreen(sl);
             // Q57 纵向对位根治：层身后的文档行 = scrollY +（层顶 − ScrollView 顶），旧式少减 svTop——
