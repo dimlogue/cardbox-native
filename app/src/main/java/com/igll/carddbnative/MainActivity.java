@@ -13,6 +13,7 @@ import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Paint;
 import android.graphics.RectF;
+import android.graphics.drawable.Drawable;
 import android.graphics.drawable.GradientDrawable;
 import android.os.Build;
 import android.os.Bundle;
@@ -607,20 +608,24 @@ public class MainActivity extends Activity {
         }
     }
 
-    GradientDrawable floatingBarBg() {
-        // P1b：灰白半透（与页面 #F2F3F7 拉开层次又能透出底下滚动内容）+ 1dp 淡灰描边
+    Drawable floatingBarBg() {
+        // P1c：贴混合版 .dock-glass——带极淡蓝灰的半透白（rgba .58 量级，内容滚过能透出）、
+        // 顶部高光（三段渐变首段提亮模拟 inset 0 1px 高光）、白色半透描边
         GradientDrawable g = new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
-            new int[]{Color.argb(228, 255, 255, 255), Color.argb(214, 243, 243, 247)});
+            new int[]{Color.argb(172, 255, 255, 255), Color.argb(150, 247, 250, 255),
+                Color.argb(138, 228, 236, 246)});
         g.setCornerRadius(dp(this, 26));
-        g.setStroke(dp(this, 1), Color.argb(56, 20, 30, 60));
+        g.setStroke(dp(this, 1), Color.argb(120, 205, 218, 235));
         return g;
     }
 
-    GradientDrawable navPillBg() {
-        GradientDrawable g = new GradientDrawable();
-        g.setColor(Color.argb(255, 255, 255, 255));
+    Drawable navPillBg() {
+        // P1c：选中胶囊贴混合版 .dock-pill——半透白（.68 量级）+ 顶部高光渐变 + 白色高光描边
+        GradientDrawable g = new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
+            new int[]{Color.argb(198, 255, 255, 255), Color.argb(173, 244, 248, 253),
+                Color.argb(164, 234, 241, 250)});
         g.setCornerRadius(dp(this, 18));
-        g.setStroke(dp(this, 1), Color.argb(40, 20, 30, 60));
+        g.setStroke(dp(this, 1), Color.argb(160, 255, 255, 255));
         return g;
     }
 
@@ -638,7 +643,7 @@ public class MainActivity extends Activity {
         navBar.setOrientation(LinearLayout.HORIZONTAL);
         navBar.setBackground(floatingBarBg());
         navBar.setPadding(dp(this, 8), dp(this, 8), dp(this, 8), dp(this, 8));
-        if (Build.VERSION.SDK_INT >= 21) navBar.setElevation(dp(this, 16));
+        if (Build.VERSION.SDK_INT >= 21) navBar.setElevation(dp(this, 24));
         navBar.setClipToOutline(false);
         String[][] tabs = {
             {"home", "全部卡片"}, {"student", "学生推荐"}, {"mine", "我的卡片"}, {"news", "资讯"}, {"settings", "设置"}
@@ -692,7 +697,7 @@ public class MainActivity extends Activity {
         for (Map.Entry<String, LinearLayout> e : navItems.entrySet()) {
             boolean on = e.getKey().equals(key);
             e.getValue().setBackground(on ? navPillBg() : null);
-            if (Build.VERSION.SDK_INT >= 21) e.getValue().setElevation(on ? dp(this, 2) : 0);
+            if (Build.VERSION.SDK_INT >= 21) e.getValue().setElevation(on ? dp(this, 3) : 0);
             NavIconView ic = navIcons.get(e.getKey());
             if (ic != null) ic.setOn(on);
             TextView lb = navLabels.get(e.getKey());
