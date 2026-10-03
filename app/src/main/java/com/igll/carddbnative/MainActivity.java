@@ -41,6 +41,9 @@ import org.json.JSONArray;
 import org.json.JSONObject;
 
 import java.io.ByteArrayOutputStream;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
 import java.io.InputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
@@ -124,16 +127,24 @@ public class MainActivity extends Activity {
     static class Store {
         static List<Card> all = new ArrayList<>();
         static Map<String, Card> byId = new HashMap<>();
-        static void load(Context c) {
-            if (!all.isEmpty()) return;
+        static int dataVersion = 0;
+
+        static String readAll(InputStream in) throws Exception {
+            ByteArrayOutputStream bos = new ByteArrayOutputStream();
+            byte[] buf = new byte[8192]; int n;
+            while ((n = in.read(buf)) > 0) bos.write(buf, 0, n);
+            in.close();
+            return new String(bos.toByteArray(), "UTF-8");
+        }
+
+        // 解析一整份 cards.json 成功返回 true，并替换当前数据（先解到临时表，成功才换，避免半截数据）
+        static boolean parseInto(String json) {
             try {
-                InputStream in = c.getAssets().open("data/cards.json");
-                ByteArrayOutputStream bos = new ByteArrayOutputStream();
-                byte[] buf = new byte[8192]; int n;
-                while ((n = in.read(buf)) > 0) bos.write(buf, 0, n);
-                in.close();
-                JSONObject root = new JSONObject(new String(bos.toByteArray(), "UTF-8"));
+                JSONObject root = new JSONObject(json);
                 JSONArray arr = root.getJSONArray("cards");
+                if (arr == null || arr.length() == 0) return false;
+                List<Card> tmp = new ArrayList<>();
+                Map<String, Card> tmpBy = new HashMap<>();
                 for (int i = 0; i < arr.length(); i++) {
                     JSONObject o = arr.getJSONObject(i);
                     Card cd = new Card();
@@ -148,9 +159,33 @@ public class MainActivity extends Activity {
                     JSONObject sp = o.optJSONObject("student_pick");
                     cd.studentPick = sp != null;
                     cd.studentOrder = sp != null ? sp.optInt("order", 999) : 999;
-                    all.add(cd); byId.put(cd.id, cd);
+                    tmp.add(cd); tmpBy.put(cd.id, cd);
                 }
-            } catch (Exception e) { /* 数据读不到就空列表，界面有空状态 */ }
+                all = tmp; byId = tmpBy;
+                dataVersion = root.optInt("data_version", dataVersion);
+                return true;
+            } catch (Exception e) { return false; }
+        }
+
+        static int versionOf(String json) {
+            try { return new JSONObject(json).optInt("data_version", 0); } catch (Exception e) { return 0; }
+        }
+
+        static void load(Context c) {
+            if (!all.isEmpty()) return;
+            String assetJson = null;
+            try { assetJson = readAll(c.getAssets().open("data/cards.json")); } catch (Exception e) { /* 读不到走空 */ }
+            // OTA 文件（filesDir/cards-ota.json）比内置新才优先用它（对照混合版 boot 的 OTA 优先逻辑）
+            String otaJson = null;
+            try {
+                File f = new File(c.getFilesDir(), "cards-ota.json");
+                if (f.exists()) otaJson = readAll(new FileInputStream(f));
+            } catch (Exception e) { otaJson = null; }
+            if (otaJson != null && assetJson != null && versionOf(otaJson) > versionOf(assetJson)) {
+                if (parseInto(otaJson)) return;
+            }
+            if (assetJson != null) parseInto(assetJson);
+            if (all.isEmpty() && otaJson != null) parseInto(otaJson);
         }
     }
 
@@ -399,6 +434,7 @@ public class MainActivity extends Activity {
         setContentView(root);
 
         showTab("home");
+        checkDataUpdate(false);
         if (!prefs.getBoolean("welcomed", false)) showWelcome();
     }
 
@@ -2523,6 +2559,54 @@ public class MainActivity extends Activity {
     }
 
     // ---------- 资讯 / 设置 ----------
+    // ---------- 数据 OTA（Phase 4c，对照 app.js checkDataUpdate/DATA_URLS） ----------
+    boolean otaFetchStarted = false;
+
+    // 启动自动查一次；设置页手动查 manual=true 给 toast 反馈。双线：jsDelivr 优先，失败回落 raw。
+    void checkDataUpdate(final boolean manual) {
+        if (!manual && otaFetchStarted) return;
+        otaFetchStarted = true;
+        final String[] urls = {
+            "https://cdn.jsdelivr.net/gh/dimlogue/cardbox-data@main/cards.json",
+            "https://raw.githubusercontent.com/dimlogue/cardbox-data/main/cards.json"
+        };
+        new Thread(() -> {
+            for (String u : urls) {
+                try {
+                    HttpURLConnection conn = (HttpURLConnection) new URL(u + "?t=" + System.currentTimeMillis()).openConnection();
+                    conn.setConnectTimeout(8000); conn.setReadTimeout(8000);
+                    conn.setRequestProperty("Cache-Control", "no-cache");
+                    if (conn.getResponseCode() != 200) { conn.disconnect(); continue; }
+                    String json = Store.readAll(conn.getInputStream());
+                    conn.disconnect();
+                    int remoteVer = Store.versionOf(json);
+                    if (remoteVer <= Store.dataVersion) {
+                        if (manual) runOnUiThread(() -> Toast.makeText(this, "已是最新数据（v" + Store.dataVersion + "）", Toast.LENGTH_SHORT).show());
+                        return;
+                    }
+                    // 先在临时解析校验卡数>0 再落盘，避免把坏数据写进 filesDir
+                    try {
+                        JSONObject probe = new JSONObject(json);
+                        JSONArray pa = probe.getJSONArray("cards");
+                        if (pa == null || pa.length() == 0) continue;
+                    } catch (Exception e) { continue; }
+                    try {
+                        FileOutputStream fos = new FileOutputStream(new File(getFilesDir(), "cards-ota.json"));
+                        fos.write(json.getBytes("UTF-8")); fos.close();
+                    } catch (Exception e) { /* 落盘失败也继续用本次拉到的数据刷新界面 */ }
+                    final boolean ok = Store.parseInto(json);
+                    if (!ok) continue;
+                    runOnUiThread(() -> {
+                        Toast.makeText(this, "卡片数据已更新到 v" + Store.dataVersion + "（" + Store.all.size() + " 张）", Toast.LENGTH_SHORT).show();
+                        rebuildPages();
+                    });
+                    return;
+                } catch (Exception e) { /* 换下一条线路 */ }
+            }
+            if (manual) runOnUiThread(() -> Toast.makeText(this, "检查更新失败，请检查网络", Toast.LENGTH_SHORT).show());
+        }).start();
+    }
+
     // ---------- 资讯（Phase 2c，对照 app.js renderNews/loadNews/checkNewsUpdate） ----------
     static class NewsItem {
         String id, title, tag, date, source, summary, url;
@@ -2933,8 +3017,14 @@ public class MainActivity extends Activity {
             hapticOn = on; prefs.edit().putBoolean("haptic", on).apply(); haptic(); rebuildPages();
         });
 
+        sectionHead(page, "数据");
+        page.addView(settingRow("数据版本", "v" + Store.dataVersion + " · " + Store.all.size() + " 张卡（启动自动检查，更新后无需重装）"));
+        View updRow = settingRow("检查数据更新", "从数据仓拉最新卡库 ›");
+        updRow.setOnClickListener(v -> { haptic(); Toast.makeText(this, "正在检查数据更新…", Toast.LENGTH_SHORT).show(); checkDataUpdate(true); });
+        page.addView(updRow);
+
         sectionHead(page, "关于");
-        page.addView(settingRow("版本", "0.11-native（Phase 4b）"));
+        page.addView(settingRow("版本", "0.12-native（Phase 4c）"));
         View logRow = settingRow("更新日志", "每个版本改了什么 ›");
         logRow.setOnClickListener(v -> { haptic(); showChangelog(); });
         page.addView(logRow);
@@ -2942,7 +3032,7 @@ public class MainActivity extends Activity {
         welRow.setOnClickListener(v -> { haptic(); showWelcome(); });
         page.addView(welRow);
         page.addView(settingRow("关于卡盒", "原生版：纯 Java 手写界面，数据与现行版共用同一份卡库"));
-        page.addView(settingRow("迁移进度", "全部卡片 / 详情 / 我的卡片 / 学生推荐 / 筛选 / 资讯 / 情景选卡 / 自定义卡 / 拖动 / 字体与界面大小 / 高刷 / 触感 / 欢迎页 / 更新日志 已迁移；OTA 在后续阶段"));
+        page.addView(settingRow("迁移进度", "全部卡片 / 详情 / 我的卡片 / 学生推荐 / 筛选 / 资讯 / 情景选卡 / 自定义卡 / 拖动 / 字体与界面大小 / 高刷 / 触感 / 欢迎页 / 更新日志 / 数据 OTA 已迁移"));
         ScrollView sv = new ScrollView(this);
         sv.addView(page);
         return sv;
