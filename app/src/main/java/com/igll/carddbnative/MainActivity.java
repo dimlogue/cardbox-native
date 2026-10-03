@@ -27,6 +27,7 @@ import android.text.TextWatcher;
 import android.util.LruCache;
 import android.view.Gravity;
 import android.view.animation.DecelerateInterpolator;
+import android.view.animation.OvershootInterpolator;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
@@ -71,6 +72,23 @@ import java.util.Set;
  * 仍在迁移中的功能会明确标「迁移中」，不装样子。
  */
 public class MainActivity extends Activity {
+    // ── P4-fix 统一动画语言（全 App 共用，禁止各处自创曲线）──
+    // 进入：先快后稳的大减速；退出：短促收尾；按压回弹：轻微 overshoot 弹簧感。
+    static final DecelerateInterpolator ANIM_ENTER = new DecelerateInterpolator(2.2f);
+    static final DecelerateInterpolator ANIM_EXIT = new DecelerateInterpolator(1.6f);
+    static final OvershootInterpolator ANIM_SPRING = new OvershootInterpolator(1.4f);
+    static final int ANIM_DUR_PAGE = 260;    // 切页 淡入+上移
+    static final int ANIM_DUR_SHEET_IN = 280; // 悬浮窗升起
+    static final int ANIM_DUR_SHEET_OUT = 190; // 悬浮窗收起
+    static final int ANIM_DUR_FADE = 220;    // 普通淡入/步骤切换
+    /** 通用按压反馈：按下 90ms 缩到 .92，松手 260ms 弹簧回弹到 1.0（微 overshoot）。 */
+    static void pressBounce(View v, boolean down) {
+        if (v == null) return;
+        v.animate().cancel();
+        if (down) v.animate().scaleX(0.92f).scaleY(0.92f).setDuration(90).setInterpolator(ANIM_EXIT).start();
+        else v.animate().scaleX(1f).scaleY(1f).setDuration(260).setInterpolator(ANIM_SPRING).start();
+    }
+
 
     // ---------- 小工具 ----------
     static int dp(Context c, float v) { return (int) (v * c.getResources().getDisplayMetrics().density + 0.5f); }
@@ -211,9 +229,9 @@ public class MainActivity extends Activity {
         fab.addView(icon, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         fab.setOnClickListener(v -> { haptic(); smoothScrollTop(activeLongScroll()); });
         fab.setOnTouchListener((v, e) -> {
-            if (e.getAction() == MotionEvent.ACTION_DOWN) v.animate().scaleX(0.9f).scaleY(0.9f).setDuration(90).start();
+            if (e.getAction() == MotionEvent.ACTION_DOWN) pressBounce(v, true);
             else if (e.getAction() == MotionEvent.ACTION_UP || e.getAction() == MotionEvent.ACTION_CANCEL)
-                v.animate().scaleX(1f).scaleY(1f).setDuration(120).start();
+                pressBounce(v, false);
             return false;
         });
         return fab;
@@ -1140,9 +1158,9 @@ public class MainActivity extends Activity {
             openFilterSheet();
         });
         fab.setOnTouchListener((v, e) -> {
-            if (e.getAction() == MotionEvent.ACTION_DOWN) v.animate().scaleX(0.9f).scaleY(0.9f).setDuration(90).start();
+            if (e.getAction() == MotionEvent.ACTION_DOWN) pressBounce(v, true);
             else if (e.getAction() == MotionEvent.ACTION_UP || e.getAction() == MotionEvent.ACTION_CANCEL)
-                v.animate().scaleX(1f).scaleY(1f).setDuration(120).start();
+                pressBounce(v, false);
             return false;
         });
         return fab;
@@ -1166,9 +1184,9 @@ public class MainActivity extends Activity {
             focusSearch();
         });
         fab.setOnTouchListener((v, e) -> {
-            if (e.getAction() == MotionEvent.ACTION_DOWN) v.animate().scaleX(0.9f).scaleY(0.9f).setDuration(90).start();
+            if (e.getAction() == MotionEvent.ACTION_DOWN) pressBounce(v, true);
             else if (e.getAction() == MotionEvent.ACTION_UP || e.getAction() == MotionEvent.ACTION_CANCEL)
-                v.animate().scaleX(1f).scaleY(1f).setDuration(120).start();
+                pressBounce(v, false);
             return false;
         });
         return fab;
@@ -1815,7 +1833,7 @@ public class MainActivity extends Activity {
         card.setScaleX(0.94f); card.setScaleY(0.94f);
         card.setTranslationY(dp(this, 14));
         card.animate().alpha(1f).scaleX(1f).scaleY(1f).translationY(0f)
-            .setDuration(260).setInterpolator(new DecelerateInterpolator(2.2f)).start();
+            .setDuration(260).setInterpolator(ANIM_ENTER).start();
     }
 
     LinearLayout filterPanelRef = null;
@@ -1966,9 +1984,9 @@ public class MainActivity extends Activity {
         t.setPadding(dp(this, 11), dp(this, 6), dp(this, 11), dp(this, 6));
         t.setOnClickListener(v -> { haptic(); act.run(); });
         t.setOnTouchListener((v, e) -> {
-            if (e.getAction() == MotionEvent.ACTION_DOWN) v.animate().scaleX(0.96f).scaleY(0.96f).setDuration(80).start();
+            if (e.getAction() == MotionEvent.ACTION_DOWN) pressBounce(v, true);
             else if (e.getAction() == MotionEvent.ACTION_UP || e.getAction() == MotionEvent.ACTION_CANCEL)
-                v.animate().scaleX(1f).scaleY(1f).setDuration(140).setInterpolator(new DecelerateInterpolator()).start();
+                pressBounce(v, false);
             return false;
         });
         return t;
@@ -2323,14 +2341,14 @@ public class MainActivity extends Activity {
             card.setAlpha(0f);
             card.setTranslationX(dx);
             card.animate().alpha(1f).translationX(0f)
-                .setDuration(220).setInterpolator(new DecelerateInterpolator(1.8f)).start();
+                .setDuration(220).setInterpolator(ANIM_ENTER).start();
         } else {
             sheet.setAlpha(0f);
             sheet.animate().alpha(1f).setDuration(200)
                 .setInterpolator(new DecelerateInterpolator()).start();
             card.setTranslationY(dp(this, 42));
             card.animate().translationY(0f)
-                .setDuration(260).setInterpolator(new DecelerateInterpolator(1.8f)).start();
+                .setDuration(260).setInterpolator(ANIM_ENTER).start();
         }
         lastWizStepShown = wizStep;
     }
@@ -2636,7 +2654,7 @@ public class MainActivity extends Activity {
         dv.setAlpha(0f);
         dv.setTranslationX(dp(this, 48));
         dv.animate().alpha(1f).translationX(0f)
-            .setDuration(260).setInterpolator(new DecelerateInterpolator(1.6f)).start();
+            .setDuration(260).setInterpolator(ANIM_EXIT).start();
     }
 
     void closeDetail() {
@@ -4217,7 +4235,7 @@ public class MainActivity extends Activity {
         sheet.animate().alpha(1f).setDuration(200).setInterpolator(new DecelerateInterpolator()).start();
         card.setTranslationY(dp(this, 42));
         card.animate().translationY(0f).setDuration(260)
-            .setInterpolator(new DecelerateInterpolator(1.8f)).start();
+            .setInterpolator(ANIM_ENTER).start();
     }
 
     void closeAbout() {
