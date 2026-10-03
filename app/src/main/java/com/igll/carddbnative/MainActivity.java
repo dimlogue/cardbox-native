@@ -4540,6 +4540,19 @@ public class MainActivity extends Activity {
         homeList.removeAllViews();
         if (list.isEmpty()) {
             homeList.addView(emptyState("没有符合条件的卡\n换个筛选条件或清空筛选试试"));
+            // Q68：本地搜不到时给扩展卡库入口，冷门卡走在线索引，不在本地硬编
+            if (query != null && !query.trim().isEmpty()) {
+                TextView goExt = tv(this, "去扩展卡库搜「" + query.trim() + "」 ›", 13.5f, Color.rgb(0x0A, 0x5C, 0xD6), true);
+                goExt.setGravity(Gravity.CENTER);
+                goExt.setPadding(dp(this, 14), dp(this, 10), dp(this, 14), dp(this, 10));
+                goExt.setBackground(rippleBg(Color.rgb(0xE8, 0xF1, 0xFD), 999));
+                LinearLayout.LayoutParams glp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+                glp.gravity = Gravity.CENTER_HORIZONTAL;
+                glp.topMargin = dp(this, 10);
+                final String fq = query.trim();
+                goExt.setOnClickListener(v -> { haptic(); openExtendedSearch(); if (extInput != null) { extInput.setText(fq); try { extInput.setSelection(fq.length()); } catch (Throwable ignored) {} } });
+                homeList.addView(goExt, glp);
+            }
             return;
         }
         if (query.isEmpty() && activeFilterCount() == 0) homeList.addView(wizardBanner());
