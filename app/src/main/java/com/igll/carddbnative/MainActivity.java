@@ -2059,7 +2059,7 @@ public class MainActivity extends Activity {
 
     // 排序 / 列数 / 显示方式（Phase 2a-3，对照 app.js applySort/colsNowVal/groupBank+bankOpen）
     String sortMode = null; // null=默认 / score-desc / score-asc / name / bank / dim:<维度名>
-    int cols = 2; // 1/2/3
+    int cols = 2; // 1/2/3/4（Q75 起加四列档）
     boolean groupBank = false;
     java.util.Set<String> bankOpen = new java.util.HashSet<>();
     // Q67：只看这些评分（维度名用数据线 score_dims 的全名；空=维持现行总分展示）
@@ -2294,7 +2294,7 @@ public class MainActivity extends Activity {
         try { mine = new HashSet<>(prefs.getStringSet("mine_ids", new HashSet<String>())); } catch (Exception e) { mine = new HashSet<>(); }
         sortMode = prefs.getString("sort_mode", null);
         try { scoreDimsSel = new java.util.LinkedHashSet<>(prefs.getStringSet("score_dims_sel", new HashSet<String>())); } catch (Exception e) { scoreDimsSel = new java.util.LinkedHashSet<>(); }
-        cols = prefs.getInt("cols", 2); if (cols != 1 && cols != 2 && cols != 3) cols = 2;
+        cols = prefs.getInt("cols", 2); if (cols < 1 || cols > 4) cols = 2;
         groupBank = prefs.getBoolean("group_bank", false);
         try { bankOpen = new HashSet<>(prefs.getStringSet("bank_open", new HashSet<String>())); } catch (Exception e) { bankOpen = new HashSet<>(); }
         loadCustomCards();
@@ -4214,8 +4214,10 @@ public class MainActivity extends Activity {
         AbsListView.LayoutParams lp = new AbsListView.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         box.setLayoutParams(lp);
 
-        int nc = (nCols == 1 || nCols == 3) ? nCols : 2;
-        int availW = getResources().getDisplayMetrics().widthPixels - dp(this, 28) - (nc - 1) * dp(this, 10);
+        // Q75：列数放行 1–4；四列列间距收至 8dp 给瓷砖让宽（行构建处同口径），图宽按真实列宽算
+        int nc = (nCols >= 1 && nCols <= 4) ? nCols : 2;
+        int gapDp = nc >= 4 ? 8 : 10;
+        int availW = getResources().getDisplayMetrics().widthPixels - dp(this, 28) - (nc - 1) * dp(this, gapDp);
         int tileW = availW / nc;
         // Q33：瓷砖圆角随图宽缩放（图宽 4% 量级），且不低于原固定 14dp——只许更圆润不许回退变尖；
         // 顶图 cover 铺满不变（Q24 优先级：铺满第一、圆角第二），四角靠外框同半径裁切、无图占位同半径。
@@ -4235,16 +4237,22 @@ public class MainActivity extends Activity {
 
         LinearLayout body = new LinearLayout(this);
         body.setOrientation(LinearLayout.VERTICAL);
-        body.setPadding(dp(this, 8), dp(this, 7), dp(this, 8), dp(this, 10));
+        // Q75：正文内边距按列数分档重排（四档外推混合版 .grid.c3 的 body 收紧口径再进一档），
+        // 间距宁匀勿乱，不把双列的 8/7/8/10 硬挤进四列窄瓷砖
+        int padH = nc >= 4 ? 6 : 8;
+        int padT = nc >= 3 ? 6 : 7;
+        int padB = nc >= 4 ? 8 : 10;
+        body.setPadding(dp(this, padH), dp(this, padT), dp(this, padH), dp(this, padB));
         box.addView(body, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
 
-        TextView name = tv(this, c.name, 13, colText(), true);
+        // Q75：四列卡名字号收至 11.5sp 仍保两行多显字（v3.77 定版），不许回退一行截断
+        TextView name = tv(this, c.name, nc >= 4 ? 11.5f : 13, colText(), true);
         name.setMaxLines(2);
         name.setMinLines(2);
         name.setEllipsize(android.text.TextUtils.TruncateAt.END);
         body.addView(name, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
 
-        TextView sub = tv(this, c.bank + " · " + orgLabel(c.org) + (c.isCredit() ? " · 信用卡" : ""), 10.5f, colText2(), false);
+        TextView sub = tv(this, c.bank + " · " + orgLabel(c.org) + (c.isCredit() ? " · 信用卡" : ""), nc >= 4 ? 9f : 10.5f, colText2(), false);
         sub.setMaxLines(1);
         sub.setEllipsize(android.text.TextUtils.TruncateAt.END);
         body.addView(sub);
@@ -4252,9 +4260,9 @@ public class MainActivity extends Activity {
         LinearLayout chips = new LinearLayout(this);
         chips.setOrientation(LinearLayout.HORIZONTAL);
         LinearLayout.LayoutParams clp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        clp.topMargin = dp(this, 6);
+        clp.topMargin = dp(this, nc >= 4 ? 5 : 6);
         body.addView(chips, clp);
-        float chipSp = nc == 3 ? 8.5f : 10f;
+        float chipSp = nc >= 4 ? 8f : nc == 3 ? 8.5f : 10f;
         List<String> selDims = showScoreDims ? selectedScoreDimsOrdered() : new ArrayList<>();
         if (showScoreDims && !selDims.isEmpty()) {
             // Q67：选了维度后总分退居其次（灰胶囊），分项分在下方单独成流展示。
@@ -4273,8 +4281,18 @@ public class MainActivity extends Activity {
         if (acctClass != null && !acctClass.isEmpty())
             chips.addView(chip(acctClass, Color.rgb(0xF0, 0xF7, 0xFF), Color.rgb(0x2F, 0x6F, 0xD0), chipSp));
 
+        // Q75：四列下评分/状态/已添加三胶囊同行易溢出，统一收紧内边距与间隔防裁断到读不出
+        if (nc >= 4) {
+            for (int ci = 0; ci < chips.getChildCount(); ci++) {
+                View cv = chips.getChildAt(ci);
+                cv.setPadding(dp(this, 4), dp(this, 2), dp(this, 4), dp(this, 2));
+                LinearLayout.LayoutParams cp = (LinearLayout.LayoutParams) cv.getLayoutParams();
+                cp.rightMargin = dp(this, 4);
+            }
+        }
+
         if (showScoreDims && !selDims.isEmpty()) {
-            View dimFlow = buildScoreDimFlow(c, tileW - dp(this, 16), nc, selDims);
+            View dimFlow = buildScoreDimFlow(c, tileW - dp(this, padH * 2), nc, selDims);
             if (dimFlow != null) {
                 LinearLayout.LayoutParams dlp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
                 dlp.topMargin = dp(this, 5);
@@ -4284,7 +4302,7 @@ public class MainActivity extends Activity {
 
         // Q51：特点标签行（对照混合版 featChips——FEATS 顺序逐卡渲染命中的标签，
         // .feats 流式换行、最多两行溢出截断；此前原生瓷砖只出评分/状态行，标签全缺）
-        View featFlow = buildFeatFlow(c, tileW - dp(this, 16), nc);
+        View featFlow = buildFeatFlow(c, tileW - dp(this, padH * 2), nc);
         if (featFlow != null) {
             LinearLayout.LayoutParams flp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
             flp.topMargin = dp(this, 5);
@@ -4296,8 +4314,8 @@ public class MainActivity extends Activity {
         final MineAddBtn mineBtn = new MineAddBtn(this);
         mineBtn.setOn(mine.contains(c.id));
         mineBtn.setCardImage(b, c.image); // Q47：钮下卡图磨砂片一次性生成并缓存，无图回落浅白玻璃
-        int btnSize = nc == 3 ? dp(this, 26) : dp(this, 32);
-        int btnEdge = nc == 3 ? dp(this, 6) : dp(this, 8);
+        int btnSize = nc >= 4 ? dp(this, 22) : nc == 3 ? dp(this, 26) : dp(this, 32);
+        int btnEdge = nc >= 4 ? dp(this, 5) : nc == 3 ? dp(this, 6) : dp(this, 8);
         FrameLayout.LayoutParams blp2 = new FrameLayout.LayoutParams(btnSize, btnSize);
         blp2.gravity = Gravity.TOP | Gravity.RIGHT;
         blp2.topMargin = btnEdge; blp2.rightMargin = btnEdge;
@@ -4584,7 +4602,7 @@ public class MainActivity extends Activity {
         List<String> labels = new ArrayList<>();
         for (String[] f : FEATS) if (featMatch(c, f[0])) labels.add(f[1]);
         if (labels.isEmpty()) return null;
-        float sp = nc == 3 ? 8f : 9.5f;
+        float sp = nc >= 4 ? 7.5f : nc == 3 ? 8f : 9.5f;
         LinearLayout wrap = new LinearLayout(this);
         wrap.setOrientation(LinearLayout.VERTICAL);
         Paint mp = new Paint();
@@ -4593,7 +4611,7 @@ public class MainActivity extends Activity {
         LinearLayout row = null;
         int rowW = 0, rows = 0;
         for (String label : labels) {
-            int w = (int) Math.ceil(mp.measureText(label)) + dp(this, 13);
+            int w = (int) Math.ceil(mp.measureText(label)) + dp(this, nc >= 4 ? 9 : 13);
             if (row == null || (rowW > 0 && rowW + gap + w > availPx)) {
                 if (rows >= 2) break; // 两行封顶，同混合版 overflow:hidden
                 row = new LinearLayout(this);
@@ -4605,6 +4623,7 @@ public class MainActivity extends Activity {
                 rowW = 0; rows++;
             }
             TextView t = chip(label, Color.rgb(0xF0, 0xF7, 0xFF), Color.rgb(0x2F, 0x6F, 0xD0), sp);
+            if (nc >= 4) t.setPadding(dp(this, 4), dp(this, 2), dp(this, 4), dp(this, 2)); // Q75：与宽度测算同档收紧
             LinearLayout.LayoutParams clp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
             if (rowW > 0) clp.leftMargin = gap;
             t.setLayoutParams(clp);
@@ -4617,7 +4636,7 @@ public class MainActivity extends Activity {
     // Q67：所选评分维度流。已下发分项分用蓝 chip，未下发用灰 chip 标「—」，不拿 0 分冒充。
     View buildScoreDimFlow(Card c, int availPx, int nc, List<String> dims) {
         if (dims == null || dims.isEmpty()) return null;
-        float sp = nc == 3 ? 8f : 9.5f;
+        float sp = nc >= 4 ? 7.5f : nc == 3 ? 8f : 9.5f;
         int maxRows = 99; // Q67 是用户显式多选，所选维度不截断；选得多时瓷砖自然变高，不拿两行封顶吞掉后选维度
         LinearLayout wrap = new LinearLayout(this);
         wrap.setOrientation(LinearLayout.VERTICAL);
@@ -4629,7 +4648,7 @@ public class MainActivity extends Activity {
         for (String dim : dims) {
             Double v = c.scoreDim(dim);
             String label = scoreDimShort(dim) + " " + (v == null ? "—" : formatDimScore(v));
-            int w = (int) Math.ceil(mp.measureText(label)) + dp(this, 13);
+            int w = (int) Math.ceil(mp.measureText(label)) + dp(this, nc >= 4 ? 9 : 13);
             if (row == null || (rowW > 0 && rowW + gap + w > availPx)) {
                 if (rows >= maxRows) break;
                 row = new LinearLayout(this);
@@ -4643,6 +4662,7 @@ public class MainActivity extends Activity {
             TextView t = v == null
                 ? chip(label, Color.rgb(0xEE, 0xF0, 0xF3), Color.rgb(0x8E, 0x8E, 0x93), sp)
                 : chip(label, Color.rgb(0xE8, 0xF1, 0xFD), Color.rgb(0x0A, 0x5C, 0xD6), sp);
+            if (nc >= 4) t.setPadding(dp(this, 4), dp(this, 2), dp(this, 4), dp(this, 2)); // Q75 同上
             LinearLayout.LayoutParams clp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
             if (rowW > 0) clp.leftMargin = gap;
             t.setLayoutParams(clp);
@@ -5182,19 +5202,20 @@ public class MainActivity extends Activity {
         int at = Math.max(0, Math.min(insertAt[0], container.getChildCount()));
         container.addView(row, at);
         insertAt[0] = at + 1;
+        int rowGap = cols >= 4 ? dp(this, 8) : dp(this, 10); // Q75：与 cardTile 图宽测算同口径
         for (int j = 0; j < cols; j++) {
             if (i + j < list.size()) {
                 final Card c = list.get(i + j);
                 View tile = cardTile(c, row);
                 LinearLayout.LayoutParams tlp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1f);
-                if (j > 0) tlp.leftMargin = dp(this, 10);
+                if (j > 0) tlp.leftMargin = rowGap;
                 tile.setLayoutParams(tlp);
                 tile.setOnClickListener(v -> openDetail(c));
                 row.addView(tile);
             } else {
                 View spacer = new View(this);
                 LinearLayout.LayoutParams slp2 = new LinearLayout.LayoutParams(0, 1, 1f);
-                if (j > 0) slp2.leftMargin = dp(this, 10);
+                if (j > 0) slp2.leftMargin = rowGap;
                 spacer.setLayoutParams(slp2);
                 row.addView(spacer);
             }
@@ -5534,7 +5555,7 @@ public class MainActivity extends Activity {
         addChipFlow(panel, dispChips);
 
         panel.addView(filterSectionTitle("\u5217\u6570"));
-        String[][] colOpts = {{"1", "\u5355\u5217"}, {"2", "\u53cc\u5217"}, {"3", "\u4e09\u5217"}};
+        String[][] colOpts = {{"1", "\u5355\u5217"}, {"2", "\u53cc\u5217"}, {"3", "\u4e09\u5217"}, {"4", "\u56db\u5217"}};
         List<View> colChips = new ArrayList<>();
         for (final String[] co : colOpts) {
             final int nCols = Integer.parseInt(co[0]);
@@ -7574,7 +7595,9 @@ public class MainActivity extends Activity {
 
     // 我的卡片网格：双列；长按拖动排序（对照 app.js startMineDrag/endMineDrag 的落位换序与 450ms 点击锁）
     void addMineCardRows(LinearLayout container, final List<MineRow> list, final ScrollView sv) {
-        final int mineCols = 2;
+        // Q75：我的卡片网格同步走全局列数体系（1/2/3/4），列间距与 cardTile 测算一致；拖动换算下方同取此值
+        final int mineCols = (cols >= 1 && cols <= 4) ? cols : 2;
+        final int mineGap = mineCols >= 4 ? dp(this, 8) : dp(this, 10);
         container.setClipChildren(false);
         for (int i = 0; i < list.size(); i += mineCols) {
             LinearLayout row = new LinearLayout(this);
@@ -7592,7 +7615,7 @@ public class MainActivity extends Activity {
                     final View tile = cardTile(c, row, mineCols, mr.entry.acctClass);
                     tile.setOnTouchListener(null); // Q1：我的卡片页长按拖动优先，清掉 cardTile 默认贴卡菜单触摸
                     LinearLayout.LayoutParams tlp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1f);
-                    if (j > 0) tlp.leftMargin = dp(this, 10);
+                    if (j > 0) tlp.leftMargin = mineGap;
                     tile.setLayoutParams(tlp);
                     tile.setOnClickListener(v -> {
                         if (System.currentTimeMillis() - lastDragEndAt < 450) return; // 拖后点击锁，同混合版
@@ -7603,7 +7626,7 @@ public class MainActivity extends Activity {
                 } else {
                     View spacer = new View(this);
                     LinearLayout.LayoutParams slp2 = new LinearLayout.LayoutParams(0, 1, 1f);
-                    if (j > 0) slp2.leftMargin = dp(this, 10);
+                    if (j > 0) slp2.leftMargin = mineGap;
                     spacer.setLayoutParams(slp2);
                     row.addView(spacer);
                 }
@@ -7649,9 +7672,10 @@ public class MainActivity extends Activity {
         tile.setElevation(0);
         if (sv != null) sv.requestDisallowInterceptTouchEvent(false);
         lastDragEndAt = System.currentTimeMillis();
-        final int mineCols = 2;
+        // Q75：拖动落位换算与网格同列数/同列间距，四列下按 4 列网格换位
+        final int mineCols = (cols >= 1 && cols <= 4) ? cols : 2;
         int tw = tile.getWidth(), th = tile.getHeight();
-        int rowH = th + dp(this, 10), colW = tw + dp(this, 10);
+        int rowH = th + dp(this, 10), colW = tw + (mineCols >= 4 ? dp(this, 8) : dp(this, 10));
         int dRow = rowH > 0 ? Math.round(dy / (float) rowH) : 0;
         int dCol = colW > 0 ? Math.round(dx / (float) colW) : 0;
         int rows = (list.size() + mineCols - 1) / mineCols;
