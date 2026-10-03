@@ -996,24 +996,28 @@ public class MainActivity extends Activity {
         return Color.rgb((hex >> 16) & 0xFF, (hex >> 8) & 0xFF, hex & 0xFF);
     }
 
-    // P-deck ②：与下一张顶色衔接的三段渐变（本卡顶→本卡底→下一张顶），无下一张时退回双色
-    GradientDrawable customBlendedGradient(int style, int nextStyle, boolean first, boolean last) {
+    // Q40 对照混合版 restyleTiles/.csk-tile::after 重做衔接：卡带本体只用自身双色 135° 渐变，
+    // 底部 48dp 由 customNextFade 竖向淡接下一张顶色（透明→下一张顶色），不用三段对角硬接
+    GradientDrawable customBandGradient(int style, boolean first, boolean last) {
         int s = Math.max(0, Math.min(style, CUSTOM_STYLES.length - 1));
         int[] pair = CUSTOM_STYLES[s];
-        GradientDrawable g;
-        if (nextStyle >= 0) {
-            int ns = Math.max(0, Math.min(nextStyle, CUSTOM_STYLES.length - 1));
-            g = new GradientDrawable(GradientDrawable.Orientation.TL_BR,
-                new int[]{styleRgb(pair[0]), styleRgb(pair[1]), styleRgb(CUSTOM_STYLES[ns][0])});
-        } else {
-            g = new GradientDrawable(GradientDrawable.Orientation.TL_BR,
-                new int[]{styleRgb(pair[0]), styleRgb(pair[1])});
-        }
+        GradientDrawable g = new GradientDrawable(GradientDrawable.Orientation.TL_BR,
+            new int[]{styleRgb(pair[0]), styleRgb(pair[1])});
         float r = dp(this, 14);
         if (first && last) g.setCornerRadius(r);
         else if (first) g.setCornerRadii(new float[]{r, r, r, r, 0, 0, 0, 0});
         else if (last) g.setCornerRadii(new float[]{0, 0, 0, 0, r, r, r, r});
         else g.setCornerRadius(0);
+        return g;
+    }
+
+    // Q40：带底 48dp 衔接层（对照 .csk-tile::after：to bottom, transparent → var(--next)=下一张顶色）
+    GradientDrawable customNextFade(int nextStyle) {
+        int ns = Math.max(0, Math.min(nextStyle, CUSTOM_STYLES.length - 1));
+        int next = styleRgb(CUSTOM_STYLES[ns][0]);
+        GradientDrawable g = new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
+            new int[]{Color.argb(0, Color.red(next), Color.green(next), Color.blue(next)), next});
+        g.setCornerRadius(0);
         return g;
     }
 
@@ -5234,21 +5238,33 @@ public class MainActivity extends Activity {
             final CustomCard c = customCards.get(i);
             final int idx = i;
             final int nextStyle = (i + 1 < customCards.size()) ? customCards.get(i + 1).style : -1;
-            LinearLayout tile = new LinearLayout(this);
-            tile.setOrientation(LinearLayout.HORIZONTAL);
-            tile.setGravity(Gravity.CENTER_VERTICAL);
-            tile.setBackground(customBlendedGradient(c.style, nextStyle, i == 0, i == customCards.size() - 1));
-            tile.setPadding(dp(this, 14), dp(this, 18), dp(this, 14), dp(this, 30));
+            // Q40：带体改 FrameLayout——本体双色渐变 + 底部 48dp 淡接层（下一条色带顶色），对照 .csk-tile::after
+            FrameLayout tile = new FrameLayout(this);
+            tile.setBackground(customBandGradient(c.style, i == 0, i == customCards.size() - 1));
+            LinearLayout row = new LinearLayout(this);
+            row.setOrientation(LinearLayout.HORIZONTAL);
+            row.setGravity(Gravity.CENTER_VERTICAL);
+            row.setPadding(dp(this, 14), dp(this, 18), dp(this, 14), dp(this, 30));
+            tile.addView(row, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+            if (nextStyle >= 0) {
+                View fade = new View(this);
+                fade.setBackground(customNextFade(nextStyle));
+                fade.setClickable(false);
+                fade.setFocusable(false);
+                FrameLayout.LayoutParams flp = new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(this, 48));
+                flp.gravity = Gravity.BOTTOM;
+                tile.addView(fade, flp);
+            }
             tilesBox.addView(tile, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
             TextView idxTv = tv(this, String.valueOf(i + 1), 11, Color.WHITE, true);
             idxTv.setBackground(roundRect(Color.argb(71, 255, 255, 255), 999, this));
             idxTv.setGravity(Gravity.CENTER);
-            tile.addView(idxTv, new LinearLayout.LayoutParams(dp(this, 24), dp(this, 24)));
+            row.addView(idxTv, new LinearLayout.LayoutParams(dp(this, 24), dp(this, 24)));
             LinearLayout tx = new LinearLayout(this);
             tx.setOrientation(LinearLayout.VERTICAL);
             LinearLayout.LayoutParams txLp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
             txLp.leftMargin = dp(this, 10);
-            tile.addView(tx, txLp);
+            row.addView(tx, txLp);
             TextView nm = tv(this, c.name, 15.5f, Color.WHITE, true);
             nm.setMaxLines(1);
             nm.setEllipsize(android.text.TextUtils.TruncateAt.END);
@@ -5259,9 +5275,9 @@ public class MainActivity extends Activity {
             mtv.setEllipsize(android.text.TextUtils.TruncateAt.END);
             tx.addView(mtv);
             // 三颗 30dp 半透玻璃小圆钮：上移/下移/删除（细字形，禁用态半透明；删除走二次确认+撤销）
-            tile.addView(customMoveBtn("↑", i == 0, v -> moveCustom(idx, -1)));
-            tile.addView(customMoveBtn("↓", i == customCards.size() - 1, v -> moveCustom(idx, 1)));
-            tile.addView(customMoveBtn("✕", false, v -> confirmDeleteCustom(c)));
+            row.addView(customMoveBtn("↑", i == 0, v -> moveCustom(idx, -1)));
+            row.addView(customMoveBtn("↓", i == customCards.size() - 1, v -> moveCustom(idx, 1)));
+            row.addView(customMoveBtn("✕", false, v -> confirmDeleteCustom(c)));
             tile.setOnClickListener(v -> {
                 if (System.currentTimeMillis() - lastDragEndAt < 450) return;
                 openCustomDetail(c);
@@ -5346,6 +5362,8 @@ public class MainActivity extends Activity {
                                         View band = parent.getChildAt(i);
                                         if (band instanceof ViewGroup && ((ViewGroup) band).getChildCount() > 0) {
                                             View idxV = ((ViewGroup) band).getChildAt(0);
+                                            // Q40：色带改 FrameLayout（本体+淡接层）后编号在行容器首位，下探一层取编号
+                                            if (idxV instanceof ViewGroup && ((ViewGroup) idxV).getChildCount() > 0) idxV = ((ViewGroup) idxV).getChildAt(0);
                                             if (idxV instanceof TextView) ((TextView) idxV).setText(String.valueOf(i + 1));
                                         }
                                     }
