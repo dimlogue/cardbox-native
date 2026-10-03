@@ -4997,9 +4997,6 @@ public class MainActivity extends Activity {
             slide.setGravity(Gravity.CENTER_HORIZONTAL);
             slide.setPadding(dp(this, 26), dp(this, 16), dp(this, 26), dp(this, 4)); // Q33：大图略内缩留呼吸边（对照 .p-slide padding 16/22 再放宽 4dp），不死贴窗边
             track.addView(slide, new LinearLayout.LayoutParams(screenW, ViewGroup.LayoutParams.WRAP_CONTENT));
-            ImageView iv = new ImageView(this);
-            iv.setScaleType(ImageView.ScaleType.FIT_CENTER);
-            if (Build.VERSION.SDK_INT >= 21) iv.setElevation(dp(this, 6));
             Bitmap b = Img.get(this, imgPath);
             int availW = screenW - dp(this, 52);
             int imgW = availW, imgH = dp(this, 168);
@@ -5009,17 +5006,26 @@ public class MainActivity extends Activity {
                 int maxH = dp(this, 260);
                 if (imgH > maxH) { imgH = maxH; imgW = Math.round(imgH / ratio); }
             }
-            // Q33：半径按最终显示图宽 4% 取（全宽时约 14dp，替掉 Q27 写死的 12dp 下沿值）；
-            // 位图圆角/占位渐变/阴影轮廓三者同吃这个半径，无图占位同半径（Q33 ④）。
+            // Q48：控件级圆角裁切为主——用户定性「控件是正方形、图要裁成圆弧边框」；旧实现仅靠 roundBitmap
+            // 副本切角，副本分配失败或个别 OEM 的 outline 退化时方图四角（源图深色角）直接露黑。改：外框
+            // FrameLayout 与 ImageView 双双装同半径 outline 裁切（四角透出窗体/画廊底，不垫任何黑底），
+            // elevation 阴影移到外框按圆角轮廓走，位图级切角保留为第二层；源图文件一张不动。
             float cardR = cardRadiusDp(imgW / getResources().getDisplayMetrics().density);
-            iv.setBackground(placeholderGrad(cardR, this));
+            FrameLayout imgFrame = new FrameLayout(this);
+            imgFrame.setBackgroundColor(Color.TRANSPARENT);
+            if (Build.VERSION.SDK_INT >= 21) imgFrame.setElevation(dp(this, 6));
+            roundClip(imgFrame, cardR, this);
+            ImageView iv = new ImageView(this);
+            iv.setScaleType(ImageView.ScaleType.FIT_CENTER);
+            iv.setBackgroundColor(Color.TRANSPARENT);
             roundClip(iv, cardR, this);
+            imgFrame.addView(iv, new FrameLayout.LayoutParams(imgW, imgH));
             LinearLayout.LayoutParams ilp = new LinearLayout.LayoutParams(imgW, imgH);
             ilp.gravity = Gravity.CENTER_HORIZONTAL;
-            slide.addView(iv, ilp);
-            if (b != null) {
-                // Q27：有真图时撤掉占位底（免其颜色从圆角外透出），图本身按位图级圆角出（半径按位图/显示宽比换算）
-                iv.setBackground(null);
+            slide.addView(imgFrame, ilp);
+            if (b == null) iv.setBackground(placeholderGrad(cardR, this));
+            else {
+                // 第二层：位图级同半径切角（半径按位图/显示宽比换算）；副本失败回落源图时控件裁切仍保四角
                 float rScale = imgW > 0 ? (float) b.getWidth() / (float) imgW : 1f;
                 iv.setImageBitmap(roundBitmap(b, dp(this, cardR) * rScale));
             }
@@ -6249,15 +6255,19 @@ public class MainActivity extends Activity {
         page.setOrientation(LinearLayout.VERTICAL);
         page.setBackgroundColor(Color.WHITE);
 
-        // .cc-hero：卡色渐变头（135° 双色、顶圆 20 与窗体同半径、内边距 28/20/22）
+        // Q48：hero 改独立圆角卡——四角同半径 16dp、四边内缩留白，不再顶着窗体顶圆在两上角露白边
+        // （与 Q46 收款码卡片口径一致）；编辑钮移出色块，入下方信息区（见 buildCustomDetailBody 信息头行）。
         LinearLayout hero = new LinearLayout(this);
         hero.setOrientation(LinearLayout.VERTICAL);
         GradientDrawable hg = customGradient(c.style);
-        float hr = dp(this, 20);
-        hg.setCornerRadii(new float[]{hr, hr, hr, hr, 0, 0, 0, 0});
+        float hr = dp(this, 16);
+        hg.setCornerRadii(new float[]{hr, hr, hr, hr, hr, hr, hr, hr});
         hero.setBackground(hg);
-        hero.setPadding(dp(this, 20), dp(this, 28), dp(this, 64), dp(this, 22));
-        page.addView(hero);
+        hero.setPadding(dp(this, 20), dp(this, 22), dp(this, 20), dp(this, 20));
+        LinearLayout.LayoutParams hlp2 = new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        hlp2.leftMargin = dp(this, 12); hlp2.rightMargin = dp(this, 12); hlp2.topMargin = dp(this, 12);
+        page.addView(hero, hlp2);
         TextView nm = tvW(this, c.name == null ? "" : c.name, 20, Color.WHITE, 800);
         nm.setLineSpacing(0, 1.15f);
         hero.addView(nm);
@@ -6268,20 +6278,27 @@ public class MainActivity extends Activity {
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         slp.topMargin = dp(this, 4);
         hero.addView(sb, slp);
-        // 编辑入口保留在窗内：hero 右下半透描边小钮（白字），不与底部双钮动作行抢位
-        TextView editBtn = tv(this, "编辑", 12.5f, Color.WHITE, true);
+        // .p-body（padding 16/18）+ .p-sec「卡片信息」+ .spec 细线分行；Q48：编辑钮移出 hero 色块，
+        // 作信息区头行右上轻钮（白底浅描边蓝字），点击行为沿旧 hero 钮（链式开表单、防 dock 闪烁）
+        LinearLayout inner = new LinearLayout(this);
+        inner.setOrientation(LinearLayout.VERTICAL);
+        inner.setPadding(dp(this, 18), dp(this, 16), dp(this, 18), 0);
+        page.addView(inner);
+        LinearLayout infoHead = new LinearLayout(this);
+        infoHead.setOrientation(LinearLayout.HORIZONTAL);
+        infoHead.setGravity(Gravity.CENTER_VERTICAL);
+        infoHead.addView(detailSectionTitle("卡片信息"), new LinearLayout.LayoutParams(
+            0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+        TextView editBtn = tv(this, "编辑", 12.5f, Color.rgb(0x0A, 0x5C, 0xD6), true);
         editBtn.setGravity(Gravity.CENTER);
         GradientDrawable eg = new GradientDrawable();
-        eg.setColor(Color.argb(46, 255, 255, 255));
+        eg.setColor(Color.WHITE);
         eg.setCornerRadius(dp(this, 999));
-        eg.setStroke(dp(this, 1), Color.argb(140, 255, 255, 255));
+        eg.setStroke(dp(this, 1), Color.rgb(0xD8, 0xD8, 0xDE));
         editBtn.setBackground(eg);
         editBtn.setPadding(dp(this, 14), dp(this, 6), dp(this, 14), dp(this, 6));
-        LinearLayout.LayoutParams elp = new LinearLayout.LayoutParams(
-            ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        elp.topMargin = dp(this, 12);
-        elp.gravity = Gravity.END;
-        hero.addView(editBtn, elp);
+        infoHead.addView(editBtn);
+        inner.addView(infoHead);
         editBtn.setOnClickListener(v -> {
             haptic();
             suppressNextChromeRestore = true; // 链式开表单，跳过一次恢复防 dock 闪烁（Q12）
@@ -6294,13 +6311,6 @@ public class MainActivity extends Activity {
                 pressBounce(v, false);
             return false;
         });
-
-        // .p-body（padding 16/18）+ .p-sec「卡片信息」+ .spec 细线分行
-        LinearLayout inner = new LinearLayout(this);
-        inner.setOrientation(LinearLayout.VERTICAL);
-        inner.setPadding(dp(this, 18), dp(this, 16), dp(this, 18), 0);
-        page.addView(inner);
-        inner.addView(detailSectionTitle("卡片信息"));
         LinearLayout specBox = new LinearLayout(this);
         specBox.setOrientation(LinearLayout.VERTICAL);
         inner.addView(specBox);
