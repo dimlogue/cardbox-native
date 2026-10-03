@@ -885,7 +885,7 @@ public class MainActivity extends Activity {
         LinearLayout col = new LinearLayout(this);
         col.setOrientation(LinearLayout.VERTICAL);
         // 顶部让出悬浮栏（状态栏 + 栏高约 50 + 间距），底部留白让最后一项滚出悬浮底栏
-        col.setPadding(dp(this, 14), statusBarH() + dp(this, 70), dp(this, 14), dp(this, 104));
+        col.setPadding(dp(this, 14), statusBarH() + dp(this, 70), dp(this, 14), dockPad());
         homeScroll.addView(col, new ScrollView.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
 
@@ -1657,7 +1657,7 @@ public class MainActivity extends Activity {
         sv.setBackgroundColor(Color.rgb(0xF2, 0xF3, 0xF7));
         LinearLayout page = new LinearLayout(this);
         page.setOrientation(LinearLayout.VERTICAL);
-        page.setPadding(dp(this, 16), statusBarH() + dp(this, 12), dp(this, 16), dp(this, 28));
+        page.setPadding(dp(this, 16), pageTopPad(), dp(this, 16), dp(this, 28));
         sv.addView(page);
 
         List<WizQ> qs = wizQs();
@@ -1882,7 +1882,7 @@ public class MainActivity extends Activity {
         sc.setBackgroundColor(Color.rgb(0xF2, 0xF3, 0xF7));
         LinearLayout page = new LinearLayout(this);
         page.setOrientation(LinearLayout.VERTICAL);
-        page.setPadding(dp(this, 16), statusBarH() + dp(this, 12), dp(this, 16), dp(this, 28));
+        page.setPadding(dp(this, 16), pageTopPad(), dp(this, 16), dp(this, 28));
         sc.addView(page);
 
         LinearLayout top = new LinearLayout(this);
@@ -2097,7 +2097,7 @@ public class MainActivity extends Activity {
         sv.setClipToPadding(false);
         LinearLayout listBox = new LinearLayout(this);
         listBox.setOrientation(LinearLayout.VERTICAL);
-        listBox.setPadding(0, dp(this, 10), 0, dp(this, 104));
+        listBox.setPadding(0, dp(this, 10), 0, dockPad());
         sv.addView(listBox);
         page.addView(sv, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
 
@@ -2385,7 +2385,7 @@ public class MainActivity extends Activity {
         sv.setClipToPadding(false);
         LinearLayout inner = new LinearLayout(this);
         inner.setOrientation(LinearLayout.VERTICAL);
-        inner.setPadding(0, dp(this, 10), 0, dp(this, 104));
+        inner.setPadding(0, dp(this, 10), 0, dockPad());
         sv.addView(inner, new ScrollView.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
         page.addView(sv, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
         if (!mineCards.isEmpty()) inner.addView(buildMineAnalysis(mineCards));
@@ -3132,7 +3132,7 @@ public class MainActivity extends Activity {
         sv.setClipToPadding(false);
         newsListBox = new LinearLayout(this);
         newsListBox.setOrientation(LinearLayout.VERTICAL);
-        newsListBox.setPadding(0, dp(this, 2), 0, dp(this, 104));
+        newsListBox.setPadding(0, dp(this, 2), 0, dockPad());
         sv.addView(newsListBox);
         page.addView(sv, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
         renderNews();
@@ -3276,7 +3276,7 @@ public class MainActivity extends Activity {
         LinearLayout head = new LinearLayout(this);
         head.setOrientation(LinearLayout.HORIZONTAL);
         head.setGravity(Gravity.CENTER_VERTICAL);
-        head.setPadding(dp(this, 14), statusBarH() + dp(this, 12), dp(this, 14), dp(this, 6));
+        head.setPadding(dp(this, 14), pageTopPad(), dp(this, 14), dp(this, 6));
         root.addView(head);
         Button back = new Button(this);
         back.setText("‹ 返回"); back.setTextSize(14); back.setAllCaps(false);
