@@ -141,6 +141,39 @@ public class MainActivity extends Activity {
         }
         syncTopFab();
     }
+    // Q12 浮窗升起时悬浮件全体退场（对照混合版 styles.css body.dock-hidden：
+    // .dock-wrap/.fab/.quick-fab/.qf-top/.sbar 一并 display:none，app.js 各弹窗 open* 均 setDockVisible(false)）。
+    // 原生等价：navWrap（dock）+searchFab/filterFab/addFab/topFab 同退同回；关窗恢复走 sync* 的
+    // ANIM_ENTER 淡入缩放（P4-fix 曲线），dock 本身 180ms 淡入，不再各处散写 navWrap VISIBLE。
+    boolean isChromeCovered() {
+        return welcomeOpen || changelogOpen || wizardOpen || aboutOpen
+            || filterSheet != null || detailCard != null || cardMenuPop != null
+            || customFormSheet != null || binSheet != null || addSheetView != null;
+    }
+    void hideFabsNow() {
+        cancelTopFabShow();
+        if (searchFab != null && searchFab.getParent() != null) ((ViewGroup) searchFab.getParent()).removeView(searchFab);
+        searchFab = null;
+        if (filterFab != null && filterFab.getParent() != null) ((ViewGroup) filterFab.getParent()).removeView(filterFab);
+        filterFab = null; filterFabBadge = null;
+        if (addFab != null && addFab.getParent() != null) ((ViewGroup) addFab.getParent()).removeView(addFab);
+        addFab = null;
+        if (topFab != null && topFab.getParent() != null) ((ViewGroup) topFab.getParent()).removeView(topFab);
+        topFab = null; topFabShown = false;
+    }
+    void hideChrome() {
+        if (navWrap != null) { navWrap.animate().cancel(); navWrap.setVisibility(View.GONE); }
+        hideFabsNow();
+    }
+    void restoreChrome() {
+        if (isChromeCovered()) { hideChrome(); return; }
+        if (navWrap != null && navWrap.getVisibility() != View.VISIBLE) {
+            navWrap.setVisibility(View.VISIBLE);
+            navWrap.setAlpha(0f);
+            navWrap.animate().alpha(1f).setDuration(180).setInterpolator(ANIM_ENTER).start();
+        }
+        syncSearchFab(); syncAddFab(); syncTopFab();
+    }
     // P2d-fix：长页面底部安全留白，确保末行能完整滚出悬浮 dock 之外（dock 高约 67dp+底边距 12dp）
     int dockPad() { return dp(this, 112) + navBarH(); } // Q26：再加导航栏避让，末行滚出抬高后的 dock
     // P-scroll：全 App 长列表统一细淡滚动条——3dp 细窄、低对比蓝灰，滚动时显、停稳后淡出，不许一根长粗条挂右边
@@ -225,8 +258,7 @@ public class MainActivity extends Activity {
         // Q5：回顶钮只在全部卡片/学生/我的卡片三个列表页出现（对照混合版 syncQuickFab 的 tab 口径）；
         // 设置/资讯不挂，浮窗（筛选/选卡/欢迎/关于/详情/日志）升起时退场（Q12 名单先行落地这一钮）
         boolean pageOk = "home".equals(tab) || "student".equals(tab) || "mine".equals(tab);
-        boolean covered = welcomeOpen || wizardOpen || aboutOpen || filterSheet != null
-            || detailCard != null || changelogOpen;
+        boolean covered = isChromeCovered();
         ScrollView sv = activeLongScroll();
         if (sv == null || covered || !pageOk) {
             cancelTopFabShow();
@@ -866,6 +898,7 @@ public class MainActivity extends Activity {
     };
     // Q9 在线 BIN 查询（对照混合版 lookupBin/openBinQuery/addBinToMine）：binlist 在线认行，可一键入卡
     View binSheet = null;
+    View addSheetView = null; // Q12: 添加卡片底表，浮窗退场名单内
     String lastBin = null, lastBinScheme = null, lastBinType = null, lastBinBrand = null, lastBinBank = null, lastBinCountry = null;
     // P-deck：我的卡片页滚动位置保持（换序/开合不甩回顶部）
     ScrollView mineScrollView = null;
@@ -2005,7 +2038,7 @@ public class MainActivity extends Activity {
     // 只在首页、且没有整屏覆盖层时出现；覆盖层（详情/向导/欢迎/日志）都会
     // content.removeAllViews()，天然把它清掉，回到首页时 showTab 会再挂回来。
     void syncSearchFab() {
-        boolean want = "home".equals(tab) && detailCard == null && !wizardOpen && !welcomeOpen && !changelogOpen && filterSheet == null; // P2e：筛选窗开着时双钮退场
+        boolean want = "home".equals(tab) && !isChromeCovered(); // Q12：任一浮窗在场双钮退场
         if (!want) {
             if (searchFab != null && searchFab.getParent() != null)
                 ((ViewGroup) searchFab.getParent()).removeView(searchFab);
@@ -2055,7 +2088,7 @@ public class MainActivity extends Activity {
     // Q7 ④：我的卡片页右下圆形 ＋（照混合版 .fab：56dp、右 20dp、底 108dp+inset、蓝底白 ＋、与 dock 同层浮空）；
     // 仅在 mine 页且浮窗（筛选/选卡/详情/向导/关于/长按菜单）不在场时出现，浮窗退场归 Q12 同步。
     void syncAddFab() {
-        boolean want = "mine".equals(tab) && detailCard == null && !wizardOpen && !welcomeOpen && !changelogOpen && filterSheet == null;
+        boolean want = "mine".equals(tab) && !isChromeCovered(); // Q12
         if (!want) {
             if (addFab != null && addFab.getParent() != null) ((ViewGroup) addFab.getParent()).removeView(addFab);
             addFab = null;
@@ -2089,7 +2122,9 @@ public class MainActivity extends Activity {
     // Q7 ④ + Q9：点 ＋ 先升「添加卡片」底表（自定义卡片 / 在线查询卡信息 / 取消），再进表单；
     // 在线查询走真 BIN 在线认行（openBinQuery），不再是空壳跳转。
     void openAddSheet() {
+        hideChrome(); // Q12
         final FrameLayout sheet = new FrameLayout(this);
+        addSheetView = sheet;
         sheet.setBackgroundColor(Color.argb(117, 15, 20, 40));
         sheet.setOnClickListener(v -> closeAddSheet(sheet));
         LinearLayout card = new LinearLayout(this);
@@ -2131,7 +2166,10 @@ public class MainActivity extends Activity {
         return r;
     }
     void closeAddSheet(View sheet) {
+        if (sheet == addSheetView) addSheetView = null;
         if (sheet != null && sheet.getParent() != null) ((ViewGroup) sheet.getParent()).removeView(sheet);
+        // rows chain into openCustomForm/openBinQuery which hide again same frame; restore only if no next overlay took over
+        if (customFormSheet == null && binSheet == null) restoreChrome(); // Q12
     }
 
     void updateFilterFabBadge() {
@@ -2716,7 +2754,7 @@ public class MainActivity extends Activity {
             .setDuration(160).setInterpolator(ANIM_ENTER).start();
 
         // 菜单出现时底栏让开，不挡靠近底部的卡（对照 setDockVisible(false)）
-        if (navWrap != null) navWrap.setVisibility(View.GONE);
+        hideChrome(); // Q12
     }
 
     static void removeViewNow(View v) {
@@ -2728,7 +2766,7 @@ public class MainActivity extends Activity {
         final View pop = cardMenuPop, bd = cardMenuBackdrop, cl = cardMenuClone, mg = cardMenuGlass;
         cardMenuPop = null; cardMenuBackdrop = null; cardMenuClone = null; cardMenuGlass = null;
         removeViewNow(mg);
-        if (navWrap != null) navWrap.setVisibility(View.VISIBLE);
+        restoreChrome(); // Q12
         removeViewNow(bd);
         removeViewNow(cl);
         if (pop == null) return;
@@ -2743,7 +2781,7 @@ public class MainActivity extends Activity {
         View pop = cardMenuPop, bd = cardMenuBackdrop, cl = cardMenuClone, mg = cardMenuGlass;
         cardMenuPop = null; cardMenuBackdrop = null; cardMenuClone = null; cardMenuGlass = null;
         removeViewNow(mg);
-        if (navWrap != null) navWrap.setVisibility(View.VISIBLE);
+        restoreChrome(); // Q12
         removeViewNow(pop);
         removeViewNow(bd);
         removeViewNow(cl);
@@ -3242,13 +3280,7 @@ public class MainActivity extends Activity {
     void openFilterSheet() {
         closeFilterSheetNow();
         // P2e/P2c：右下双钮退场，不与筛选窗叠压
-        if (searchFab != null && searchFab.getParent() != null)
-            ((ViewGroup) searchFab.getParent()).removeView(searchFab);
-        searchFab = null;
-        if (filterFab != null && filterFab.getParent() != null)
-            ((ViewGroup) filterFab.getParent()).removeView(filterFab);
-        filterFab = null;
-        filterFabBadge = null;
+        hideChrome(); // Q12
         final FrameLayout sheet = new FrameLayout(this);
         sheet.setBackgroundColor(Color.argb(38, 18, 22, 36)); // 轻遮罩（混合版 .dlg-backdrop.light）
         sheet.setOnClickListener(v -> closeFilterSheet());
@@ -3344,17 +3376,17 @@ public class MainActivity extends Activity {
         final View sheet = filterSheet;
         if (sheet == null) return;
         filterSheet = null;
-        if (sheet.getParent() == null) { syncSearchFab(); return; }
+        if (sheet.getParent() == null) { restoreChrome(); return; }
         View card = sheet instanceof ViewGroup && ((ViewGroup) sheet).getChildCount() > 0
             ? ((ViewGroup) sheet).getChildAt(((ViewGroup) sheet).getChildCount() - 1) : null; // Q11：玻璃层在窗下，窗体是最后一层
         if (card != null) {
             card.animate().alpha(0f).scaleX(0.96f).scaleY(0.96f).translationY(dp(this, 10))
                 .setDuration(180).setInterpolator(ANIM_ENTER)
-                .withEndAction(() -> { closeFilterSheetNow(sheet); syncSearchFab(); }).start();
+                .withEndAction(() -> { closeFilterSheetNow(sheet); restoreChrome(); }).start();
             sheet.animate().alpha(0f).setDuration(180).start();
         } else {
             closeFilterSheetNow(sheet);
-            syncSearchFab();
+            restoreChrome();
         }
     }
 
@@ -3778,16 +3810,14 @@ public class MainActivity extends Activity {
                     .setDuration(180).setInterpolator(ANIM_ENTER)
                     .withEndAction(() -> {
                         if (sheet.getParent() != null) ((ViewGroup) sheet.getParent()).removeView(sheet);
-                        if (navWrap != null) navWrap.setVisibility(View.VISIBLE); // Q32
-                        syncSearchFab();
+                        restoreChrome(); // Q12
                     }).start();
                 sheet.animate().alpha(0f).setDuration(180).start();
                 return;
             }
             ((ViewGroup) sheet.getParent()).removeView(sheet);
         }
-        if (navWrap != null) navWrap.setVisibility(View.VISIBLE); // Q32
-        syncSearchFab();
+        restoreChrome(); // Q12
     }
 
     // 同 app.js wizBack：已在第一题（含未选场景由关闭键处理）就回到选场景，否则上一步
@@ -3799,7 +3829,7 @@ public class MainActivity extends Activity {
     // P2b：选卡改悬浮窗——对照混合版 .wizard/.wiz-shade/.wiz-sheet：全屏轻遮罩（rgba(15,20,40,.46)）
     // +贴底大圆角窗（顶圆角 26、max-height 88vh、柔影），底层页面留在后面，关窗回到原页原位。
     void showWizardPage() {
-        if (navWrap != null) navWrap.setVisibility(View.GONE); // Q32: hide whole dock incl. glass layer - hiding navBar alone leaks a glass strip at screen bottom
+        hideChrome(); // Q12
         // P4：窗已在场时是步骤切换（新内容横向滑入），否则是首次打开（整窗升起）
         boolean stepSwitch = wizardSheet != null && wizardSheet.getParent() != null;
         if (wizardSheet != null && wizardSheet.getParent() != null)
@@ -4157,7 +4187,7 @@ public class MainActivity extends Activity {
         detailCard = c;
         detailClosing = false;
         detailVariantIdx = 0;
-        if (navWrap != null) navWrap.setVisibility(View.GONE);
+        hideChrome(); // Q12
 
         final FrameLayout overlay = new FrameLayout(this);
         overlay.setBackgroundColor(Color.TRANSPARENT);
@@ -4315,14 +4345,8 @@ public class MainActivity extends Activity {
             detailScroll = null; detailBinView = null; detailVerInfoBox = null;
             detailDots = new java.util.ArrayList<>();
             detailCard = null; detailClosing = false; detailFromWiz = false;
-            if (!wasWiz && navWrap != null) navWrap.setVisibility(View.VISIBLE);
-            if (wasWiz && wizardOpen) {
-                // 选卡窗仍在底下（未被切走），直接露回即可，进度天然保留
-                if (navWrap != null) navWrap.setVisibility(View.GONE);
-            }
             restoreCurrentTabScroll();
-            syncSearchFab();
-            syncTopFab();
+            restoreChrome(); // Q12
             // FIFO：关窗落定才开下一次点选的那张，不叠窗
             Card next = detailQueue.poll();
             if (next != null) openDetail(next, wasWiz && wizardOpen);
@@ -5583,16 +5607,14 @@ public class MainActivity extends Activity {
                     .setDuration(180).setInterpolator(ANIM_ENTER)
                     .withEndAction(() -> {
                         if (sheet.getParent() != null) ((ViewGroup) sheet.getParent()).removeView(sheet);
-                        if (navWrap != null) navWrap.setVisibility(View.VISIBLE); // Q32
-                        syncSearchFab();
+                        restoreChrome(); // Q12
                     }).start();
                 sheet.animate().alpha(0f).setDuration(180).start();
                 return;
             }
             ((ViewGroup) sheet.getParent()).removeView(sheet);
         }
-        if (navWrap != null) navWrap.setVisibility(View.VISIBLE); // Q32
-        syncSearchFab();
+        restoreChrome(); // Q12
     }
 
     void closeCustomFormNow() {
@@ -5998,7 +6020,7 @@ public class MainActivity extends Activity {
         closeBinQueryNow();
         lastBin = null; lastBinScheme = null; lastBinType = null; lastBinBrand = null; lastBinBank = null; lastBinCountry = null;
         captureCurrentPageScroll();
-        if (navWrap != null) navWrap.setVisibility(View.GONE);
+        hideChrome(); // Q12
         final FrameLayout sheet = new FrameLayout(this);
         View shade = new View(this);
         shade.setBackgroundColor(Color.argb(102, 0, 0, 0));
@@ -6108,16 +6130,14 @@ public class MainActivity extends Activity {
                 card.animate().translationY(dp(this, 42)).alpha(0f).setDuration(180).setInterpolator(ANIM_ENTER)
                     .withEndAction(() -> {
                         if (sheet.getParent() != null) ((ViewGroup) sheet.getParent()).removeView(sheet);
-                        if (navWrap != null) navWrap.setVisibility(View.VISIBLE);
-                        syncSearchFab();
+                        restoreChrome(); // Q12
                     }).start();
                 sheet.animate().alpha(0f).setDuration(180).start();
                 return;
             }
             ((ViewGroup) sheet.getParent()).removeView(sheet);
         }
-        if (navWrap != null) navWrap.setVisibility(View.VISIBLE);
-        syncSearchFab();
+        restoreChrome(); // Q12
     }
 
     void lookupBinOnline(final String bin, final LinearLayout resultBox, final Button addBtn) {
@@ -6248,7 +6268,7 @@ public class MainActivity extends Activity {
         final int[] styleSel = {draft.style};
 
         captureCurrentPageScroll();
-        if (navWrap != null) navWrap.setVisibility(View.GONE); // 混合版 openCustomForm 即 setDockVisible(false)
+        hideChrome(); // Q12 混合版 openCustomForm 即 setDockVisible(false)
         final FrameLayout sheet = new FrameLayout(this);
         View shade = new View(this);
         shade.setBackgroundColor(Color.argb(102, 0, 0, 0)); // .dlg-backdrop rgba(0,0,0,.4)
@@ -6807,7 +6827,7 @@ public class MainActivity extends Activity {
         captureCurrentPageScroll();
         aboutOpen = true;
         aboutSponsorOpen = false;
-        if (navWrap != null) navWrap.setVisibility(View.GONE); // Q32: hide whole dock incl. glass layer - hiding navBar alone leaks a glass strip at screen bottom
+        hideChrome(); // Q12
         if (aboutSheet != null && aboutSheet.getParent() != null)
             ((ViewGroup) aboutSheet.getParent()).removeView(aboutSheet);
         final FrameLayout sheet = new FrameLayout(this);
@@ -6872,16 +6892,14 @@ public class MainActivity extends Activity {
                     .setDuration(180).setInterpolator(ANIM_ENTER)
                     .withEndAction(() -> {
                         if (sheet.getParent() != null) ((ViewGroup) sheet.getParent()).removeView(sheet);
-                        if (navWrap != null) navWrap.setVisibility(View.VISIBLE); // Q32
-                        syncSearchFab();
+                        restoreChrome(); // Q12
                     }).start();
                 sheet.animate().alpha(0f).setDuration(180).start();
                 return;
             }
             ((ViewGroup) sheet.getParent()).removeView(sheet);
         }
-        if (navWrap != null) navWrap.setVisibility(View.VISIBLE); // Q32
-        syncSearchFab();
+        restoreChrome(); // Q12
     }
 
     LinearLayout buildAboutBody() {
