@@ -916,18 +916,36 @@ public class MainActivity extends Activity {
         int n = activeFilterCount();
         if (n <= 0) {
             filterFabBadge.setVisibility(View.GONE);
+            // 无筛选时恢复白底
+            GradientDrawable bg0 = new GradientDrawable();
+            bg0.setShape(GradientDrawable.OVAL);
+            bg0.setColor(Color.WHITE);
+            bg0.setStroke(dp(this, 1), Color.argb(38, 20, 30, 60));
+            filterFab.setBackground(bg0);
         } else {
             filterFabBadge.setVisibility(View.VISIBLE);
             filterFabBadge.setText(n > 9 ? "9+" : String.valueOf(n));
+            // 有筛选时淡蓝底，与搜索钮的蓝呼应但不抢主次（同混合版已选态）
+            GradientDrawable bg1 = new GradientDrawable();
+            bg1.setShape(GradientDrawable.OVAL);
+            bg1.setColor(Color.rgb(0xE8, 0xF1, 0xFD));
+            bg1.setStroke(dp(this, 1), Color.argb(60, 0x0A, 0x5C, 0xD6));
+            filterFab.setBackground(bg1);
         }
     }
 
     View buildFilterFab() {
         FrameLayout fab = new FrameLayout(this);
+        int n0 = activeFilterCount();
         GradientDrawable bg = new GradientDrawable();
         bg.setShape(GradientDrawable.OVAL);
-        bg.setColor(Color.WHITE);
-        bg.setStroke(dp(this, 1), Color.argb(38, 20, 30, 60));
+        if (n0 > 0) {
+            bg.setColor(Color.rgb(0xE8, 0xF1, 0xFD));
+            bg.setStroke(dp(this, 1), Color.argb(60, 0x0A, 0x5C, 0xD6));
+        } else {
+            bg.setColor(Color.WHITE);
+            bg.setStroke(dp(this, 1), Color.argb(38, 20, 30, 60));
+        }
         fab.setBackground(bg);
         if (Build.VERSION.SDK_INT >= 21) fab.setElevation(dp(this, 12));
         FilterIconView icon = new FilterIconView(this);
@@ -950,9 +968,8 @@ public class MainActivity extends Activity {
         blp.rightMargin = dp(this, 1);
         fab.addView(badge, blp);
         filterFabBadge = badge;
-        int n = activeFilterCount();
-        if (n <= 0) badge.setVisibility(View.GONE);
-        else { badge.setVisibility(View.VISIBLE); badge.setText(n > 9 ? "9+" : String.valueOf(n)); }
+        if (n0 <= 0) badge.setVisibility(View.GONE);
+        else { badge.setVisibility(View.VISIBLE); badge.setText(n0 > 9 ? "9+" : String.valueOf(n0)); }
         fab.setOnClickListener(v -> {
             haptic();
             openFilterSheet();
