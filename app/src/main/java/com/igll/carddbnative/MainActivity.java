@@ -1639,7 +1639,7 @@ public class MainActivity extends Activity {
         sv.setBackgroundColor(Color.rgb(0xF2, 0xF3, 0xF7));
         LinearLayout page = new LinearLayout(this);
         page.setOrientation(LinearLayout.VERTICAL);
-        page.setPadding(dp(this, 16), dp(this, 12), dp(this, 16), dp(this, 28));
+        page.setPadding(dp(this, 16), statusBarH() + dp(this, 12), dp(this, 16), dp(this, 28));
         sv.addView(page);
 
         List<WizQ> qs = wizQs();
@@ -1864,7 +1864,7 @@ public class MainActivity extends Activity {
         sc.setBackgroundColor(Color.rgb(0xF2, 0xF3, 0xF7));
         LinearLayout page = new LinearLayout(this);
         page.setOrientation(LinearLayout.VERTICAL);
-        page.setPadding(dp(this, 16), dp(this, 12), dp(this, 16), dp(this, 28));
+        page.setPadding(dp(this, 16), statusBarH() + dp(this, 12), dp(this, 16), dp(this, 28));
         sc.addView(page);
 
         LinearLayout top = new LinearLayout(this);
@@ -3142,7 +3142,7 @@ public class MainActivity extends Activity {
         sc.setFillViewport(true);
         LinearLayout page = new LinearLayout(this);
         page.setOrientation(LinearLayout.VERTICAL);
-        page.setPadding(dp(this, 26), dp(this, 22), dp(this, 26), dp(this, 18));
+        page.setPadding(dp(this, 26), statusBarH() + dp(this, 22), dp(this, 26), dp(this, 18));
         sc.addView(page);
 
         TextView logo = tv(this, "卡", 30, Color.WHITE, true);
@@ -3258,7 +3258,7 @@ public class MainActivity extends Activity {
         LinearLayout head = new LinearLayout(this);
         head.setOrientation(LinearLayout.HORIZONTAL);
         head.setGravity(Gravity.CENTER_VERTICAL);
-        head.setPadding(dp(this, 14), dp(this, 12), dp(this, 14), dp(this, 6));
+        head.setPadding(dp(this, 14), statusBarH() + dp(this, 12), dp(this, 14), dp(this, 6));
         root.addView(head);
         Button back = new Button(this);
         back.setText("‹ 返回"); back.setTextSize(14); back.setAllCaps(false);
