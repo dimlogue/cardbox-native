@@ -1900,41 +1900,61 @@ public class MainActivity extends Activity {
         page.addView(top);
 
         ImageView iv = new ImageView(this);
-        iv.setScaleType(ImageView.ScaleType.CENTER_CROP);
-        iv.setBackground(roundRect(Color.rgb(0xE9, 0xEE, 0xF5), 14, this));
-        LinearLayout.LayoutParams ilp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(this, 168));
-        ilp.topMargin = dp(this, 14);
+        // 卡面图按原比例完整显示不裁剪（对照混合版 .p-slide img：object-fit:contain、圆角 12）
+        iv.setScaleType(ImageView.ScaleType.FIT_CENTER);
+        iv.setAdjustViewBounds(true);
+        iv.setBackground(roundRect(Color.rgb(0xF1, 0xF1, 0xF4), 12, this));
+        iv.setClipToOutline(true);
+        LinearLayout.LayoutParams ilp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(this, 220));
+        ilp.topMargin = dp(this, 12);
         page.addView(iv, ilp);
         Bitmap b = Img.get(this, c.image);
         if (b != null) iv.setImageBitmap(b);
 
-        TextView name = tv(this, c.name, 20, Color.rgb(0x1C, 0x1C, 0x1E), true);
+        TextView name = tv(this, c.name, 19, Color.rgb(0x1C, 0x1C, 0x1E), true);
         LinearLayout.LayoutParams nlp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        nlp.topMargin = dp(this, 14);
+        nlp.topMargin = dp(this, 12);
         page.addView(name, nlp);
-        page.addView(tv(this, c.bank + " · " + orgLabel(c.org) + " · " + (c.isCredit() ? "信用卡" : "借记卡") + " · " + c.status,
-            12.5f, Color.rgb(0x8E, 0x8E, 0x93), false));
+        TextView meta = tv(this, c.bank + " · " + orgLabel(c.org) + " · " + (c.isCredit() ? "信用卡" : "借记卡") + " · " + c.status,
+            12.5f, Color.rgb(0x8E, 0x8E, 0x93), false);
+        LinearLayout.LayoutParams mep = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        mep.topMargin = dp(this, 2);
+        page.addView(meta, mep);
 
         if (c.variants != null && c.variants.length() > 1) {
-            page.addView(tv(this, "子版本", 13, Color.rgb(0x8E, 0x8E, 0x93), true));
+            TextView varTitle = tv(this, "子版本", 14, Color.rgb(0x1C, 0x1C, 0x1E), true);
+            LinearLayout.LayoutParams vtp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            vtp.topMargin = dp(this, 14);
+            page.addView(varTitle, vtp);
+            LinearLayout varBox = new LinearLayout(this);
+            varBox.setOrientation(LinearLayout.VERTICAL);
+            varBox.setBackground(roundRect(Color.WHITE, 12, this));
+            varBox.setPadding(dp(this, 12), dp(this, 4), dp(this, 12), dp(this, 4));
+            LinearLayout.LayoutParams vbp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            vbp.topMargin = dp(this, 8);
+            page.addView(varBox, vbp);
             for (int i = 0; i < c.variants.length(); i++) {
                 JSONObject v = c.variants.optJSONObject(i);
                 if (v == null) continue;
                 String line = v.optString("name") + "（BIN " + v.optString("bin") + "）";
                 if (!v.optString("note").isEmpty()) line += "：" + v.optString("note");
-                TextView vt = tv(this, "· " + line, 12, Color.rgb(0x3A, 0x3A, 0x3C), false);
-                LinearLayout.LayoutParams vlp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-                vlp.topMargin = dp(this, 3);
-                page.addView(vt, vlp);
+                TextView vt = tv(this, line, 12.5f, Color.rgb(0x3A, 0x3A, 0x3C), false);
+                vt.setPadding(0, dp(this, 7), 0, dp(this, 7));
+                varBox.addView(vt);
+                if (i < c.variants.length() - 1) {
+                    View div = new View(this);
+                    div.setBackgroundColor(Color.rgb(0xF0, 0xF0, 0xF5));
+                    varBox.addView(div, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, Math.max(1, dp(this, 1) / 2)));
+                }
             }
         }
 
         if (c.review != null && !c.review.isEmpty()) {
             TextView rv = tv(this, c.review, 13.5f, Color.rgb(0x3A, 0x3A, 0x3C), false);
             rv.setBackground(roundRect(Color.rgb(0xEE, 0xF4, 0xFB), 12, this));
-            rv.setPadding(dp(this, 12), dp(this, 10), dp(this, 12), dp(this, 10));
+            rv.setPadding(dp(this, 12), dp(this, 9), dp(this, 12), dp(this, 9));
             LinearLayout.LayoutParams rlp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-            rlp.topMargin = dp(this, 12);
+            rlp.topMargin = dp(this, 10);
             page.addView(rv, rlp);
         }
 
@@ -1948,42 +1968,58 @@ public class MainActivity extends Activity {
             styleMineBtn(mineBtn, c);
             pages.remove("mine");
         });
-        LinearLayout.LayoutParams mlp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(this, 48));
-        mlp.topMargin = dp(this, 14);
+        LinearLayout.LayoutParams mlp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(this, 46));
+        mlp.topMargin = dp(this, 12);
         page.addView(mineBtn, mlp);
 
-        TextView specTitle = tv(this, "卡片参数", 15, Color.rgb(0x1C, 0x1C, 0x1E), true);
+        TextView specTitle = tv(this, "卡片参数", 14, Color.rgb(0x1C, 0x1C, 0x1E), true);
         LinearLayout.LayoutParams splp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        splp.topMargin = dp(this, 18);
+        splp.topMargin = dp(this, 16);
         page.addView(specTitle, splp);
 
         if (c.specs != null) {
+            // 参数整卡：白底圆角一整张，行间 1px 细线分隔、紧凑行高（对照混合版 .spec）
+            LinearLayout specBox = new LinearLayout(this);
+            specBox.setOrientation(LinearLayout.VERTICAL);
+            specBox.setBackground(roundRect(Color.WHITE, 14, this));
+            specBox.setPadding(dp(this, 14), dp(this, 4), dp(this, 14), dp(this, 4));
+            LinearLayout.LayoutParams sbp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            sbp.topMargin = dp(this, 8);
+            page.addView(specBox, sbp);
+            java.util.List<String[]> rows = new ArrayList<>();
             Iterator<String> keys = c.specs.keys();
             while (keys.hasNext()) {
                 String k = keys.next();
                 String v = c.specs.optString(k, "");
                 if (v == null || v.isEmpty()) continue;
+                rows.add(new String[]{k, v});
+            }
+            for (int i = 0; i < rows.size(); i++) {
                 LinearLayout row = new LinearLayout(this);
                 row.setOrientation(LinearLayout.HORIZONTAL);
-                row.setBackground(roundRect(Color.WHITE, 10, this));
-                row.setPadding(dp(this, 12), dp(this, 9), dp(this, 12), dp(this, 9));
-                LinearLayout.LayoutParams rlp2 = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-                rlp2.topMargin = dp(this, 6);
-                page.addView(row, rlp2);
-                TextView kt = tv(this, k, 12.5f, Color.rgb(0x8E, 0x8E, 0x93), false);
+                row.setGravity(Gravity.TOP);
+                row.setPadding(0, dp(this, 8), 0, dp(this, 8));
+                specBox.addView(row);
+                TextView kt = tv(this, rows.get(i)[0], 12.5f, Color.rgb(0x8E, 0x8E, 0x93), false);
                 row.addView(kt, new LinearLayout.LayoutParams(dp(this, 108), ViewGroup.LayoutParams.WRAP_CONTENT));
-                TextView vt = tv(this, v, 12.5f, Color.rgb(0x1C, 0x1C, 0x1E), false);
+                TextView vt = tv(this, rows.get(i)[1], 12.5f, Color.rgb(0x1C, 0x1C, 0x1E), false);
                 row.addView(vt, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+                if (i < rows.size() - 1) {
+                    View div = new View(this);
+                    div.setBackgroundColor(Color.rgb(0xF0, 0xF0, 0xF5));
+                    specBox.addView(div, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, Math.max(1, dp(this, 1) / 2)));
+                }
             }
         }
         return sc;
     }
 
     void styleMineBtn(Button b, Card c) {
+        // 对照混合版 .mine-toggle：未收藏蓝底白字、已收藏绿底白字，利落主按钮（圆角 12）
         boolean in = mine.contains(c.id);
         b.setText(in ? "✓ 已在我的卡片（点此移除）" : "＋ 加入我的卡片");
-        b.setTextColor(in ? Color.rgb(0x1D, 0x8A, 0x49) : Color.WHITE);
-        b.setBackground(roundRect(in ? Color.rgb(0xE6, 0xF6, 0xEC) : Color.rgb(0x0A, 0x5C, 0xD6), 14, this));
+        b.setTextColor(Color.WHITE);
+        b.setBackground(roundRect(in ? Color.rgb(0x34, 0xC7, 0x59) : Color.rgb(0x0A, 0x5C, 0xD6), 12, this));
     }
 
     // ---------- 学生推荐（Phase 2b，对照 app.js studentReason/studentFit/studentPageHtml） ----------
