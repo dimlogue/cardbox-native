@@ -3142,7 +3142,7 @@ public class MainActivity extends Activity {
         name.setEllipsize(android.text.TextUtils.TruncateAt.END);
         body.addView(name, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
 
-        TextView sub = tv(this, c.bank + " · " + orgLabel(c.org), 10.5f, Color.rgb(0x8E, 0x8E, 0x93), false);
+        TextView sub = tv(this, c.bank + " · " + orgLabel(c.org) + (c.isCredit() ? " · 信用卡" : ""), 10.5f, Color.rgb(0x8E, 0x8E, 0x93), false);
         sub.setMaxLines(1);
         sub.setEllipsize(android.text.TextUtils.TruncateAt.END);
         body.addView(sub);
@@ -3159,6 +3159,15 @@ public class MainActivity extends Activity {
             "已停发".equals(c.status) ? Color.rgb(0xB0, 0x23, 0x2B) : Color.rgb(0x1D, 0x8A, 0x49), chipSp));
         final TextView addedChip = chip("已添加", Color.rgb(0xE6, 0xF6, 0xEC), Color.rgb(0x1D, 0x8A, 0x49), chipSp);
         if (mine.contains(c.id)) chips.addView(addedChip);
+
+        // Q51：特点标签行（对照混合版 featChips——FEATS 顺序逐卡渲染命中的标签，
+        // .feats 流式换行、最多两行溢出截断；此前原生瓷砖只出评分/状态行，标签全缺）
+        View featFlow = buildFeatFlow(c, tileW - dp(this, 16), nc);
+        if (featFlow != null) {
+            LinearLayout.LayoutParams flp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            flp.topMargin = dp(this, 5);
+            body.addView(featFlow, flp);
+        }
 
         // Q24 加卡钮：点它直接切换我的卡片不进详情（对照混合版 [data-mine] 点击 stopPropagation + toggleMine，
         // 反馈走既有悬浮提示条/撤销）；钮态与「已添加」chip 在切换/撤销后就地同步，不整页重绘。
@@ -3444,6 +3453,42 @@ public class MainActivity extends Activity {
 
     TextView chip(String s, int bg, int fg) {
         return chip(s, bg, fg, 10f);
+    }
+
+    // Q51：瓷砖特点标签流（对照混合版 .feats/featChips：FEATS 固定顺序、命中才出、
+    // gap 4dp 流式换行、容器最高两行——.feats max-height 38px 口径，溢出截断不撑高瓷砖）
+    View buildFeatFlow(Card c, int availPx, int nc) {
+        List<String> labels = new ArrayList<>();
+        for (String[] f : FEATS) if (featMatch(c, f[0])) labels.add(f[1]);
+        if (labels.isEmpty()) return null;
+        float sp = nc == 3 ? 8f : 9.5f;
+        LinearLayout wrap = new LinearLayout(this);
+        wrap.setOrientation(LinearLayout.VERTICAL);
+        Paint mp = new Paint();
+        mp.setTextSize(sp * uiScale * getResources().getDisplayMetrics().scaledDensity);
+        int gap = dp(this, 4);
+        LinearLayout row = null;
+        int rowW = 0, rows = 0;
+        for (String label : labels) {
+            int w = (int) Math.ceil(mp.measureText(label)) + dp(this, 13);
+            if (row == null || (rowW > 0 && rowW + gap + w > availPx)) {
+                if (rows >= 2) break; // 两行封顶，同混合版 overflow:hidden
+                row = new LinearLayout(this);
+                row.setOrientation(LinearLayout.HORIZONTAL);
+                LinearLayout.LayoutParams rlp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+                if (rows > 0) rlp.topMargin = gap;
+                row.setLayoutParams(rlp);
+                wrap.addView(row);
+                rowW = 0; rows++;
+            }
+            TextView t = chip(label, Color.rgb(0xF0, 0xF7, 0xFF), Color.rgb(0x2F, 0x6F, 0xD0), sp);
+            LinearLayout.LayoutParams clp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            if (rowW > 0) clp.leftMargin = gap;
+            t.setLayoutParams(clp);
+            row.addView(t);
+            rowW += (rowW > 0 ? gap : 0) + w;
+        }
+        return wrap.getChildCount() > 0 ? wrap : null;
     }
 
     TextView chip(String s, int bg, int fg, float sp) {
