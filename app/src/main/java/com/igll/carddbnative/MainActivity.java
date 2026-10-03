@@ -576,7 +576,7 @@ public class MainActivity extends Activity {
             cv.drawBitmap(full, m, pt);
             // Q37：live 面换帧交叉淡入 220ms（治用户 20:03 批的停稳硬跳色）——旧帧作底、新帧淡入，
             // 不许 setImageBitmap 硬切；frozen 浮窗升起只 apply 一次、沿用直切。Q21 纪律：旧图只解引用不 recycle。
-            if ("live".equals(iv.getTag()) && iv.getDrawable() instanceof android.graphics.drawable.BitmapDrawable) {
+            if ("live".equals(iv.getTag()) && iv.getDrawable() != null) {
                 android.graphics.drawable.BitmapDrawable nd = new android.graphics.drawable.BitmapDrawable(iv.getResources(), out);
                 android.graphics.drawable.TransitionDrawable td = new android.graphics.drawable.TransitionDrawable(
                     new android.graphics.drawable.Drawable[]{ iv.getDrawable(), nd });
