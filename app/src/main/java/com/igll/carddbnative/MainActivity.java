@@ -5225,7 +5225,7 @@ public class MainActivity extends Activity {
                 mainHandler.postDelayed(() -> showFloatToast("长按色带可拖动排序"), 600);
             }
         } catch (Throwable ignored) {}
-        // 展开态：整叠色带河——外框 16dp 裁圆+柔影，每带 18/14/30 内边距，底部以三段渐变接下一带顶色
+        // 展开态：整叠色带河——外框 16dp 裁圆+柔影，每带 18/14/30 内边距，带底 48dp 竖向淡接至下一带顶色（Q40 照 .csk-tile::after）
         LinearLayout tilesBox = new LinearLayout(this);
         tilesBox.setOrientation(LinearLayout.VERTICAL);
         tilesBox.setBackground(roundRect(Color.WHITE, 16, this));
