@@ -1238,9 +1238,10 @@ public class MainActivity extends Activity {
         clp.gravity = Gravity.END | Gravity.BOTTOM;
         clp.rightMargin = dp(this, 14);
         clp.bottomMargin = dp(this, 104); // 浮在 dock 之上（混合版 bottom:104px）
-        sheet.addView(card, clp);
         card.measure(View.MeasureSpec.makeMeasureSpec(cardW, View.MeasureSpec.EXACTLY),
             View.MeasureSpec.makeMeasureSpec(maxH, View.MeasureSpec.AT_MOST));
+        clp.height = card.getMeasuredHeight();
+        sheet.addView(card, clp);
         content.addView(sheet);
         filterSheet = sheet;
         // 开场：淡入+放大+上浮，减速曲线（P4-fix 统一手感方向，220–320ms 档）
@@ -1411,7 +1412,7 @@ public class MainActivity extends Activity {
     }
 
     void addChipFlow(LinearLayout panel, List<View> chips) {
-        int avail = getResources().getDisplayMetrics().widthPixels - dp(this, 28) - dp(this, 28);
+        int avail = Math.min(getResources().getDisplayMetrics().widthPixels - dp(this, 28), dp(this, 368)) - dp(this, 28);
         Paint mp = new Paint();
         mp.setTextSize(13f * uiScale * getResources().getDisplayMetrics().scaledDensity);
         LinearLayout row = null;
