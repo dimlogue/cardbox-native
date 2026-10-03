@@ -23,6 +23,7 @@ import android.text.Editable;
 import android.text.TextWatcher;
 import android.util.LruCache;
 import android.view.Gravity;
+import android.view.animation.DecelerateInterpolator;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
@@ -356,6 +357,7 @@ public class MainActivity extends Activity {
     TextView homeCount;
     Button filterBtn;
     View filterSheet = null;
+    ScrollView filterScroll = null; // P2e：筛选窗内滚动区（窗框固定不滚，四角不被内容切掉）
     // P2 悬浮搜索圆钮（首页右下，点了回顶聚焦顶部搜索框）
     View searchFab = null;
 
@@ -743,7 +745,7 @@ public class MainActivity extends Activity {
     // 只在首页、且没有整屏覆盖层时出现；覆盖层（详情/向导/欢迎/日志）都会
     // content.removeAllViews()，天然把它清掉，回到首页时 showTab 会再挂回来。
     void syncSearchFab() {
-        boolean want = "home".equals(tab) && detailCard == null && !wizardOpen && !welcomeOpen && !changelogOpen;
+        boolean want = "home".equals(tab) && detailCard == null && !wizardOpen && !welcomeOpen && !changelogOpen && filterSheet == null; // P2e：筛选窗开着时搜索钮退场
         if (!want) {
             if (searchFab != null && searchFab.getParent() != null)
                 ((ViewGroup) searchFab.getParent()).removeView(searchFab);
@@ -1178,54 +1180,97 @@ public class MainActivity extends Activity {
     // ---------- 筛选面板（Phase 2a-1；P2 改悬浮卡窗：左右/底部留空、四角全圆+描边+投影、开合动画） ----------
     void openFilterSheet() {
         closeFilterSheetNow();
+        // P2e：右下搜索钮退场，不与筛选窗叠压
+        if (searchFab != null && searchFab.getParent() != null)
+            ((ViewGroup) searchFab.getParent()).removeView(searchFab);
+        searchFab = null;
         final FrameLayout sheet = new FrameLayout(this);
-        sheet.setBackgroundColor(Color.argb(90, 10, 16, 28));
+        sheet.setBackgroundColor(Color.argb(38, 18, 22, 36)); // 轻遮罩（混合版 .dlg-backdrop.light）
         sheet.setOnClickListener(v -> closeFilterSheet());
+        // 窗框：真正浮起的卡片——固定不滚，四角完整圆角+描边，滚动只在窗内
+        LinearLayout card = new LinearLayout(this);
+        card.setOrientation(LinearLayout.VERTICAL);
+        GradientDrawable cg = new GradientDrawable();
+        cg.setColor(Color.WHITE);
+        cg.setCornerRadius(dp(this, 24));
+        cg.setStroke(dp(this, 1), Color.argb(18, 20, 30, 60));
+        card.setBackground(cg);
+        if (Build.VERSION.SDK_INT >= 21) {
+            card.setElevation(dp(this, 24));
+            card.setClipToOutline(true);
+        }
+        card.setOnClickListener(v -> {});
+        // 头部固定（标题+清空/完成），不随内容滚动
+        LinearLayout chead = new LinearLayout(this);
+        chead.setOrientation(LinearLayout.HORIZONTAL);
+        chead.setGravity(Gravity.CENTER_VERTICAL);
+        chead.setPadding(dp(this, 16), dp(this, 12), dp(this, 10), dp(this, 4));
+        TextView cttl = tv(this, "\u7b5b\u9009", 16, Color.rgb(0x1C, 0x1C, 0x1E), true);
+        chead.addView(cttl, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+        TextView clearT = tv(this, "\u6e05\u7a7a", 13, Color.rgb(0x8E, 0x8E, 0x93), false);
+        clearT.setPadding(dp(this, 8), dp(this, 6), dp(this, 8), dp(this, 6));
+        clearT.setOnClickListener(v -> {
+            filterType = null; filterOrg = null; filterStatus = null;
+            filterFeats.clear(); filterBank = null;
+            sortMode = null; groupBank = false; persistViewPrefs();
+            rebuildFilterPanel(filterPanelRef); refreshHome();
+        });
+        chead.addView(clearT);
+        TextView doneT = tv(this, "\u5b8c\u6210", 13, Color.rgb(0x0A, 0x5C, 0xD6), true);
+        doneT.setPadding(dp(this, 8), dp(this, 6), dp(this, 10), dp(this, 6));
+        doneT.setOnClickListener(v -> closeFilterSheet());
+        chead.addView(doneT);
+        card.addView(chead);
+        ScrollView sc = new ScrollView(this);
+        sc.setBackgroundColor(Color.TRANSPARENT);
         LinearLayout panel = new LinearLayout(this);
         panel.setOrientation(LinearLayout.VERTICAL);
-        GradientDrawable pg = new GradientDrawable();
-        pg.setColor(Color.WHITE);
-        pg.setCornerRadius(dp(this, 22));
-        pg.setStroke(dp(this, 1), Color.argb(48, 20, 30, 60));
-        panel.setBackground(pg);
-        panel.setPadding(dp(this, 16), dp(this, 14), dp(this, 16), dp(this, 18));
-        panel.setOnClickListener(v -> {});
-        ScrollView panelScroll = new ScrollView(this);
-        panelScroll.setBackgroundColor(Color.TRANSPARENT);
-        panelScroll.setFillViewport(true);
-        if (Build.VERSION.SDK_INT >= 21) panelScroll.setElevation(dp(this, 18));
-        int maxH = (int) (getResources().getDisplayMetrics().heightPixels * 0.72);
-        FrameLayout.LayoutParams splp = new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, maxH);
-        splp.gravity = Gravity.BOTTOM;
-        splp.leftMargin = dp(this, 14);
-        splp.rightMargin = dp(this, 14);
-        splp.bottomMargin = dp(this, 92); // 浮在底栏 dock 之上，不贴边
-        panelScroll.addView(panel, new ScrollView.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
-        sheet.addView(panelScroll, splp);
+        panel.setPadding(dp(this, 14), dp(this, 2), dp(this, 14), dp(this, 14));
+        sc.addView(panel, new ScrollView.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        card.addView(sc, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
+        filterScroll = sc;
+        filterPanelRef = panel;
         rebuildFilterPanel(panel);
+        int sw = getResources().getDisplayMetrics().widthPixels;
+        int cardW = Math.min(sw - dp(this, 28), dp(this, 368));
+        int maxH = (int) (getResources().getDisplayMetrics().heightPixels * 0.60);
+        FrameLayout.LayoutParams clp = new FrameLayout.LayoutParams(cardW, ViewGroup.LayoutParams.WRAP_CONTENT);
+        clp.gravity = Gravity.END | Gravity.BOTTOM;
+        clp.rightMargin = dp(this, 14);
+        clp.bottomMargin = dp(this, 104); // 浮在 dock 之上（混合版 bottom:104px）
+        sheet.addView(card, clp);
+        card.measure(View.MeasureSpec.makeMeasureSpec(cardW, View.MeasureSpec.EXACTLY),
+            View.MeasureSpec.makeMeasureSpec(maxH, View.MeasureSpec.AT_MOST));
         content.addView(sheet);
         filterSheet = sheet;
-        // 开场：淡入 + 轻微放大上浮
-        panelScroll.setAlpha(0f);
-        panelScroll.setScaleX(0.96f);
-        panelScroll.setScaleY(0.96f);
-        panelScroll.setTranslationY(dp(this, 18));
-        panelScroll.animate().alpha(1f).scaleX(1f).scaleY(1f).translationY(0f).setDuration(190).start();
+        // 开场：淡入+放大+上浮，减速曲线（P4-fix 统一手感方向，220–320ms 档）
+        sheet.setAlpha(0f);
+        sheet.animate().alpha(1f).setDuration(200)
+            .setInterpolator(new DecelerateInterpolator()).start();
+        card.setAlpha(0f);
+        card.setScaleX(0.94f); card.setScaleY(0.94f);
+        card.setTranslationY(dp(this, 14));
+        card.animate().alpha(1f).scaleX(1f).scaleY(1f).translationY(0f)
+            .setDuration(260).setInterpolator(new DecelerateInterpolator(2.2f)).start();
     }
+
+    LinearLayout filterPanelRef = null;
 
     void closeFilterSheet() {
         final View sheet = filterSheet;
         if (sheet == null) return;
         filterSheet = null;
-        if (sheet.getParent() == null) return;
+        if (sheet.getParent() == null) { syncSearchFab(); return; }
         View card = sheet instanceof ViewGroup && ((ViewGroup) sheet).getChildCount() > 0
             ? ((ViewGroup) sheet).getChildAt(0) : null;
         if (card != null) {
-            card.animate().alpha(0f).scaleX(0.96f).scaleY(0.96f).translationY(dp(this, 18))
-                .setDuration(140).withEndAction(() -> closeFilterSheetNow(sheet)).start();
-            sheet.animate().alpha(0f).setDuration(140).start();
+            card.animate().alpha(0f).scaleX(0.96f).scaleY(0.96f).translationY(dp(this, 10))
+                .setDuration(180).setInterpolator(new DecelerateInterpolator())
+                .withEndAction(() -> { closeFilterSheetNow(sheet); syncSearchFab(); }).start();
+            sheet.animate().alpha(0f).setDuration(180).start();
         } else {
             closeFilterSheetNow(sheet);
+            syncSearchFab();
         }
     }
 
@@ -1235,59 +1280,43 @@ public class MainActivity extends Activity {
         if (sheet != null && sheet.getParent() != null)
             ((ViewGroup) sheet.getParent()).removeView(sheet);
         if (sheet == filterSheet) filterSheet = null;
+        if (sheet != null) { filterScroll = null; filterPanelRef = null; }
     }
 
     void rebuildFilterPanel(final LinearLayout panel) {
+        final int keepY = filterScroll != null ? filterScroll.getScrollY() : 0;
         panel.removeAllViews();
-        LinearLayout head = new LinearLayout(this);
-        head.setOrientation(LinearLayout.HORIZONTAL);
-        head.setGravity(Gravity.CENTER_VERTICAL);
-        TextView ttl = tv(this, "筛选", 16, Color.rgb(0x1C, 0x1C, 0x1E), true);
-        head.addView(ttl, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
-        Button clear = new Button(this);
-        clear.setText("清空"); clear.setTextSize(12.5f); clear.setAllCaps(false); clear.setMinWidth(0);
-        clear.setBackground(roundRect(Color.rgb(0xF5, 0xF6, 0xF8), 10, this));
-        clear.setOnClickListener(v -> {
-            filterType = null; filterOrg = null; filterStatus = null;
-            filterFeats.clear(); filterBank = null;
-            sortMode = null; groupBank = false; persistViewPrefs();
-            rebuildFilterPanel(panel); refreshHome();
-        });
-        head.addView(clear, new LinearLayout.LayoutParams(dp(this, 64), dp(this, 32)));
-        Button done = new Button(this);
-        done.setText("完成"); done.setTextSize(12.5f); done.setAllCaps(false); done.setMinWidth(0);
-        done.setTextColor(Color.WHITE);
-        done.setBackground(roundRect(Color.rgb(0x0A, 0x5C, 0xD6), 10, this));
-        LinearLayout.LayoutParams dlp = new LinearLayout.LayoutParams(dp(this, 64), dp(this, 32));
-        dlp.leftMargin = dp(this, 8);
-        done.setOnClickListener(v -> closeFilterSheet());
-        head.addView(done, dlp);
-        panel.addView(head);
 
-        panel.addView(filterSectionTitle("卡片类型"));
-        panel.addView(filterOpt("借记卡", "debit".equals(filterType), () -> { filterType = "debit".equals(filterType) ? null : "debit"; rebuildFilterPanel(panel); refreshHome(); }));
-        panel.addView(filterOpt("信用卡", "credit".equals(filterType), () -> { filterType = "credit".equals(filterType) ? null : "credit"; rebuildFilterPanel(panel); refreshHome(); }));
+        panel.addView(filterSectionTitle("\u5361\u7247\u7c7b\u578b"));
+        List<View> typeChips = new ArrayList<>();
+        typeChips.add(filterChip("\u501f\u8bb0\u5361", "debit".equals(filterType), () -> { filterType = "debit".equals(filterType) ? null : "debit"; rebuildFilterPanel(panel); refreshHome(); }));
+        typeChips.add(filterChip("\u4fe1\u7528\u5361", "credit".equals(filterType), () -> { filterType = "credit".equals(filterType) ? null : "credit"; rebuildFilterPanel(panel); refreshHome(); }));
+        addChipFlow(panel, typeChips);
 
-        panel.addView(filterSectionTitle("卡组织"));
-        String[][] orgs = {{"visa", "VISA"}, {"mastercard", "万事达"}, {"mastercard-nucc", "万事达-网联"}, {"amex-cn", "运通-人民币"}, {"unionpay", "银联"}, {"jcb", "JCB"}};
+        panel.addView(filterSectionTitle("\u5361\u7ec4\u7ec7"));
+        String[][] orgs = {{"visa", "VISA"}, {"mastercard", "\u4e07\u4e8b\u8fbe"}, {"mastercard-nucc", "\u4e07\u4e8b\u8fbe-\u7f51\u8054"}, {"amex-cn", "\u8fd0\u901a-\u4eba\u6c11\u5e01"}, {"unionpay", "\u94f6\u8054"}, {"jcb", "JCB"}};
+        List<View> orgChips = new ArrayList<>();
         for (final String[] o : orgs) {
-            panel.addView(filterOpt(o[1], o[0].equals(filterOrg), () -> {
+            orgChips.add(filterChip(o[1], o[0].equals(filterOrg), () -> {
                 filterOrg = o[0].equals(filterOrg) ? null : o[0];
                 rebuildFilterPanel(panel); refreshHome();
             }));
         }
+        addChipFlow(panel, orgChips);
 
-        panel.addView(filterSectionTitle("状态"));
-        panel.addView(filterOpt("在发", "在发".equals(filterStatus), () -> { filterStatus = "在发".equals(filterStatus) ? null : "在发"; rebuildFilterPanel(panel); refreshHome(); }));
-        panel.addView(filterOpt("已停发", "已停发".equals(filterStatus), () -> { filterStatus = "已停发".equals(filterStatus) ? null : "已停发"; rebuildFilterPanel(panel); refreshHome(); }));
+        panel.addView(filterSectionTitle("\u72b6\u6001"));
+        List<View> stChips = new ArrayList<>();
+        stChips.add(filterChip("\u5728\u53d1", "\u5728\u53d1".equals(filterStatus), () -> { filterStatus = "\u5728\u53d1".equals(filterStatus) ? null : "\u5728\u53d1"; rebuildFilterPanel(panel); refreshHome(); }));
+        stChips.add(filterChip("\u5df2\u505c\u53d1", "\u5df2\u505c\u53d1".equals(filterStatus), () -> { filterStatus = "\u5df2\u505c\u53d1".equals(filterStatus) ? null : "\u5df2\u505c\u53d1"; rebuildFilterPanel(panel); refreshHome(); }));
+        addChipFlow(panel, stChips);
 
-        panel.addView(filterSectionTitle("特点（可多选，须同时满足）"));
+        panel.addView(filterSectionTitle("\u7279\u70b9\uff08\u53ef\u591a\u9009\uff0c\u987b\u540c\u65f6\u6ee1\u8db3\uff09"));
+        List<View> featChips = new ArrayList<>();
         for (final String[] f : FEATS) {
-            panel.addView(filterOpt(f[1], filterFeats.contains(f[0]), () -> {
+            featChips.add(filterChip(f[1], filterFeats.contains(f[0]), () -> {
                 if (filterFeats.contains(f[0])) {
                     filterFeats.remove(f[0]);
                 } else {
-                    // 同混合版 chipRow：加上后若没有任何卡能同时满足全部已选特点，拒绝并提示
                     java.util.Set<String> test = new java.util.LinkedHashSet<>(filterFeats);
                     test.add(f[0]);
                     boolean any = false;
@@ -1298,8 +1327,8 @@ public class MainActivity extends Activity {
                     }
                     if (!any) {
                         StringBuilder names = new StringBuilder();
-                        for (String k : test) { if (names.length() > 0) names.append("」+「"); names.append(featLabel(k)); }
-                        Toast.makeText(this, "「" + names + "」没有卡同时满足，不能一起选", Toast.LENGTH_SHORT).show();
+                        for (String k : test) { if (names.length() > 0) names.append("\u300d+\u300c"); names.append(featLabel(k)); }
+                        Toast.makeText(this, "\u300c" + names + "\u300d\u6ca1\u6709\u5361\u540c\u65f6\u6ee1\u8db3\uff0c\u4e0d\u80fd\u4e00\u8d77\u9009", Toast.LENGTH_SHORT).show();
                         return;
                     }
                     filterFeats.add(f[0]);
@@ -1307,62 +1336,138 @@ public class MainActivity extends Activity {
                 rebuildFilterPanel(panel); refreshHome();
             }));
         }
+        addChipFlow(panel, featChips);
 
-        panel.addView(filterSectionTitle("发卡行"));
-        for (final String bankName : distinctBanks()) {
-            panel.addView(filterOpt(bankName, bankName.equals(filterBank), () -> {
-                filterBank = bankName.equals(filterBank) ? null : bankName;
-                rebuildFilterPanel(panel); refreshHome();
-            }));
-        }
+        panel.addView(filterSectionTitle("\u53d1\u5361\u884c"));
+        addBankGrid(panel, distinctBanks());
 
-        panel.addView(filterSectionTitle("排序"));
-        String[][] sorts = {{"score-desc", "评分由高到低"}, {"score-asc", "评分由低到高"}, {"name", "名称"}, {"bank", "银行"}};
+        panel.addView(filterSectionTitle("\u6392\u5e8f"));
+        String[][] sorts = {{"score-desc", "\u8bc4\u5206\u7531\u9ad8\u5230\u4f4e"}, {"score-asc", "\u8bc4\u5206\u7531\u4f4e\u5230\u9ad8"}, {"name", "\u540d\u79f0"}, {"bank", "\u94f6\u884c"}};
+        List<View> sortChips = new ArrayList<>();
         for (final String[] so : sorts) {
-            panel.addView(filterOpt(so[1], so[0].equals(sortMode), () -> {
+            sortChips.add(filterChip(so[1], so[0].equals(sortMode), () -> {
                 sortMode = so[0].equals(sortMode) ? null : so[0];
                 persistViewPrefs();
                 rebuildFilterPanel(panel); refreshHome();
             }));
         }
+        addChipFlow(panel, sortChips);
 
-        panel.addView(filterSectionTitle("显示方式"));
-        panel.addView(filterOpt("显示全部", !groupBank, () -> {
+        panel.addView(filterSectionTitle("\u663e\u793a\u65b9\u5f0f"));
+        List<View> dispChips = new ArrayList<>();
+        dispChips.add(filterChip("\u663e\u793a\u5168\u90e8", !groupBank, () -> {
             groupBank = false; persistViewPrefs();
             rebuildFilterPanel(panel); refreshHome();
         }));
-        panel.addView(filterOpt("按银行折叠", groupBank, () -> {
+        dispChips.add(filterChip("\u6309\u94f6\u884c\u6298\u53e3", groupBank, () -> {
             groupBank = true; persistViewPrefs();
             rebuildFilterPanel(panel); refreshHome();
         }));
+        addChipFlow(panel, dispChips);
 
-        panel.addView(filterSectionTitle("列数"));
-        String[][] colOpts = {{"1", "单列"}, {"2", "双列"}, {"3", "三列"}};
+        panel.addView(filterSectionTitle("\u5217\u6570"));
+        String[][] colOpts = {{"1", "\u5355\u5217"}, {"2", "\u53cc\u5217"}, {"3", "\u4e09\u5217"}};
+        List<View> colChips = new ArrayList<>();
         for (final String[] co : colOpts) {
             final int nCols = Integer.parseInt(co[0]);
-            panel.addView(filterOpt(co[1], cols == nCols, () -> {
+            colChips.add(filterChip(co[1], cols == nCols, () -> {
                 cols = nCols; persistViewPrefs();
                 rebuildFilterPanel(panel); refreshHome();
             }));
+        }
+        addChipFlow(panel, colChips);
+
+        if (filterScroll != null) filterScroll.post(() -> filterScroll.scrollTo(0, keepY));
+    }
+
+    // P2e chips：紧凑胶囊流式排列（多枚一行），选中蓝渐变+勾；发卡行三列等宽（混合版 #chipsBank 口径）
+    TextView filterChip(String label, boolean on, final Runnable act) {
+        TextView t = tv(this, (on ? "\u2713 " : "") + label, 13, on ? Color.WHITE : Color.rgb(0x1C, 0x1C, 0x1E), on);
+        t.setSingleLine(true);
+        t.setEllipsize(android.text.TextUtils.TruncateAt.END);
+        t.setGravity(Gravity.CENTER);
+        if (on) {
+            GradientDrawable g = new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
+                new int[]{Color.rgb(0x0A, 0x84, 0xFF), Color.rgb(0x00, 0x66, 0xE6)});
+            g.setCornerRadius(dp(this, 999));
+            t.setBackground(g);
+            if (Build.VERSION.SDK_INT >= 21) t.setElevation(dp(this, 2));
+        } else {
+            GradientDrawable g = new GradientDrawable();
+            g.setColor(Color.rgb(0xF2, 0xF3, 0xF7));
+            g.setCornerRadius(dp(this, 999));
+            g.setStroke(dp(this, 1), Color.argb(13, 20, 30, 60));
+            t.setBackground(g);
+        }
+        t.setPadding(dp(this, 11), dp(this, 6), dp(this, 11), dp(this, 6));
+        t.setOnClickListener(v -> { haptic(); act.run(); });
+        t.setOnTouchListener((v, e) -> {
+            if (e.getAction() == MotionEvent.ACTION_DOWN) v.animate().scaleX(0.96f).scaleY(0.96f).setDuration(80).start();
+            else if (e.getAction() == MotionEvent.ACTION_UP || e.getAction() == MotionEvent.ACTION_CANCEL)
+                v.animate().scaleX(1f).scaleY(1f).setDuration(140).setInterpolator(new DecelerateInterpolator()).start();
+            return false;
+        });
+        return t;
+    }
+
+    void addChipFlow(LinearLayout panel, List<View> chips) {
+        int avail = getResources().getDisplayMetrics().widthPixels - dp(this, 28) - dp(this, 28);
+        Paint mp = new Paint();
+        mp.setTextSize(13f * uiScale * getResources().getDisplayMetrics().scaledDensity);
+        LinearLayout row = null;
+        int rowW = 0;
+        for (View chip : chips) {
+            String txt = ((TextView) chip).getText().toString();
+            int w = (int) mp.measureText(txt) + dp(this, 24);
+            if (row == null || (rowW > 0 && rowW + dp(this, 6) + w > avail)) {
+                row = new LinearLayout(this);
+                row.setOrientation(LinearLayout.HORIZONTAL);
+                LinearLayout.LayoutParams rlp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+                rlp.topMargin = dp(this, 6);
+                row.setLayoutParams(rlp);
+                panel.addView(row);
+                rowW = 0;
+            }
+            if (rowW > 0) rowW += dp(this, 6);
+            LinearLayout.LayoutParams clp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            if (rowW > 0) clp.leftMargin = dp(this, 6);
+            chip.setLayoutParams(clp);
+            row.addView(chip);
+            rowW += w;
+        }
+    }
+
+    void addBankGrid(LinearLayout panel, List<String> banks) {
+        for (int i = 0; i < banks.size(); i += 3) {
+            LinearLayout row = new LinearLayout(this);
+            row.setOrientation(LinearLayout.HORIZONTAL);
+            LinearLayout.LayoutParams rlp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            rlp.topMargin = dp(this, 6);
+            row.setLayoutParams(rlp);
+            for (int j = 0; j < 3; j++) {
+                int idx = i + j;
+                LinearLayout.LayoutParams clp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+                if (j > 0) clp.leftMargin = dp(this, 6);
+                if (idx < banks.size()) {
+                    final String bankName = banks.get(idx);
+                    View chip = filterChip(bankName, bankName.equals(filterBank), () -> {
+                        filterBank = bankName.equals(filterBank) ? null : bankName;
+                        rebuildFilterPanel(panel); refreshHome();
+                    });
+                    row.addView(chip, clp);
+                } else {
+                    row.addView(new View(this), clp);
+                }
+            }
+            panel.addView(row);
         }
     }
 
     TextView filterSectionTitle(String s) {
         TextView t = tv(this, s, 12, Color.rgb(0x8E, 0x8E, 0x93), true);
         LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        lp.topMargin = dp(this, 14);
+        lp.topMargin = dp(this, 10);
         t.setLayoutParams(lp);
-        return t;
-    }
-
-    View filterOpt(String label, boolean on, final Runnable act) {
-        TextView t = tv(this, (on ? "✓ " : "　 ") + label, 13.5f, on ? Color.rgb(0x0A, 0x5C, 0xD6) : Color.rgb(0x1C, 0x1C, 0x1E), on);
-        t.setBackground(roundRect(on ? Color.rgb(0xE8, 0xF1, 0xFD) : Color.rgb(0xF5, 0xF6, 0xF8), 10, this));
-        t.setPadding(dp(this, 12), dp(this, 9), dp(this, 12), dp(this, 9));
-        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        lp.topMargin = dp(this, 6);
-        t.setLayoutParams(lp);
-        t.setOnClickListener(v -> act.run());
         return t;
     }
 
