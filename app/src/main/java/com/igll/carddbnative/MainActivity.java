@@ -2758,10 +2758,10 @@ public class MainActivity extends Activity {
 
         String n = String.valueOf(Store.all.size());
         String[][] feats = {
-            {"▭", "银行卡图鉴", n + " 张借记卡与信用卡，费率、币种、权益一次看清"},
-            {"◉", "情景选卡", "留学、旅游、海淘、日常，答几道题给你推荐合适的卡"},
-            {"☆", "我的卡片", "收藏自己的卡，能看卡包实力，还能拖动排序"},
-            {"∅", "断网可用", "数据存在手机里，没网也能查，更新不用重装"},
+            {"▤", "银行卡图鉴", n + " 张借记卡与信用卡，费率、币种、权益一次看清"},
+            {"◎", "情景选卡", "留学、旅游、海淘、日常，答几道题给你推荐合适的卡"},
+            {"★", "我的卡片", "收藏自己的卡，能看卡包实力，还能拖动排序"},
+            {"⊘", "断网可用", "数据存在手机里，没网也能查，更新不用重装"},
         };
         for (String[] f : feats) {
             LinearLayout row = new LinearLayout(this);
@@ -2943,7 +2943,9 @@ public class MainActivity extends Activity {
         page.addView(welRow);
         page.addView(settingRow("关于卡盒", "原生版：纯 Java 手写界面，数据与现行版共用同一份卡库"));
         page.addView(settingRow("迁移进度", "全部卡片 / 详情 / 我的卡片 / 学生推荐 / 筛选 / 资讯 / 情景选卡 / 自定义卡 / 拖动 / 字体与界面大小 / 高刷 / 触感 / 欢迎页 / 更新日志 已迁移；OTA 在后续阶段"));
-        return page;
+        ScrollView sv = new ScrollView(this);
+        sv.addView(page);
+        return sv;
     }
 
     void sectionHead(LinearLayout page, String s) {
