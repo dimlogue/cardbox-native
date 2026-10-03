@@ -274,6 +274,9 @@ public class MainActivity extends Activity {
     java.util.List<CustomCard> customCards = new ArrayList<>();
     boolean customOpen = false;
     Dialog customDialog = null;
+    // P-deck：我的卡片页滚动位置保持（换序/开合不甩回顶部）
+    ScrollView mineScrollView = null;
+    int mineScrollSaveY = 0;
 
     void loadCustomCards() {
         customCards = new ArrayList<>();
@@ -320,6 +323,37 @@ public class MainActivity extends Activity {
                       Color.rgb((pair[1] >> 16) & 0xFF, (pair[1] >> 8) & 0xFF, pair[1] & 0xFF)});
         g.setCornerRadius(dp(this, 14));
         return g;
+    }
+
+    static int styleRgb(int hex) {
+        return Color.rgb((hex >> 16) & 0xFF, (hex >> 8) & 0xFF, hex & 0xFF);
+    }
+
+    // P-deck ②：与下一张顶色衔接的三段渐变（本卡顶→本卡底→下一张顶），无下一张时退回双色
+    GradientDrawable customBlendedGradient(int style, int nextStyle, boolean first, boolean last) {
+        int s = Math.max(0, Math.min(style, CUSTOM_STYLES.length - 1));
+        int[] pair = CUSTOM_STYLES[s];
+        GradientDrawable g;
+        if (nextStyle >= 0) {
+            int ns = Math.max(0, Math.min(nextStyle, CUSTOM_STYLES.length - 1));
+            g = new GradientDrawable(GradientDrawable.Orientation.TL_BR,
+                new int[]{styleRgb(pair[0]), styleRgb(pair[1]), styleRgb(CUSTOM_STYLES[ns][0])});
+        } else {
+            g = new GradientDrawable(GradientDrawable.Orientation.TL_BR,
+                new int[]{styleRgb(pair[0]), styleRgb(pair[1])});
+        }
+        float r = dp(this, 14);
+        if (first && last) g.setCornerRadius(r);
+        else if (first) g.setCornerRadii(new float[]{r, r, r, r, 0, 0, 0, 0});
+        else if (last) g.setCornerRadii(new float[]{0, 0, 0, 0, r, r, r, r});
+        else g.setCornerRadius(0);
+        return g;
+    }
+
+    // P-deck ③：换序/开合后保持我的卡片页滚动位置，不甩回顶部
+    void refreshMineKeepScroll() {
+        if (mineScrollView != null) mineScrollSaveY = mineScrollView.getScrollY();
+        showTab("mine");
     }
 
     // ---------- 全局状态 ----------
@@ -2548,11 +2582,17 @@ public class MainActivity extends Activity {
         ScrollView sv = new ScrollView(this);
         sv.setFillViewport(true);
         sv.setClipToPadding(false);
+        mineScrollView = sv;
+        if (Build.VERSION.SDK_INT >= 23) {
+            sv.setOnScrollChangeListener((v, sx, sy, ox, oy) -> { mineScrollSaveY = sy; });
+        }
         LinearLayout inner = new LinearLayout(this);
         inner.setOrientation(LinearLayout.VERTICAL);
         inner.setPadding(0, dp(this, 10), 0, dockPad());
         sv.addView(inner, new ScrollView.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
         page.addView(sv, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
+        // P-deck ③：重建后恢复上次滚动位置（换序/展开收起不跳顶）
+        if (mineScrollSaveY > 0) sv.post(() -> sv.scrollTo(0, mineScrollSaveY));
         if (!mineCards.isEmpty()) inner.addView(buildMineAnalysis(mineCards));
         inner.addView(buildCustomSection());
 
@@ -2707,7 +2747,7 @@ public class MainActivity extends Activity {
         alp2.leftMargin = dp(this, 8);
         head.addView(arrow, alp2);
         if (!customCards.isEmpty()) {
-            head.setOnClickListener(v -> { customOpen = !customOpen; showTab("mine"); });
+            head.setOnClickListener(v -> { customOpen = !customOpen; refreshMineKeepScroll(); });
         }
 
         if (customCards.isEmpty()) {
@@ -2719,47 +2759,67 @@ public class MainActivity extends Activity {
         }
 
         if (!customOpen) {
-            // 收起态：最近 3 张叠成一叠（最新在最上），只露顶部一张的名字
+            // P-deck ⑤ 收起态：最新一张完整压在最上（名/行/组织可见），其余只在下方露一道边
             int show = Math.min(3, customCards.size());
-            LinearLayout deck = new LinearLayout(this);
-            deck.setOrientation(LinearLayout.VERTICAL);
-            LinearLayout.LayoutParams dlp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            FrameLayout deckFrame = new FrameLayout(this);
+            LinearLayout.LayoutParams dlp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(this, 70));
             dlp.topMargin = dp(this, 10);
-            sec.addView(deck, dlp);
-            for (int k = show - 1; k >= 0; k--) {
-                CustomCard c = customCards.get(customCards.size() - 1 - k);
-                LinearLayout strip = new LinearLayout(this);
-                strip.setOrientation(LinearLayout.HORIZONTAL);
-                strip.setGravity(Gravity.CENTER_VERTICAL);
-                strip.setBackground(customGradient(c.style));
-                strip.setPadding(dp(this, 12), dp(this, 8), dp(this, 12), dp(this, 8));
-                LinearLayout.LayoutParams stLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-                stLp.leftMargin = dp(this, k * 10);
-                stLp.rightMargin = dp(this, k * 10);
-                if (k < show - 1) stLp.topMargin = dp(this, -6);
-                deck.addView(strip, stLp);
-                if (k == 0) {
-                    strip.addView(tv(this, c.name, 13, Color.WHITE, true), new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+            sec.addView(deckFrame, dlp);
+            // 先加旧卡垫底（只露边），最后加最新卡上盖
+            for (int depth = show - 1; depth >= 0; depth--) {
+                CustomCard c = customCards.get(customCards.size() - 1 - depth);
+                boolean isTop = depth == 0;
+                LinearLayout layer = new LinearLayout(this);
+                layer.setOrientation(LinearLayout.HORIZONTAL);
+                layer.setGravity(Gravity.CENTER_VERTICAL);
+                GradientDrawable lg = customGradient(c.style);
+                layer.setBackground(lg);
+                layer.setPadding(dp(this, 12), dp(this, 8), dp(this, 12), dp(this, 8));
+                if (Build.VERSION.SDK_INT >= 21) layer.setElevation(dp(this, isTop ? 3 : 1));
+                FrameLayout.LayoutParams flp = new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(this, 52));
+                flp.topMargin = dp(this, depth * 7);
+                flp.leftMargin = dp(this, depth * 8);
+                flp.rightMargin = dp(this, depth * 8);
+                deckFrame.addView(layer, flp);
+                if (isTop) {
+                    TextView nm = tv(this, c.name, 13.5f, Color.WHITE, true);
+                    nm.setMaxLines(1);
+                    nm.setEllipsize(android.text.TextUtils.TruncateAt.END);
+                    layer.addView(nm, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
                     String meta = (c.bank == null ? "" : c.bank) + (c.org != null && !c.org.isEmpty() ? " · " + c.org : "");
-                    strip.addView(tv(this, meta, 11, Color.argb(210, 255, 255, 255), false));
-                } else {
-                    strip.addView(tv(this, " ", 13, Color.WHITE, false));
+                    TextView mt = tv(this, meta, 11, Color.argb(215, 255, 255, 255), false);
+                    mt.setMaxLines(1);
+                    mt.setEllipsize(android.text.TextUtils.TruncateAt.END);
+                    LinearLayout.LayoutParams mlp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+                    mlp.leftMargin = dp(this, 8);
+                    layer.addView(mt, mlp);
                 }
             }
             return sec;
         }
 
-        // 展开态：每张一条渐变色带，底部向下一张颜色衔接
+        // P-deck 展开态：紧凑色带整叠（无缝衔接）+ 长按拖动换序，小圆钮弱化
+        TextView dragHint = tv(this, "长按色带可拖动排序 · 点色带看详情", 11, Color.rgb(0x8E, 0x8E, 0x93), false);
+        LinearLayout.LayoutParams dhLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        dhLp.topMargin = dp(this, 8);
+        sec.addView(dragHint, dhLp);
+        LinearLayout tilesBox = new LinearLayout(this);
+        tilesBox.setOrientation(LinearLayout.VERTICAL);
+        tilesBox.setBackground(roundRect(Color.WHITE, 14, this));
+        if (Build.VERSION.SDK_INT >= 21) tilesBox.setElevation(dp(this, 2));
+        tilesBox.setClipToOutline(true);
+        LinearLayout.LayoutParams boxLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        boxLp.topMargin = dp(this, 6);
+        sec.addView(tilesBox, boxLp);
         for (int i = 0; i < customCards.size(); i++) {
             final CustomCard c = customCards.get(i);
             final int idx = i;
+            final int nextStyle = (i + 1 < customCards.size()) ? customCards.get(i + 1).style : -1;
             LinearLayout tile = new LinearLayout(this);
             tile.setOrientation(LinearLayout.VERTICAL);
-            tile.setBackground(customGradient(c.style));
-            tile.setPadding(dp(this, 12), dp(this, 10), dp(this, 12), dp(this, 10));
-            LinearLayout.LayoutParams tlp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-            tlp.topMargin = i == 0 ? dp(this, 10) : dp(this, 8);
-            sec.addView(tile, tlp);
+            tile.setBackground(customBlendedGradient(c.style, nextStyle, i == 0, i == customCards.size() - 1));
+            tile.setPadding(dp(this, 12), dp(this, 8), dp(this, 12), dp(this, 8));
+            tilesBox.addView(tile, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
 
             LinearLayout topRow = new LinearLayout(this);
             topRow.setOrientation(LinearLayout.HORIZONTAL);
@@ -2767,9 +2827,8 @@ public class MainActivity extends Activity {
             tile.addView(topRow);
             TextView idxTv = tv(this, String.valueOf(i + 1), 11, Color.WHITE, true);
             idxTv.setBackground(roundRect(Color.argb(70, 255, 255, 255), 999, this));
-            idxTv.setPadding(dp(this, 7), dp(this, 2), dp(this, 7), dp(this, 2));
             idxTv.setGravity(Gravity.CENTER);
-            topRow.addView(idxTv);
+            topRow.addView(idxTv, new LinearLayout.LayoutParams(dp(this, 22), dp(this, 22)));
             LinearLayout tx = new LinearLayout(this);
             tx.setOrientation(LinearLayout.VERTICAL);
             LinearLayout.LayoutParams txLp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
@@ -2781,41 +2840,112 @@ public class MainActivity extends Activity {
             tx.addView(nm);
             String meta = (c.bank == null || c.bank.isEmpty() ? "未填发卡行" : c.bank)
                 + (c.org != null && !c.org.isEmpty() ? " · " + c.org : "");
-            tx.addView(tv(this, meta, 11, Color.argb(215, 255, 255, 255), false));
+            TextView mtv = tv(this, meta, 11, Color.argb(215, 255, 255, 255), false);
+            mtv.setMaxLines(1);
+            mtv.setEllipsize(android.text.TextUtils.TruncateAt.END);
+            tx.addView(mtv);
+            // 小圆钮（弱化）：上/下移，拖动为主、点按为辅
+            topRow.addView(customMoveBtn("↑", i == 0, v -> moveCustom(idx, -1)));
+            topRow.addView(customMoveBtn("↓", i == customCards.size() - 1, v -> moveCustom(idx, 1)));
             if (c.note != null && !c.note.isEmpty()) {
                 TextView nt = tv(this, c.note, 11.5f, Color.argb(225, 255, 255, 255), false);
                 nt.setMaxLines(2);
                 nt.setEllipsize(android.text.TextUtils.TruncateAt.END);
                 LinearLayout.LayoutParams nlp2 = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-                nlp2.topMargin = dp(this, 5);
+                nlp2.topMargin = dp(this, 4);
+                nlp2.leftMargin = dp(this, 30);
                 tile.addView(nt, nlp2);
             }
             LinearLayout acts = new LinearLayout(this);
             acts.setOrientation(LinearLayout.HORIZONTAL);
             acts.setGravity(Gravity.CENTER_VERTICAL);
             LinearLayout.LayoutParams actLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-            actLp.topMargin = dp(this, 8);
+            actLp.topMargin = dp(this, 6);
+            actLp.leftMargin = dp(this, 30);
             tile.addView(acts, actLp);
-            acts.addView(customActBtn("↑", i == 0, v -> moveCustom(idx, -1)));
-            acts.addView(customActBtn("↓", i == customCards.size() - 1, v -> moveCustom(idx, 1)));
             acts.addView(customActBtn("编辑", false, v -> openCustomForm(c)));
             acts.addView(customActBtn("删除", false, v -> confirmDeleteCustom(c)));
             View spacer = new View(this);
             acts.addView(spacer, new LinearLayout.LayoutParams(0, 1, 1f));
-            TextView detailHint = tv(this, "点色带看详情 ›", 11, Color.argb(220, 255, 255, 255), false);
+            TextView detailHint = tv(this, "详情 ›", 11, Color.argb(220, 255, 255, 255), false);
             acts.addView(detailHint);
-            tile.setOnClickListener(v -> openCustomDetail(c));
+            tile.setOnClickListener(v -> {
+                if (System.currentTimeMillis() - lastDragEndAt < 450) return;
+                openCustomDetail(c);
+            });
+            tile.setOnLongClickListener(v -> { startCustomDrag(tile, idx); return true; });
         }
         return sec;
     }
 
+    // P-deck 小圆钮：28dp 圆，半透白底，禁用态更淡
+    TextView customMoveBtn(String label, boolean disabled, View.OnClickListener onClick) {
+        TextView b = tv(this, label, 13, disabled ? Color.argb(130, 255, 255, 255) : Color.WHITE, true);
+        b.setGravity(Gravity.CENTER);
+        b.setBackground(roundRect(Color.argb(disabled ? 28 : 52, 255, 255, 255), 999, this));
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(dp(this, 28), dp(this, 28));
+        lp.leftMargin = dp(this, 6);
+        b.setLayoutParams(lp);
+        if (!disabled) b.setOnClickListener(onClick);
+        return b;
+    }
+
+    // P-deck ① 长按拖动：跟手平移+放大，松手按位移换序并保存（对照混合版 startTileDrag）
+    void startCustomDrag(final View tile, final int fromIdx) {
+        haptic();
+        tile.setScaleX(1.02f); tile.setScaleY(1.02f); tile.setAlpha(0.95f);
+        if (Build.VERSION.SDK_INT >= 21) tile.setElevation(dp(this, 10));
+        if (tile.getParent() instanceof ViewGroup) ((ViewGroup) tile.getParent()).bringChildToFront(tile);
+        if (mineScrollView != null) mineScrollView.requestDisallowInterceptTouchEvent(true);
+        tile.setOnTouchListener(new View.OnTouchListener() {
+            float downY = -1;
+            public boolean onTouch(View v, MotionEvent e) {
+                switch (e.getActionMasked()) {
+                    case MotionEvent.ACTION_DOWN:
+                        downY = e.getRawY();
+                        return true;
+                    case MotionEvent.ACTION_MOVE:
+                        if (downY < 0) downY = e.getRawY();
+                        v.setTranslationY(e.getRawY() - downY);
+                        return true;
+                    case MotionEvent.ACTION_UP:
+                    case MotionEvent.ACTION_CANCEL: {
+                        float dy = downY < 0 ? 0 : e.getRawY() - downY;
+                        finishCustomDrag(tile, fromIdx, dy);
+                        return true;
+                    }
+                }
+                return true;
+            }
+        });
+    }
+
+    void finishCustomDrag(View tile, int fromIdx, float dy) {
+        tile.setOnTouchListener(null);
+        tile.setTranslationY(0);
+        tile.setScaleX(1f); tile.setScaleY(1f); tile.setAlpha(1f);
+        if (Build.VERSION.SDK_INT >= 21) tile.setElevation(0);
+        if (mineScrollView != null) mineScrollView.requestDisallowInterceptTouchEvent(false);
+        lastDragEndAt = System.currentTimeMillis();
+        int th = tile.getHeight();
+        int dRow = th > 0 ? Math.round(dy / (float) th) : 0;
+        int toIdx = Math.max(0, Math.min(fromIdx + dRow, customCards.size() - 1));
+        if (toIdx != fromIdx) {
+            CustomCard moved = customCards.remove(fromIdx);
+            customCards.add(toIdx, moved);
+            saveCustomCards();
+            Toast.makeText(this, "顺序已保存", Toast.LENGTH_SHORT).show();
+        }
+        refreshMineKeepScroll();
+    }
+
     Button customActBtn(String label, boolean disabled, View.OnClickListener onClick) {
         Button b = new Button(this);
-        b.setText(label); b.setTextSize(11.5f); b.setAllCaps(false);
+        b.setText(label); b.setTextSize(11f); b.setAllCaps(false);
         b.setMinWidth(0); b.setMinHeight(0);
-        b.setPadding(dp(this, 9), dp(this, 4), dp(this, 9), dp(this, 4));
+        b.setPadding(dp(this, 8), dp(this, 3), dp(this, 8), dp(this, 3));
         b.setTextColor(disabled ? Color.argb(140, 255, 255, 255) : Color.WHITE);
-        b.setBackground(roundRect(Color.argb(disabled ? 30 : 55, 255, 255, 255), 999, this));
+        b.setBackground(roundRect(Color.argb(disabled ? 30 : 48, 255, 255, 255), 999, this));
         b.setEnabled(!disabled);
         LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         lp.rightMargin = dp(this, 6);
@@ -2831,7 +2961,7 @@ public class MainActivity extends Activity {
         customCards.set(idx, customCards.get(j));
         customCards.set(j, t);
         saveCustomCards();
-        showTab("mine");
+        refreshMineKeepScroll();
     }
 
     void confirmDeleteCustom(final CustomCard c) {
@@ -2843,7 +2973,7 @@ public class MainActivity extends Activity {
                 customCards.remove(c);
                 saveCustomCards();
                 Toast.makeText(this, "已删除这张自定义卡", Toast.LENGTH_SHORT).show();
-                showTab("mine");
+                refreshMineKeepScroll();
             })
             .show();
     }
@@ -3056,7 +3186,7 @@ public class MainActivity extends Activity {
             saveCustomCards();
             customDialog = null;
             dlg.dismiss();
-            showTab("mine");
+            refreshMineKeepScroll();
         });
         dlg.setOnDismissListener(d -> { if (customDialog == dlg) customDialog = null; });
         dlg.show();
