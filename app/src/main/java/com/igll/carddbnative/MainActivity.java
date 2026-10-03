@@ -6293,7 +6293,7 @@ public class MainActivity extends Activity {
         GradientDrawable cg = new GradientDrawable();
         cg.setShape(GradientDrawable.OVAL);
         cg.setColor(Color.argb(142, 54, 56, 64));
-        cg.setStroke(dp(this, 1), Color.argb(125, 255, 255, 255));
+        cg.setStroke(dp(this, 1), Color.argb(110, 255, 255, 255));
         circle.setBackground(cg);
         if (Build.VERSION.SDK_INT >= 21) circle.setElevation(dp(this, 5));
         FrameLayout.LayoutParams clp2 = new FrameLayout.LayoutParams(dp(this, 34), dp(this, 34));
