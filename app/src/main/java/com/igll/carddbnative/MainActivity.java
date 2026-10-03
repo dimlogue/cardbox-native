@@ -1276,6 +1276,9 @@ public class MainActivity extends Activity {
     boolean suppressNextChromeRestore = false; // Q12: chain open (menu->detail, addSheet->form) skips one restore to avoid dock flicker
     View addSheetView = null; // Q12: 添加卡片底表，浮窗退场名单内
     String lastBin = null, lastBinScheme = null, lastBinType = null, lastBinBrand = null, lastBinBank = null, lastBinCountry = null;
+    // Q43：binlist 剩余字段 + 国家代码（有才存，无不假装）与本地命中卡（点开走 openDetail）
+    String lastBinPrepaid = null, lastBinBankUrl = null, lastBinBankPhone = null, lastBinBankCity = null, lastBinCountryAlpha2 = null;
+    Card lastBinLocalCard = null;
     // P-deck：我的卡片页滚动位置保持（换序/开合不甩回顶部）
     ScrollView mineScrollView = null;
     int mineScrollSaveY = 0;
@@ -7188,22 +7191,147 @@ public class MainActivity extends Activity {
         return sum % 10 == 0;
     }
 
-    // 在线 BIN 查询浮窗（对照混合版 #binDlg：输入 6–8 位 → binlist 在线认行 → 可一键加入我的卡片）
+    // Q43 对照混合版 styles.css .spec（display:flex;justify-content:space-between;gap:12px;
+    // padding:8px 0;border-bottom:1px solid #f0f0f5;font-size:.9rem；dt 灰 flex:none、dd 右对齐
+    // weight 500、overflow-wrap:anywhere）+ Q42 字体口径：全程 tvW 的内置无衬线（软件字体三档），
+    // 键 WRAP_CONTENT 不定宽截断、值 weight 500 可换行不省略，行下 1px #F0F0F5 细线分行。
     LinearLayout binSpecRow(String k, String v) {
+        LinearLayout wrap = new LinearLayout(this);
+        wrap.setOrientation(LinearLayout.VERTICAL);
         LinearLayout row = new LinearLayout(this);
         row.setOrientation(LinearLayout.HORIZONTAL);
-        row.setPadding(0, dp(this, 7), 0, dp(this, 7));
-        TextView dk = tv(this, k, 13, Color.rgb(0x8E, 0x8E, 0x93), false);
-        row.addView(dk, new LinearLayout.LayoutParams(dp(this, 72), ViewGroup.LayoutParams.WRAP_CONTENT));
-        TextView dv = tv(this, v == null ? "" : v, 13.5f, Color.rgb(0x1C, 0x1C, 0x1E), false);
+        row.setGravity(Gravity.TOP);
+        row.setPadding(0, dp(this, 8), 0, dp(this, 8));
+        TextView dk = tvW(this, k, 13, Color.rgb(0x8E, 0x8E, 0x93), 400);
+        dk.setSingleLine(false);
+        row.addView(dk, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        TextView dv = tvW(this, v == null ? "" : v, 13.5f, Color.rgb(0x1C, 0x1C, 0x1E), 500);
         dv.setGravity(Gravity.END);
-        row.addView(dv, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
-        return row;
+        dv.setSingleLine(false);
+        try { dv.setBreakStrategy(android.text.Layout.BREAK_STRATEGY_SIMPLE); } catch (Throwable ignored) {}
+        LinearLayout.LayoutParams dvLp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+        dvLp.leftMargin = dp(this, 12);
+        row.addView(dv, dvLp);
+        wrap.addView(row, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        View line = new View(this);
+        line.setBackgroundColor(Color.rgb(0xF0, 0xF0, 0xF5));
+        wrap.addView(line, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, Math.max(1, dp(this, 1))));
+        return wrap;
+    }
+
+    // Q43② 国家双语：英文原名（binlist country.name）+ 括号简体中文（alpha2 经 Locale 转出），
+    // 如 Bangladesh（孟加拉国）；alpha2 缺失或中文与英文相同/为空时只显英文，不编造。
+    static String binCountryDisplay(String name, String alpha2) {
+        if (name == null || name.length() == 0) return "";
+        if (alpha2 == null || alpha2.length() == 0) return name;
+        try {
+            String zh = new java.util.Locale("", alpha2).getDisplayCountry(java.util.Locale.SIMPLIFIED_CHINESE);
+            if (zh != null && zh.length() > 0 && !zh.equalsIgnoreCase(name) && !zh.equalsIgnoreCase(alpha2)) return name + "（" + zh + "）";
+        } catch (Throwable ignored) {}
+        return name;
+    }
+
+    // Q43③ 英文发卡行名 → 本地中文行名（仅覆盖卡库 17 家，认不出返回空，不硬凑）
+    static String binBankZh(String bankName) {
+        if (bankName == null) return "";
+        String s = bankName.toLowerCase(java.util.Locale.ROOT);
+        if (s.contains("bank of china")) return "中国银行";
+        if (s.contains("industrial and commercial") || s.contains("icbc")) return "工商银行";
+        if (s.contains("china construction") || s.contains("ccb")) return "建设银行";
+        if (s.contains("agricultural")) return "农业银行";
+        if (s.contains("bank of communications") || s.contains("bocom")) return "交通银行";
+        if (s.contains("china merchants") || s.contains("cmb")) return "招商银行";
+        if (s.contains("citic")) return "中信银行";
+        if (s.contains("ping an")) return "平安银行";
+        if (s.contains("guangfa") || s.contains("cgb")) return "广发银行";
+        if (s.contains("pudong") || s.contains("spd bank")) return "浦发银行";
+        if (s.contains("postal savings") || s.contains("psbc")) return "邮储银行";
+        if (s.contains("minsheng")) return "民生银行";
+        if (s.contains("huaxia") || s.contains("hua xia")) return "华夏银行";
+        if (s.contains("bank of beijing")) return "北京银行";
+        if (s.contains("bank of shanghai")) return "上海银行";
+        if (s.contains("bank of ningbo")) return "宁波银行";
+        if (s.contains("industrial bank")) return "兴业银行";
+        return "";
+    }
+
+    static java.util.Set<String> binSchemeOrgs(String scheme) {
+        java.util.Set<String> out = new java.util.HashSet<>();
+        if (scheme == null) return out;
+        String s = scheme.toLowerCase(java.util.Locale.ROOT);
+        if (s.contains("visa")) out.add("visa");
+        if (s.contains("mastercard") || s.contains("maestro")) { out.add("mastercard"); out.add("mastercard-nucc"); }
+        if (s.contains("unionpay") || s.contains("union pay")) out.add("unionpay");
+        if (s.contains("amex") || s.contains("american express")) out.add("amex-cn");
+        if (s.contains("jcb")) out.add("jcb");
+        return out;
+    }
+
+    // Q43③ 本地命中：先 BIN 前缀最长匹配（卡库 specs.BIN），再发卡行（中英映射）+卡组织双中；
+    // 都不中返回 null，结果区不许假装命中。
+    Card findLocalCardForBin(String bin, String bankName, String scheme) {
+        if (bin != null && bin.length() >= 6) {
+            Card best = null; int bestK = 5;
+            for (Card c : Store.all) {
+                String digits = c.spec("BIN").replaceAll("[^0-9]", "");
+                if (digits.length() < 6) continue;
+                int k = Math.min(Math.min(bin.length(), digits.length()), 8);
+                if (k > bestK && bin.substring(0, k).equals(digits.substring(0, k))) { bestK = k; best = c; }
+            }
+            if (best != null) return best;
+        }
+        String mapped = binBankZh(bankName);
+        java.util.Set<String> orgs = binSchemeOrgs(scheme);
+        if (orgs.isEmpty()) return null;
+        Card best = null;
+        for (Card c : Store.all) {
+            boolean bankHit = (mapped.length() > 0 && mapped.equals(c.bank))
+                || (bankName != null && bankName.length() > 0 && bankName.equals(c.bank));
+            if (!bankHit || c.org == null || !orgs.contains(c.org)) continue;
+            if (best == null || (c.hasScore ? c.score : -1) > (best.hasScore ? best.score : -1)) best = c;
+        }
+        return best;
+    }
+
+    // Q43③ 命中行：浅蓝卡可点开详情，带卡名与现成字段（评分/货币转换费），未命中不渲染此行
+    View binLocalHitRow(final Card c) {
+        LinearLayout box = new LinearLayout(this);
+        box.setOrientation(LinearLayout.HORIZONTAL);
+        box.setGravity(Gravity.CENTER_VERTICAL);
+        box.setPadding(dp(this, 12), dp(this, 10), dp(this, 12), dp(this, 10));
+        box.setBackground(roundRect(Color.rgb(0xF0, 0xF7, 0xFF), 12, this));
+        LinearLayout texts = new LinearLayout(this);
+        texts.setOrientation(LinearLayout.VERTICAL);
+        texts.addView(tvW(this, "卡库里有这张卡", 13, Color.rgb(0x0A, 0x5C, 0xD6), 700));
+        String ftf = c.spec("货币转换费（FTF）");
+        if (ftf == null || ftf.length() == 0) ftf = c.spec("货币转换费");
+        StringBuilder meta = new StringBuilder();
+        meta.append(c.name == null ? "" : c.name);
+        meta.append(" · ").append(c.bank == null ? "" : c.bank).append(" · ").append(orgLabel(c.org));
+        if (c.hasScore) meta.append(" · ").append(String.format(java.util.Locale.US, "%.1f分", c.score));
+        if (ftf != null && ftf.length() > 0) meta.append(" · 转换费 ").append(ftf);
+        TextView mv = tv(this, meta.toString(), 12, Color.rgb(0x5A, 0x6B, 0x8A), false);
+        mv.setSingleLine(false);
+        LinearLayout.LayoutParams mvLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        mvLp.topMargin = dp(this, 3);
+        texts.addView(mv, mvLp);
+        box.addView(texts, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+        TextView arrow = tv(this, "›", 20, Color.rgb(0x0A, 0x5C, 0xD6), false);
+        arrow.setGravity(Gravity.CENTER);
+        box.addView(arrow, new LinearLayout.LayoutParams(dp(this, 20), ViewGroup.LayoutParams.WRAP_CONTENT));
+        box.setOnClickListener(v -> {
+            haptic();
+            final Card target = c;
+            closeBinQueryNow();
+            openDetail(target);
+        });
+        return box;
     }
 
     void openBinQuery() {
         closeBinQueryNow();
         lastBin = null; lastBinScheme = null; lastBinType = null; lastBinBrand = null; lastBinBank = null; lastBinCountry = null;
+        lastBinPrepaid = null; lastBinBankUrl = null; lastBinBankPhone = null; lastBinBankCity = null; lastBinCountryAlpha2 = null; lastBinLocalCard = null; // Q43
         captureCurrentPageScroll();
         hideChrome(); // Q12
         final FrameLayout sheet = new FrameLayout(this);
@@ -7239,7 +7367,7 @@ public class MainActivity extends Activity {
         formRow.addView(inBin, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
         Button go = new Button(this);
         go.setText("查询"); go.setTextSize(15); go.setAllCaps(false); go.setTextColor(Color.WHITE);
-        try { go.setTypeface(go.getTypeface(), android.graphics.Typeface.BOLD); } catch (Throwable ignored) {}
+        try { go.setTypeface(weightTypeface(this, 700)); } catch (Throwable ignored) {}
         GradientDrawable goBg = new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
             new int[]{Color.rgb(0x0A, 0x84, 0xFF), Color.rgb(0x00, 0x66, 0xE6)});
         goBg.setCornerRadius(dp(this, 12));
@@ -7250,9 +7378,13 @@ public class MainActivity extends Activity {
         if (inBin.getLayoutParams() instanceof ViewGroup.MarginLayoutParams)
             ((ViewGroup.MarginLayoutParams) inBin.getLayoutParams()).topMargin = 0;
         formRow.addView(go, goLp);
+        // Q43：结果区独立可滚（字段补全后可达 10 行，卡高封顶 82vh 时动作行不被挤出、长网址在行内换行）
+        ScrollView binScroll = new ScrollView(this);
+        thinScrollbar(binScroll);
+        binScroll.addView(resultBox, new ScrollView.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
         LinearLayout.LayoutParams resLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         resLp.topMargin = dp(this, 6);
-        card.addView(resultBox, resLp);
+        card.addView(binScroll, resLp);
         LinearLayout acts = new LinearLayout(this);
         acts.setOrientation(LinearLayout.HORIZONTAL);
         LinearLayout.LayoutParams actLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
@@ -7260,11 +7392,12 @@ public class MainActivity extends Activity {
         card.addView(acts, actLp);
         Button closeBtn = new Button(this);
         closeBtn.setText("关闭"); closeBtn.setTextSize(15); closeBtn.setAllCaps(false);
+        try { closeBtn.setTypeface(weightTypeface(this, 600)); } catch (Throwable ignored) {}
         closeBtn.setBackground(roundRect(Color.rgb(0xF2, 0xF3, 0xF7), 14, this));
         closeBtn.setOnClickListener(v -> { haptic(); closeBinQuery(); });
         acts.addView(closeBtn, new LinearLayout.LayoutParams(0, dp(this, 48), 1f));
         addBtn.setText("加入我的卡片"); addBtn.setTextSize(15); addBtn.setAllCaps(false); addBtn.setTextColor(Color.WHITE);
-        try { addBtn.setTypeface(addBtn.getTypeface(), android.graphics.Typeface.BOLD); } catch (Throwable ignored) {}
+        try { addBtn.setTypeface(weightTypeface(this, 700)); } catch (Throwable ignored) {}
         GradientDrawable addBg = new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
             new int[]{Color.rgb(0x0A, 0x84, 0xFF), Color.rgb(0x00, 0x66, 0xE6)});
         addBg.setCornerRadius(dp(this, 14));
@@ -7331,14 +7464,20 @@ public class MainActivity extends Activity {
         restoreChrome(); // Q12
     }
 
+    // Q43 对照混合版 app.js lookupBin（fetch lookup.binlist.net、ok 门槛 scheme||bank.name、
+    // 三态：查询中…／查不到这个 BIN 的信息，换个试试。／空窗提示句在窗体 hint）：
+    // ①binlist 剩余字段全展示（prepaid 有才显、bank.city/url/phone 有才显，空跳行不编造）；
+    // ②国家英文原名+括号简体中文（alpha2 经 Locale）；③本地命中（BIN 前缀→行名+组织）加可点行；
+    // 失败只显查不到、不假装查到；一键加入沿 addBinToMine（name=银行+组织(BIN)、note=type·brand·国家英文名）。
     void lookupBinOnline(final String bin, final LinearLayout resultBox, final Button addBtn) {
         if (bin == null || !bin.matches("[0-9]{6,8}")) { showFloatToast("请输入 6–8 位数字 BIN"); return; }
         resultBox.removeAllViews();
         resultBox.addView(tv(this, "查询中…", 13.5f, Color.rgb(0x8E, 0x8E, 0x93), false));
         addBtn.setVisibility(View.GONE);
-        lastBin = null;
+        lastBin = null; lastBinLocalCard = null;
         new Thread(() -> {
             String scheme = null, type = null, brand = null, bankName = null, country = null;
+            String prepaid = null, bankUrl = null, bankPhone = null, bankCity = null, alpha2 = null;
             boolean ok = false;
             try {
                 HttpURLConnection conn = (HttpURLConnection) new URL("https://lookup.binlist.net/" + bin).openConnection();
@@ -7350,15 +7489,22 @@ public class MainActivity extends Activity {
                     scheme = d.optString("scheme", "");
                     type = d.optString("type", "");
                     brand = d.optString("brand", "");
+                    if (d.has("prepaid") && !d.isNull("prepaid")) prepaid = d.optBoolean("prepaid", false) ? "是" : "否";
                     JSONObject bk = d.optJSONObject("bank");
-                    if (bk != null) bankName = bk.optString("name", "");
+                    if (bk != null) {
+                        bankName = bk.optString("name", "");
+                        bankUrl = bk.optString("url", "");
+                        bankPhone = bk.optString("phone", "");
+                        bankCity = bk.optString("city", "");
+                    }
                     JSONObject co = d.optJSONObject("country");
-                    if (co != null) country = co.optString("name", "");
+                    if (co != null) { country = co.optString("name", ""); alpha2 = co.optString("alpha2", ""); }
                     ok = (scheme != null && scheme.length() > 0) || (bankName != null && bankName.length() > 0);
                 }
                 conn.disconnect();
             } catch (Throwable ignored) { ok = false; }
             final String fScheme = scheme, fType = type, fBrand = brand, fBank = bankName, fCountry = country;
+            final String fPrepaid = prepaid, fUrl = bankUrl, fPhone = bankPhone, fCity = bankCity, fAlpha2 = alpha2;
             final boolean fOk = ok;
             runOnUiThread(() -> {
                 resultBox.removeAllViews();
@@ -7368,12 +7514,27 @@ public class MainActivity extends Activity {
                     return;
                 }
                 lastBin = bin; lastBinScheme = fScheme; lastBinType = fType; lastBinBrand = fBrand; lastBinBank = fBank; lastBinCountry = fCountry;
-                if (bin != null && bin.length() > 0) resultBox.addView(binSpecRow("BIN", bin));
+                lastBinPrepaid = fPrepaid; lastBinBankUrl = fUrl; lastBinBankPhone = fPhone; lastBinBankCity = fCity; lastBinCountryAlpha2 = fAlpha2;
+                resultBox.addView(binSpecRow("BIN", bin));
                 if (fScheme != null && fScheme.length() > 0) resultBox.addView(binSpecRow("卡组织", fScheme));
                 if (fType != null && fType.length() > 0) resultBox.addView(binSpecRow("类型", fType));
                 if (fBrand != null && fBrand.length() > 0) resultBox.addView(binSpecRow("品牌", fBrand));
+                if (fPrepaid != null && fPrepaid.length() > 0) resultBox.addView(binSpecRow("是否预付", fPrepaid));
                 if (fBank != null && fBank.length() > 0) resultBox.addView(binSpecRow("发卡行", fBank));
-                if (fCountry != null && fCountry.length() > 0) resultBox.addView(binSpecRow("国家", fCountry));
+                if (fCity != null && fCity.length() > 0) resultBox.addView(binSpecRow("发卡行城市", fCity));
+                if (fUrl != null && fUrl.length() > 0) resultBox.addView(binSpecRow("发卡行网址", fUrl));
+                if (fPhone != null && fPhone.length() > 0) resultBox.addView(binSpecRow("发卡行电话", fPhone));
+                String countryTxt = binCountryDisplay(fCountry, fAlpha2);
+                if (countryTxt.length() > 0) resultBox.addView(binSpecRow("国家", countryTxt));
+                Card local = null;
+                try { local = findLocalCardForBin(bin, fBank, fScheme); } catch (Throwable ignored) { local = null; }
+                lastBinLocalCard = local;
+                if (local != null) {
+                    View hit = binLocalHitRow(local);
+                    LinearLayout.LayoutParams hLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+                    hLp.topMargin = dp(MainActivity.this, 10);
+                    resultBox.addView(hit, hLp);
+                }
                 addBtn.setVisibility(View.VISIBLE);
             });
         }).start();
