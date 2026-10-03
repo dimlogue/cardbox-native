@@ -9499,8 +9499,8 @@ public class MainActivity extends Activity {
         sectionHead(page, "数据");
         int pendVer = prefs == null ? -1 : prefs.getInt("pending_update_version", -1); if (pendVer <= Store.dataVersion) pendVer = -1; else if (pendingUpdateVer > Store.dataVersion) pendVer = pendingUpdateVer;
         String updSub = pendVer > 0 ? ("v" + Store.dataVersion + " · " + Store.all.size() + " 张卡 · 有新版 v" + pendVer + " 可更新 ›") : ("v" + Store.dataVersion + " · " + Store.all.size() + " 张卡 · 点此直接检查更新 ›");
-        View updRow = settingRow("数据更新" + (pendVer > 0 ? "  ●" : ""), updSub);
-        if (pendVer > 0) { try { TextView ut = (TextView)((ViewGroup)updRow).getChildAt(0); ut.setTextColor(Color.rgb(0x1C,0x1C,0x1E)); TextView us = (TextView)((ViewGroup)updRow).getChildAt(1); us.setText(updSub); } catch(Throwable ignored){} }
+        View updRow = settingRow("数据更新", updSub);
+        if (pendVer > 0) { try { TextView ut = (TextView)((ViewGroup)updRow).getChildAt(0); android.text.SpannableStringBuilder ssb = new android.text.SpannableStringBuilder("数据更新  ●"); ssb.setSpan(new android.text.style.ForegroundColorSpan(Color.rgb(0xE0,0x31,0x31)), 5, 6, android.text.Spannable.SPAN_EXCLUSIVE_EXCLUSIVE); ssb.setSpan(new android.text.style.RelativeSizeSpan(0.7f), 5, 6, android.text.Spannable.SPAN_EXCLUSIVE_EXCLUSIVE); ut.setText(ssb); } catch(Throwable ignored){} }
         final int pendFinal = pendVer;
         updRow.setOnClickListener(v -> { haptic(); if (pendFinal > 0 && pendingUpdateJson != null) showUpdateConfirm(); else { showFloatToast("正在检查数据更新…"); checkDataUpdate(true); } });
         page.addView(updRow);
