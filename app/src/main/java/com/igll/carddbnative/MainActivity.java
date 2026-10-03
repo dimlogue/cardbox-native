@@ -1068,7 +1068,6 @@ public class MainActivity extends Activity {
     EditText searchBox;
     String query = "";
     TextView homeCount;
-    Button filterBtn;
     View filterSheet = null;
     ScrollView filterScroll = null; // P2e：筛选窗内滚动区（窗框固定不滚，四角不被内容切掉）
     // Q3 悬浮搜索圆钮（首页右侧竖列上钮，玻璃底深色放大镜，点了回顶聚焦顶部搜索框）
@@ -2616,14 +2615,8 @@ public class MainActivity extends Activity {
         col.addView(frow, frowLp);
         homeCount = tv(this, "", 12.5f, Color.rgb(0x8E, 0x8E, 0x93), false);
         frow.addView(homeCount, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
-        filterBtn = new Button(this);
-        filterBtn.setText("筛选");
-        filterBtn.setTextSize(12.5f);
-        filterBtn.setAllCaps(false);
-        filterBtn.setMinWidth(0);
-        filterBtn.setBackground(roundRect(Color.WHITE, 11, this));
-        filterBtn.setOnClickListener(v -> { haptic(); openFilterSheet(); });
-        frow.addView(filterBtn, new LinearLayout.LayoutParams(dp(this, 92), dp(this, 34)));
+        // Q31：顶部「筛选」药丸下架——对照混合版 app.js 现行（顶部入口已去掉、只留右下悬浮筛选钮），
+        // 已选计数走悬浮钮蓝色角标（updateFilterFabBadge），已选标签栏仍在下方可点删。
 
         // 已选标签栏（Phase 2a-2，对照 renderActiveFilters：点标签即移除该项筛选）
         android.widget.HorizontalScrollView afScroll = new android.widget.HorizontalScrollView(this);
@@ -2838,10 +2831,6 @@ public class MainActivity extends Activity {
         List<Card> list = filteredHome();
         applySort(list);
         if (homeCount != null) homeCount.setText("共 " + list.size() + " 张");
-        if (filterBtn != null) {
-            int n = activeFilterCount();
-            filterBtn.setText(n == 0 ? "筛选" : "筛选 · " + n);
-        }
         renderActiveFilters();
         renderHomeList(list);
         homeRenderSig = sig;
