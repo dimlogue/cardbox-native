@@ -147,6 +147,7 @@ public class MainActivity extends Activity {
         return welcomeOpen || changelogOpen || wizardOpen || aboutOpen
             || filterSheet != null || detailCard != null || cardMenuPop != null
             || customFormSheet != null || customDetailSheet != null || binSheet != null || addSheetView != null
+            || extSheet != null
             || delConfirmSheet != null || updateTipSheet != null || updateConfirmSheet != null;
     }
     void hideFabsNow() {
@@ -1335,6 +1336,20 @@ public class MainActivity extends Activity {
     };
     // Q9 在线 BIN 查询（对照混合版 lookupBin/openBinQuery/addBinToMine）：binlist 在线认行，可一键入卡
     View binSheet = null;
+    // Q68 在线搜卡·扩展卡库：轻索引（发卡行+卡名+组织+卡种+官网）走 OTA extended.json，不进安装包、不进核心库；
+    // 搜索命中可一键转为本机 CustomCard（自有条目），断网仅看缓存并明示。规格空缺如实标注，不编造。
+    static class ExtCard {
+        String id, name, bank, org, type, url, image;
+    }
+    View extSheet = null;
+    boolean extClosing = false;
+    java.util.List<ExtCard> extItems = null;
+    boolean extFetchStarted = false;
+    boolean extLoading = false;
+    String extQuery = "";
+    LinearLayout extResultBox = null;
+    TextView extMeta = null;
+    EditText extInput = null;
     boolean suppressNextChromeRestore = false; // Q12: chain open (menu->detail, addSheet->form) skips one restore to avoid dock flicker
     View addSheetView = null; // Q12: 添加卡片底表，浮窗退场名单内
     String lastBin = null, lastBinScheme = null, lastBinType = null, lastBinBrand = null, lastBinBank = null, lastBinCountry = null;
@@ -3214,11 +3229,20 @@ public class MainActivity extends Activity {
         LinearLayout.LayoutParams r1lp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(this, 52));
         r1lp.topMargin = dp(this, 12);
         card.addView(r1, r1lp);
+        TextView rExt = addSheetRow("\u5728\u7EBF\u641C\u5361\uFF08\u6269\u5C55\u5361\u5E93\uFF09", () -> {
+            suppressNextChromeRestore = true; closeAddSheet(sheet);
+            openExtendedSearch();
+        });
+        LinearLayout.LayoutParams rExtLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(this, 52));
+        rExtLp.topMargin = dp(this, 8);
+        card.addView(rExt, rExtLp);
         TextView r2 = addSheetRow("\u5728\u7EBF\u67E5\u8BE2\u5361\u4FE1\u606F", () -> {
             suppressNextChromeRestore = true; closeAddSheet(sheet);
             openBinQuery();
         });
-        card.addView(r2, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(this, 52)));
+        LinearLayout.LayoutParams r2lp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(this, 52));
+        r2lp.topMargin = dp(this, 8);
+        card.addView(r2, r2lp);
         TextView cancel = tv(this, "\u53D6\u6D88", 15, Color.rgb(0x8E, 0x8E, 0x93), false);
         cancel.setGravity(Gravity.CENTER);
         cancel.setPadding(0, dp(this, 10), 0, dp(this, 6));
@@ -9405,6 +9429,381 @@ public class MainActivity extends Activity {
         }
     }
 
+    // ---------- Q68 在线搜卡·扩展卡库 ----------
+    // 索引格式：{"cards":[{id,name,bank,org,type,url,image}]}，兼容 {"items":[...]} 与裸数组；
+    // org 沿核心库代码（visa/mastercard/unionpay/...），type 为 debit/credit 或中文直写。
+    java.util.List<ExtCard> parseExtended(String json) {
+        if (json == null || json.trim().isEmpty()) return null;
+        try {
+            JSONArray arr = null;
+            String t = json.trim();
+            if (t.startsWith("[")) arr = new JSONArray(t);
+            else {
+                JSONObject root = new JSONObject(t);
+                if (root.has("cards")) arr = root.optJSONArray("cards");
+                else if (root.has("items")) arr = root.optJSONArray("items");
+            }
+            if (arr == null) return null;
+            java.util.List<ExtCard> out = new ArrayList<>();
+            for (int i = 0; i < arr.length(); i++) {
+                JSONObject o = arr.optJSONObject(i);
+                if (o == null) continue;
+                ExtCard e = new ExtCard();
+                e.id = o.optString("id", "");
+                e.name = o.optString("name", "");
+                e.bank = o.optString("bank", "");
+                e.org = o.optString("org", "");
+                e.type = o.optString("type", "");
+                e.url = o.optString("url", "");
+                e.image = o.optString("image", "");
+                if (e.name == null || e.name.trim().isEmpty()) continue;
+                if (e.id == null || e.id.trim().isEmpty()) e.id = "ext-" + i + "-" + Math.abs((e.bank + "|" + e.name).hashCode());
+                out.add(e);
+            }
+            return out;
+        } catch (Throwable e) { return null; }
+    }
+
+    void ensureExtended() {
+        if (extItems != null) return;
+        try {
+            String cached = prefs == null ? null : prefs.getString("extended_cache", null);
+            java.util.List<ExtCard> c = cached == null ? null : parseExtended(cached);
+            if (c != null) { extItems = c; return; }
+        } catch (Throwable ignored) {}
+        extItems = new ArrayList<>();
+    }
+
+    void fetchExtendedUpdate(final Runnable onDone) {
+        if (extFetchStarted) { if (onDone != null) onDone.run(); return; }
+        extFetchStarted = true;
+        extLoading = true;
+        final String[] urls = {
+            "https://cdn.jsdelivr.net/gh/dimlogue/cardbox-data@main/extended.json",
+            "https://raw.githubusercontent.com/dimlogue/cardbox-data/main/extended.json"
+        };
+        new Thread(() -> {
+            String bestJson = null;
+            java.util.List<ExtCard> best = null;
+            for (String u : urls) {
+                try {
+                    HttpURLConnection conn = (HttpURLConnection) new URL(u + "?t=" + System.currentTimeMillis()).openConnection();
+                    conn.setConnectTimeout(8000); conn.setReadTimeout(8000);
+                    conn.setRequestProperty("Cache-Control", "no-cache");
+                    if (conn.getResponseCode() != 200) { conn.disconnect(); continue; }
+                    String json = Store.readAll(conn.getInputStream()); conn.disconnect();
+                    java.util.List<ExtCard> parsed = parseExtended(json);
+                    if (parsed == null) continue;
+                    if (best == null || parsed.size() > best.size()) { best = parsed; bestJson = json; }
+                    if (parsed.size() > 0) break;
+                } catch (Throwable ignored) {}
+            }
+            final java.util.List<ExtCard> fBest = best;
+            final String fJson = bestJson;
+            runOnUiThread(() -> {
+                extLoading = false;
+                extFetchStarted = false;
+                if (fBest != null) {
+                    extItems = fBest;
+                    if (fJson != null && prefs != null) {
+                        try { prefs.edit().putString("extended_cache", fJson).apply(); } catch (Throwable ignored) {}
+                    }
+                }
+                if (onDone != null) onDone.run();
+                if (extSheet != null) renderExtResults();
+            });
+        }).start();
+    }
+
+    boolean isExtAdded(ExtCard e) {
+        if (e == null || customCards == null) return false;
+        String n = e.name == null ? "" : e.name.trim();
+        String b = e.bank == null ? "" : e.bank.trim();
+        for (CustomCard c : customCards) {
+            String cn = c.name == null ? "" : c.name.trim();
+            String cb = c.bank == null ? "" : c.bank.trim();
+            if (n.equals(cn) && b.equals(cb)) return true;
+        }
+        return false;
+    }
+
+    void addExtToMine(final ExtCard e) {
+        if (e == null) return;
+        if (isExtAdded(e)) { showFloatToast("这张卡已经在我的卡片里了"); return; }
+        CustomCard c = new CustomCard();
+        c.id = "custom-ext-" + System.currentTimeMillis();
+        c.name = e.name == null ? "" : e.name;
+        c.bank = e.bank == null ? "" : e.bank;
+        // CustomCard 的组织存显示名；扩展索引的 org 代码经 orgLabel 转显示名，空则留空
+        String ol = (e.org == null || e.org.trim().isEmpty()) ? "" : orgLabel(e.org.trim());
+        // CUSTOM_ORGS 用「Visa」而 orgLabel 返「VISA」，统一成表单口径，避免详情里大小写两套
+        if ("VISA".equals(ol)) ol = "Visa";
+        else if ("万事达-网联".equals(ol)) ol = "万事达";
+        else if ("运通-人民币".equals(ol)) ol = "美国运通";
+        c.org = ol;
+        String typeTxt = "";
+        if ("credit".equals(e.type)) typeTxt = "信用卡";
+        else if ("debit".equals(e.type)) typeTxt = "借记卡";
+        else if (e.type != null) typeTxt = e.type;
+        StringBuilder note = new StringBuilder();
+        if (!typeTxt.isEmpty()) note.append(typeTxt);
+        note.append(note.length() > 0 ? " · 扩展卡库" : "扩展卡库");
+        note.append(" · 规格待补，以发卡行官网为准");
+        if (e.url != null && !e.url.trim().isEmpty()) note.append(" · ").append(e.url.trim());
+        c.note = note.toString();
+        c.acctClass = "";
+        c.style = Math.abs((c.name + "|" + c.bank).hashCode()) % CUSTOM_STYLES.length;
+        customCards.add(c);
+        customOpen = true;
+        saveCustomCards();
+        showFloatToast("已加入我的卡片，可在详情里标一类/二类");
+        renderExtResults();
+    }
+
+    void renderExtResults() {
+        if (extResultBox == null) return;
+        extResultBox.removeAllViews();
+        ensureExtended();
+        String q = extQuery == null ? "" : extQuery.trim().toLowerCase();
+        // 本地核心库命中数（断网/扩展无结果时给出去向，不假装扩展有）
+        int localHits = 0;
+        if (!q.isEmpty()) {
+            for (Card lc : Store.all) {
+                String hay = ((lc.name == null ? "" : lc.name) + " " + (lc.bank == null ? "" : lc.bank) + " " + orgLabel(lc.org)).toLowerCase();
+                if (hay.contains(q)) localHits++;
+            }
+        }
+        if (extMeta != null) {
+            int total = extItems == null ? 0 : extItems.size();
+            if (extLoading) extMeta.setText("正在拉取扩展索引… 已缓存 " + total + " 条");
+            else if (total == 0) extMeta.setText("扩展索引暂无缓存 · 本地核心库 " + Store.all.size() + " 张仍可搜");
+            else extMeta.setText("扩展卡库 " + total + " 条 · 本地核心库 " + Store.all.size() + " 张");
+        }
+        if (extItems == null || extItems.isEmpty()) {
+            TextView em = tv(this, extLoading ? "正在拉取扩展卡库…" : "暂时拉不到扩展卡库\n检查网络后再试；本地卡库在首页仍可搜索。", 13.5f, Color.rgb(0x8E, 0x8E, 0x93), false);
+            em.setGravity(Gravity.CENTER);
+            em.setPadding(dp(this, 16), dp(this, 28), dp(this, 16), dp(this, 28));
+            extResultBox.addView(em);
+            return;
+        }
+        java.util.List<ExtCard> hits = new ArrayList<>();
+        for (ExtCard e : extItems) {
+            if (q.isEmpty()) { hits.add(e); continue; }
+            String hay = ((e.name == null ? "" : e.name) + " " + (e.bank == null ? "" : e.bank) + " " + (e.org == null ? "" : e.org) + " " + orgLabel(e.org == null ? "" : e.org) + " " + (e.type == null ? "" : e.type)).toLowerCase();
+            if (hay.contains(q)) hits.add(e);
+        }
+        if (hits.isEmpty()) {
+            String msg = "扩展卡库里没找到「" + (extQuery == null ? "" : extQuery.trim()) + "」";
+            if (localHits > 0) msg += "\n本地卡库有 " + localHits + " 张相似卡，去首页搜索看看。";
+            else msg += "\n换个卡名或银行试试，冷门卡会随扩展索引持续增补。";
+            TextView em = tv(this, msg, 13.5f, Color.rgb(0x8E, 0x8E, 0x93), false);
+            em.setGravity(Gravity.CENTER);
+            em.setPadding(dp(this, 16), dp(this, 28), dp(this, 16), dp(this, 28));
+            extResultBox.addView(em);
+            return;
+        }
+        TextView cnt = tv(this, "找到 " + hits.size() + " 张" + (hits.size() > 60 ? "（只显示前 60 张，输入更准的关键词）" : ""), 12, Color.rgb(0x8E, 0x8E, 0x93), false);
+        extResultBox.addView(cnt);
+        int shown = 0;
+        for (final ExtCard e : hits) {
+            if (shown++ >= 60) break;
+            LinearLayout row = new LinearLayout(this);
+            row.setOrientation(LinearLayout.HORIZONTAL);
+            row.setGravity(Gravity.CENTER_VERTICAL);
+            row.setBackground(rippleBg(Color.rgb(0xF8, 0xF8, 0xFA), 12));
+            row.setPadding(dp(this, 10), dp(this, 10), dp(this, 10), dp(this, 10));
+            LinearLayout.LayoutParams rlp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            rlp.topMargin = dp(this, 8);
+            extResultBox.addView(row, rlp);
+            // 占位面：无图卡统一柔和渐变 + 组织短标，不预置扩展图进包（Q68 体积口径）
+            FrameLayout thumb = new FrameLayout(this);
+            thumb.setBackground(placeholderGrad(8, this));
+            roundClip(thumb, 8, this);
+            TextView orgShort = tv(this, (e.org == null || e.org.trim().isEmpty()) ? "卡" : orgLabel(e.org.trim()), 10, Color.rgb(0x0A, 0x5C, 0xD6), true);
+            orgShort.setGravity(Gravity.CENTER);
+            thumb.addView(orgShort, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+            row.addView(thumb, new LinearLayout.LayoutParams(dp(this, 56), dp(this, 36)));
+            LinearLayout mid = new LinearLayout(this);
+            mid.setOrientation(LinearLayout.VERTICAL);
+            LinearLayout.LayoutParams mlp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+            mlp.leftMargin = dp(this, 10);
+            row.addView(mid, mlp);
+            mid.addView(tv(this, e.name == null ? "" : e.name, 15, Color.rgb(0x1C, 0x1C, 0x1E), true));
+            String typeTxt = "credit".equals(e.type) ? "信用卡" : ("debit".equals(e.type) ? "借记卡" : (e.type == null ? "" : e.type));
+            StringBuilder sub = new StringBuilder();
+            if (e.bank != null && !e.bank.trim().isEmpty()) sub.append(e.bank.trim());
+            String ol2 = (e.org == null || e.org.trim().isEmpty()) ? "" : orgLabel(e.org.trim());
+            if (!ol2.isEmpty()) { if (sub.length() > 0) sub.append(" · "); sub.append(ol2); }
+            if (!typeTxt.isEmpty()) { if (sub.length() > 0) sub.append(" · "); sub.append(typeTxt); }
+            sub.append(" · 扩展卡库");
+            mid.addView(tv(this, sub.toString(), 12, Color.rgb(0x8E, 0x8E, 0x93), false));
+            if (e.url != null && !e.url.trim().isEmpty()) {
+                TextView link = tv(this, "发卡行官网 ›", 12, Color.rgb(0x0A, 0x5C, 0xD6), true);
+                LinearLayout.LayoutParams llp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+                llp.topMargin = dp(this, 3);
+                mid.addView(link, llp);
+                final String fu = e.url.trim();
+                link.setOnClickListener(v -> {
+                    haptic();
+                    try { startActivity(new android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(fu))); }
+                    catch (Throwable ex) { showFloatToast("打不开这个链接"); }
+                });
+                row.setOnClickListener(v -> {
+                    haptic();
+                    try { startActivity(new android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(fu))); }
+                    catch (Throwable ex) { showFloatToast("打不开这个链接"); }
+                });
+            }
+            final boolean added = isExtAdded(e);
+            TextView addBtn = tv(this, added ? "已加入" : "加入", 13, added ? Color.rgb(0x8E, 0x8E, 0x93) : Color.WHITE, true);
+            addBtn.setGravity(Gravity.CENTER);
+            addBtn.setPadding(dp(this, 12), dp(this, 7), dp(this, 12), dp(this, 7));
+            if (added) addBtn.setBackground(roundRect(Color.rgb(0xE9, 0xE9, 0xED), 999, this));
+            else {
+                GradientDrawable g = new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM, new int[]{Color.rgb(0x0A, 0x84, 0xFF), Color.rgb(0x00, 0x66, 0xE6)});
+                g.setCornerRadius(dp(this, 999));
+                addBtn.setBackground(g);
+            }
+            LinearLayout.LayoutParams alp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            alp.leftMargin = dp(this, 8);
+            row.addView(addBtn, alp);
+            if (!added) addBtn.setOnClickListener(v -> { haptic(); addExtToMine(e); });
+        }
+        if (!q.isEmpty() && localHits > 0) {
+            TextView lh = tv(this, "本地卡库另有 " + localHits + " 张相似卡，在首页搜索即可查看。", 12, Color.rgb(0x8E, 0x8E, 0x93), false);
+            LinearLayout.LayoutParams lhp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            lhp.topMargin = dp(this, 12);
+            extResultBox.addView(lh, lhp);
+        }
+    }
+
+    void openExtendedSearch() {
+        closeExtendedSearchNow();
+        extQuery = "";
+        ensureExtended();
+        captureCurrentPageScroll();
+        hideChrome();
+        final FrameLayout sheet = new FrameLayout(this);
+        View shade = new View(this);
+        shade.setBackgroundColor(Color.argb(102, 0, 0, 0));
+        shade.setOnClickListener(v -> closeExtendedSearch());
+        sheet.addView(shade, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        LinearLayout card = new LinearLayout(this);
+        card.setOrientation(LinearLayout.VERTICAL);
+        GradientDrawable cg = new GradientDrawable();
+        cg.setColor(Color.rgb(0xFF, 0xFF, 0xFF));
+        float rTop = dp(this, 22);
+        cg.setCornerRadii(new float[]{rTop, rTop, rTop, rTop, 0, 0, 0, 0});
+        card.setBackground(cg);
+        if (Build.VERSION.SDK_INT >= 21) { card.setElevation(dp(this, 24)); topSheetClip(card, 22, this); }
+        card.setOnClickListener(v -> {});
+        card.setPadding(dp(this, 18), dp(this, 18), dp(this, 18), dp(this, 14) + navBarH());
+        card.addView(tv(this, "在线搜卡 · 扩展卡库", 17, Color.rgb(0x1C, 0x1C, 0x1E), true));
+        TextView hint = tv(this, "搜冷门卡、地方银行与合作社卡。扩展索引只存文字、随数据更新增补，加入后只存本机；无图卡先用占位面，规格空缺会如实标注。", 12.5f, Color.rgb(0x8E, 0x8E, 0x93), false);
+        hint.setLineSpacing(dp(this, 2), 1f);
+        LinearLayout.LayoutParams hintLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        hintLp.topMargin = dp(this, 6);
+        card.addView(hint, hintLp);
+        final EditText inQ = customInput("输入卡名 / 银行，如：村镇银行", "", 30);
+        // customInput 自带 topMargin 6，在窗内再补一行距
+        LinearLayout.LayoutParams inLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        inLp.topMargin = dp(this, 6);
+        card.addView(inQ, inLp);
+        extInput = inQ;
+        extMeta = tv(this, "", 12, Color.rgb(0x8E, 0x8E, 0x93), false);
+        LinearLayout.LayoutParams metaLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        metaLp.topMargin = dp(this, 8);
+        card.addView(extMeta, metaLp);
+        ScrollView resScroll = new ScrollView(this);
+        thinScrollbar(resScroll);
+        extResultBox = new LinearLayout(this);
+        extResultBox.setOrientation(LinearLayout.VERTICAL);
+        resScroll.addView(extResultBox, new ScrollView.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        int maxH = (int) (getResources().getDisplayMetrics().heightPixels * 0.52);
+        card.addView(resScroll, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, maxH));
+        LinearLayout acts = new LinearLayout(this);
+        acts.setOrientation(LinearLayout.HORIZONTAL);
+        LinearLayout.LayoutParams actLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        actLp.topMargin = dp(this, 14);
+        card.addView(acts, actLp);
+        Button refreshBtn = new Button(this);
+        refreshBtn.setText("刷新索引"); refreshBtn.setTextSize(15); refreshBtn.setAllCaps(false);
+        try { refreshBtn.setTypeface(weightTypeface(this, 600)); } catch (Throwable ignored) {}
+        refreshBtn.setBackground(roundRect(Color.rgb(0xF2, 0xF3, 0xF7), 14, this));
+        refreshBtn.setOnClickListener(v -> { haptic(); extFetchStarted = false; fetchExtendedUpdate(null); renderExtResults(); });
+        acts.addView(refreshBtn, new LinearLayout.LayoutParams(0, dp(this, 48), 1f));
+        Button closeBtn = new Button(this);
+        closeBtn.setText("关闭"); closeBtn.setTextSize(15); closeBtn.setAllCaps(false); closeBtn.setTextColor(Color.WHITE);
+        try { closeBtn.setTypeface(weightTypeface(this, 700)); } catch (Throwable ignored) {}
+        GradientDrawable closeBg = new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM, new int[]{Color.rgb(0x0A, 0x84, 0xFF), Color.rgb(0x00, 0x66, 0xE6)});
+        closeBg.setCornerRadius(dp(this, 14));
+        closeBtn.setBackground(closeBg);
+        closeBtn.setOnClickListener(v -> { haptic(); closeExtendedSearch(); });
+        LinearLayout.LayoutParams closeLp = new LinearLayout.LayoutParams(0, dp(this, 48), 1.4f);
+        closeLp.leftMargin = dp(this, 10);
+        acts.addView(closeBtn, closeLp);
+        inQ.addTextChangedListener(new android.text.TextWatcher() {
+            public void beforeTextChanged(CharSequence s, int a, int b, int c) {}
+            public void onTextChanged(CharSequence s, int a, int b, int c) { extQuery = s == null ? "" : s.toString(); renderExtResults(); }
+            public void afterTextChanged(android.text.Editable s) {}
+        });
+        int sw = getResources().getDisplayMetrics().widthPixels;
+        int maxCardH = (int) (getResources().getDisplayMetrics().heightPixels * 0.86);
+        card.measure(View.MeasureSpec.makeMeasureSpec(sw - dp(this, 24), View.MeasureSpec.EXACTLY), View.MeasureSpec.makeMeasureSpec(maxCardH, View.MeasureSpec.AT_MOST));
+        FrameLayout.LayoutParams clp = new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, Math.min(card.getMeasuredHeight(), maxCardH));
+        clp.gravity = Gravity.BOTTOM;
+        clp.leftMargin = dp(this, 12); clp.rightMargin = dp(this, 12); clp.bottomMargin = 0;
+        FrameLayout wrap = new FrameLayout(this);
+        View glass = glassLayer(card, 22, false);
+        topSheetClip(glass, 22, this);
+        wrap.addView(glass, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, clp.height + dp(this, 22)));
+        wrap.addView(card, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        sheet.addView(wrap, clp);
+        content.addView(sheet);
+        extSheet = sheet;
+        extClosing = false;
+        sheet.setAlpha(0f);
+        sheet.animate().alpha(1f).setDuration(200).setInterpolator(ANIM_ENTER).start();
+        wrap.setTranslationY(dp(this, 40)); wrap.setAlpha(0f);
+        wrap.animate().translationY(0f).alpha(1f).setDuration(280).setInterpolator(ANIM_ENTER).start();
+        renderExtResults();
+        // 进窗即拉一次新索引（有缓存先显缓存，拉到新版再刷新）；断网保持缓存并在空状态明示
+        fetchExtendedUpdate(null);
+        inQ.postDelayed(() -> { try { inQ.requestFocus(); } catch (Throwable ignored) {} }, 140);
+    }
+
+    void closeExtendedSearchNow() {
+        View sheet = extSheet;
+        if (sheet == null) return;
+        extSheet = null; extResultBox = null; extMeta = null; extInput = null;
+        if (sheet.getParent() != null) ((ViewGroup) sheet.getParent()).removeView(sheet);
+    }
+
+    void closeExtendedSearch() {
+        final View sheet = extSheet;
+        if (sheet == null || extClosing) return;
+        extClosing = true;
+        extSheet = null;
+        hideKeyboardNow();
+        if (sheet.getParent() != null) {
+            View wrap = sheet instanceof ViewGroup && ((ViewGroup) sheet).getChildCount() > 1
+                ? ((ViewGroup) sheet).getChildAt(((ViewGroup) sheet).getChildCount() - 1) : null;
+            if (wrap != null) {
+                wrap.animate().translationY(dp(this, 42)).alpha(0f).setDuration(180).setInterpolator(ANIM_EXIT)
+                    .withEndAction(() -> {
+                        if (sheet.getParent() != null) ((ViewGroup) sheet.getParent()).removeView(sheet);
+                        extClosing = false; extResultBox = null; extMeta = null; extInput = null;
+                        restoreChrome();
+                    }).start();
+                sheet.animate().alpha(0f).setDuration(180).start();
+                return;
+            }
+            ((ViewGroup) sheet.getParent()).removeView(sheet);
+        }
+        extClosing = false; extResultBox = null; extMeta = null; extInput = null;
+        restoreChrome();
+    }
+
     String readAssetText(String path) {
         try {
             InputStream in = getAssets().open(path);
@@ -10638,6 +11037,7 @@ public class MainActivity extends Activity {
         if (customDetailSheet != null) { closeCustomDetail(); return; }
         if (detailCard != null) { closeDetail(); return; }
         if (filterSheet != null) { closeFilterSheet(); return; }
+        if (extSheet != null) { closeExtendedSearch(); return; }
         if (binSheet != null) { closeBinQuery(); return; }
         if (delConfirmSheet != null) { closeDelConfirm(); return; }
         if (updateConfirmSheet != null) { closeUpdateSheet(updateConfirmSheet); return; }
