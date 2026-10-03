@@ -648,9 +648,10 @@ public class MainActivity extends Activity {
     View homeSearchBar = null;
     boolean homeSearchBarShown = true;
     int lastHomeScrollY = 0;
-    // P-press 长按放大预览：快照浮层与源视图（松手即收起）
-    View pressPreview = null;
-    View pressPreviewSrc = null;
+    // Q1 长按贴卡菜单（对照混合版现行 openCardMenu：按住 450ms、原卡蓝框高亮、贴卡小菜单）
+    View cardMenuBackdrop = null;
+    View cardMenuClone = null;
+    View cardMenuPop = null;
 
     // 筛选状态（Phase 2a-1：与混合版 chipRow 相同的单选切换语义，点已选项再点一次取消）
     String filterType = null;   // "debit" / "credit" / null
@@ -1092,7 +1093,7 @@ public class MainActivity extends Activity {
     }
 
     void showTab(String key) {
-        dismissPressPreview();
+        dismissCardMenu();
         tab = key;
         content.removeAllViews();
         View page = pages.get(key);
@@ -1449,80 +1450,241 @@ public class MainActivity extends Activity {
             "已停发".equals(c.status) ? Color.rgb(0xF3, 0xE8, 0xE8) : Color.rgb(0xE6, 0xF6, 0xEC),
             "已停发".equals(c.status) ? Color.rgb(0xB0, 0x23, 0x2B) : Color.rgb(0x1D, 0x8A, 0x49), chipSp));
         if (mine.contains(c.id)) chips.addView(chip("已添加", Color.rgb(0xE6, 0xF6, 0xEC), Color.rgb(0x1D, 0x8A, 0x49), chipSp));
-        // P-press 长按放大预览（我的卡片页会覆盖此长按为拖动排序，语义不冲突）
-        box.setOnLongClickListener(v -> { showPressPreview(box); return true; });
+        // Q1 长按贴卡菜单（对照混合版 450ms 长按；我的卡片页会清掉此触摸改走拖动排序，语义不冲突）
+        attachCardMenuLongPress(box, c, false);
         return box;
     }
 
-    // P-press：长按放大预览——拍源视图像素快照做浮层，按当场实测宽高等比放大并居中夹在屏内，
-    // 1/2/3 列都取实测尺寸，不复制子视图，也就不会丢行高/字号（混合版克隆栽过的跟头）。
-    // 松手（UP/CANCEL）即收；切页/开详情时也会先收，避免浮层残留。
-    void showPressPreview(final View src) {
-        if (src == null || pressPreview != null) return;
-        final int w = src.getWidth(), h = src.getHeight();
-        if (w <= 0 || h <= 0) return;
-        Bitmap snap;
-        try {
-            snap = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888);
-            src.draw(new Canvas(snap));
-        } catch (Exception e) { return; }
-        ViewGroup rootVg = (ViewGroup) findViewById(android.R.id.content);
-        if (rootVg == null || rootVg.getWidth() <= 0 || rootVg.getHeight() <= 0) return;
-        int[] rl = new int[2]; rootVg.getLocationOnScreen(rl);
-        int[] sl = new int[2]; src.getLocationOnScreen(sl);
-        float left = sl[0] - rl[0], top = sl[1] - rl[1];
-
-        FrameLayout holder = new FrameLayout(this);
-        holder.setBackground(roundRect(Color.WHITE, 14, this));
-        holder.setClipToOutline(true);
-        if (Build.VERSION.SDK_INT >= 21) holder.setElevation(dp(this, 18));
-        ImageView iv = new ImageView(this);
-        iv.setImageBitmap(snap);
-        iv.setScaleType(ImageView.ScaleType.FIT_XY);
-        holder.addView(iv, new FrameLayout.LayoutParams(w, h));
-        FrameLayout.LayoutParams hlp = new FrameLayout.LayoutParams(w, h);
-        hlp.leftMargin = (int) left; hlp.topMargin = (int) top;
-        rootVg.addView(holder, hlp);
-
-        float maxW = rootVg.getWidth() - dp(this, 32);
-        float maxH = rootVg.getHeight() - dp(this, 48);
-        float mul = w < dp(this, 150) ? 1.9f : (w < dp(this, 230) ? 1.45f : 1.18f);
-        float scale = Math.min(mul, Math.min(maxW / w, maxH / h));
-        if (scale < 1f) scale = 1f; // 单列大瓷砖已近屏宽：不再硬撑放大，靠浮起阴影与淡入做预览感，防溢出屏外
-        float cx = left + w / 2f, cy = top + h / 2f;
-        float tw = w * scale, th = h * scale;
-        float wantCx = Math.max(tw / 2f + dp(this, 10), Math.min(cx, rootVg.getWidth() - tw / 2f - dp(this, 10)));
-        float wantCy = Math.max(th / 2f + dp(this, 10), Math.min(cy, rootVg.getHeight() - th / 2f - dp(this, 10)));
-        holder.setPivotX(w / 2f); holder.setPivotY(h / 2f);
-        holder.setAlpha(0.92f);
-        holder.animate().scaleX(scale).scaleY(scale)
-            .translationX(wantCx - cx).translationY(wantCy - cy).alpha(1f)
-            .setDuration(220).setInterpolator(ANIM_ENTER).start();
-
-        pressPreview = holder; pressPreviewSrc = src;
-        haptic();
-        android.view.ViewParent p = src.getParent();
-        while (p != null) { p.requestDisallowInterceptTouchEvent(true); p = p.getParent(); }
-        src.setOnTouchListener((v, e) -> {
-            if (e.getActionMasked() == MotionEvent.ACTION_UP || e.getActionMasked() == MotionEvent.ACTION_CANCEL) dismissPressPreview();
-            return false;
-        });
+    // Q1 长按贴卡菜单（对照混合版 app.js openCardMenu/closeCardMenu 现行行为，删除 P-press 放大预览）：
+    // 按住 450ms 触发；被按卡大小不变、原地 1:1 快照浮在轻暗遮罩上 + 2.5dp 蓝框 + 浮起阴影，其余内容被遮罩压暗；
+    // 贴着被按卡浮出 224dp 小菜单（查看详情 / 添加到我的卡片 或 从我的卡片移除，细线图标禁用 emoji），菜单出现时底栏让开。
+    // 原生无 CSS backdrop 实时模糊，背景以 rgba(18,22,36,.14) 轻暗近似（混合版为 blur+轻暗）。
+    class CardMenuTouch implements View.OnTouchListener {
+        final View anchor;
+        final Card card;
+        final boolean fromWiz;
+        float downX, downY;
+        boolean armed = false, fired = false;
+        final Runnable fireTask;
+        CardMenuTouch(View v, Card c, boolean wiz) {
+            anchor = v; card = c; fromWiz = wiz;
+            fireTask = () -> {
+                if (!armed) return;
+                fired = true;
+                openCardMenu(card, anchor, fromWiz);
+            };
+        }
+        @Override public boolean onTouch(View v, MotionEvent e) {
+            switch (e.getActionMasked()) {
+                case MotionEvent.ACTION_DOWN:
+                    armed = true; fired = false;
+                    downX = e.getRawX(); downY = e.getRawY();
+                    mainHandler.removeCallbacks(fireTask);
+                    mainHandler.postDelayed(fireTask, 450);
+                    return false;
+                case MotionEvent.ACTION_MOVE:
+                    // 移动超过 10dp 视为滑动，取消（对照混合版）
+                    if (armed && !fired && (Math.abs(e.getRawX() - downX) > dp(MainActivity.this, 10)
+                        || Math.abs(e.getRawY() - downY) > dp(MainActivity.this, 10))) {
+                        armed = false;
+                        mainHandler.removeCallbacks(fireTask);
+                    }
+                    return false;
+                case MotionEvent.ACTION_UP: {
+                    mainHandler.removeCallbacks(fireTask);
+                    boolean was = fired;
+                    armed = false; fired = false;
+                    return was; // 已弹菜单时吞掉松手，避免紧接着的 click 误开详情
+                }
+                case MotionEvent.ACTION_CANCEL:
+                    mainHandler.removeCallbacks(fireTask);
+                    armed = false; fired = false;
+                    return false;
+                default:
+                    return false;
+            }
+        }
     }
 
-    void dismissPressPreview() {
-        if (pressPreview == null) return;
-        final View holder = pressPreview; pressPreview = null;
-        if (pressPreviewSrc != null) {
-            pressPreviewSrc.setOnTouchListener(null);
-            android.view.ViewParent p = pressPreviewSrc.getParent();
-            while (p != null) { p.requestDisallowInterceptTouchEvent(false); p = p.getParent(); }
-            pressPreviewSrc = null;
+    void attachCardMenuLongPress(View v, Card c, boolean fromWiz) {
+        v.setOnTouchListener(new CardMenuTouch(v, c, fromWiz));
+    }
+
+    // Q1 菜单细线星标（Canvas 手绘星形轮廓，与导航/搜索图标同一线条语言）
+    class StarIconView extends View {
+        int iconColor = Color.rgb(0x1C, 0x1C, 0x1E);
+        StarIconView(Context c) { super(c); }
+        @Override protected void onDraw(Canvas cv) {
+            Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);
+            p.setStyle(Paint.Style.STROKE);
+            p.setStrokeCap(Paint.Cap.ROUND);
+            p.setStrokeJoin(Paint.Join.ROUND);
+            p.setStrokeWidth(dp(getContext(), 1.8f));
+            p.setColor(iconColor);
+            float w = getWidth(), h = getHeight();
+            float sx = w / 24f, sy = h / 24f;
+            float[][] pts = {
+                {12f, 3f}, {14.23f, 8.93f}, {20.56f, 9.22f}, {15.61f, 13.17f}, {17.29f, 19.28f},
+                {12f, 15.8f}, {6.71f, 19.28f}, {8.39f, 13.17f}, {3.44f, 9.22f}, {9.77f, 8.93f}
+            };
+            android.graphics.Path path = new android.graphics.Path();
+            for (int i = 0; i < pts.length; i++) {
+                float x = pts[i][0] * sx, y = pts[i][1] * sy;
+                if (i == 0) path.moveTo(x, y); else path.lineTo(x, y);
+            }
+            path.close();
+            cv.drawPath(path, p);
         }
-        holder.animate().cancel();
-        holder.animate().scaleX(1f).scaleY(1f).translationX(0).translationY(0).alpha(0f)
-            .setDuration(140).setInterpolator(ANIM_ENTER)
-            .withEndAction(() -> { if (holder.getParent() instanceof ViewGroup) ((ViewGroup) holder.getParent()).removeView(holder); })
-            .start();
+    }
+
+    View cardMenuRow(View icon, String text, final Runnable act) {
+        LinearLayout row = new LinearLayout(this);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        row.setGravity(Gravity.CENTER_VERTICAL);
+        row.setPadding(dp(this, 10), dp(this, 11), dp(this, 10), dp(this, 11));
+        row.addView(icon, new LinearLayout.LayoutParams(dp(this, 20), dp(this, 20)));
+        TextView t = tv(this, text, 15, Color.rgb(0x1C, 0x1C, 0x1E), false);
+        LinearLayout.LayoutParams tlp = new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        tlp.leftMargin = dp(this, 10);
+        row.addView(t, tlp);
+        // 按下底色 rgba(0,122,255,.10)（对照 .cp-row:active）
+        row.setOnTouchListener((v, e) -> {
+            if (e.getAction() == MotionEvent.ACTION_DOWN) v.setBackground(roundRect(Color.argb(26, 0, 122, 255), 10, MainActivity.this));
+            else if (e.getAction() == MotionEvent.ACTION_UP || e.getAction() == MotionEvent.ACTION_CANCEL) v.setBackground(null);
+            return false;
+        });
+        row.setOnClickListener(v -> { haptic(); act.run(); });
+        return row;
+    }
+
+    void openCardMenu(final Card c, final View anchor, final boolean fromWiz) {
+        if (c == null || anchor == null || rootView == null) return;
+        if (!anchor.isAttachedToWindow() || cardMenuPop != null) return;
+        haptic(); // 对照混合版触发时 buzz(12)，走用户触感档位
+        dismissSearch();
+
+        View backdrop = new View(this);
+        backdrop.setBackgroundColor(Color.argb(36, 18, 22, 36));
+        backdrop.setClickable(true);
+        backdrop.setOnClickListener(v -> closeCardMenu());
+        rootView.addView(backdrop, new FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        cardMenuBackdrop = backdrop;
+
+        // 高亮：源卡 1:1 快照浮在遮罩上（原大小不变），蓝框 2.5dp rgba(0,122,255,.7) + 浮起阴影（对照 pop-clone）
+        int w = Math.max(1, anchor.getWidth()), h = Math.max(1, anchor.getHeight());
+        int[] rl = new int[2]; rootView.getLocationOnScreen(rl);
+        int[] al = new int[2]; anchor.getLocationOnScreen(al);
+        int left = al[0] - rl[0], top = al[1] - rl[1];
+        FrameLayout clone = new FrameLayout(this);
+        try {
+            Bitmap snap = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888);
+            anchor.draw(new Canvas(snap));
+            ImageView iv = new ImageView(this);
+            iv.setImageBitmap(snap);
+            iv.setScaleType(ImageView.ScaleType.FIT_XY);
+            clone.addView(iv, new FrameLayout.LayoutParams(w, h));
+        } catch (Exception e) { /* 快照失败仍保留蓝框定位 */ }
+        GradientDrawable border = new GradientDrawable();
+        border.setColor(Color.TRANSPARENT);
+        border.setCornerRadius(dp(this, 14));
+        border.setStroke(dp(this, 2.5f), Color.argb(179, 0, 122, 255));
+        View borderV = new View(this);
+        borderV.setBackground(border);
+        borderV.setClickable(false);
+        clone.addView(borderV, new FrameLayout.LayoutParams(w, h));
+        clone.setClickable(false);
+        if (Build.VERSION.SDK_INT >= 21) clone.setElevation(dp(this, 18));
+        FrameLayout.LayoutParams clp = new FrameLayout.LayoutParams(w, h);
+        clp.leftMargin = left; clp.topMargin = top;
+        rootView.addView(clone, clp);
+        cardMenuClone = clone;
+
+        // 贴卡小菜单（对照 .card-pop：宽 224、内边距 6、圆角 16、白色半透、深柔影）
+        LinearLayout pop = new LinearLayout(this);
+        pop.setOrientation(LinearLayout.VERTICAL);
+        GradientDrawable pbg = new GradientDrawable();
+        pbg.setColor(Color.argb(235, 255, 255, 255));
+        pbg.setCornerRadius(dp(this, 16));
+        pbg.setStroke(dp(this, 1), Color.argb(46, 20, 30, 60));
+        pop.setBackground(pbg);
+        if (Build.VERSION.SDK_INT >= 21) pop.setElevation(dp(this, 24));
+        pop.setPadding(dp(this, 6), dp(this, 6), dp(this, 6), dp(this, 6));
+        pop.setClickable(true);
+
+        TextView title = tv(this, c.name, 12.5f, Color.rgb(0x8E, 0x8E, 0x93), false);
+        title.setSingleLine(true);
+        title.setEllipsize(android.text.TextUtils.TruncateAt.END);
+        title.setPadding(dp(this, 10), dp(this, 7), dp(this, 10), dp(this, 5));
+        pop.addView(title, new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+
+        SearchIconView detailIcon = new SearchIconView(this);
+        detailIcon.iconColor = Color.rgb(0x1C, 0x1C, 0x1E);
+        pop.addView(cardMenuRow(detailIcon, "查看详情", () -> {
+            dismissCardMenu();
+            openDetail(c, fromWiz);
+        }));
+        StarIconView starIcon = new StarIconView(this);
+        pop.addView(cardMenuRow(starIcon, mine.contains(c.id) ? "从我的卡片移除" : "添加到我的卡片", () -> {
+            closeCardMenu();
+            toggleMineWithToast(c, () -> {
+                if (fromWiz) { if (wizardOpen) showWizardPage(); }
+                else if ("home".equals(tab)) refreshHome();
+            });
+        }));
+
+        // 定位：优先贴在卡下方 8dp，放不下改上方；左右夹在屏内 12dp（对照 openCardMenu 的 W=224 定位）
+        int popW = dp(this, 224);
+        FrameLayout.LayoutParams plp = new FrameLayout.LayoutParams(popW, ViewGroup.LayoutParams.WRAP_CONTENT);
+        rootView.addView(pop, plp);
+        cardMenuPop = pop;
+        pop.measure(View.MeasureSpec.makeMeasureSpec(popW, View.MeasureSpec.AT_MOST),
+            View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED));
+        int popH = pop.getMeasuredHeight();
+        int rootW = rootView.getWidth(), rootH = rootView.getHeight();
+        int pl = Math.max(dp(this, 12), Math.min(rootW - popW - dp(this, 12), left + w / 2 - popW / 2));
+        boolean below = top + h + dp(this, 8) + popH <= rootH - dp(this, 12);
+        int pt = below ? top + h + dp(this, 8) : Math.max(dp(this, 12), top - dp(this, 8) - popH);
+        plp.leftMargin = pl; plp.topMargin = pt;
+        pop.setLayoutParams(plp);
+        pop.setPivotX(Math.max(0, Math.min(popW, left + w / 2 - pl)));
+        pop.setPivotY(below ? 0 : popH);
+        pop.setAlpha(0f); pop.setScaleX(0.94f); pop.setScaleY(0.94f);
+        pop.animate().alpha(1f).scaleX(1f).scaleY(1f)
+            .setDuration(160).setInterpolator(ANIM_ENTER).start();
+
+        // 菜单出现时底栏让开，不挡靠近底部的卡（对照 setDockVisible(false)）
+        if (navWrap != null) navWrap.setVisibility(View.GONE);
+    }
+
+    static void removeViewNow(View v) {
+        if (v != null && v.getParent() instanceof ViewGroup) ((ViewGroup) v.getParent()).removeView(v);
+    }
+
+    // 关闭走 140ms 缩小淡出（对照 closeCardMenu），遮罩与高亮立即撤，底栏立即恢复
+    void closeCardMenu() {
+        final View pop = cardMenuPop, bd = cardMenuBackdrop, cl = cardMenuClone;
+        cardMenuPop = null; cardMenuBackdrop = null; cardMenuClone = null;
+        if (navWrap != null) navWrap.setVisibility(View.VISIBLE);
+        removeViewNow(bd);
+        removeViewNow(cl);
+        if (pop == null) return;
+        pop.animate().cancel();
+        pop.animate().alpha(0f).scaleX(0.94f).scaleY(0.94f)
+            .setDuration(140).setInterpolator(ANIM_EXIT)
+            .withEndAction(() -> removeViewNow(pop)).start();
+    }
+
+    // 立即关闭（切页/开详情/返回拦截）：不走动画，避免浮层残留
+    void dismissCardMenu() {
+        View pop = cardMenuPop, bd = cardMenuBackdrop, cl = cardMenuClone;
+        cardMenuPop = null; cardMenuBackdrop = null; cardMenuClone = null;
+        if (navWrap != null) navWrap.setVisibility(View.VISIBLE);
+        removeViewNow(pop);
+        removeViewNow(bd);
+        removeViewNow(cl);
     }
 
     TextView chip(String s, int bg, int fg) {
@@ -2775,7 +2937,7 @@ public class MainActivity extends Activity {
             toggleMineWithToast(c, () -> { if (wizardOpen) showWizardPage(); });
         });
         row.setOnClickListener(v -> openDetail(c, true));
-        row.setOnLongClickListener(v -> { showPressPreview(row); return true; });
+        attachCardMenuLongPress(row, c, true);
         return row;
     }
 
@@ -2783,7 +2945,7 @@ public class MainActivity extends Activity {
     void openDetail(Card c) { openDetail(c, false); }
 
     void openDetail(Card c, boolean fromWiz) {
-        dismissPressPreview();
+        dismissCardMenu();
         if (!fromWiz) captureCurrentPageScroll(); // P-keepscroll：关详情后回到打开前的位置
         detailFromWiz = fromWiz;
         detailCard = c;
@@ -3124,7 +3286,7 @@ public class MainActivity extends Activity {
             clp.topMargin = dp(this, 10);
             listBox.addView(cardBox, clp);
             cardBox.setOnClickListener(v -> openDetail(c));
-            cardBox.setOnLongClickListener(v -> { showPressPreview(cardBox); return true; });
+            attachCardMenuLongPress(cardBox, c, false);
 
             LinearLayout top = new LinearLayout(this);
             top.setOrientation(LinearLayout.HORIZONTAL);
@@ -3462,6 +3624,7 @@ public class MainActivity extends Activity {
                     final Card c = list.get(i + j);
                     final int idx = i + j;
                     final View tile = cardTile(c, row, mineCols);
+                    tile.setOnTouchListener(null); // Q1：我的卡片页长按拖动优先，清掉 cardTile 默认贴卡菜单触摸
                     LinearLayout.LayoutParams tlp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1f);
                     if (j > 0) tlp.leftMargin = dp(this, 10);
                     tile.setLayoutParams(tlp);
@@ -5046,7 +5209,7 @@ public class MainActivity extends Activity {
 
     @Override
     public void onBackPressed() {
-        if (pressPreview != null) { dismissPressPreview(); return; }
+        if (cardMenuPop != null) { closeCardMenu(); return; }
         if (aboutOpen) { closeAbout(); return; }
         if (welcomeOpen) { closeWelcome(); return; }
         if (changelogOpen) { closeChangelog(); return; }
