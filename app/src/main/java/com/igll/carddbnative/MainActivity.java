@@ -1,5 +1,6 @@
 package com.igll.carddbnative;
 
+import android.animation.ValueAnimator;
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.app.Dialog;
@@ -856,10 +857,33 @@ public class MainActivity extends Activity {
         homeSearchBar.setFocusable(show);
     }
 
+    // P-searchfix ③：点搜索栏以外任意区域收起搜索（全局分发，不依赖某个子视图是否消费触摸）
+    @Override public boolean dispatchTouchEvent(MotionEvent ev) {
+        if (ev != null && ev.getAction() == MotionEvent.ACTION_DOWN
+            && searchBox != null && searchBox.hasFocus() && homeSearchBar != null && homeSearchBarShown) {
+            int[] loc = new int[2];
+            homeSearchBar.getLocationOnScreen(loc);
+            float x = ev.getRawX(), y = ev.getRawY();
+            boolean inside = x >= loc[0] && x <= loc[0] + homeSearchBar.getWidth()
+                && y >= loc[1] && y <= loc[1] + homeSearchBar.getHeight();
+            if (!inside) dismissSearch();
+        }
+        return super.dispatchTouchEvent(ev);
+    }
+
     void focusSearch() {
         // P-searchfix：先让搜索栏显现，再平滑滚回顶，等滚动落稳后才聚焦弹键盘，避免瞬间弹飞的硬切
         setHomeSearchBarShown(true, true);
-        if (homeScroll != null) homeScroll.smoothScrollTo(0, 0);
+        long scrollDur = 0;
+        if (homeScroll != null && homeScroll.getScrollY() > 0) {
+            int from = homeScroll.getScrollY();
+            scrollDur = Math.min(420, 200 + from / 6);
+            ValueAnimator va = ValueAnimator.ofInt(from, 0);
+            va.setDuration(scrollDur);
+            va.setInterpolator(new DecelerateInterpolator());
+            va.addUpdateListener(a -> { if (homeScroll != null) homeScroll.scrollTo(0, (int) a.getAnimatedValue()); });
+            va.start();
+        }
         if (searchBox == null) return;
         searchBox.postDelayed(() -> {
             if (searchBox == null) return;
@@ -868,7 +892,7 @@ public class MainActivity extends Activity {
                 InputMethodManager imm = (InputMethodManager) getSystemService(INPUT_METHOD_SERVICE);
                 if (imm != null) imm.showSoftInput(searchBox, InputMethodManager.SHOW_IMPLICIT);
             } catch (Exception e) { /* 无输入法静默 */ }
-        }, 300);
+        }, scrollDur + 60);
     }
 
     // ---------- 通用：卡片瓷砖 ----------
