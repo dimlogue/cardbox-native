@@ -16,6 +16,7 @@ import android.text.Editable;
 import android.text.TextWatcher;
 import android.util.LruCache;
 import android.view.Gravity;
+import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.Window;
@@ -218,6 +219,9 @@ public class MainActivity extends Activity {
     // ---------- 全局状态 ----------
     SharedPreferences prefs;
     Set<String> mine = new HashSet<>();
+    // 我的卡片拖动顺序（Phase 3c，对照 app.js 的 cbMineOrder）：卡 id 的有序列表
+    List<String> mineOrder = new ArrayList<>();
+    long lastDragEndAt = 0;
     String tab = "home";
     Card detailCard = null;
 
@@ -353,6 +357,7 @@ public class MainActivity extends Activity {
         groupBank = prefs.getBoolean("group_bank", false);
         try { bankOpen = new HashSet<>(prefs.getStringSet("bank_open", new HashSet<String>())); } catch (Exception e) { bankOpen = new HashSet<>(); }
         loadCustomCards();
+        loadMineOrder();
         Store.load(this);
 
         LinearLayout root = new LinearLayout(this);
@@ -1729,18 +1734,90 @@ public class MainActivity extends Activity {
         return row;
     }
 
-    // ---------- 我的卡片 ----------
-    View buildMinePage() {
-        LinearLayout page = basePage("我的卡片");
-        List<Card> mineCards = new ArrayList<>();
-        for (Card c : Store.all) if (mine.contains(c.id)) mineCards.add(c);
+    // ---------- 我的卡片（Phase 3c：卡包分析补全 + 长按拖动排序） ----------
 
-        Set<String> orgs = new HashSet<>();
-        int noFtf = 0;
-        for (Card c : mineCards) {
-            if (c.org != null && !c.org.isEmpty()) orgs.add(c.org);
-            if ("无".equals(c.spec("货币转换费（FTF）"))) noFtf++;
+    // 卡档次用 3a 已移植的 cardTier（按卡名粗分 3 钻石/无限级、2 白金/世界级、1 金卡级、0 普卡）
+    static final String[] TIER_NAMES = {"普卡", "金卡级", "白金级", "钻石 / 无限级"};
+    // 组织清单（顺序与标签同 app.js mineAnalysisHtml 的 orgs）
+    static final String[][] ORG_LIST = {
+        {"unionpay", "银联"}, {"mastercard", "万事达"}, {"visa", "Visa"},
+        {"mastercard-nucc", "万事网联"}, {"jcb", "JCB"}, {"amex-cn", "美国运通"}
+    };
+
+    void loadMineOrder() {
+        mineOrder = new ArrayList<>();
+        try {
+            JSONArray arr = new JSONArray(prefs.getString("mine_order", "[]"));
+            for (int i = 0; i < arr.length(); i++) {
+                String id = arr.optString(i, "");
+                if (!id.isEmpty()) mineOrder.add(id);
+            }
+        } catch (Exception e) { mineOrder = new ArrayList<>(); }
+    }
+
+    void saveMineOrder() {
+        try {
+            JSONArray arr = new JSONArray();
+            for (String id : mineOrder) arr.put(id);
+            prefs.edit().putString("mine_order", arr.toString()).apply();
+        } catch (Exception e) { /* 存不下就保持内存顺序 */ }
+    }
+
+    // 同 app.js applyMineOrder：已保存顺序的在前（按保存序），其余保持原相对序（List.sort 稳定）
+    void applyMineOrder(List<Card> list) {
+        if (mineOrder == null || mineOrder.isEmpty() || list.size() < 2) return;
+        final Map<String, Integer> pos = new HashMap<>();
+        for (int i = 0; i < mineOrder.size(); i++) pos.put(mineOrder.get(i), i);
+        list.sort((a, b) -> Integer.compare(
+            pos.containsKey(a.id) ? pos.get(a.id) : Integer.MAX_VALUE,
+            pos.containsKey(b.id) ? pos.get(b.id) : Integer.MAX_VALUE));
+    }
+
+    // 卡包分析（对照 app.js mineAnalysisHtml：最高档次/组织覆盖清单/最通用一张/短板/境外能力四条进度）
+    View buildMineAnalysis(final List<Card> owned) {
+        LinearLayout wrap = new LinearLayout(this);
+        wrap.setOrientation(LinearLayout.VERTICAL);
+
+        int[] tiers = new int[4];
+        for (Card c : owned) tiers[cardTier(c)]++;
+        int topTier = 0;
+        for (int i = 0; i < 4; i++) if (tiers[i] > 0) topTier = i;
+        List<String> hasOrgs = new ArrayList<>(), missOrgs = new ArrayList<>();
+        for (String[] o : ORG_LIST) {
+            boolean has = false;
+            for (Card c : owned) if (o[0].equals(c.org)) { has = true; break; }
+            (has ? hasOrgs : missOrgs).add(o[1]);
         }
+        int nNoFtf = 0, n3ds = 0, nFx = 0, nAtm = 0;
+        for (Card c : owned) {
+            if (featMatch(c, "noftf")) nNoFtf++;
+            if (featMatch(c, "3ds")) n3ds++;
+            if (featMatch(c, "autofx")) nFx++;
+            if (c.spec("境外ATM取现手续费").trim().startsWith("免发卡行")) nAtm++;
+        }
+        // 最通用：币种多 + 无转换费 + 有 3DS + 能网付 + 评分加权（同混合版口径）
+        Card best = null; double bestS = -1;
+        for (Card c : owned) {
+            String cur = c.spec("币种支持");
+            int curN = 1; // 同混合版：分隔符数 + 1（空值也计 1）
+            for (int i = 0; i < cur.length(); i++) {
+                char ch = cur.charAt(i);
+                if (ch == '、' || ch == ',' || ch == '，') curN++;
+            }
+            double s = curN + (featMatch(c, "noftf") ? 3 : 0) + (featMatch(c, "3ds") ? 2 : 0)
+                + (featMatch(c, "online") ? 2 : 0) + (c.hasScore ? c.score : 0) * 0.3;
+            if (s > bestS) { bestS = s; best = c; }
+        }
+        List<String> gaps = new ArrayList<>();
+        if (nNoFtf == 0) gaps.add("还没有无货币转换费的卡，出境刷卡每笔会被收 1%~1.5% 转换费");
+        boolean hasJcb = false;
+        for (Card c : owned) if ("jcb".equals(c.org)) { hasJcb = true; break; }
+        if (!hasJcb) gaps.add("没有 JCB，去日本线下会弱一点");
+        if (n3ds == 0) gaps.add("没有支持 3DS 的卡，部分境外网站付款可能过不了验证");
+        String verdict = owned.size() >= 8 ? "卡包比较齐整了"
+            : owned.size() >= 4 ? "主力框架有了，再补短板就行" : "还在起步阶段，先把主力卡配齐";
+
+        // 深蓝英雄卡：2×2 指标格
         LinearLayout hero = new LinearLayout(this);
         hero.setOrientation(LinearLayout.VERTICAL);
         GradientDrawable hg = new GradientDrawable(GradientDrawable.Orientation.TL_BR,
@@ -1748,8 +1825,118 @@ public class MainActivity extends Activity {
         hg.setCornerRadius(dp(this, 18));
         hero.setBackground(hg);
         hero.setPadding(dp(this, 16), dp(this, 14), dp(this, 16), dp(this, 14));
-        hero.addView(tv(this, mineCards.size() + " 张卡 · 我的卡包", 18, Color.WHITE, true));
-        hero.addView(tv(this, "组织覆盖 " + orgs.size() + " 家 · 无转换费 " + noFtf + " 张", 12.5f, Color.argb(205, 255, 255, 255), false));
+        wrap.addView(hero, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        LinearLayout row1 = new LinearLayout(this); row1.setOrientation(LinearLayout.HORIZONTAL);
+        LinearLayout row2 = new LinearLayout(this); row2.setOrientation(LinearLayout.HORIZONTAL);
+        LinearLayout.LayoutParams r2lp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        r2lp.topMargin = dp(this, 12);
+        hero.addView(row1);
+        hero.addView(row2, r2lp);
+        row1.addView(mineHeroTile(owned.size() + " 张卡", "我的卡包 · " + verdict, null), new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+        row1.addView(mineHeroTile(TIER_NAMES[topTier], "最高档次", null), new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+        row2.addView(mineHeroTile(hasOrgs.size() + " / " + ORG_LIST.length, "组织覆盖",
+            hasOrgs.isEmpty() ? null : joinCn(hasOrgs)), new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+        row2.addView(mineHeroTile(nNoFtf + " 张", "无转换费",
+            missOrgs.isEmpty() ? "组织全覆盖了" : "还差 " + joinCn(missOrgs)), new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+
+        // 境外能力白卡：四条进度 + 最通用 + 短板
+        TextView sect = tv(this, "境外能力", 15, Color.rgb(0x1C, 0x1C, 0x1E), true);
+        LinearLayout.LayoutParams sectLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        sectLp.topMargin = dp(this, 16);
+        wrap.addView(sect, sectLp);
+        LinearLayout card = new LinearLayout(this);
+        card.setOrientation(LinearLayout.VERTICAL);
+        card.setBackground(roundRect(Color.WHITE, 16, this));
+        card.setPadding(dp(this, 14), dp(this, 12), dp(this, 14), dp(this, 12));
+        LinearLayout.LayoutParams clp2 = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        clp2.topMargin = dp(this, 8);
+        wrap.addView(card, clp2);
+        card.addView(mineProgRow("无货币转换费", nNoFtf, owned.size()));
+        card.addView(mineProgRow("3DS 验证", n3ds, owned.size()));
+        card.addView(mineProgRow("自动购汇", nFx, owned.size()));
+        card.addView(mineProgRow("境外 ATM 免发卡行费", nAtm, owned.size()));
+        if (best != null) {
+            final Card bestF = best;
+            LinearLayout brow = new LinearLayout(this);
+            brow.setOrientation(LinearLayout.HORIZONTAL);
+            brow.setGravity(Gravity.CENTER_VERTICAL);
+            LinearLayout.LayoutParams blp2 = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            blp2.topMargin = dp(this, 10);
+            card.addView(brow, blp2);
+            brow.addView(tv(this, "最通用", 12.5f, Color.rgb(0x0A, 0x5C, 0xD6), true));
+            TextView bn = tv(this, best.name, 12.5f, Color.rgb(0x1C, 0x1C, 0x1E), false);
+            LinearLayout.LayoutParams bnlp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+            bnlp.leftMargin = dp(this, 10);
+            brow.addView(bn, bnlp);
+            brow.addView(tv(this, "›", 16, Color.rgb(0x8E, 0x8E, 0x93), false));
+            brow.setOnClickListener(v -> openDetail(bestF));
+        }
+        if (!gaps.isEmpty()) {
+            TextView g = tv(this, "短板：" + gaps.get(0), 12, Color.rgb(0xB0, 0x5A, 0x1B), false);
+            LinearLayout.LayoutParams glp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            glp.topMargin = dp(this, 10);
+            card.addView(g, glp);
+        }
+        TextView note = tv(this, "按卡库资料粗算，仅供参考", 10.5f, Color.rgb(0x8E, 0x8E, 0x93), false);
+        LinearLayout.LayoutParams nlp2 = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        nlp2.topMargin = dp(this, 8);
+        card.addView(note, nlp2);
+        return wrap;
+    }
+
+    static String joinCn(List<String> xs) {
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < xs.size(); i++) { if (i > 0) sb.append("、"); sb.append(xs.get(i)); }
+        return sb.toString();
+    }
+
+    View mineHeroTile(String value, String label, String sub) {
+        LinearLayout t = new LinearLayout(this);
+        t.setOrientation(LinearLayout.VERTICAL);
+        t.addView(tv(this, value, 17, Color.WHITE, true));
+        TextView l = tv(this, label, 11, Color.argb(205, 255, 255, 255), false);
+        LinearLayout.LayoutParams llp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        llp.topMargin = dp(this, 3);
+        t.addView(l, llp);
+        if (sub != null && !sub.isEmpty()) {
+            TextView s = tv(this, sub, 10.5f, Color.argb(170, 255, 255, 255), false);
+            LinearLayout.LayoutParams slp3 = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            slp3.topMargin = dp(this, 2);
+            t.addView(s, slp3);
+        }
+        return t;
+    }
+
+    View mineProgRow(String label, int n, int total) {
+        LinearLayout row = new LinearLayout(this);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        row.setGravity(Gravity.CENTER_VERTICAL);
+        LinearLayout.LayoutParams rlp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        rlp.topMargin = dp(this, 7);
+        row.setLayoutParams(rlp);
+        TextView k = tv(this, label, 12.5f, Color.rgb(0x3A, 0x3A, 0x3C), false);
+        row.addView(k, new LinearLayout.LayoutParams(dp(this, 118), ViewGroup.LayoutParams.WRAP_CONTENT));
+        LinearLayout bar = new LinearLayout(this);
+        bar.setOrientation(LinearLayout.HORIZONTAL);
+        bar.setBackground(roundRect(Color.rgb(0xE9, 0xEE, 0xF5), 999, this));
+        row.addView(bar, new LinearLayout.LayoutParams(0, dp(this, 6), 1f));
+        View fill = new View(this);
+        fill.setBackground(roundRect(Color.rgb(0x0A, 0x5C, 0xD6), 999, this));
+        bar.addView(fill, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, (float) Math.max(0, n)));
+        View rest = new View(this);
+        bar.addView(rest, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, (float) Math.max(0, total - n) + 0.0001f));
+        TextView v = tv(this, n + " / " + total, 11.5f, Color.rgb(0x8E, 0x8E, 0x93), true);
+        LinearLayout.LayoutParams vlp = new LinearLayout.LayoutParams(dp(this, 44), ViewGroup.LayoutParams.WRAP_CONTENT);
+        vlp.leftMargin = dp(this, 8);
+        row.addView(v, vlp);
+        return row;
+    }
+
+    View buildMinePage() {
+        LinearLayout page = basePage("我的卡片");
+        List<Card> mineCards = new ArrayList<>();
+        for (Card c : Store.all) if (mine.contains(c.id)) mineCards.add(c);
+        applyMineOrder(mineCards);
 
         // 整页可滚：自定义卡展开后不会把卡库收藏网格挤没（色带多时纵向滚动看）
         ScrollView sv = new ScrollView(this);
@@ -1759,7 +1946,7 @@ public class MainActivity extends Activity {
         inner.setPadding(0, dp(this, 10), 0, dp(this, 16));
         sv.addView(inner, new ScrollView.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
         page.addView(sv, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
-        inner.addView(hero, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        if (!mineCards.isEmpty()) inner.addView(buildMineAnalysis(mineCards));
         inner.addView(buildCustomSection());
 
         if (mineCards.isEmpty()) {
@@ -1774,11 +1961,104 @@ public class MainActivity extends Activity {
         LinearLayout.LayoutParams sectLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         sectLp.topMargin = dp(this, 16);
         inner.addView(sect, sectLp);
-        int oldCols = cols;
-        cols = 2;
-        addCardRows(inner, mineCards);
-        cols = oldCols;
+        TextView hint = tv(this, "长按任意一张卡拖动即可调整顺序，松手自动保存。", 11.5f, Color.rgb(0x8E, 0x8E, 0x93), false);
+        LinearLayout.LayoutParams hlp3 = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        hlp3.topMargin = dp(this, 3);
+        inner.addView(hint, hlp3);
+        addMineCardRows(inner, mineCards, sv);
         return page;
+    }
+
+    // 我的卡片网格：双列；长按拖动排序（对照 app.js startMineDrag/endMineDrag 的落位换序与 450ms 点击锁）
+    void addMineCardRows(LinearLayout container, final List<Card> list, final ScrollView sv) {
+        final int mineCols = 2;
+        for (int i = 0; i < list.size(); i += mineCols) {
+            LinearLayout row = new LinearLayout(this);
+            row.setOrientation(LinearLayout.HORIZONTAL);
+            LinearLayout.LayoutParams rlp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            rlp.topMargin = dp(this, 10);
+            row.setLayoutParams(rlp);
+            container.addView(row);
+            for (int j = 0; j < mineCols; j++) {
+                if (i + j < list.size()) {
+                    final Card c = list.get(i + j);
+                    final int idx = i + j;
+                    final View tile = cardTile(c, row);
+                    LinearLayout.LayoutParams tlp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+                    if (j > 0) tlp.leftMargin = dp(this, 10);
+                    tile.setLayoutParams(tlp);
+                    tile.setOnClickListener(v -> {
+                        if (System.currentTimeMillis() - lastDragEndAt < 450) return; // 拖后点击锁，同混合版
+                        openDetail(c);
+                    });
+                    tile.setOnLongClickListener(v -> { startMineTileDrag(tile, list, idx, sv); return true; });
+                    row.addView(tile);
+                } else {
+                    View spacer = new View(this);
+                    LinearLayout.LayoutParams slp2 = new LinearLayout.LayoutParams(0, 1, 1f);
+                    if (j > 0) slp2.leftMargin = dp(this, 10);
+                    spacer.setLayoutParams(slp2);
+                    row.addView(spacer);
+                }
+            }
+        }
+    }
+
+    void startMineTileDrag(final View tile, final List<Card> list, final int fromIdx, final ScrollView sv) {
+        tile.setScaleX(1.04f); tile.setScaleY(1.04f); tile.setAlpha(0.92f);
+        tile.setElevation(dp(this, 8));
+        if (sv != null) sv.requestDisallowInterceptTouchEvent(true);
+        tile.setOnTouchListener(new View.OnTouchListener() {
+            float downX = -1, downY = -1;
+            public boolean onTouch(View v, MotionEvent e) {
+                switch (e.getActionMasked()) {
+                    case MotionEvent.ACTION_DOWN:
+                        downX = e.getRawX(); downY = e.getRawY();
+                        return true;
+                    case MotionEvent.ACTION_MOVE: {
+                        if (downX < 0) { downX = e.getRawX(); downY = e.getRawY(); }
+                        v.setTranslationX(e.getRawX() - downX);
+                        v.setTranslationY(e.getRawY() - downY);
+                        return true;
+                    }
+                    case MotionEvent.ACTION_UP:
+                    case MotionEvent.ACTION_CANCEL: {
+                        float dx = downX < 0 ? 0 : e.getRawX() - downX;
+                        float dy = downY < 0 ? 0 : e.getRawY() - downY;
+                        finishMineTileDrag(tile, list, fromIdx, dx, dy, sv);
+                        return true;
+                    }
+                }
+                return true;
+            }
+        });
+    }
+
+    void finishMineTileDrag(View tile, List<Card> list, int fromIdx, float dx, float dy, ScrollView sv) {
+        tile.setOnTouchListener(null);
+        tile.setTranslationX(0); tile.setTranslationY(0);
+        tile.setScaleX(1f); tile.setScaleY(1f); tile.setAlpha(1f);
+        tile.setElevation(0);
+        if (sv != null) sv.requestDisallowInterceptTouchEvent(false);
+        lastDragEndAt = System.currentTimeMillis();
+        final int mineCols = 2;
+        int tw = tile.getWidth(), th = tile.getHeight();
+        int rowH = th + dp(this, 10), colW = tw + dp(this, 10);
+        int dRow = rowH > 0 ? Math.round(dy / (float) rowH) : 0;
+        int dCol = colW > 0 ? Math.round(dx / (float) colW) : 0;
+        int rows = (list.size() + mineCols - 1) / mineCols;
+        int toRow = Math.max(0, Math.min(fromIdx / mineCols + dRow, rows - 1));
+        int toCol = Math.max(0, Math.min(fromIdx % mineCols + dCol, mineCols - 1));
+        int toIdx = Math.max(0, Math.min(toRow * mineCols + toCol, list.size() - 1));
+        if (toIdx != fromIdx) {
+            Card moved = list.remove(fromIdx);
+            list.add(toIdx, moved);
+            mineOrder = new ArrayList<>();
+            for (Card c : list) mineOrder.add(c.id);
+            saveMineOrder();
+            Toast.makeText(this, "顺序已保存", Toast.LENGTH_SHORT).show();
+        }
+        showTab("mine");
     }
 
     // ---------- 自定义卡片（Phase 3b） ----------
