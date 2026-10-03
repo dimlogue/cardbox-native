@@ -655,15 +655,34 @@ public class MainActivity extends Activity {
         return bold ? android.graphics.Typeface.create(serifTf, android.graphics.Typeface.BOLD) : serifTf;
     }
 
+    // Q39 排字：对照混合版 styles.css body 栈（-apple-system/PingFang SC/HarmonyOS Sans/
+    // HarmonyOS Sans SC/MiSans/Noto Sans SC/sans-serif）与字重分级。原生无内置鸿蒙/米字
+    // 字体文件，default 走系统 SANS_SERIF（国产 ROM 上即厂商同栈字体，与混合版回落同路）。
+    static android.graphics.Typeface weightTypeface(Context c, int weight) {
+        android.graphics.Typeface base;
+        if ("serif".equals(fontMode)) return serifTypeface(c, weight >= 600);
+        if ("system".equals(fontMode)) base = android.graphics.Typeface.SANS_SERIF;
+        else base = android.graphics.Typeface.SANS_SERIF;
+        if (android.os.Build.VERSION.SDK_INT >= 28) {
+            int w = Math.max(100, Math.min(1000, weight));
+            return android.graphics.Typeface.create(base, w, false);
+        }
+        return weight >= 600 ? android.graphics.Typeface.create(base, android.graphics.Typeface.BOLD)
+            : android.graphics.Typeface.create(base, android.graphics.Typeface.NORMAL);
+    }
+
     static TextView tv(Context c, String s, float sp, int color, boolean bold) {
+        return tvW(c, s, sp, color, bold ? 700 : 400);
+    }
+    static TextView tvW(Context c, String s, float sp, int color, int weight) {
         TextView t = new TextView(c);
         t.setText(s); t.setTextSize(sp * uiScale); t.setTextColor(color);
-        if ("serif".equals(fontMode)) t.setTypeface(serifTypeface(c, bold));
-        else if ("system".equals(fontMode)) t.setTypeface(bold ? android.graphics.Typeface.create(android.graphics.Typeface.SANS_SERIF, android.graphics.Typeface.BOLD) : android.graphics.Typeface.SANS_SERIF);
-        else if (bold) t.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+        t.setTypeface(weightTypeface(c, weight));
         t.setIncludeFontPadding(false);
         return t;
     }
+    // 正文行高：混合版 body line-height 1.5；原生多行正文统一走此助手，不在单行标签上套
+    static void bodyLH(TextView t) { t.setLineSpacing(0, 1.45f); }
     static String orgLabel(String org) {
         if (org == null) return "";
         switch (org) {
