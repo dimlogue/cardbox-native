@@ -1375,9 +1375,9 @@ public class MainActivity extends Activity {
         // liquid glass drop: glass layer (live, shared snapshot) + pill tint on top edge.
         navIndicator = new FrameLayout(this);
         ((FrameLayout) navIndicator).setBackground(navPillBg());
-        navIndicatorGlass = glassLayer(navIndicator, 18, true);
-        ((FrameLayout) navIndicator).addView(navIndicatorGlass, new FrameLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        // Q20 紧急拆弹（主会话 2026-10-03 18:23 亲手）：指示块内的实时玻璃层在真机上撑成全屏巨卡且拖动卡死，
+        // 先整层摘除——指示块保留 navPillBg 药丸+拖动+弹簧，只是不再采样玻璃；液态玻璃等黑匣子证据齐了再议。
+        navIndicatorGlass = null;
         if (Build.VERSION.SDK_INT >= 21) navIndicator.setElevation(dp(this, 2));
         FrameLayout.LayoutParams indLp = new FrameLayout.LayoutParams(dp(this, 60), dp(this, 52));
         navBar.addView(navIndicator, indLp);
@@ -1469,8 +1469,7 @@ public class MainActivity extends Activity {
         float stretch = Math.min(1.30f, 1f + Math.abs(vel) * 0.045f);
         navIndicator.setScaleX(stretch);
         navIndicator.setScaleY(1f - (stretch - 1f) * 0.38f);
-        long now = android.os.SystemClock.elapsedRealtime();
-        if (now - navGlassMs > 80 && navIndicatorGlass != null) { navGlassMs = now; applyGlass(navIndicatorGlass); }
+        // Q20 拆弹：拖动/弹簧帧里不再做 applyGlass 位图裁图（曾是卡死与巨卡来源之一）。
     }
 
     void navDragTo(float navX) {
