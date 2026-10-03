@@ -394,6 +394,10 @@ public class MainActivity extends Activity {
     ScrollView filterScroll = null; // P2e：筛选窗内滚动区（窗框固定不滚，四角不被内容切掉）
     // P2 悬浮搜索圆钮（首页右下，点了回顶聚焦顶部搜索框）
     View searchFab = null;
+    // P-searchfix：首页悬浮搜索栏本体与显隐状态（滚动时收起/失焦，不再赖在视角上）
+    View homeSearchBar = null;
+    boolean homeSearchBarShown = true;
+    int lastHomeScrollY = 0;
 
     // 筛选状态（Phase 2a-1：与混合版 chipRow 相同的单选切换语义，点已选项再点一次取消）
     String filterType = null;   // "debit" / "credit" / null
@@ -825,16 +829,46 @@ public class MainActivity extends Activity {
         return fab;
     }
 
+    // P-searchfix：收起搜索——清焦点 + 收键盘（点框外、滚动列表时调用）
+    void dismissSearch() {
+        if (searchBox == null) return;
+        if (searchBox.hasFocus()) searchBox.clearFocus();
+        try {
+            InputMethodManager imm = (InputMethodManager) getSystemService(INPUT_METHOD_SERVICE);
+            if (imm != null) imm.hideSoftInputFromWindow(searchBox.getWindowToken(), 0);
+        } catch (Exception e) { /* 静默 */ }
+    }
+
+    // P-searchfix：悬浮搜索栏显隐（减速曲线，上滑隐藏、回顶/上滑显现，不再跟着视角赖住）
+    void setHomeSearchBarShown(boolean show, boolean animate) {
+        if (homeSearchBar == null || homeSearchBarShown == show) return;
+        homeSearchBarShown = show;
+        float ty = show ? 0f : -(statusBarH() + dp(this, 76));
+        if (animate) {
+            homeSearchBar.animate().translationY(ty).alpha(show ? 1f : 0f)
+                .setDuration(show ? 240 : 200)
+                .setInterpolator(new DecelerateInterpolator()).start();
+        } else {
+            homeSearchBar.setTranslationY(ty);
+            homeSearchBar.setAlpha(show ? 1f : 0f);
+        }
+        homeSearchBar.setClickable(show);
+        homeSearchBar.setFocusable(show);
+    }
+
     void focusSearch() {
+        // P-searchfix：先让搜索栏显现，再平滑滚回顶，等滚动落稳后才聚焦弹键盘，避免瞬间弹飞的硬切
+        setHomeSearchBarShown(true, true);
         if (homeScroll != null) homeScroll.smoothScrollTo(0, 0);
         if (searchBox == null) return;
         searchBox.postDelayed(() -> {
+            if (searchBox == null) return;
             searchBox.requestFocus();
             try {
                 InputMethodManager imm = (InputMethodManager) getSystemService(INPUT_METHOD_SERVICE);
                 if (imm != null) imm.showSoftInput(searchBox, InputMethodManager.SHOW_IMPLICIT);
             } catch (Exception e) { /* 无输入法静默 */ }
-        }, 120);
+        }, 300);
     }
 
     // ---------- 通用：卡片瓷砖 ----------
@@ -915,6 +949,20 @@ public class MainActivity extends Activity {
         homeScroll = new ScrollView(this);
         homeScroll.setFillViewport(true);
         homeScroll.setClipToPadding(false);
+        // P-searchfix：列表滚动时搜索自动收起/失焦；点列表区域（框外）收键盘
+        homeScroll.setOnTouchListener((v, e) -> {
+            if (e.getAction() == MotionEvent.ACTION_DOWN) dismissSearch();
+            return false;
+        });
+        homeScroll.setOnScrollChangeListener((v, scrollX, scrollY, oldScrollX, oldScrollY) -> {
+            if (scrollY > oldScrollY + dp(this, 6) && scrollY > statusBarH() + dp(this, 72)) {
+                dismissSearch();
+                setHomeSearchBarShown(false, true);
+            } else if (scrollY < oldScrollY - dp(this, 6) || scrollY <= dp(this, 10)) {
+                setHomeSearchBarShown(true, true);
+            }
+            lastHomeScrollY = scrollY;
+        });
         page.addView(homeScroll, new FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
 
@@ -1021,6 +1069,8 @@ public class MainActivity extends Activity {
         blp.rightMargin = dp(this, 12);
         blp.topMargin = statusBarH() + dp(this, 8);
         page.addView(bar, blp);
+        homeSearchBar = bar;
+        homeSearchBarShown = true;
 
         refreshHome();
         return page;
