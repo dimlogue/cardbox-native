@@ -975,7 +975,7 @@ public class MainActivity extends Activity {
         float maxH = rootVg.getHeight() - dp(this, 48);
         float mul = w < dp(this, 150) ? 1.9f : (w < dp(this, 230) ? 1.45f : 1.18f);
         float scale = Math.min(mul, Math.min(maxW / w, maxH / h));
-        if (scale < 1.05f) scale = 1.05f;
+        if (scale < 1f) scale = 1f; // 单列大瓷砖已近屏宽：不再硬撑放大，靠浮起阴影与淡入做预览感，防溢出屏外
         float cx = left + w / 2f, cy = top + h / 2f;
         float tw = w * scale, th = h * scale;
         float wantCx = Math.max(tw / 2f + dp(this, 10), Math.min(cx, rootVg.getWidth() - tw / 2f - dp(this, 10)));
@@ -3946,6 +3946,7 @@ public class MainActivity extends Activity {
 
     @Override
     public void onBackPressed() {
+        if (pressPreview != null) { dismissPressPreview(); return; }
         if (welcomeOpen) { closeWelcome(); return; }
         if (changelogOpen) { closeChangelog(); return; }
         if (detailCard != null) { closeDetail(); return; }
