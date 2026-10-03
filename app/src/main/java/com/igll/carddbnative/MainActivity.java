@@ -14,6 +14,7 @@ import android.graphics.BitmapFactory;
 import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Paint;
+import android.graphics.Path;
 import android.graphics.RectF;
 import android.graphics.drawable.Drawable;
 import android.graphics.drawable.GradientDrawable;
@@ -106,8 +107,35 @@ public class MainActivity extends Activity {
     }
     // P2d-fix：带大标题页面的顶部安全留白 = 状态栏高度 + 舒适间距，标题文字绝不进状态栏
     int pageTopPad() { return statusBarH() + dp(this, 16); }
+    // Q26：edge-to-edge 后系统导航栏（手势条/三键）真实高度——API 30+ 由 WindowInsets 实测，
+    // 低版本回落系统 dimen；拿不到记 0（内容照常铺底，只是不额外避让）
+    int navInsetPx = -1;
+    int navBarH() {
+        if (navInsetPx >= 0) return navInsetPx;
+        int id = getResources().getIdentifier("navigation_bar_height", "dimen", "android");
+        return id > 0 ? getResources().getDimensionPixelSize(id) : 0;
+    }
+    // Q26：导航栏高度实测到达后，把常驻底部控件（dock/悬浮钮）抬到手势条之上
+    void applyNavInset() {
+        if (navWrap != null && navWrap.getLayoutParams() instanceof FrameLayout.LayoutParams) {
+            FrameLayout.LayoutParams lp = (FrameLayout.LayoutParams) navWrap.getLayoutParams();
+            int want = dp(this, 12) + navBarH();
+            if (lp.bottomMargin != want) { lp.bottomMargin = want; navWrap.setLayoutParams(lp); }
+        }
+        if (searchFab != null && searchFab.getParent() != null
+            && searchFab.getLayoutParams() instanceof FrameLayout.LayoutParams) {
+            FrameLayout.LayoutParams lp = (FrameLayout.LayoutParams) searchFab.getLayoutParams();
+            lp.bottomMargin = dp(this, 166) + navBarH(); searchFab.setLayoutParams(lp);
+        }
+        if (filterFab != null && filterFab.getParent() != null
+            && filterFab.getLayoutParams() instanceof FrameLayout.LayoutParams) {
+            FrameLayout.LayoutParams lp = (FrameLayout.LayoutParams) filterFab.getLayoutParams();
+            lp.bottomMargin = dp(this, 108) + navBarH(); filterFab.setLayoutParams(lp);
+        }
+        syncTopFab();
+    }
     // P2d-fix：长页面底部安全留白，确保末行能完整滚出悬浮 dock 之外（dock 高约 67dp+底边距 12dp）
-    int dockPad() { return dp(this, 112); }
+    int dockPad() { return dp(this, 112) + navBarH(); } // Q26：再加导航栏避让，末行滚出抬高后的 dock
     // P-scroll：全 App 长列表统一细淡滚动条——3dp 细窄、低对比蓝灰，滚动时显、停稳后淡出，不许一根长粗条挂右边
     void thinScrollbar(ScrollView sv) { thinScrollbar(sv, true); }
     // 更新日志这类短框常驻需求：同款细淡，但不自动淡出（用户 15:28 要求右侧滑杆常显）
@@ -207,12 +235,12 @@ public class MainActivity extends Activity {
             // Q5：页面下方正中、悬浮栏上方居中（对照混合版 .qf-top：left 50% + bottom 112）
             FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(dp(this, 44), dp(this, 44));
             lp.gravity = Gravity.CENTER_HORIZONTAL | Gravity.BOTTOM;
-            lp.bottomMargin = dp(this, 112);
+            lp.bottomMargin = dp(this, 112) + navBarH(); // Q26：导航栏避让
             content.addView(topFab, lp);
             topFab.setVisibility(View.GONE);
         } else if (topFab.getLayoutParams() instanceof FrameLayout.LayoutParams) {
             FrameLayout.LayoutParams lp = (FrameLayout.LayoutParams) topFab.getLayoutParams();
-            int wantBottom = dp(this, 112);
+            int wantBottom = dp(this, 112) + navBarH(); // Q26：导航栏避让
             if (lp.bottomMargin != wantBottom || lp.gravity != (Gravity.CENTER_HORIZONTAL | Gravity.BOTTOM)) {
                 lp.bottomMargin = wantBottom; lp.gravity = Gravity.CENTER_HORIZONTAL | Gravity.BOTTOM;
                 lp.rightMargin = 0; topFab.setLayoutParams(lp);
@@ -1139,10 +1167,24 @@ public class MainActivity extends Activity {
         super.onCreate(savedInstanceState);
         Window w = getWindow();
         // P2d 沉浸式状态栏：透明，内容顶到状态栏底下；各页顶部留白按 statusBarH() 补齐
+        // Q26：导航栏一并透明做 edge-to-edge（内容铺到屏底，消灭底部白色断带），
+        // 控件避让靠 navBarH() 实测值（见 applyNavInset），不许与手势条打架
         w.setStatusBarColor(Color.TRANSPARENT);
-        w.getDecorView().setSystemUiVisibility(
-            View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN | View.SYSTEM_UI_FLAG_LAYOUT_STABLE
-            | View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR);
+        w.setNavigationBarColor(Color.TRANSPARENT);
+        int uiFlags = View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN | View.SYSTEM_UI_FLAG_LAYOUT_STABLE
+            | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
+            | View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR;
+        if (Build.VERSION.SDK_INT >= 26) uiFlags |= View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR;
+        w.getDecorView().setSystemUiVisibility(uiFlags);
+        if (Build.VERSION.SDK_INT >= 30) {
+            w.getDecorView().setOnApplyWindowInsetsListener((v, insets) -> {
+                try {
+                    int b = insets.getInsets(android.view.WindowInsets.Type.navigationBars()).bottom;
+                    if (b != navInsetPx) { navInsetPx = b; applyNavInset(); }
+                } catch (Throwable ignored) {}
+                return insets;
+            });
+        }
         w.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE);
 
         prefs = getSharedPreferences("cardbox_native", MODE_PRIVATE);
@@ -1282,7 +1324,7 @@ public class MainActivity extends Activity {
         lp.gravity = Gravity.BOTTOM;
         lp.leftMargin = dp(this, 16);
         lp.rightMargin = dp(this, 16);
-        lp.bottomMargin = dp(this, 106);
+        lp.bottomMargin = dp(this, 106) + navBarH(); // Q26：导航栏避让
         // Q11：提示条垫冻结模糊层，外壳只剩半透染色
         FrameLayout toastWrap = new FrameLayout(this);
         toastWrap.addView(glassLayer(toastWrap, 16, false), new FrameLayout.LayoutParams(
@@ -1457,7 +1499,7 @@ public class MainActivity extends Activity {
         wrapLp.gravity = Gravity.BOTTOM;
         wrapLp.leftMargin = dp(this, 12);
         wrapLp.rightMargin = dp(this, 12);
-        wrapLp.bottomMargin = dp(this, 12);
+        wrapLp.bottomMargin = dp(this, 12) + navBarH(); // Q26：抬到系统手势条之上
         navWrap.setLayoutParams(wrapLp);
 
         // Q17: navBar is now a FrameLayout stack: dock tint / liquid indicator / item row.
@@ -1815,7 +1857,7 @@ public class MainActivity extends Activity {
             FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(dp(this, 48), dp(this, 48));
             lp.gravity = Gravity.END | Gravity.BOTTOM;
             lp.rightMargin = dp(this, 20);
-            lp.bottomMargin = dp(this, 166); // Q3：竖列上钮 = 列底 108 + 钮 48 + 间距 10
+            lp.bottomMargin = dp(this, 166) + navBarH(); // Q3：竖列上钮 = 列底 108 + 钮 48 + 间距 10；Q26 再加导航栏避让
             content.addView(searchFab, lp);
             searchFab.setAlpha(0f);
             searchFab.setScaleX(0.8f);
@@ -1830,7 +1872,7 @@ public class MainActivity extends Activity {
             FrameLayout.LayoutParams flp = new FrameLayout.LayoutParams(dp(this, 48), dp(this, 48));
             flp.gravity = Gravity.END | Gravity.BOTTOM;
             flp.rightMargin = dp(this, 20);
-            flp.bottomMargin = dp(this, 108);
+            flp.bottomMargin = dp(this, 108) + navBarH(); // Q26：导航栏避让
             content.addView(filterFab, flp);
             filterFab.setAlpha(0f);
             filterFab.setScaleX(0.8f);
@@ -3014,7 +3056,7 @@ public class MainActivity extends Activity {
         FrameLayout.LayoutParams clp = new FrameLayout.LayoutParams(cardW, ViewGroup.LayoutParams.WRAP_CONTENT);
         clp.gravity = Gravity.END | Gravity.BOTTOM;
         clp.rightMargin = dp(this, 14);
-        clp.bottomMargin = dp(this, 104); // 浮在 dock 之上（混合版 bottom:104px）
+        clp.bottomMargin = dp(this, 104) + navBarH(); // 浮在 dock 之上（混合版 bottom:104px）；Q26 再加导航栏避让
         card.measure(View.MeasureSpec.makeMeasureSpec(cardW, View.MeasureSpec.EXACTLY),
             View.MeasureSpec.makeMeasureSpec(maxH, View.MeasureSpec.AT_MOST));
         clp.height = card.getMeasuredHeight();
@@ -3639,7 +3681,7 @@ public class MainActivity extends Activity {
         sv.setBackgroundColor(Color.TRANSPARENT);
         LinearLayout page = new LinearLayout(this);
         page.setOrientation(LinearLayout.VERTICAL);
-        page.setPadding(dp(this, 18), dp(this, 4), dp(this, 18), dp(this, 24));
+        page.setPadding(dp(this, 18), dp(this, 4), dp(this, 18), dp(this, 24) + navBarH()); // Q26：贴底窗内容避开手势条
         sv.addView(page);
         col.addView(sv, new LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
@@ -3895,7 +3937,7 @@ public class MainActivity extends Activity {
 
         LinearLayout footer = new LinearLayout(this);
         footer.setOrientation(LinearLayout.HORIZONTAL);
-        footer.setPadding(dp(this, 16), dp(this, 10), dp(this, 16), dp(this, 20));
+        footer.setPadding(dp(this, 16), dp(this, 10), dp(this, 16), dp(this, 20) + navBarH()); // Q26：贴底窗按钮避开系统手势条
         footer.setBackgroundColor(Color.WHITE);
         sheetCard.addView(footer);
         final Button mineBtn = new Button(this);
@@ -5626,6 +5668,38 @@ public class MainActivity extends Activity {
 
     // ---------- P-about 关于卡盒（对照混合版 aboutDlg：图标+名称+版本/简介/数据来源/赞助展开） ----------
     // 细线咖啡杯图标（Canvas 线条，对照混合版 sponsor SVG，禁用 emoji）
+    // Q26：关于窗卡盒标记——双卡叠放的细线自绘（替代带黑边的裁切位图），24 网格与全 App 图标同语言
+    class CardMarkIconView extends View {
+        CardMarkIconView(Context c) { super(c); }
+        @Override protected void onDraw(Canvas cv) {
+            Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);
+            p.setStyle(Paint.Style.STROKE);
+            p.setStrokeCap(Paint.Cap.ROUND);
+            p.setStrokeJoin(Paint.Join.ROUND);
+            p.setStrokeWidth(dp(getContext(), 1.7f));
+            float sx = getWidth() / 24f, sy = getHeight() / 24f;
+            // 后卡：左上探出的一张，只描上/左边（照原图叠放关系）
+            p.setColor(Color.argb(150, 0x0A, 0x5C, 0xD6));
+            Path back = new Path();
+            back.moveTo(7.5f * sx, 8.5f * sy);
+            back.lineTo(7.5f * sx, 5.2f * sy);
+            back.quadTo(7.5f * sx, 3.4f * sy, 9.3f * sx, 3.4f * sy);
+            back.lineTo(17.6f * sx, 3.4f * sy);
+            back.quadTo(19.4f * sx, 3.4f * sy, 19.4f * sx, 5.2f * sy);
+            back.lineTo(19.4f * sx, 7.5f * sy);
+            cv.drawPath(back, p);
+            // 前卡：整卡描边 + 磁条线 + 芯片 + 两道短线（照原图蓝卡元素）
+            p.setColor(Color.rgb(0x0A, 0x5C, 0xD6));
+            RectF card = new RectF(4.6f * sx, 8f * sy, 21f * sx, 20.6f * sy);
+            cv.drawRoundRect(card, 2.4f * sx, 2.4f * sy, p);
+            cv.drawLine(4.6f * sx, 11.6f * sy, 21f * sx, 11.6f * sy, p);
+            RectF chip = new RectF(7f * sx, 14.2f * sy, 10.4f * sx, 16.8f * sy);
+            cv.drawRoundRect(chip, 0.9f * sx, 0.9f * sy, p);
+            cv.drawLine(14.6f * sx, 14.9f * sy, 18.6f * sx, 14.9f * sy, p);
+            cv.drawLine(14.6f * sx, 17.3f * sy, 17.2f * sx, 17.3f * sy, p);
+        }
+    }
+
     class CoffeeIconView extends View {
         CoffeeIconView(Context c) { super(c); }
         @Override protected void onDraw(Canvas cv) {
@@ -5710,7 +5784,7 @@ public class MainActivity extends Activity {
             ViewGroup.LayoutParams.MATCH_PARENT, Math.min(card.getMeasuredHeight(), maxH));
         clp.gravity = Gravity.BOTTOM;
         clp.leftMargin = dp(this, 12); clp.rightMargin = dp(this, 12);
-        clp.bottomMargin = dp(this, 12);
+        clp.bottomMargin = dp(this, 12) + navBarH(); // Q26：浮窗底边抬到手势条之上，不拖白带
         // Q11：关于窗下垫冻结模糊快照，与窗同位同尺寸
         FrameLayout.LayoutParams aglp = new FrameLayout.LayoutParams(clp.width, clp.height);
         aglp.gravity = clp.gravity; aglp.leftMargin = clp.leftMargin; aglp.rightMargin = clp.rightMargin; aglp.bottomMargin = clp.bottomMargin;
@@ -5766,14 +5840,10 @@ public class MainActivity extends Activity {
         hero.setPadding(dp(this, 16), dp(this, 14), dp(this, 16), dp(this, 14));
         page.addView(hero, new LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
-        ImageView icon = new ImageView(this);
-        icon.setScaleType(ImageView.ScaleType.FIT_CENTER);
-        icon.setBackground(roundRect(Color.WHITE, 14, this));
-        icon.setClipToOutline(true);
-        if (Build.VERSION.SDK_INT >= 21) icon.setElevation(dp(this, 2));
-        Bitmap iconBmp = loadAssetBitmap("data/images/about-icon.png");
-        if (iconBmp != null) icon.setImageBitmap(iconBmp);
-        hero.addView(icon, new LinearLayout.LayoutParams(dp(this, 56), dp(this, 56)));
+        // Q26：图标改细线自绘——原 about-icon.png 是浅底彩图位图，在窗里被白底圆角裁出
+        // 一圈没裁净的边（用户指认的黑边），禁用位图，照原图「双卡叠放」形态用 Canvas
+        // 细线重绘，与全 App 图标体系同一语言，从根上无边可黑
+        hero.addView(new CardMarkIconView(this), new LinearLayout.LayoutParams(dp(this, 56), dp(this, 56)));
         LinearLayout heroTx = new LinearLayout(this);
         heroTx.setOrientation(LinearLayout.VERTICAL);
         LinearLayout.LayoutParams htlp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
