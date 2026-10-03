@@ -4203,6 +4203,12 @@ public class MainActivity extends Activity {
             }
         }
         settingsLogScroll.addView(inner);
+        settingsLogScroll.setOnTouchListener((v, ev) -> {
+            v.getParent().requestDisallowInterceptTouchEvent(true);
+            if (ev.getAction() == android.view.MotionEvent.ACTION_UP || ev.getAction() == android.view.MotionEvent.ACTION_CANCEL)
+                v.getParent().requestDisallowInterceptTouchEvent(false);
+            return false;
+        });
         box.addView(settingsLogScroll, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, h));
 
         LinearLayout actions = new LinearLayout(this);
