@@ -11,7 +11,10 @@ import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.Color;
 import android.graphics.drawable.GradientDrawable;
+import android.os.Build;
 import android.os.Bundle;
+import android.os.VibrationEffect;
+import android.os.Vibrator;
 import android.text.Editable;
 import android.text.TextWatcher;
 import android.util.LruCache;
@@ -64,10 +67,26 @@ public class MainActivity extends Activity {
         g.setColor(color); g.setCornerRadius(dp(c, radiusDp));
         return g;
     }
+    // ---------- 显示偏好（Phase 4a：字体三档/界面大小/高刷/触感） ----------
+    static String fontMode = "default"; // default=软件默认栈 / system=本机 / serif=内置宋体
+    static float uiScale = 1f;          // 界面大小：0.9 紧凑 / 1 标准 / 1.12 大号（作用于 sp）
+    static boolean hapticOn = true;
+    static android.graphics.Typeface serifTf = null;
+
+    static android.graphics.Typeface serifTypeface(Context c, boolean bold) {
+        if (serifTf == null) {
+            try { serifTf = android.graphics.Typeface.createFromAsset(c.getAssets(), "fonts/serif.ttf"); }
+            catch (Exception e) { serifTf = android.graphics.Typeface.SERIF; }
+        }
+        return bold ? android.graphics.Typeface.create(serifTf, android.graphics.Typeface.BOLD) : serifTf;
+    }
+
     static TextView tv(Context c, String s, float sp, int color, boolean bold) {
         TextView t = new TextView(c);
-        t.setText(s); t.setTextSize(sp); t.setTextColor(color);
-        if (bold) t.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+        t.setText(s); t.setTextSize(sp * uiScale); t.setTextColor(color);
+        if ("serif".equals(fontMode)) t.setTypeface(serifTypeface(c, bold));
+        else if ("system".equals(fontMode)) t.setTypeface(bold ? android.graphics.Typeface.create(android.graphics.Typeface.SANS_SERIF, android.graphics.Typeface.BOLD) : android.graphics.Typeface.SANS_SERIF);
+        else if (bold) t.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
         t.setIncludeFontPadding(false);
         return t;
     }
@@ -351,6 +370,11 @@ public class MainActivity extends Activity {
         w.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE);
 
         prefs = getSharedPreferences("cardbox_native", MODE_PRIVATE);
+        fontMode = prefs.getString("font_mode", "default");
+        uiScale = prefs.getFloat("ui_scale", 1f);
+        if (uiScale != 0.9f && uiScale != 1f && uiScale != 1.12f) uiScale = 1f;
+        hapticOn = prefs.getBoolean("haptic", true);
+        applyHighRefresh();
         try { mine = new HashSet<>(prefs.getStringSet("mine_ids", new HashSet<String>())); } catch (Exception e) { mine = new HashSet<>(); }
         sortMode = prefs.getString("sort_mode", null);
         cols = prefs.getInt("cols", 2); if (cols != 1 && cols != 2 && cols != 3) cols = 2;
@@ -372,6 +396,43 @@ public class MainActivity extends Activity {
         showTab("home");
     }
 
+    // 高刷：开启时把窗口首选刷新率设为屏幕支持的最高档（对照混合版 Bridge setHighRefresh）
+    void applyHighRefresh() {
+        try {
+            WindowManager.LayoutParams lp = getWindow().getAttributes();
+            if (prefs != null && prefs.getBoolean("high_refresh", false)) {
+                float best = 0;
+                int bestId = 0;
+                for (android.view.Display.Mode m : getWindowManager().getDefaultDisplay().getSupportedModes()) {
+                    if (m.getRefreshRate() > best) { best = m.getRefreshRate(); bestId = m.getModeId(); }
+                }
+                if (bestId != 0) lp.preferredDisplayModeId = bestId;
+                lp.preferredRefreshRate = best;
+            } else {
+                lp.preferredDisplayModeId = 0;
+                lp.preferredRefreshRate = 0;
+            }
+            getWindow().setAttributes(lp);
+        } catch (Exception e) { /* 个别机型不支持就静默 */ }
+    }
+
+    void haptic() {
+        if (!hapticOn) return;
+        try {
+            Vibrator v = (Vibrator) getSystemService(VIBRATOR_SERVICE);
+            if (v == null) return;
+            if (Build.VERSION.SDK_INT >= 26) v.vibrate(VibrationEffect.createOneShot(15, VibrationEffect.DEFAULT_AMPLITUDE));
+            else v.vibrate(15);
+        } catch (Exception e) { /* 无振动器静默 */ }
+    }
+
+    // 字体/界面大小变化后整页重建（各页都是缓存 View，必须重造才生效）
+    void rebuildPages() {
+        pages.clear();
+        if (content != null) content.removeAllViews();
+        showTab(tab);
+    }
+
     // ---------- 底部导航 ----------
     void buildNav(LinearLayout root) {
         navBar = new LinearLayout(this);
@@ -387,7 +448,7 @@ public class MainActivity extends Activity {
             b.setAllCaps(false);
             b.setBackground(null);
             final String key = t[0];
-            b.setOnClickListener(v -> showTab(key));
+            b.setOnClickListener(v -> { haptic(); showTab(key); });
             navBtns.put(key, b);
             navBar.addView(b, new LinearLayout.LayoutParams(0, dp(this, 44), 1f));
         }
@@ -2650,12 +2711,94 @@ public class MainActivity extends Activity {
     View buildSettingsPage() {
         LinearLayout page = basePage("设置");
         View wizEntry = settingRow("情景选卡", "出国留学 / 出境旅游 / 海淘网购 / 日常使用，按场景挑卡 ›");
-        wizEntry.setOnClickListener(v -> openWizard());
+        wizEntry.setOnClickListener(v -> { haptic(); openWizard(); });
         page.addView(wizEntry);
-        page.addView(settingRow("版本", "0.8-native（Phase 3b）"));
+
+        sectionHead(page, "显示");
+        segRow(page, "字体", new String[][]{{"default","软件默认"},{"system","本机字体"},{"serif","内置宋体"}}, fontMode, v -> {
+            fontMode = v; prefs.edit().putString("font_mode", v).apply(); haptic(); rebuildPages();
+        });
+        segRow(page, "界面大小", new String[][]{{"0.9","紧凑"},{"1","标准"},{"1.12","大号"}}, String.valueOf(uiScale), v -> {
+            uiScale = Float.parseFloat(v); prefs.edit().putFloat("ui_scale", uiScale).apply(); haptic(); rebuildPages();
+        });
+
+        sectionHead(page, "使用体验");
+        switchRow(page, "高刷新率", "把刷新率拉到屏幕最高档（耗电略增）", prefs.getBoolean("high_refresh", false), on -> {
+            prefs.edit().putBoolean("high_refresh", on).apply(); haptic(); applyHighRefresh(); rebuildPages();
+        });
+        switchRow(page, "触感反馈", "点按时轻震一下", hapticOn, on -> {
+            hapticOn = on; prefs.edit().putBoolean("haptic", on).apply(); haptic(); rebuildPages();
+        });
+
+        page.addView(settingRow("版本", "0.10-native（Phase 4a）"));
         page.addView(settingRow("关于卡盒", "原生版：纯 Java 手写界面，数据与现行版共用同一份卡库"));
-        page.addView(settingRow("迁移进度", "全部卡片 / 详情 / 我的卡片 / 学生推荐 / 筛选 / 资讯 / 情景选卡 / 自定义卡 已迁移；我的卡片拖动、字体与界面大小在后续阶段"));
+        page.addView(settingRow("迁移进度", "全部卡片 / 详情 / 我的卡片 / 学生推荐 / 筛选 / 资讯 / 情景选卡 / 自定义卡 / 拖动 / 字体与界面大小 / 高刷 / 触感 已迁移；欢迎页与 OTA 在后续阶段"));
         return page;
+    }
+
+    void sectionHead(LinearLayout page, String s) {
+        TextView t = tv(this, s, 12.5f, Color.rgb(0x8E, 0x8E, 0x93), true);
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        lp.topMargin = dp(this, 16); lp.leftMargin = dp(this, 2);
+        t.setLayoutParams(lp);
+        page.addView(t);
+    }
+
+    interface SegPick { void onPick(String v); }
+
+    // 三档单选行：白卡里横排，选中蓝底（与筛选面板 chipRow 同风格）
+    void segRow(LinearLayout page, String label, String[][] opts, String cur, final SegPick pick) {
+        LinearLayout box = new LinearLayout(this);
+        box.setOrientation(LinearLayout.VERTICAL);
+        box.setBackground(roundRect(Color.WHITE, 12, this));
+        box.setPadding(dp(this, 14), dp(this, 10), dp(this, 14), dp(this, 12));
+        LinearLayout.LayoutParams blp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        blp.topMargin = dp(this, 8);
+        box.setLayoutParams(blp);
+        box.addView(tv(this, label, 14, Color.rgb(0x1C, 0x1C, 0x1E), true));
+        LinearLayout row = new LinearLayout(this);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        LinearLayout.LayoutParams rlp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        rlp.topMargin = dp(this, 9);
+        box.addView(row, rlp);
+        for (final String[] o : opts) {
+            final boolean on = o[0].equals(cur);
+            TextView t = tv(this, o[1], 12.5f, on ? Color.WHITE : Color.rgb(0x1C, 0x1C, 0x1E), on);
+            t.setGravity(Gravity.CENTER);
+            t.setBackground(roundRect(on ? Color.rgb(0x0A, 0x5C, 0xD6) : Color.rgb(0xEE, 0xF1, 0xF6), 9, this));
+            t.setPadding(dp(this, 4), dp(this, 8), dp(this, 4), dp(this, 8));
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+            lp.rightMargin = dp(this, 8);
+            t.setLayoutParams(lp);
+            t.setOnClickListener(v -> pick.onPick(o[0]));
+            row.addView(t);
+        }
+        page.addView(box);
+    }
+
+    interface SwitchSet { void onSet(boolean on); }
+
+    void switchRow(LinearLayout page, String label, String desc, final boolean on, final SwitchSet set) {
+        LinearLayout row = new LinearLayout(this);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        row.setGravity(Gravity.CENTER_VERTICAL);
+        row.setBackground(roundRect(Color.WHITE, 12, this));
+        row.setPadding(dp(this, 14), dp(this, 10), dp(this, 12), dp(this, 10));
+        LinearLayout.LayoutParams rlp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        rlp.topMargin = dp(this, 8);
+        row.setLayoutParams(rlp);
+        LinearLayout txt = new LinearLayout(this);
+        txt.setOrientation(LinearLayout.VERTICAL);
+        txt.addView(tv(this, label, 14, Color.rgb(0x1C, 0x1C, 0x1E), true));
+        txt.addView(tv(this, desc, 11.5f, Color.rgb(0x8E, 0x8E, 0x93), false));
+        row.addView(txt, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+        TextView sw = tv(this, on ? "开" : "关", 12.5f, on ? Color.WHITE : Color.rgb(0x8E, 0x8E, 0x93), true);
+        sw.setGravity(Gravity.CENTER);
+        sw.setBackground(roundRect(on ? Color.rgb(0x0A, 0x5C, 0xD6) : Color.rgb(0xEE, 0xF1, 0xF6), 999, this));
+        sw.setPadding(dp(this, 16), dp(this, 7), dp(this, 16), dp(this, 7));
+        row.addView(sw);
+        row.setOnClickListener(v -> set.onSet(!on));
+        page.addView(row);
     }
 
     View settingRow(String k, String v) {
