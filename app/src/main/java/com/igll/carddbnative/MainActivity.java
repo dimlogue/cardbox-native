@@ -1,6 +1,8 @@
 package com.igll.carddbnative;
 
 import android.app.Activity;
+import android.app.AlertDialog;
+import android.app.Dialog;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
@@ -152,6 +154,67 @@ public class MainActivity extends Activity {
         }
     }
 
+    // ---------- 自定义卡片（Phase 3b，对照 app.js 的 CUSTOM_STYLES / customCards） ----------
+    static class CustomCard {
+        String id, name, bank, org, note;
+        int style;
+    }
+    static final int[][] CUSTOM_STYLES = {
+        {0x3B82C4, 0x1E3A5F}, {0x8E44AD, 0x2C1A4D}, {0x16A085, 0x0A3D2E},
+        {0xE67E22, 0x7E2F0E}, {0x2C3E50, 0x0D1520}, {0xC0392B, 0x4D0F0A}
+    };
+    static final String[] CUSTOM_ORGS = {"Visa", "万事达", "美国运通", "银联", "JCB"};
+    java.util.List<CustomCard> customCards = new ArrayList<>();
+    boolean customOpen = false;
+    Dialog customDialog = null;
+
+    void loadCustomCards() {
+        customCards = new ArrayList<>();
+        try {
+            String raw = prefs.getString("custom_cards", "[]");
+            JSONArray arr = new JSONArray(raw == null || raw.isEmpty() ? "[]" : raw);
+            for (int i = 0; i < arr.length(); i++) {
+                JSONObject o = arr.getJSONObject(i);
+                CustomCard c = new CustomCard();
+                c.id = o.optString("id");
+                c.name = o.optString("name");
+                c.bank = o.optString("bank");
+                c.org = o.optString("org");
+                c.note = o.optString("note");
+                c.style = o.optInt("style", 0);
+                if (c.id == null || c.id.isEmpty()) c.id = "custom-" + i;
+                if (c.style < 0 || c.style >= CUSTOM_STYLES.length) c.style = 0;
+                customCards.add(c);
+            }
+        } catch (Exception e) { customCards = new ArrayList<>(); }
+    }
+
+    void saveCustomCards() {
+        try {
+            JSONArray arr = new JSONArray();
+            for (CustomCard c : customCards) {
+                JSONObject o = new JSONObject();
+                o.put("id", c.id == null ? "" : c.id);
+                o.put("name", c.name == null ? "" : c.name);
+                o.put("bank", c.bank == null ? "" : c.bank);
+                o.put("org", c.org == null ? "" : c.org);
+                o.put("note", c.note == null ? "" : c.note);
+                o.put("style", c.style);
+                arr.put(o);
+            }
+            prefs.edit().putString("custom_cards", arr.toString()).apply();
+        } catch (Exception e) { /* 存不下就保持内存中的列表 */ }
+    }
+
+    GradientDrawable customGradient(int style) {
+        int[] pair = CUSTOM_STYLES[Math.max(0, Math.min(style, CUSTOM_STYLES.length - 1))];
+        GradientDrawable g = new GradientDrawable(GradientDrawable.Orientation.TL_BR,
+            new int[]{Color.rgb((pair[0] >> 16) & 0xFF, (pair[0] >> 8) & 0xFF, pair[0] & 0xFF),
+                      Color.rgb((pair[1] >> 16) & 0xFF, (pair[1] >> 8) & 0xFF, pair[1] & 0xFF)});
+        g.setCornerRadius(dp(this, 14));
+        return g;
+    }
+
     // ---------- 全局状态 ----------
     SharedPreferences prefs;
     Set<String> mine = new HashSet<>();
@@ -289,6 +352,7 @@ public class MainActivity extends Activity {
         cols = prefs.getInt("cols", 2); if (cols != 1 && cols != 2 && cols != 3) cols = 2;
         groupBank = prefs.getBoolean("group_bank", false);
         try { bankOpen = new HashSet<>(prefs.getStringSet("bank_open", new HashSet<String>())); } catch (Exception e) { bankOpen = new HashSet<>(); }
+        loadCustomCards();
         Store.load(this);
 
         LinearLayout root = new LinearLayout(this);
@@ -1671,10 +1735,6 @@ public class MainActivity extends Activity {
         List<Card> mineCards = new ArrayList<>();
         for (Card c : Store.all) if (mine.contains(c.id)) mineCards.add(c);
 
-        if (mineCards.isEmpty()) {
-            page.addView(tv(this, "还没有收藏的卡。去「全部卡片」点开任意一张，加入我的卡片。", 13.5f, Color.rgb(0x8E, 0x8E, 0x93), false));
-            return page;
-        }
         Set<String> orgs = new HashSet<>();
         int noFtf = 0;
         for (Card c : mineCards) {
@@ -1688,9 +1748,21 @@ public class MainActivity extends Activity {
         hg.setCornerRadius(dp(this, 18));
         hero.setBackground(hg);
         hero.setPadding(dp(this, 16), dp(this, 14), dp(this, 16), dp(this, 14));
-        page.addView(hero);
+        LinearLayout.LayoutParams hlp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        hlp.topMargin = dp(this, 10);
+        page.addView(hero, hlp);
         hero.addView(tv(this, mineCards.size() + " 张卡 · 我的卡包", 18, Color.WHITE, true));
         hero.addView(tv(this, "组织覆盖 " + orgs.size() + " 家 · 无转换费 " + noFtf + " 张", 12.5f, Color.argb(205, 255, 255, 255), false));
+
+        page.addView(buildCustomSection());
+
+        if (mineCards.isEmpty()) {
+            TextView empty = tv(this, "还没有从卡库收藏的卡。去「全部卡片」点开任意一张，加入我的卡片。", 13.5f, Color.rgb(0x8E, 0x8E, 0x93), false);
+            LinearLayout.LayoutParams elp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            elp.topMargin = dp(this, 12);
+            page.addView(empty, elp);
+            return page;
+        }
 
         GridView g = new GridView(this);
         g.setNumColumns(2);
@@ -1702,6 +1774,401 @@ public class MainActivity extends Activity {
         g.setOnItemClickListener((p, v, i, id) -> openDetail(ad.data.get(i)));
         page.addView(g, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
         return page;
+    }
+
+    // ---------- 自定义卡片（Phase 3b） ----------
+    View buildCustomSection() {
+        LinearLayout sec = new LinearLayout(this);
+        sec.setOrientation(LinearLayout.VERTICAL);
+        sec.setBackground(roundRect(Color.WHITE, 16, this));
+        sec.setPadding(dp(this, 14), dp(this, 12), dp(this, 14), dp(this, 12));
+        LinearLayout.LayoutParams slp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        slp.topMargin = dp(this, 12);
+        sec.setLayoutParams(slp);
+
+        LinearLayout head = new LinearLayout(this);
+        head.setOrientation(LinearLayout.HORIZONTAL);
+        head.setGravity(Gravity.CENTER_VERTICAL);
+        sec.addView(head);
+        LinearLayout info = new LinearLayout(this);
+        info.setOrientation(LinearLayout.VERTICAL);
+        head.addView(info, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+        info.addView(tv(this, "自定义卡片", 15, Color.rgb(0x1C, 0x1C, 0x1E), true));
+        String subTxt = customCards.isEmpty()
+            ? "还没有自定义卡片"
+            : customCards.size() + " 张 · " + (customOpen ? "点开收起" : "点开展开");
+        TextView sub = tv(this, subTxt, 11.5f, Color.rgb(0x8E, 0x8E, 0x93), false);
+        LinearLayout.LayoutParams subLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        subLp.topMargin = dp(this, 2);
+        info.addView(sub, subLp);
+        Button addBtn = new Button(this);
+        addBtn.setText("＋ 添加"); addBtn.setTextSize(12.5f); addBtn.setAllCaps(false);
+        addBtn.setTextColor(Color.WHITE);
+        addBtn.setBackground(roundRect(Color.rgb(0x0A, 0x5C, 0xD6), 999, this));
+        addBtn.setOnClickListener(v -> openCustomForm(null));
+        head.addView(addBtn, new LinearLayout.LayoutParams(dp(this, 76), dp(this, 36)));
+        TextView arrow = tv(this, customCards.isEmpty() ? "" : (customOpen ? "收起 ‹" : "展开 ›"), 12, Color.rgb(0x0A, 0x5C, 0xD6), true);
+        LinearLayout.LayoutParams alp2 = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        alp2.leftMargin = dp(this, 8);
+        head.addView(arrow, alp2);
+        if (!customCards.isEmpty()) {
+            head.setOnClickListener(v -> { customOpen = !customOpen; showTab("mine"); });
+        }
+
+        if (customCards.isEmpty()) {
+            TextView hint = tv(this, "卡库里没有的卡可以自己记一张：填名字、银行、挑个颜色、写备注。", 12, Color.rgb(0x8E, 0x8E, 0x93), false);
+            LinearLayout.LayoutParams hlp2 = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            hlp2.topMargin = dp(this, 8);
+            sec.addView(hint, hlp2);
+            return sec;
+        }
+
+        if (!customOpen) {
+            // 收起态：最近 3 张叠成一叠（最新在最上），只露顶部一张的名字
+            int show = Math.min(3, customCards.size());
+            LinearLayout deck = new LinearLayout(this);
+            deck.setOrientation(LinearLayout.VERTICAL);
+            LinearLayout.LayoutParams dlp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            dlp.topMargin = dp(this, 10);
+            sec.addView(deck, dlp);
+            for (int k = show - 1; k >= 0; k--) {
+                CustomCard c = customCards.get(customCards.size() - 1 - k);
+                LinearLayout strip = new LinearLayout(this);
+                strip.setOrientation(LinearLayout.HORIZONTAL);
+                strip.setGravity(Gravity.CENTER_VERTICAL);
+                strip.setBackground(customGradient(c.style));
+                strip.setPadding(dp(this, 12), dp(this, 8), dp(this, 12), dp(this, 8));
+                LinearLayout.LayoutParams stLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+                stLp.leftMargin = dp(this, k * 10);
+                stLp.rightMargin = dp(this, k * 10);
+                if (k < show - 1) stLp.topMargin = dp(this, -6);
+                deck.addView(strip, stLp);
+                if (k == 0) {
+                    strip.addView(tv(this, c.name, 13, Color.WHITE, true), new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+                    String meta = (c.bank == null ? "" : c.bank) + (c.org != null && !c.org.isEmpty() ? " · " + c.org : "");
+                    strip.addView(tv(this, meta, 11, Color.argb(210, 255, 255, 255), false));
+                } else {
+                    strip.addView(tv(this, " ", 13, Color.WHITE, false));
+                }
+            }
+            return sec;
+        }
+
+        // 展开态：每张一条渐变色带，底部向下一张颜色衔接
+        for (int i = 0; i < customCards.size(); i++) {
+            final CustomCard c = customCards.get(i);
+            final int idx = i;
+            LinearLayout tile = new LinearLayout(this);
+            tile.setOrientation(LinearLayout.VERTICAL);
+            tile.setBackground(customGradient(c.style));
+            tile.setPadding(dp(this, 12), dp(this, 10), dp(this, 12), dp(this, 10));
+            LinearLayout.LayoutParams tlp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            tlp.topMargin = i == 0 ? dp(this, 10) : dp(this, 8);
+            sec.addView(tile, tlp);
+
+            LinearLayout topRow = new LinearLayout(this);
+            topRow.setOrientation(LinearLayout.HORIZONTAL);
+            topRow.setGravity(Gravity.CENTER_VERTICAL);
+            tile.addView(topRow);
+            TextView idxTv = tv(this, String.valueOf(i + 1), 11, Color.WHITE, true);
+            idxTv.setBackground(roundRect(Color.argb(70, 255, 255, 255), 999, this));
+            idxTv.setPadding(dp(this, 7), dp(this, 2), dp(this, 7), dp(this, 2));
+            idxTv.setGravity(Gravity.CENTER);
+            topRow.addView(idxTv);
+            LinearLayout tx = new LinearLayout(this);
+            tx.setOrientation(LinearLayout.VERTICAL);
+            LinearLayout.LayoutParams txLp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+            txLp.leftMargin = dp(this, 8);
+            topRow.addView(tx, txLp);
+            TextView nm = tv(this, c.name, 14, Color.WHITE, true);
+            nm.setMaxLines(1);
+            nm.setEllipsize(android.text.TextUtils.TruncateAt.END);
+            tx.addView(nm);
+            String meta = (c.bank == null || c.bank.isEmpty() ? "未填发卡行" : c.bank)
+                + (c.org != null && !c.org.isEmpty() ? " · " + c.org : "");
+            tx.addView(tv(this, meta, 11, Color.argb(215, 255, 255, 255), false));
+            if (c.note != null && !c.note.isEmpty()) {
+                TextView nt = tv(this, c.note, 11.5f, Color.argb(225, 255, 255, 255), false);
+                nt.setMaxLines(2);
+                nt.setEllipsize(android.text.TextUtils.TruncateAt.END);
+                LinearLayout.LayoutParams nlp2 = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+                nlp2.topMargin = dp(this, 5);
+                tile.addView(nt, nlp2);
+            }
+            LinearLayout acts = new LinearLayout(this);
+            acts.setOrientation(LinearLayout.HORIZONTAL);
+            acts.setGravity(Gravity.CENTER_VERTICAL);
+            LinearLayout.LayoutParams actLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            actLp.topMargin = dp(this, 8);
+            tile.addView(acts, actLp);
+            acts.addView(customActBtn("↑", i == 0, v -> moveCustom(idx, -1)));
+            acts.addView(customActBtn("↓", i == customCards.size() - 1, v -> moveCustom(idx, 1)));
+            acts.addView(customActBtn("编辑", false, v -> openCustomForm(c)));
+            acts.addView(customActBtn("删除", false, v -> confirmDeleteCustom(c)));
+            View spacer = new View(this);
+            acts.addView(spacer, new LinearLayout.LayoutParams(0, 1, 1f));
+            TextView detailHint = tv(this, "点色带看详情 ›", 11, Color.argb(220, 255, 255, 255), false);
+            acts.addView(detailHint);
+            tile.setOnClickListener(v -> openCustomDetail(c));
+        }
+        return sec;
+    }
+
+    Button customActBtn(String label, boolean disabled, View.OnClickListener onClick) {
+        Button b = new Button(this);
+        b.setText(label); b.setTextSize(11.5f); b.setAllCaps(false);
+        b.setMinWidth(0); b.setMinHeight(0);
+        b.setPadding(dp(this, 9), dp(this, 4), dp(this, 9), dp(this, 4));
+        b.setTextColor(disabled ? Color.argb(140, 255, 255, 255) : Color.WHITE);
+        b.setBackground(roundRect(Color.argb(disabled ? 30 : 55, 255, 255, 255), 999, this));
+        b.setEnabled(!disabled);
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        lp.rightMargin = dp(this, 6);
+        b.setLayoutParams(lp);
+        if (!disabled) b.setOnClickListener(onClick);
+        return b;
+    }
+
+    void moveCustom(int idx, int dir) {
+        int j = idx + dir;
+        if (idx < 0 || j < 0 || j >= customCards.size()) return;
+        CustomCard t = customCards.get(idx);
+        customCards.set(idx, customCards.get(j));
+        customCards.set(j, t);
+        saveCustomCards();
+        showTab("mine");
+    }
+
+    void confirmDeleteCustom(final CustomCard c) {
+        new AlertDialog.Builder(this)
+            .setTitle("删除这张自定义卡？")
+            .setMessage("「" + c.name + "」删了就没了，备注也会一起清掉。")
+            .setNegativeButton("取消", null)
+            .setPositiveButton("删除", (d, w) -> {
+                customCards.remove(c);
+                saveCustomCards();
+                Toast.makeText(this, "已删除这张自定义卡", Toast.LENGTH_SHORT).show();
+                showTab("mine");
+            })
+            .show();
+    }
+
+    void openCustomDetail(final CustomCard c) {
+        LinearLayout box = new LinearLayout(this);
+        box.setOrientation(LinearLayout.VERTICAL);
+        box.setPadding(dp(this, 18), dp(this, 6), dp(this, 18), dp(this, 4));
+        LinearLayout hero = new LinearLayout(this);
+        hero.setOrientation(LinearLayout.VERTICAL);
+        hero.setBackground(customGradient(c.style));
+        hero.setPadding(dp(this, 14), dp(this, 12), dp(this, 14), dp(this, 12));
+        box.addView(hero);
+        hero.addView(tv(this, c.name, 16, Color.WHITE, true));
+        hero.addView(tv(this, (c.bank == null || c.bank.isEmpty() ? "未填发卡行" : c.bank)
+            + (c.org != null && !c.org.isEmpty() ? " · " + c.org : ""), 12, Color.argb(220, 255, 255, 255), false));
+        box.addView(customDetailRow("卡片名称", c.name));
+        box.addView(customDetailRow("发卡银行", c.bank == null || c.bank.isEmpty() ? "—" : c.bank));
+        box.addView(customDetailRow("卡组织", c.org == null || c.org.isEmpty() ? "—" : c.org));
+        if (c.note != null && !c.note.isEmpty()) box.addView(customDetailRow("备注", c.note));
+
+        AlertDialog dlg = new AlertDialog.Builder(this)
+            .setView(box)
+            .setNegativeButton("关闭", null)
+            .setNeutralButton("删除", (d, w) -> confirmDeleteCustom(c))
+            .setPositiveButton("编辑", (d, w) -> openCustomForm(c))
+            .create();
+        if (c.bank != null && !c.bank.isEmpty()) {
+            dlg.setButton(AlertDialog.BUTTON_NEUTRAL, "删除", (d, w) -> confirmDeleteCustom(c));
+            // 搜银行放在关闭后执行，避免与编辑/删除挤同一个按钮位：用标题区下小字提示替代
+        }
+        dlg.show();
+        // 在卡库里搜这家银行（详情底部附加一行可点文字，点完关详情跳首页搜索）
+        if (c.bank != null && !c.bank.isEmpty()) {
+            TextView find = tv(this, "在卡库里搜「" + c.bank + "」 ›", 13, Color.rgb(0x0A, 0x5C, 0xD6), true);
+            find.setPadding(dp(this, 18), dp(this, 8), dp(this, 18), dp(this, 10));
+            find.setOnClickListener(v -> {
+                try { dlg.dismiss(); } catch (Exception e) {}
+                query = c.bank;
+                showTab("home");
+                if (searchBox != null) searchBox.setText(c.bank);
+            });
+            // AlertDialog 内容区外无法直接追加，改为塞进 box（对话框已 show，追加后需请求重排）
+            box.addView(find);
+        }
+    }
+
+    View customDetailRow(String k, String v) {
+        LinearLayout row = new LinearLayout(this);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        row.setPadding(0, dp(this, 7), 0, dp(this, 7));
+        row.addView(tv(this, k, 12.5f, Color.rgb(0x8E, 0x8E, 0x93), false), new LinearLayout.LayoutParams(dp(this, 76), ViewGroup.LayoutParams.WRAP_CONTENT));
+        row.addView(tv(this, v == null ? "" : v, 13, Color.rgb(0x1C, 0x1C, 0x1E), false), new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+        return row;
+    }
+
+    EditText customInput(String hint, String value, boolean multi) {
+        EditText e = new EditText(this);
+        e.setHint(hint);
+        e.setText(value == null ? "" : value);
+        e.setTextSize(14);
+        e.setSingleLine(!multi);
+        if (multi) { e.setMinLines(2); e.setGravity(Gravity.TOP); }
+        e.setBackground(roundRect(Color.rgb(0xF5, 0xF6, 0xF8), 10, this));
+        e.setPadding(dp(this, 12), dp(this, 10), dp(this, 12), dp(this, 10));
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        lp.topMargin = dp(this, 8);
+        e.setLayoutParams(lp);
+        return e;
+    }
+
+    TextView customFormLabel(String s) {
+        TextView t = tv(this, s, 12, Color.rgb(0x8E, 0x8E, 0x93), true);
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        lp.topMargin = dp(this, 12);
+        t.setLayoutParams(lp);
+        return t;
+    }
+
+    void openCustomForm(final CustomCard edit) {
+        final boolean isNew = edit == null;
+        final CustomCard draft = new CustomCard();
+        if (!isNew) {
+            draft.id = edit.id; draft.name = edit.name; draft.bank = edit.bank;
+            draft.org = edit.org; draft.note = edit.note; draft.style = edit.style;
+        } else {
+            draft.id = null; draft.name = ""; draft.bank = ""; draft.org = ""; draft.note = ""; draft.style = 0;
+        }
+        final String[] orgSel = {draft.org == null ? "" : draft.org};
+        final int[] styleSel = {draft.style};
+
+        ScrollView sv = new ScrollView(this);
+        LinearLayout form = new LinearLayout(this);
+        form.setOrientation(LinearLayout.VERTICAL);
+        form.setPadding(dp(this, 18), dp(this, 14), dp(this, 18), dp(this, 18));
+        sv.addView(form);
+        form.addView(tv(this, isNew ? "添加自定义卡片" : "编辑自定义卡片", 17, Color.rgb(0x1C, 0x1C, 0x1E), true));
+        form.addView(customFormLabel("卡片名称 *"));
+        final EditText inName = customInput("例如：我的旅行卡", draft.name, false);
+        form.addView(inName);
+        form.addView(customFormLabel("发卡银行"));
+        final EditText inBank = customInput("例如：招商银行（可不填）", draft.bank, false);
+        form.addView(inBank);
+        form.addView(customFormLabel("卡组织"));
+        final LinearLayout orgRow = new LinearLayout(this);
+        orgRow.setOrientation(LinearLayout.HORIZONTAL);
+        LinearLayout.LayoutParams orgLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        orgLp.topMargin = dp(this, 8);
+        form.addView(orgRow, orgLp);
+        final java.util.List<Button> orgBtns = new ArrayList<>();
+        Runnable paintOrgs = () -> {
+            for (Button b : orgBtns) {
+                boolean on = b.getText().toString().equals(orgSel[0]);
+                b.setTextColor(on ? Color.WHITE : Color.rgb(0x3A, 0x3A, 0x3C));
+                b.setBackground(roundRect(on ? Color.rgb(0x0A, 0x5C, 0xD6) : Color.rgb(0xF5, 0xF6, 0xF8), 999, MainActivity.this));
+            }
+        };
+        for (final String o : CUSTOM_ORGS) {
+            Button b = new Button(this);
+            b.setText(o); b.setTextSize(11.5f); b.setAllCaps(false);
+            b.setMinWidth(0); b.setMinHeight(0);
+            b.setPadding(dp(this, 10), dp(this, 6), dp(this, 10), dp(this, 6));
+            LinearLayout.LayoutParams blp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            blp.rightMargin = dp(this, 6);
+            b.setLayoutParams(blp);
+            b.setOnClickListener(v -> { orgSel[0] = o.equals(orgSel[0]) ? "" : o; paintOrgs.run(); });
+            orgBtns.add(b);
+            orgRow.addView(b);
+        }
+        paintOrgs.run();
+        form.addView(customFormLabel("卡面颜色"));
+        final LinearLayout styleRow = new LinearLayout(this);
+        styleRow.setOrientation(LinearLayout.HORIZONTAL);
+        LinearLayout.LayoutParams styleLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        styleLp.topMargin = dp(this, 8);
+        form.addView(styleRow, styleLp);
+        final java.util.List<Button> styleBtns = new ArrayList<>();
+        Runnable paintStyles = () -> {
+            for (int i = 0; i < styleBtns.size(); i++) {
+                Button b = styleBtns.get(i);
+                boolean on = i == styleSel[0];
+                b.setText(on ? "✓" : "");
+                b.setTextColor(Color.WHITE);
+                GradientDrawable g = customGradient(i);
+                if (on) g.setStroke(dp(MainActivity.this, 2), Color.rgb(0x1C, 0x1C, 0x1E));
+                b.setBackground(g);
+            }
+        };
+        for (int i = 0; i < CUSTOM_STYLES.length; i++) {
+            final int si = i;
+            Button b = new Button(this);
+            b.setTextSize(13); b.setAllCaps(false);
+            b.setMinWidth(0); b.setMinHeight(0);
+            LinearLayout.LayoutParams blp = new LinearLayout.LayoutParams(dp(this, 44), dp(this, 32));
+            blp.rightMargin = dp(this, 7);
+            b.setLayoutParams(blp);
+            b.setOnClickListener(v -> { styleSel[0] = si; paintStyles.run(); });
+            styleBtns.add(b);
+            styleRow.addView(b);
+        }
+        paintStyles.run();
+        form.addView(customFormLabel("备注"));
+        final EditText inNote = customInput("例如：额度、到期日、主要用途（可不填）", draft.note, true);
+        form.addView(inNote);
+
+        final Dialog dlg = new Dialog(this);
+        dlg.setContentView(sv);
+        if (dlg.getWindow() != null) {
+            dlg.getWindow().setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            dlg.getWindow().setBackgroundDrawable(roundRect(Color.WHITE, 18, this));
+        }
+        customDialog = dlg;
+
+        LinearLayout acts = new LinearLayout(this);
+        acts.setOrientation(LinearLayout.HORIZONTAL);
+        acts.setGravity(Gravity.CENTER_VERTICAL);
+        LinearLayout.LayoutParams actLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        actLp.topMargin = dp(this, 16);
+        form.addView(acts, actLp);
+        Button cancel = new Button(this);
+        cancel.setText("取消"); cancel.setTextSize(14); cancel.setAllCaps(false);
+        cancel.setBackground(roundRect(Color.rgb(0xF5, 0xF6, 0xF8), 12, this));
+        cancel.setOnClickListener(v -> { customDialog = null; dlg.dismiss(); });
+        acts.addView(cancel, new LinearLayout.LayoutParams(0, dp(this, 46), 1f));
+        Button save = new Button(this);
+        save.setText("保存"); save.setTextSize(14); save.setAllCaps(false);
+        save.setTextColor(Color.WHITE);
+        save.setBackground(roundRect(Color.rgb(0x0A, 0x5C, 0xD6), 12, this));
+        LinearLayout.LayoutParams saveLp = new LinearLayout.LayoutParams(0, dp(this, 46), 1f);
+        saveLp.leftMargin = dp(this, 10);
+        acts.addView(save, saveLp);
+        save.setOnClickListener(v -> {
+            String name = inName.getText().toString().trim();
+            if (name.isEmpty()) { Toast.makeText(this, "请填写卡片名称", Toast.LENGTH_SHORT).show(); inName.requestFocus(); return; }
+            if (isNew) {
+                CustomCard c = new CustomCard();
+                c.id = "custom-" + System.currentTimeMillis();
+                c.name = name;
+                c.bank = inBank.getText().toString().trim();
+                c.org = orgSel[0];
+                c.note = inNote.getText().toString().trim();
+                c.style = styleSel[0];
+                customCards.add(c);
+                customOpen = true;
+                Toast.makeText(this, "已添加「" + name + "」", Toast.LENGTH_SHORT).show();
+            } else {
+                edit.name = name;
+                edit.bank = inBank.getText().toString().trim();
+                edit.org = orgSel[0];
+                edit.note = inNote.getText().toString().trim();
+                edit.style = styleSel[0];
+                Toast.makeText(this, "已保存「" + name + "」", Toast.LENGTH_SHORT).show();
+            }
+            saveCustomCards();
+            customDialog = null;
+            dlg.dismiss();
+            showTab("mine");
+        });
+        dlg.setOnDismissListener(d -> { if (customDialog == dlg) customDialog = null; });
+        dlg.show();
     }
 
     // ---------- 资讯 / 设置 ----------
