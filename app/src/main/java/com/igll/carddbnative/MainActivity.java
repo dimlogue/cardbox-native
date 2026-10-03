@@ -731,11 +731,17 @@ public class MainActivity extends Activity {
             Bitmap b = Bitmap.createBitmap(bw, bh, Bitmap.Config.ARGB_8888);
             Canvas cv = new Canvas(b);
             cv.scale(bandScale, bandScale);
-            cv.translate(0, -top);
+            // Q57：画布必须与 drawBandFrame 同一文档坐标系——child 在文档中的原点是
+            // (inner.getLeft(), inner.getTop())（含 sv padding 与 child margin 的 layout 结果），
+            // inner.draw 自带一层同值 translate，故外层再补 -原点，让文档行 Y 落在画布 (Y-top) 处；
+            // 现五页原点均为 0，此校正不改现有行为、只根治换算口径。
+            cv.translate(-inner.getLeft(), -top - inner.getTop());
             inner.draw(cv); // 位图设备边界天然裁剪，只画带内行
             glassBand = b; // Q21：旧带只解引用不 recycle
             bandDocTopPx = top;
             bandHeightPx = bandH;
+            bandChildLeftPx = inner.getLeft();
+            bandInnerH = contentH; // Q57：内容指纹，高度变了（分析卡展开/增删卡）旧带即作废
             bandSv = sv;
             bandLastBuildMs = android.os.SystemClock.uptimeMillis();
         } catch (Throwable t) {
@@ -764,11 +770,16 @@ public class MainActivity extends Activity {
             }
             int[] rl = new int[2]; rootView.getLocationOnScreen(rl);
             int[] il = new int[2]; iv.getLocationOnScreen(il);
-            // 本层身后内容在文档中的行 → 换算到条带内行（降采样 px）
-            int docTop = sv.getScrollY() + (il[1] - rl[1]);
+            int[] sl = new int[2]; sv.getLocationOnScreen(sl);
+            // Q57 纵向对位根治：层身后的文档行 = scrollY +（层顶 − ScrollView 顶），旧式少减 svTop——
+            // 学生/我的卡片/资讯三页的 sv 不贴根顶（标题区在其上），docTop 系统性偏大 svTop（约 90–300dp），
+            // 在 0.2 降采样带内 srcTop 偏大 18–60px 而层高仅约 17px，频繁越界判 exhausted →
+            // 滚动中不换帧（冻色）、停稳走 applyGlass 截帧才跳变，与用户「静止才改变+取样错位」双定性吻合。
+            // 改以 sv 实时屏幕位为基准逐像素对位，任意页通用；横向同理减 bandChildLeftPx 回到建带坐标系。
+            int docTop = sv.getScrollY() + (il[1] - sl[1]);
             int srcTop = Math.round((docTop - bandDocTopPx) * bandScale);
             if (srcTop < 0 || srcTop + ch > Math.round(bandHeightPx * bandScale)) return false; // 覆盖将尽
-            int srcLeft = Math.round((il[0] - rl[0]) * bandScale);
+            int srcLeft = Math.round(((il[0] - sl[0]) - bandChildLeftPx) * bandScale);
             Canvas cv = new Canvas(cvs);
             cv.drawColor(Color.TRANSPARENT, android.graphics.PorterDuff.Mode.CLEAR);
             Paint pt = new Paint(Paint.FILTER_BITMAP_FLAG);
@@ -796,6 +807,16 @@ public class MainActivity extends Activity {
         if (glassDisabled || glassBand == null || bandSv == null) return;
         if (navDragging || navSpringRunning) return; // Q21：底栏手势优先
         if (isChromeCovered()) return;               // 浮窗在场 chrome 退场，不跟随
+        // Q57：内容指纹校验——建带后文档总高变了（我的卡片分析卡展开/收起、自定义卡增删）
+        // 旧带内容已过期，继续平移就是「冻旧色」；作废走下方 exhausted 校准（180ms 节流）重建。
+        try {
+            ScrollView csv = bandScroll();
+            if (csv == null || csv != bandSv || csv.getChildCount() == 0
+                || csv.getChildAt(0).getHeight() != bandInnerH) {
+                triggerBandRecalib();
+                return;
+            }
+        } catch (Throwable ignored) {}
         boolean exhausted = false;
         for (ImageView iv : new java.util.ArrayList<>(glassViews)) {
             if (!"live".equals(iv.getTag())) continue;
@@ -804,18 +825,22 @@ public class MainActivity extends Activity {
             if (host != null && host.getVisibility() != View.VISIBLE) continue;
             if (!drawBandFrame(iv)) exhausted = true;
         }
-        if (exhausted && !bandRecalibPending
-            && android.os.SystemClock.uptimeMillis() - bandLastBuildMs > 180) {
-            bandRecalibPending = true;
-            mainHandler.post(() -> {
-                bandRecalibPending = false;
-                if (glassDisabled || isChromeCovered() || navDragging || navSpringRunning) return;
-                rebuildBand(); // 覆盖将尽校准一帧（当前 scrollY 重新定带）
-                for (ImageView iv2 : new java.util.ArrayList<>(glassViews)) {
-                    if ("live".equals(iv2.getTag())) drawBandFrame(iv2);
-                }
-            });
-        }
+        if (exhausted) triggerBandRecalib();
+    }
+
+    /** Q57：覆盖将尽/内容过期共用一条校准路径（180ms 节流、主线程 post 一次），滚动期绝不逐帧重采样。 */
+    void triggerBandRecalib() {
+        if (bandRecalibPending
+            || android.os.SystemClock.uptimeMillis() - bandLastBuildMs <= 180) return;
+        bandRecalibPending = true;
+        mainHandler.post(() -> {
+            bandRecalibPending = false;
+            if (glassDisabled || isChromeCovered() || navDragging || navSpringRunning) return;
+            rebuildBand(); // 以当前 scrollY 重新定带
+            for (ImageView iv2 : new java.util.ArrayList<>(glassViews)) {
+                if ("live".equals(iv2.getTag())) drawBandFrame(iv2);
+            }
+        });
     }
 
     // P5 空状态：对照混合版 .empty（居中、灰字、上下 36px 留白），包进白卡（圆角 14）不裸贴页面底
@@ -1359,6 +1384,8 @@ public class MainActivity extends Activity {
     Bitmap glassBand = null;              // 当前条带（0.2 降采样，文档空间渲染）
     int bandDocTopPx = 0;                 // 条带顶在文档中的 y（屏幕 px，未降采样）
     int bandHeightPx = 0;                 // 条带实际高度（屏幕 px，未降采样）
+    int bandChildLeftPx = 0;              // Q57：child 在文档中的横原点（建带坐标系基准）
+    int bandInnerH = -1;                  // Q57：建带时文档总高指纹，变了即旧带过期
     float bandScale = 0.20f;              // 条带降采样比（与 glassSnap 同口径）
     ScrollView bandSv = null;             // 条带所属滚动视图（实例变了即作废）
     final java.util.Map<ImageView, Bitmap> bandCanvases = new java.util.HashMap<>(); // 每层复用画布位图
