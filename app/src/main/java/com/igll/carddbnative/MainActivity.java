@@ -801,7 +801,18 @@ public class MainActivity extends Activity {
     final java.util.Map<ImageView, Integer> glassRetry = new java.util.HashMap<>(); // Q16: layout retry cap per glass layer
 
     FrameLayout content;
-    LinearLayout navBar;
+    FrameLayout navBar;
+    LinearLayout navRow;
+    View navIndicator;
+    ImageView navIndicatorGlass;
+    final java.util.List<String> navOrder = java.util.Arrays.asList("home", "student", "mine", "news", "settings");
+    float navPos = 0f;              // indicator position in tab-index units (fractional while dragging/springing)
+    int navSettled = 0;
+    boolean navDragging = false;
+    int navDragIdx = -1;
+    float navSpringV = 0f;
+    boolean navSpringRunning = false;
+    long navGlassMs = 0;
     FrameLayout navWrap;
     Map<String, View> pages = new HashMap<>();
     Map<String, LinearLayout> navItems = new HashMap<>();
@@ -1247,48 +1258,164 @@ public class MainActivity extends Activity {
         wrapLp.bottomMargin = dp(this, 12);
         navWrap.setLayoutParams(wrapLp);
 
-        navBar = new LinearLayout(this);
-        navBar.setOrientation(LinearLayout.HORIZONTAL);
-        navBar.setBackground(floatingBarBg());
-        navBar.setPadding(dp(this, 8), dp(this, 8), dp(this, 8), dp(this, 8));
-        // Q4：elevation 24→18——混合版是 0 8px 32px 大扩散柔影（偏移小、糊边大），24 在原生上影心偏沉发黑，18 更贴
+        // Q17: navBar is now a FrameLayout stack: dock tint / liquid indicator / item row.
+        navBar = new FrameLayout(this);
         if (Build.VERSION.SDK_INT >= 21) navBar.setElevation(dp(this, 18));
         if (Build.VERSION.SDK_INT >= 28) {
-            // 大扩散柔影：阴影色压到混合版 rgba(20,30,60,.14) 量级，不让默认黑影发死
             navBar.setOutlineAmbientShadowColor(Color.argb(36, 20, 30, 60));
             navBar.setOutlineSpotShadowColor(Color.argb(36, 20, 30, 60));
         }
         navBar.setClipToOutline(false);
+
+        View dockBg = new View(this);
+        dockBg.setBackground(floatingBarBg());
+        navBar.addView(dockBg, new FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+
+        // liquid glass drop: glass layer (live, shared snapshot) + pill tint on top edge.
+        navIndicator = new FrameLayout(this);
+        ((FrameLayout) navIndicator).setBackground(navPillBg());
+        navIndicatorGlass = glassLayer(navIndicator, 18, true);
+        ((FrameLayout) navIndicator).addView(navIndicatorGlass, new FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        if (Build.VERSION.SDK_INT >= 21) navIndicator.setElevation(dp(this, 2));
+        FrameLayout.LayoutParams indLp = new FrameLayout.LayoutParams(dp(this, 60), dp(this, 52));
+        navBar.addView(navIndicator, indLp);
+
+        navRow = new LinearLayout(this);
+        navRow.setOrientation(LinearLayout.HORIZONTAL);
+        navRow.setPadding(dp(this, 8), dp(this, 8), dp(this, 8), dp(this, 8));
+        navBar.addView(navRow, new FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+
         String[][] tabs = {
             {"home", "全部卡片"}, {"student", "学生推荐"}, {"mine", "我的卡片"}, {"news", "资讯"}, {"settings", "设置"}
         };
         for (String[] t : tabs) {
             final String key = t[0];
+            final int idx = navOrder.indexOf(key);
             LinearLayout item = new LinearLayout(this);
             item.setOrientation(LinearLayout.VERTICAL);
             item.setGravity(Gravity.CENTER_HORIZONTAL);
             item.setPadding(dp(this, 4), dp(this, 8), dp(this, 4), dp(this, 8));
+            item.setBackground(null); // selection shown by the liquid indicator, not per-item pill
             NavIconView icon = new NavIconView(this, key);
             item.addView(icon, new LinearLayout.LayoutParams(dp(this, 23), dp(this, 23)));
-            // Q4：标签未选色对照混合版 button 的 #3A3A3C（旧 #8E8E93 浅灰在玻璃上几乎读不出字）
             TextView label = tv(this, t[1], 10f, Color.rgb(0x3A, 0x3A, 0x3C), false);
             label.setGravity(Gravity.CENTER);
             LinearLayout.LayoutParams llp = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
             llp.topMargin = dp(this, 2);
             item.addView(label, llp);
-            item.setOnClickListener(v -> { haptic(); showTab(key); });
+            item.setOnClickListener(v -> { if (!navDragging) { haptic(); showTab(key); } });
+            // Q17: drag on the dock itself - finger drags the drop, passing a tab ticks haptic, release springs to nearest and only then switches page.
+            item.setOnTouchListener((v, e) -> {
+                float navX = v.getLeft() + e.getX();
+                switch (e.getActionMasked()) {
+                    case MotionEvent.ACTION_DOWN:
+                        navDownX = navX; navDownMs = android.os.SystemClock.uptimeMillis(); return false;
+                    case MotionEvent.ACTION_MOVE:
+                        if (!navDragging && Math.abs(navX - navDownX) > dp(this, 9)) {
+                            navDragging = true; navDragIdx = Math.round(navPos); cancelNavSpring();
+                        }
+                        if (navDragging) { navDragTo(navX); return true; }
+                        return false;
+                    case MotionEvent.ACTION_UP:
+                    case MotionEvent.ACTION_CANCEL:
+                        if (navDragging) { navDragging = false; settleNav(); return true; }
+                        return false;
+                }
+                return false;
+            });
             navItems.put(key, item);
             navIcons.put(key, icon);
             navLabels.put(key, label);
-            navBar.addView(item, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+            navRow.addView(item, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
         }
-        // Q11：底栏垫真模糊层（抓内容区快照），上层 floatingBarBg 只剩半透染色
         navWrap.addView(glassLayer(navWrap, 26, true), new FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         navWrap.addView(navBar, new FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
         root.addView(navWrap);
+        navBar.post(() -> layoutNavIndicator(navOrder.indexOf(tab == null ? "home" : tab), false));
+    }
+
+    float navDownX = 0f; long navDownMs = 0;
+
+    float navSlotW() {
+        if (navRow == null || navRow.getWidth() <= 0) return 0f;
+        return (navRow.getWidth() - dp(this, 16)) / 5f;
+    }
+
+    void layoutNavIndicator(int idx, boolean snap) {
+        if (navIndicator == null) return;
+        float slot = navSlotW();
+        if (slot <= 0) { navBar.post(() -> layoutNavIndicator(idx, snap)); return; }
+        int w = Math.max(dp(this, 40), Math.round(slot - dp(this, 6)));
+        View sample = navItems.get("home");
+        int h = sample != null && sample.getHeight() > 0 ? sample.getHeight() - dp(this, 4) : dp(this, 52);
+        FrameLayout.LayoutParams lp = (FrameLayout.LayoutParams) navIndicator.getLayoutParams();
+        if (lp.width != w || lp.height != h) { lp.width = w; lp.height = h; lp.topMargin = dp(this, 10); navIndicator.setLayoutParams(lp); }
+        if (snap) navPos = idx;
+        placeNavIndicator(0f);
+    }
+
+    void placeNavIndicator(float vel) {
+        if (navIndicator == null || navBar == null) return;
+        float slot = navSlotW(); if (slot <= 0) return;
+        float x = dp(this, 8) + navPos * slot + dp(this, 3);
+        navIndicator.setTranslationX(x);
+        float stretch = Math.min(1.30f, 1f + Math.abs(vel) * 0.045f);
+        navIndicator.setScaleX(stretch);
+        navIndicator.setScaleY(1f - (stretch - 1f) * 0.38f);
+        long now = android.os.SystemClock.elapsedRealtime();
+        if (now - navGlassMs > 80 && navIndicatorGlass != null) { navGlassMs = now; applyGlass(navIndicatorGlass); }
+    }
+
+    void navDragTo(float navX) {
+        float slot = navSlotW(); if (slot <= 0) return;
+        float p = (navX - dp(this, 8)) / slot - 0.5f;
+        p = Math.max(-0.12f, Math.min(4.12f, p));
+        float vel = (p - navPos) * 18f;
+        navPos = p;
+        placeNavIndicator(vel);
+        int idx = Math.max(0, Math.min(4, Math.round(navPos)));
+        if (idx != navDragIdx) { navDragIdx = idx; haptic(); } // one tick per tab passed
+    }
+
+    void cancelNavSpring() { navSpringRunning = false; }
+
+    void settleNav() { springNavTo(Math.max(0, Math.min(4, Math.round(navPos))), true); }
+
+    // hand-written damped spring (no libs): stiffness 170, damping ratio ~0.55 -> visible overshoot settle.
+    void springNavTo(final int target, final boolean switchPage) {
+        cancelNavSpring();
+        navSpringRunning = true;
+        navSpringV = 0f;
+        final long[] last = { android.os.SystemClock.uptimeMillis() };
+        mainHandler.post(new Runnable() {
+            public void run() {
+                if (!navSpringRunning) return;
+                long now = android.os.SystemClock.uptimeMillis();
+                float dt = Math.min(0.032f, Math.max(0.001f, (now - last[0]) / 1000f)); last[0] = now;
+                float k = 170f, c = 2f * 0.55f * (float) Math.sqrt(k);
+                float a = -k * (navPos - target) - c * navSpringV;
+                navSpringV += a * dt;
+                navPos += navSpringV * dt;
+                placeNavIndicator(navSpringV);
+                if (Math.abs(navPos - target) < 0.002f && Math.abs(navSpringV) < 0.08f) {
+                    navPos = target; navSpringV = 0f; navSpringRunning = false;
+                    placeNavIndicator(0f);
+                    navSettled = target;
+                    if (switchPage) {
+                        String key = navOrder.get(target);
+                        if (!key.equals(tab)) showTab(key); else layoutNavIndicator(target, false);
+                    }
+                    return;
+                }
+                mainHandler.postDelayed(this, 16);
+            }
+        });
     }
 
     void showTab(String key) {
@@ -1323,12 +1450,6 @@ public class MainActivity extends Activity {
         syncSearchFab();
         for (Map.Entry<String, LinearLayout> e : navItems.entrySet()) {
             boolean on = e.getKey().equals(key);
-            e.getValue().setBackground(on ? navPillBg() : null);
-            if (Build.VERSION.SDK_INT >= 21) e.getValue().setElevation(on ? dp(this, 3) : 0);
-            if (Build.VERSION.SDK_INT >= 28) {
-                e.getValue().setOutlineAmbientShadowColor(Color.argb(26, 20, 30, 60));
-                e.getValue().setOutlineSpotShadowColor(Color.argb(26, 20, 30, 60));
-            }
             NavIconView ic = navIcons.get(e.getKey());
             if (ic != null) ic.setOn(on);
             TextView lb = navLabels.get(e.getKey());
@@ -1337,6 +1458,12 @@ public class MainActivity extends Activity {
                 android.graphics.Typeface cur = lb.getTypeface();
                 if (cur != null) lb.setTypeface(cur, on ? android.graphics.Typeface.BOLD : android.graphics.Typeface.NORMAL);
             }
+        }
+        // Q17: move the liquid drop (spring if layout ready; the tap path also lands here)
+        int targetIdx = navOrder.indexOf(key);
+        if (targetIdx >= 0 && navIndicator != null) {
+            if (Math.abs(navPos - targetIdx) > 0.01f) springNavTo(targetIdx, false);
+            navSettled = targetIdx;
         }
     }
 
