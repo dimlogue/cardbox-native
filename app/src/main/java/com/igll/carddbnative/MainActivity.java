@@ -361,6 +361,15 @@ public class MainActivity extends Activity {
             return out;
         } catch (Throwable t) { return src; } // 圆角副本失败回落源图，不为修角冒崩点
     }
+    // Q33：卡面圆角照实体银行卡模具——半径按显示图宽约 4% 取（Q33 钉的 3.5–4% 量级取上沿，
+    // 对照混合版 styles.css .p-slide img 的 12px 固定值在全宽图上约合 3.5%，原生旧值 12dp 恰卡下沿显尖）；
+    // 随图宽缩放、夹在 8–24dp，详情大图/瓷砖/无图占位共用同一口径，肉眼明确圆润。
+    static float cardRadiusDp(float widthDp) {
+        float r = widthDp * 0.04f;
+        if (r < 8f) r = 8f;
+        if (r > 24f) r = 24f;
+        return r;
+    }
 
     // ---------- Q18 崩溃留痕 + 玻璃自动降级 ----------
     void noteGlassFailure() {
@@ -2200,15 +2209,18 @@ public class MainActivity extends Activity {
     View cardTile(final Card c, ViewGroup parent, int nCols) {
         LinearLayout box = new LinearLayout(this);
         box.setOrientation(LinearLayout.VERTICAL);
-        box.setBackground(rippleBg(Color.WHITE, 14));
         box.setClipToOutline(true);
-        roundClip(box, 14, this); // Q27：瓷砖同机制——外框显式圆角轮廓，顶图四角随瓷砖一同裁净
         AbsListView.LayoutParams lp = new AbsListView.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         box.setLayoutParams(lp);
 
         int nc = (nCols == 1 || nCols == 3) ? nCols : 2;
         int availW = getResources().getDisplayMetrics().widthPixels - dp(this, 28) - (nc - 1) * dp(this, 10);
         int tileW = availW / nc;
+        // Q33：瓷砖圆角随图宽缩放（图宽 4% 量级），且不低于原固定 14dp——只许更圆润不许回退变尖；
+        // 顶图 cover 铺满不变（Q24 优先级：铺满第一、圆角第二），四角靠外框同半径裁切、无图占位同半径。
+        float tileR = Math.max(14f, cardRadiusDp(tileW / getResources().getDisplayMetrics().density));
+        box.setBackground(rippleBg(Color.WHITE, tileR));
+        roundClip(box, tileR, this);
         int imgH = Math.max(dp(this, 40), Math.round(tileW / 1.586f));
         FrameLayout art = new FrameLayout(this);
         box.addView(art, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, imgH));
@@ -4199,15 +4211,13 @@ public class MainActivity extends Activity {
             LinearLayout slide = new LinearLayout(this);
             slide.setOrientation(LinearLayout.VERTICAL);
             slide.setGravity(Gravity.CENTER_HORIZONTAL);
-            slide.setPadding(dp(this, 22), dp(this, 16), dp(this, 22), dp(this, 4));
+            slide.setPadding(dp(this, 26), dp(this, 16), dp(this, 26), dp(this, 4)); // Q33：大图略内缩留呼吸边（对照 .p-slide padding 16/22 再放宽 4dp），不死贴窗边
             track.addView(slide, new LinearLayout.LayoutParams(screenW, ViewGroup.LayoutParams.WRAP_CONTENT));
             ImageView iv = new ImageView(this);
             iv.setScaleType(ImageView.ScaleType.FIT_CENTER);
-            iv.setBackground(placeholderGrad(12, this));
-            roundClip(iv, 12, this); // Q27：显式圆角轮廓，位图/占位渐变/阴影同半径，根除四角黑边
             if (Build.VERSION.SDK_INT >= 21) iv.setElevation(dp(this, 6));
             Bitmap b = Img.get(this, imgPath);
-            int availW = screenW - dp(this, 44);
+            int availW = screenW - dp(this, 52);
             int imgW = availW, imgH = dp(this, 168);
             if (b != null && b.getWidth() > 0 && b.getHeight() > 0) {
                 float ratio = (float) b.getHeight() / (float) b.getWidth();
@@ -4215,6 +4225,11 @@ public class MainActivity extends Activity {
                 int maxH = dp(this, 260);
                 if (imgH > maxH) { imgH = maxH; imgW = Math.round(imgH / ratio); }
             }
+            // Q33：半径按最终显示图宽 4% 取（全宽时约 14dp，替掉 Q27 写死的 12dp 下沿值）；
+            // 位图圆角/占位渐变/阴影轮廓三者同吃这个半径，无图占位同半径（Q33 ④）。
+            float cardR = cardRadiusDp(imgW / getResources().getDisplayMetrics().density);
+            iv.setBackground(placeholderGrad(cardR, this));
+            roundClip(iv, cardR, this);
             LinearLayout.LayoutParams ilp = new LinearLayout.LayoutParams(imgW, imgH);
             ilp.gravity = Gravity.CENTER_HORIZONTAL;
             slide.addView(iv, ilp);
@@ -4222,7 +4237,7 @@ public class MainActivity extends Activity {
                 // Q27：有真图时撤掉占位底（免其颜色从圆角外透出），图本身按位图级圆角出（半径按位图/显示宽比换算）
                 iv.setBackground(null);
                 float rScale = imgW > 0 ? (float) b.getWidth() / (float) imgW : 1f;
-                iv.setImageBitmap(roundBitmap(b, dp(this, 12) * rScale));
+                iv.setImageBitmap(roundBitmap(b, dp(this, cardR) * rScale));
             }
             if (slideName != null && !slideName.isEmpty()) {
                 TextView sn = tv(this, slideName, 12, Color.rgb(0x8E, 0x8E, 0x93), true);
