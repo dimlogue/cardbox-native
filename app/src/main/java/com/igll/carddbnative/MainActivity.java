@@ -1081,6 +1081,7 @@ public class MainActivity extends Activity {
     ScrollView filterScroll = null; // P2e：筛选窗内滚动区（窗框固定不滚，四角不被内容切掉）
     // Q3 悬浮搜索圆钮（首页右侧竖列上钮，玻璃底深色放大镜，点了回顶聚焦顶部搜索框）
     View searchFab = null;
+    View addFab = null; // Q7: 我的卡片页右下圆形 ＋（与悬浮钮同层，照混合版 .fab 56dp 蓝圆）
     // Q3 悬浮筛选钮（搜索钮正下方，玻璃底深色滑杆图标，有已选条件时带蓝角标计数）
     View filterFab = null;
     TextView filterFabBadge = null;
@@ -1775,7 +1776,7 @@ public class MainActivity extends Activity {
             .setDuration(220).setInterpolator(ANIM_ENTER).start();
         if ("home".equals(key) && homeList != null) refreshHome();
         restoreCurrentTabScroll();
-        syncSearchFab();
+        syncSearchFab(); syncAddFab();
         for (Map.Entry<String, LinearLayout> e : navItems.entrySet()) {
             boolean on = e.getKey().equals(key);
             NavIconView ic = navIcons.get(e.getKey());
@@ -1924,6 +1925,89 @@ public class MainActivity extends Activity {
             updateFilterFabBadge();
         }
         syncTopFab();
+    }
+
+    // Q7 ④：我的卡片页右下圆形 ＋（照混合版 .fab：56dp、右 20dp、底 108dp+inset、蓝底白 ＋、与 dock 同层浮空）；
+    // 仅在 mine 页且浮窗（筛选/选卡/详情/向导/关于/长按菜单）不在场时出现，浮窗退场归 Q12 同步。
+    void syncAddFab() {
+        boolean want = "mine".equals(tab) && detailCard == null && !wizardOpen && !welcomeOpen && !changelogOpen && filterSheet == null;
+        if (!want) {
+            if (addFab != null && addFab.getParent() != null) ((ViewGroup) addFab.getParent()).removeView(addFab);
+            addFab = null;
+            return;
+        }
+        if (addFab == null || addFab.getParent() != content) {
+            if (addFab != null && addFab.getParent() != null) ((ViewGroup) addFab.getParent()).removeView(addFab);
+            addFab = buildAddFab();
+            FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(dp(this, 56), dp(this, 56));
+            lp.gravity = Gravity.END | Gravity.BOTTOM;
+            lp.rightMargin = dp(this, 20);
+            lp.bottomMargin = dp(this, 108) + navBarH();
+            content.addView(addFab, lp);
+            addFab.setAlpha(0f); addFab.setScaleX(0.82f); addFab.setScaleY(0.82f);
+            addFab.animate().alpha(1f).scaleX(1f).scaleY(1f).setDuration(ANIM_DUR_FADE).setInterpolator(ANIM_ENTER).start();
+        }
+    }
+    View buildAddFab() {
+        FrameLayout fab = new FrameLayout(this);
+        GradientDrawable bg = new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
+            new int[]{Color.rgb(0x2F, 0x7D, 0xFF), Color.rgb(0x0A, 0x5C, 0xD6)});
+        bg.setShape(GradientDrawable.OVAL);
+        fab.setBackground(bg);
+        applyGlassFabShadow(fab);
+        TextView plus = tv(this, "\uFF0B", 28, Color.WHITE, false);
+        plus.setGravity(Gravity.CENTER);
+        fab.addView(plus, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        fab.setOnClickListener(v -> { haptic(); openAddSheet(); });
+        return fab;
+    }
+    // Q7 ④：点 ＋ 先升「添加卡片」底表（自定义卡片 / 在线查询卡信息 / 取消），再进表单；
+    // 在线查询一条不得缺（混合版 index.html #fabSheet 同结构），其在线认行能力归 Q9，本段入口齐全。
+    void openAddSheet() {
+        final FrameLayout sheet = new FrameLayout(this);
+        sheet.setBackgroundColor(Color.argb(117, 15, 20, 40));
+        sheet.setOnClickListener(v -> closeAddSheet(sheet));
+        LinearLayout card = new LinearLayout(this);
+        card.setOrientation(LinearLayout.VERTICAL);
+        card.setBackground(roundRect(Color.argb(245, 255, 255, 255), 22, this));
+        if (Build.VERSION.SDK_INT >= 21) card.setElevation(dp(this, 24));
+        card.setPadding(dp(this, 18), dp(this, 16), dp(this, 18), dp(this, 12) + navBarH());
+        FrameLayout.LayoutParams clp = new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        clp.gravity = Gravity.BOTTOM;
+        clp.leftMargin = dp(this, 12); clp.rightMargin = dp(this, 12); clp.bottomMargin = dp(this, 12) + navBarH();
+        sheet.addView(card, clp);
+        card.setOnClickListener(v -> {});
+        card.addView(tv(this, "\u6DFB\u52A0\u5361\u7247", 17, Color.rgb(0x1C, 0x1C, 0x1E), true));
+        TextView r1 = addSheetRow("\u81EA\u5B9A\u4E49\u5361\u7247", () -> { closeAddSheet(sheet); openCustomForm(null); });
+        LinearLayout.LayoutParams r1lp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(this, 52));
+        r1lp.topMargin = dp(this, 12);
+        card.addView(r1, r1lp);
+        TextView r2 = addSheetRow("\u5728\u7EBF\u67E5\u8BE2\u5361\u4FE1\u606F", () -> {
+            closeAddSheet(sheet);
+            showFloatToast("\u5728\u7EBF\u67E5\u8BE2\u5C06\u6309 BIN \u8BA4\u53D1\u5361\u884C\uFF08Q9\uFF09\uFF0C\u5148\u624B\u52A8\u586B\u4E00\u5F20");
+            openCustomForm(null);
+        });
+        card.addView(r2, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(this, 52)));
+        TextView cancel = tv(this, "\u53D6\u6D88", 15, Color.rgb(0x8E, 0x8E, 0x93), false);
+        cancel.setGravity(Gravity.CENTER);
+        cancel.setPadding(0, dp(this, 10), 0, dp(this, 6));
+        cancel.setOnClickListener(v -> closeAddSheet(sheet));
+        card.addView(cancel);
+        content.addView(sheet);
+        card.setAlpha(0f); card.setTranslationY(dp(this, 28));
+        card.animate().alpha(1f).translationY(0f).setDuration(ANIM_DUR_SHEET_IN).setInterpolator(ANIM_ENTER).start();
+        sheet.setTag("addSheet");
+    }
+    TextView addSheetRow(String label, final Runnable act) {
+        TextView r = tv(this, label, 16, Color.rgb(0x1C, 0x1C, 0x1E), false);
+        r.setGravity(Gravity.CENTER_VERTICAL);
+        r.setPadding(dp(this, 14), 0, dp(this, 14), 0);
+        r.setBackground(roundRect(Color.rgb(0xF2, 0xF3, 0xF7), 14, this));
+        r.setOnClickListener(v -> { haptic(); act.run(); });
+        return r;
+    }
+    void closeAddSheet(View sheet) {
+        if (sheet != null && sheet.getParent() != null) ((ViewGroup) sheet.getParent()).removeView(sheet);
     }
 
     void updateFilterFabBadge() {
@@ -4938,166 +5022,111 @@ public class MainActivity extends Activity {
     }
 
     // ---------- 自定义卡片（Phase 3b） ----------
+    // Q7 对照返工：施工前核对混合版 app.js renderCustom / restyleTiles / startTileDrag
+    // 与 styles.css .csk-head/.csk-deck/.csk-layer/.csk-body/.csk-tiles/.csk-tile/.csk-idx/.csk-del/.csk-mv：
+    // 头部为一行式白卡（62×56 迷你叠卡 + 自定义卡片 + N 张 · 点开展开/点开收起 + ▸ 箭头），
+    // 展开为整叠色带河（每带底 48dp 向下一带顶色渐变衔接、首尾由 16dp 外框裁圆），
+    // 带面只留编号/卡名/副行与三颗 30dp 半透小圆钮（↑ ↓ ✕）；无常驻教学字、无编辑大药丸行。
     View buildCustomSection() {
         LinearLayout sec = new LinearLayout(this);
         sec.setOrientation(LinearLayout.VERTICAL);
-        sec.setBackground(roundRect(Color.WHITE, 16, this));
-        sec.setPadding(dp(this, 14), dp(this, 12), dp(this, 14), dp(this, 12));
         LinearLayout.LayoutParams slp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         slp.topMargin = dp(this, 12);
         sec.setLayoutParams(slp);
-
+        if (customCards.isEmpty()) {
+            TextView empty = tv(this, "还没有自定义卡片，点右下角 ＋ 添加。", 12, Color.rgb(0x8E, 0x8E, 0x93), false);
+            empty.setPadding(dp(this, 2), dp(this, 4), dp(this, 2), dp(this, 4));
+            sec.addView(empty);
+            return sec;
+        }
+        // 头部（一行式）：迷你叠卡预览 + 标题/计数 + 箭头
         LinearLayout head = new LinearLayout(this);
         head.setOrientation(LinearLayout.HORIZONTAL);
         head.setGravity(Gravity.CENTER_VERTICAL);
+        head.setBackground(roundRect(Color.WHITE, 16, this));
+        if (Build.VERSION.SDK_INT >= 21) head.setElevation(dp(this, 2));
+        head.setPadding(dp(this, 14), dp(this, 12), dp(this, 14), dp(this, 12));
         sec.addView(head);
+        // 迷你叠卡：取最近 3 张，最新一张在最上（app.js deck 口径，层 top i*9、左右内缩 i*5%）
+        int show = Math.min(3, customCards.size());
+        FrameLayout deck = new FrameLayout(this);
+        head.addView(deck, new LinearLayout.LayoutParams(dp(this, 62), dp(this, 56)));
+        for (int k = show - 1; k >= 0; k--) {
+            int depth = k; // 0 = 最新在最上
+            CustomCard c = customCards.get(customCards.size() - 1 - k);
+            View layer = new View(this);
+            GradientDrawable lg = customGradient(c.style);
+            lg.setCornerRadius(dp(this, 9));
+            layer.setBackground(lg);
+            if (Build.VERSION.SDK_INT >= 21) layer.setElevation(dp(this, 1));
+            FrameLayout.LayoutParams flp = new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(this, 42));
+            flp.topMargin = dp(this, depth * 9);
+            flp.leftMargin = dp(this, depth * 3);
+            flp.rightMargin = dp(this, depth * 3);
+            deck.addView(layer, flp);
+        }
         LinearLayout info = new LinearLayout(this);
         info.setOrientation(LinearLayout.VERTICAL);
-        head.addView(info, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+        LinearLayout.LayoutParams infoLp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+        infoLp.leftMargin = dp(this, 12);
+        head.addView(info, infoLp);
         info.addView(tv(this, "自定义卡片", 15, Color.rgb(0x1C, 0x1C, 0x1E), true));
-        String subTxt = customCards.isEmpty()
-            ? "还没有自定义卡片"
-            : customCards.size() + " 张 · " + (customOpen ? "点开收起" : "点开展开");
-        TextView sub = tv(this, subTxt, 11.5f, Color.rgb(0x8E, 0x8E, 0x93), false);
-        LinearLayout.LayoutParams subLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        subLp.topMargin = dp(this, 2);
-        info.addView(sub, subLp);
-        Button addBtn = new Button(this);
-        addBtn.setText("＋ 添加"); addBtn.setTextSize(12.5f); addBtn.setAllCaps(false);
-        addBtn.setTextColor(Color.WHITE);
-        addBtn.setBackground(roundRect(Color.rgb(0x0A, 0x5C, 0xD6), 999, this));
-        addBtn.setOnClickListener(v -> { haptic(); openCustomForm(null); });
-        head.addView(addBtn, new LinearLayout.LayoutParams(dp(this, 76), dp(this, 36)));
-        TextView arrow = tv(this, customCards.isEmpty() ? "" : (customOpen ? "收起 ‹" : "展开 ›"), 12, Color.rgb(0x0A, 0x5C, 0xD6), true);
-        LinearLayout.LayoutParams alp2 = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        alp2.leftMargin = dp(this, 8);
-        head.addView(arrow, alp2);
-        if (!customCards.isEmpty()) {
-            head.setOnClickListener(v -> { haptic(); customOpen = !customOpen; refreshMineKeepScroll(); });
-        }
-
-        if (customCards.isEmpty()) {
-            TextView hint = tv(this, "卡库里没有的卡可以自己记一张：填名字、银行、挑个颜色、写备注。", 12, Color.rgb(0x8E, 0x8E, 0x93), false);
-            LinearLayout.LayoutParams hlp2 = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-            hlp2.topMargin = dp(this, 8);
-            sec.addView(hint, hlp2);
-            return sec;
-        }
-
-        if (!customOpen) {
-            // P-deck ⑤ 收起态：最新一张完整压在最上（名/行/组织可见），其余只在下方露一道边
-            int show = Math.min(3, customCards.size());
-            FrameLayout deckFrame = new FrameLayout(this);
-            LinearLayout.LayoutParams dlp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(this, 70));
-            dlp.topMargin = dp(this, 10);
-            sec.addView(deckFrame, dlp);
-            // 先加旧卡垫底（只露边），最后加最新卡上盖
-            for (int depth = show - 1; depth >= 0; depth--) {
-                CustomCard c = customCards.get(customCards.size() - 1 - depth);
-                boolean isTop = depth == 0;
-                LinearLayout layer = new LinearLayout(this);
-                layer.setOrientation(LinearLayout.HORIZONTAL);
-                layer.setGravity(Gravity.CENTER_VERTICAL);
-                GradientDrawable lg = customGradient(c.style);
-                layer.setBackground(lg);
-                layer.setPadding(dp(this, 12), dp(this, 8), dp(this, 12), dp(this, 8));
-                if (Build.VERSION.SDK_INT >= 21) layer.setElevation(dp(this, isTop ? 3 : 1));
-                FrameLayout.LayoutParams flp = new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(this, 52));
-                flp.topMargin = dp(this, depth * 7);
-                flp.leftMargin = dp(this, depth * 8);
-                flp.rightMargin = dp(this, depth * 8);
-                deckFrame.addView(layer, flp);
-                if (isTop) {
-                    TextView nm = tv(this, c.name, 13.5f, Color.WHITE, true);
-                    nm.setMaxLines(1);
-                    nm.setEllipsize(android.text.TextUtils.TruncateAt.END);
-                    layer.addView(nm, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
-                    String meta = (c.bank == null ? "" : c.bank) + (c.org != null && !c.org.isEmpty() ? " · " + c.org : "");
-                    TextView mt = tv(this, meta, 11, Color.argb(215, 255, 255, 255), false);
-                    mt.setMaxLines(1);
-                    mt.setEllipsize(android.text.TextUtils.TruncateAt.END);
-                    LinearLayout.LayoutParams mlp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-                    mlp.leftMargin = dp(this, 8);
-                    layer.addView(mt, mlp);
-                }
+        TextView sub = tv(this, customCards.size() + " 张 · " + (customOpen ? "点开收起" : "点开展开"), 11.5f, Color.rgb(0x8E, 0x8E, 0x93), false);
+        info.addView(sub);
+        TextView arrow = tv(this, "▸", 16, Color.rgb(0x8E, 0x8E, 0x93), false);
+        arrow.setGravity(Gravity.CENTER);
+        arrow.setRotation(customOpen ? 90 : 0);
+        head.addView(arrow, new LinearLayout.LayoutParams(dp(this, 24), dp(this, 24)));
+        head.setOnClickListener(v -> { haptic(); customOpen = !customOpen; refreshMineKeepScroll(); });
+        if (!customOpen) return sec;
+        // 展开教学只弹一次首次 toast（混合版 __ccDragHint 口径），不留常驻行
+        try {
+            if (!prefs.getBoolean("cc_drag_hint_shown", false)) {
+                prefs.edit().putBoolean("cc_drag_hint_shown", true).commit();
+                mainHandler.postDelayed(() -> showFloatToast("长按色带可拖动排序"), 600);
             }
-            return sec;
-        }
-
-        // P-deck 展开态：紧凑色带整叠（无缝衔接）+ 长按拖动换序，小圆钮弱化
-        TextView dragHint = tv(this, "长按色带可拖动排序 · 点色带看详情", 11, Color.rgb(0x8E, 0x8E, 0x93), false);
-        LinearLayout.LayoutParams dhLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        dhLp.topMargin = dp(this, 8);
-        sec.addView(dragHint, dhLp);
+        } catch (Throwable ignored) {}
+        // 展开态：整叠色带河——外框 16dp 裁圆+柔影，每带 18/14/30 内边距，底部以三段渐变接下一带顶色
         LinearLayout tilesBox = new LinearLayout(this);
         tilesBox.setOrientation(LinearLayout.VERTICAL);
-        tilesBox.setBackground(roundRect(Color.WHITE, 14, this));
+        tilesBox.setBackground(roundRect(Color.WHITE, 16, this));
         if (Build.VERSION.SDK_INT >= 21) tilesBox.setElevation(dp(this, 2));
-        // 不裁子视图：拖动时色带要能滑出整叠边界跟手（首尾圆角由色带自身渐变给出）
-        tilesBox.setClipChildren(false);
-        tilesBox.setClipToPadding(false);
-        sec.setClipChildren(false);
+        tilesBox.setClipToOutline(true);
         LinearLayout.LayoutParams boxLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        boxLp.topMargin = dp(this, 6);
+        boxLp.topMargin = dp(this, 10);
         sec.addView(tilesBox, boxLp);
         for (int i = 0; i < customCards.size(); i++) {
             final CustomCard c = customCards.get(i);
             final int idx = i;
             final int nextStyle = (i + 1 < customCards.size()) ? customCards.get(i + 1).style : -1;
             LinearLayout tile = new LinearLayout(this);
-            tile.setOrientation(LinearLayout.VERTICAL);
+            tile.setOrientation(LinearLayout.HORIZONTAL);
+            tile.setGravity(Gravity.CENTER_VERTICAL);
             tile.setBackground(customBlendedGradient(c.style, nextStyle, i == 0, i == customCards.size() - 1));
-            tile.setPadding(dp(this, 12), dp(this, 8), dp(this, 12), dp(this, 8));
+            tile.setPadding(dp(this, 14), dp(this, 18), dp(this, 14), dp(this, 30));
             tilesBox.addView(tile, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
-
-            LinearLayout topRow = new LinearLayout(this);
-            topRow.setOrientation(LinearLayout.HORIZONTAL);
-            topRow.setGravity(Gravity.CENTER_VERTICAL);
-            tile.addView(topRow);
             TextView idxTv = tv(this, String.valueOf(i + 1), 11, Color.WHITE, true);
-            idxTv.setBackground(roundRect(Color.argb(70, 255, 255, 255), 999, this));
+            idxTv.setBackground(roundRect(Color.argb(71, 255, 255, 255), 999, this));
             idxTv.setGravity(Gravity.CENTER);
-            topRow.addView(idxTv, new LinearLayout.LayoutParams(dp(this, 22), dp(this, 22)));
+            tile.addView(idxTv, new LinearLayout.LayoutParams(dp(this, 24), dp(this, 24)));
             LinearLayout tx = new LinearLayout(this);
             tx.setOrientation(LinearLayout.VERTICAL);
             LinearLayout.LayoutParams txLp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
-            txLp.leftMargin = dp(this, 8);
-            topRow.addView(tx, txLp);
-            TextView nm = tv(this, c.name, 14, Color.WHITE, true);
+            txLp.leftMargin = dp(this, 10);
+            tile.addView(tx, txLp);
+            TextView nm = tv(this, c.name, 15.5f, Color.WHITE, true);
             nm.setMaxLines(1);
             nm.setEllipsize(android.text.TextUtils.TruncateAt.END);
             tx.addView(nm);
-            String meta = (c.bank == null || c.bank.isEmpty() ? "未填发卡行" : c.bank)
-                + (c.org != null && !c.org.isEmpty() ? " · " + c.org : "");
-            TextView mtv = tv(this, meta, 11, Color.argb(215, 255, 255, 255), false);
+            String meta = (c.bank == null ? "" : c.bank) + (c.org != null && !c.org.isEmpty() ? " · " + c.org : "");
+            TextView mtv = tv(this, meta, 11.5f, Color.argb(224, 255, 255, 255), false);
             mtv.setMaxLines(1);
             mtv.setEllipsize(android.text.TextUtils.TruncateAt.END);
             tx.addView(mtv);
-            // 小圆钮（弱化）：上/下移，拖动为主、点按为辅
-            topRow.addView(customMoveBtn("↑", i == 0, v -> moveCustom(idx, -1)));
-            topRow.addView(customMoveBtn("↓", i == customCards.size() - 1, v -> moveCustom(idx, 1)));
-            if (c.note != null && !c.note.isEmpty()) {
-                TextView nt = tv(this, c.note, 11.5f, Color.argb(225, 255, 255, 255), false);
-                nt.setMaxLines(2);
-                nt.setEllipsize(android.text.TextUtils.TruncateAt.END);
-                LinearLayout.LayoutParams nlp2 = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-                nlp2.topMargin = dp(this, 4);
-                nlp2.leftMargin = dp(this, 30);
-                tile.addView(nt, nlp2);
-            }
-            LinearLayout acts = new LinearLayout(this);
-            acts.setOrientation(LinearLayout.HORIZONTAL);
-            acts.setGravity(Gravity.CENTER_VERTICAL);
-            LinearLayout.LayoutParams actLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-            actLp.topMargin = dp(this, 6);
-            actLp.leftMargin = dp(this, 30);
-            tile.addView(acts, actLp);
-            acts.addView(customActBtn("编辑", false, v -> openCustomForm(c)));
-            acts.addView(customActBtn("删除", false, v -> confirmDeleteCustom(c)));
-            View spacer = new View(this);
-            acts.addView(spacer, new LinearLayout.LayoutParams(0, 1, 1f));
-            TextView detailHint = tv(this, "详情 ›", 11, Color.argb(220, 255, 255, 255), false);
-            acts.addView(detailHint);
+            // 三颗 30dp 半透玻璃小圆钮：上移/下移/删除（细字形，禁用态半透明；删除走二次确认+撤销）
+            tile.addView(customMoveBtn("↑", i == 0, v -> moveCustom(idx, -1)));
+            tile.addView(customMoveBtn("↓", i == customCards.size() - 1, v -> moveCustom(idx, 1)));
+            tile.addView(customMoveBtn("✕", false, v -> confirmDeleteCustom(c)));
             tile.setOnClickListener(v -> {
                 if (System.currentTimeMillis() - lastDragEndAt < 450) return;
                 openCustomDetail(c);
@@ -5107,23 +5136,46 @@ public class MainActivity extends Activity {
         return sec;
     }
 
-    // P-deck 小圆钮：28dp 圆，半透白底，禁用态更淡
+    // Q7：三颗半透玻璃小圆钮（照混合版 .csk-mv/.csk-del 30dp、rgba(255,255,255,.25)，按下 .4）
     TextView customMoveBtn(String label, boolean disabled, View.OnClickListener onClick) {
-        TextView b = tv(this, label, 13, disabled ? Color.argb(130, 255, 255, 255) : Color.WHITE, true);
+        TextView b = tv(this, label, 13, disabled ? Color.argb(120, 255, 255, 255) : Color.WHITE, true);
         b.setGravity(Gravity.CENTER);
-        b.setBackground(roundRect(Color.argb(disabled ? 28 : 52, 255, 255, 255), 999, this));
-        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(dp(this, 28), dp(this, 28));
+        GradientDrawable g = new GradientDrawable();
+        g.setShape(GradientDrawable.OVAL);
+        g.setColor(Color.argb(disabled ? 30 : 64, 255, 255, 255));
+        g.setStroke(dp(this, 1), Color.argb(60, 255, 255, 255));
+        b.setBackground(g);
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(dp(this, 30), dp(this, 30));
         lp.leftMargin = dp(this, 6);
         b.setLayoutParams(lp);
-        if (!disabled) b.setOnClickListener(onClick);
+        if (!disabled) b.setOnClickListener(v -> { haptic(); onClick.onClick(v); });
         return b;
+    }
+    // Q7 ③：拖动中的蓝框（与 Q1 长按菜单同语言 rgba(0,122,255,.7)）；带体圆角由 outline 塑形，禁止黑边毛刺
+    void setCustomTileDragFrame(View tile, boolean on, Drawable orig) {
+        if (tile instanceof ViewGroup) {
+            ViewGroup vg = (ViewGroup) tile;
+            if (on) {
+                Drawable cur = tile.getBackground();
+                if (cur instanceof GradientDrawable) ((GradientDrawable) cur).setStroke(dp(this, 2), Color.argb(178, 0, 122, 255));
+                roundClip(tile, 16, this);
+                if (Build.VERSION.SDK_INT >= 21) tile.setElevation(dp(this, 18));
+            } else {
+                if (orig instanceof GradientDrawable) ((GradientDrawable) orig).setStroke(0, 0);
+                tile.setBackground(orig);
+                tile.setClipToOutline(false);
+                if (Build.VERSION.SDK_INT >= 21) tile.setElevation(0);
+            }
+        }
     }
 
     // P-deck ① 长按拖动：跟手平移+放大，松手按位移换序并保存（对照混合版 startTileDrag）
     void startCustomDrag(final View tile, final int fromIdx) {
         haptic();
-        tile.setScaleX(1.02f); tile.setScaleY(1.02f); tile.setAlpha(0.95f);
-        if (Build.VERSION.SDK_INT >= 21) tile.setElevation(dp(this, 10));
+        final Drawable origBg = tile.getBackground();
+        tile.setTag(origBg);
+        setCustomTileDragFrame(tile, true, origBg);
+        tile.setScaleX(1.02f); tile.setScaleY(1.02f); tile.setAlpha(0.98f);
         if (tile.getParent() instanceof ViewGroup) ((ViewGroup) tile.getParent()).bringChildToFront(tile);
         if (mineScrollView != null) mineScrollView.requestDisallowInterceptTouchEvent(true);
         tile.setOnTouchListener(new View.OnTouchListener() {
@@ -5136,6 +5188,35 @@ public class MainActivity extends Activity {
                     case MotionEvent.ACTION_MOVE:
                         if (downY < 0) downY = e.getRawY();
                         v.setTranslationY(e.getRawY() - downY);
+                        // Q7 ③：过中线即让位——兄弟色带就地换位，编号随之实时改写（混合版 startTileDrag 的 insertBefore 语义）
+                        try {
+                            ViewGroup parent = (ViewGroup) v.getParent();
+                            if (parent != null && v.getHeight() > 0) {
+                                float center = v.getTop() + v.getTranslationY() + v.getHeight() / 2f;
+                                int cur = parent.indexOfChild(v);
+                                int target = cur;
+                                for (int i = 0; i < parent.getChildCount(); i++) {
+                                    View sib = parent.getChildAt(i);
+                                    if (sib == v) continue;
+                                    float sc = sib.getTop() + sib.getHeight() / 2f;
+                                    if (i < cur && center < sc) target = Math.min(target, i);
+                                    if (i > cur && center > sc) target = Math.max(target, i);
+                                }
+                                if (target != cur) {
+                                    float topBefore = v.getTop();
+                                    parent.removeView(v);
+                                    parent.addView(v, target);
+                                    v.setTranslationY(v.getTranslationY() + (topBefore - v.getTop()));
+                                    for (int i = 0; i < parent.getChildCount(); i++) {
+                                        View band = parent.getChildAt(i);
+                                        if (band instanceof ViewGroup && ((ViewGroup) band).getChildCount() > 0) {
+                                            View idxV = ((ViewGroup) band).getChildAt(0);
+                                            if (idxV instanceof TextView) ((TextView) idxV).setText(String.valueOf(i + 1));
+                                        }
+                                    }
+                                }
+                            }
+                        } catch (Throwable ignored) {}
                         return true;
                     case MotionEvent.ACTION_UP:
                     case MotionEvent.ACTION_CANCEL: {
@@ -5153,12 +5234,21 @@ public class MainActivity extends Activity {
         tile.setOnTouchListener(null);
         tile.setTranslationY(0);
         tile.setScaleX(1f); tile.setScaleY(1f); tile.setAlpha(1f);
-        if (Build.VERSION.SDK_INT >= 21) tile.setElevation(0);
+        Object tag = tile.getTag();
+        if (tag instanceof Drawable) setCustomTileDragFrame(tile, false, (Drawable) tag);
+        tile.setTag(null);
         if (mineScrollView != null) mineScrollView.requestDisallowInterceptTouchEvent(false);
         lastDragEndAt = System.currentTimeMillis();
-        int th = tile.getHeight();
-        int dRow = th > 0 ? Math.round(dy / (float) th) : 0;
-        int toIdx = Math.max(0, Math.min(fromIdx + dRow, customCards.size() - 1));
+        // Q7：以拖动手势中就地换位后的实际子序为准（dy 仅作兜底），避免实时换位与按位移换算双重作用
+        int liveIdx = -1;
+        try { if (tile.getParent() instanceof ViewGroup) liveIdx = ((ViewGroup) tile.getParent()).indexOfChild(tile); } catch (Throwable ignored) {}
+        int toIdx;
+        if (liveIdx >= 0) toIdx = Math.max(0, Math.min(liveIdx, customCards.size() - 1));
+        else {
+            int th = tile.getHeight();
+            int dRow = th > 0 ? Math.round(dy / (float) th) : 0;
+            toIdx = Math.max(0, Math.min(fromIdx + dRow, customCards.size() - 1));
+        }
         if (toIdx != fromIdx) {
             CustomCard moved = customCards.remove(fromIdx);
             customCards.add(toIdx, moved);
