@@ -148,6 +148,7 @@ public class MainActivity extends Activity {
             || filterSheet != null || detailCard != null || cardMenuPop != null
             || customFormSheet != null || customDetailSheet != null || binSheet != null || addSheetView != null
             || extSheet != null
+            || placeholderPickerView != null
             || delConfirmSheet != null || updateTipSheet != null || updateConfirmSheet != null;
     }
     void hideFabsNow() {
@@ -480,19 +481,58 @@ public class MainActivity extends Activity {
         g.setCornerRadius(dp(c, radiusDp));
         return g;
     }
-    // Q70：无图占位面按卡 id 哈希从 10 色沉稳渐变里固定取一色（同卡恒定、不随机乱跳，全局一套色板）
+    // Q70：无图占位面按卡 id 哈希固定取色（同卡恒定、不随机乱跳，全局一套色板）
+    // Q71：自动配色两套风格——深色沉稳系（Q70 原 10 色）与浅色柔光系（默认），设置二选一全局生效
     static final int[][] PLACEHOLDER_PALETTE = {
         {0x2B4C7E, 0x4A7BB5}, {0x1F6B6B, 0x3A9A8C}, {0x4A3F78, 0x7A6BA5},
         {0x6B2A3A, 0x9E4A5E}, {0x2E5A3C, 0x4E8A5F}, {0x2F3A4A, 0x55677F},
         {0x6B4A2F, 0x9A7350}, {0x343A7A, 0x5A62B5}, {0x1E4A5F, 0x2F7A9A},
         {0x5A2A4E, 0x8A4A78}
     };
+    static final int[][] PLACEHOLDER_PALETTE_LIGHT = {
+        {0xEAF2FD, 0xD3E4FA}, {0xE7F5F0, 0xC9EADF}, {0xF0EBFA, 0xDCD0F2},
+        {0xFCEBF0, 0xF4CBD6}, {0xEBF6ED, 0xCDE7D2}, {0xEEF1F6, 0xD3DCEA},
+        {0xFBF2E4, 0xF1DDBE}, {0xEAECFB, 0xCCD2F2}, {0xE8F3F9, 0xC6E1F0},
+        {0xF9EBF4, 0xEFCCE1}
+    };
     static int placeholderIdx(String id) {
         if (id == null || id.isEmpty()) return 0;
         return Math.abs(id.hashCode()) % PLACEHOLDER_PALETTE.length;
     }
-    static GradientDrawable placeholderGradFor(String id, float radiusDp, Context c) {
-        int[] pair = PLACEHOLDER_PALETTE[placeholderIdx(id)];
+    // Q71 状态：placeholder_style=light(默认)/dark；placeholder_custom_enabled 开关；单卡自选存色板下标
+    String placeholderStyle = "light";
+    boolean placeholderCustomEnabled = false;
+    java.util.Map<String, Integer> placeholderCustom = new java.util.HashMap<>();
+    View placeholderPickerView = null;
+    boolean placeholderDirty = false;
+    void loadPlaceholderPrefs() {
+        try {
+            placeholderStyle = prefs == null ? "light" : prefs.getString("placeholder_style", "light");
+            if (!"dark".equals(placeholderStyle)) placeholderStyle = "light";
+            placeholderCustomEnabled = prefs != null && prefs.getBoolean("placeholder_custom_enabled", false);
+            placeholderCustom = new java.util.HashMap<>();
+            String raw = prefs == null ? null : prefs.getString("placeholder_custom_json", "{}");
+            org.json.JSONObject o = new org.json.JSONObject(raw == null || raw.isEmpty() ? "{}" : raw);
+            java.util.Iterator<String> ks = o.keys();
+            while (ks.hasNext()) { String k = ks.next(); int v = o.optInt(k, -1); if (v >= 0 && v < PLACEHOLDER_PALETTE.length) placeholderCustom.put(k, v); }
+        } catch (Throwable ignored) { placeholderCustom = new java.util.HashMap<>(); }
+    }
+    void savePlaceholderCustom() {
+        try {
+            org.json.JSONObject o = new org.json.JSONObject();
+            for (java.util.Map.Entry<String, Integer> e : placeholderCustom.entrySet()) o.put(e.getKey(), e.getValue());
+            if (prefs != null) prefs.edit().putString("placeholder_custom_json", o.toString()).apply();
+        } catch (Throwable ignored) {}
+    }
+    int placeholderIdxFor(String id) {
+        if (placeholderCustomEnabled && id != null && placeholderCustom.containsKey(id)) return placeholderCustom.get(id);
+        return placeholderIdx(id);
+    }
+    GradientDrawable placeholderGradFor(String id, float radiusDp, Context c) {
+        int idx = placeholderIdxFor(id);
+        int[] pair;
+        if (placeholderCustomEnabled && id != null && placeholderCustom.containsKey(id)) pair = PLACEHOLDER_PALETTE[idx];
+        else pair = ("dark".equals(placeholderStyle) ? PLACEHOLDER_PALETTE : PLACEHOLDER_PALETTE_LIGHT)[idx];
         GradientDrawable g = new GradientDrawable(GradientDrawable.Orientation.TL_BR,
             new int[]{ Color.rgb(Color.red(pair[0]), Color.green(pair[0]), Color.blue(pair[0])),
                        Color.rgb(Color.red(pair[1]), Color.green(pair[1]), Color.blue(pair[1])) });
@@ -2052,6 +2092,7 @@ public class MainActivity extends Activity {
         if (prefs.contains("haptic_level")) hapticLevel = prefs.getInt("haptic_level", 2);
         else hapticLevel = prefs.getBoolean("haptic", true) ? 2 : 0; // 旧开关迁移：开→中档
         if (hapticLevel < 0 || hapticLevel > 3) hapticLevel = 2;
+        loadPlaceholderPrefs(); // Q71
         applyHighRefresh();
         try { mine = new HashSet<>(prefs.getStringSet("mine_ids", new HashSet<String>())); } catch (Exception e) { mine = new HashSet<>(); }
         sortMode = prefs.getString("sort_mode", null);
@@ -2398,6 +2439,121 @@ public class MainActivity extends Activity {
         overlay.addView(wrap, clp);
         rootView.addView(overlay, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         acctPickerView = overlay;
+        overlay.setAlpha(0f);
+        overlay.animate().alpha(1f).setDuration(200).setInterpolator(ANIM_ENTER).start();
+        shade.animate().alpha(1f).setDuration(200).setInterpolator(ANIM_ENTER).start();
+        wrap.setTranslationY(dp(this, 42));
+        wrap.animate().translationY(0f).setDuration(ANIM_DUR_SHEET_IN).setInterpolator(ANIM_ENTER).start();
+    }
+
+    // Q71 占位卡面自选配色：10 色色板贴底窗，按卡 id 存本机偏好，OTA 不冲掉；真图卡不走此路
+    void closePlaceholderPicker() {
+        View v = placeholderPickerView;
+        placeholderPickerView = null;
+        if (v != null && v.getParent() instanceof ViewGroup) ((ViewGroup) v.getParent()).removeView(v);
+        restoreChrome();
+    }
+    void refreshDetailPlaceholderBody(Card c) {
+        try {
+            if (detailScroll != null && detailCard != null && c != null && c.id != null && c.id.equals(detailCard.id)) {
+                detailScroll.removeAllViews();
+                LinearLayout nb = buildDetailSheetBody(c);
+                nb.setPadding(0, 0, 0, dp(this, 10) + navBarH());
+                detailScroll.addView(nb);
+                detailScroll.scrollTo(0, 0);
+            }
+        } catch (Throwable ignored) {}
+    }
+    void openPlaceholderColorPicker(final Card c) {
+        if (c == null || rootView == null) return;
+        closePlaceholderPicker();
+        final FrameLayout overlay = new FrameLayout(this);
+        View shade = new View(this);
+        shade.setBackgroundColor(Color.argb(102, 0, 0, 0));
+        shade.setAlpha(0f);
+        shade.setOnClickListener(v -> closePlaceholderPicker());
+        overlay.addView(shade, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        LinearLayout cardBox = new LinearLayout(this);
+        cardBox.setOrientation(LinearLayout.VERTICAL);
+        GradientDrawable cg = new GradientDrawable();
+        cg.setColor(Color.WHITE);
+        float rTop = dp(this, 22);
+        cg.setCornerRadii(new float[]{rTop, rTop, rTop, rTop, 0, 0, 0, 0});
+        cardBox.setBackground(cg);
+        if (Build.VERSION.SDK_INT >= 21) { cardBox.setElevation(dp(this, 24)); topSheetClip(cardBox, 22, this); }
+        cardBox.setOnClickListener(v -> {});
+        cardBox.setPadding(dp(this, 18), dp(this, 18), dp(this, 18), dp(this, 14) + navBarH());
+        cardBox.addView(tv(this, "卡面颜色", 17, Color.rgb(0x1C, 0x1C, 0x1E), true));
+        TextView sub = tv(this, c.name + " · 只改无图占位面，真卡图不受影响", 12.5f, Color.rgb(0x8E, 0x8E, 0x93), false);
+        LinearLayout.LayoutParams subLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        subLp.topMargin = dp(this, 4);
+        cardBox.addView(sub, subLp);
+        Integer curCustom = placeholderCustom.get(c.id);
+        int autoIdx = placeholderIdx(c.id);
+        for (int rowI = 0; rowI < 2; rowI++) {
+            LinearLayout row = new LinearLayout(this);
+            row.setOrientation(LinearLayout.HORIZONTAL);
+            LinearLayout.LayoutParams rlp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            rlp.topMargin = dp(this, 12);
+            cardBox.addView(row, rlp);
+            for (int colI = 0; colI < 5; colI++) {
+                final int idx = rowI * 5 + colI;
+                int[] pair = PLACEHOLDER_PALETTE[idx];
+                GradientDrawable sw = new GradientDrawable(GradientDrawable.Orientation.TL_BR,
+                    new int[]{Color.rgb(Color.red(pair[0]), Color.green(pair[0]), Color.blue(pair[0])), Color.rgb(Color.red(pair[1]), Color.green(pair[1]), Color.blue(pair[1]))});
+                sw.setCornerRadius(dp(this, 12));
+                boolean sel = curCustom != null && curCustom == idx;
+                boolean isAuto = curCustom == null && autoIdx == idx;
+                if (sel) sw.setStroke(dp(this, 3), Color.rgb(0x0A, 0x5C, 0xD6));
+                else if (isAuto) sw.setStroke(dp(this, 2), Color.argb(160, 10, 92, 214));
+                View cell = new View(this);
+                cell.setBackground(sw);
+                LinearLayout.LayoutParams clp = new LinearLayout.LayoutParams(0, dp(this, 48), 1f);
+                if (colI > 0) clp.leftMargin = dp(this, 8);
+                row.addView(cell, clp);
+                cell.setOnClickListener(v -> {
+                    haptic();
+                    placeholderCustom.put(c.id, idx);
+                    savePlaceholderCustom();
+                    placeholderDirty = true;
+                    closePlaceholderPicker();
+                    refreshDetailPlaceholderBody(c);
+                    showFloatToast("卡面颜色已保存");
+                });
+            }
+        }
+        TextView follow = tv(this, curCustom == null ? "当前跟随系统自动配色" : "跟随系统（清掉自选）", 14, Color.rgb(0x0A, 0x5C, 0xD6), true);
+        follow.setGravity(Gravity.CENTER);
+        follow.setPadding(0, dp(this, 12), 0, dp(this, 6));
+        LinearLayout.LayoutParams flp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        flp.topMargin = dp(this, 8);
+        cardBox.addView(follow, flp);
+        follow.setOnClickListener(v -> {
+            haptic();
+            placeholderCustom.remove(c.id);
+            savePlaceholderCustom();
+            placeholderDirty = true;
+            closePlaceholderPicker();
+            refreshDetailPlaceholderBody(c);
+            showFloatToast("已回到系统配色");
+        });
+        TextView cancel = tv(this, "取消", 14, Color.rgb(0x8E, 0x8E, 0x93), false);
+        cancel.setGravity(Gravity.CENTER);
+        cancel.setPadding(0, dp(this, 8), 0, dp(this, 4));
+        cardBox.addView(cancel);
+        cancel.setOnClickListener(v -> { haptic(); closePlaceholderPicker(); });
+        FrameLayout.LayoutParams clp2 = new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        clp2.gravity = Gravity.BOTTOM;
+        clp2.leftMargin = dp(this, 12); clp2.rightMargin = dp(this, 12);
+        FrameLayout wrap = new FrameLayout(this);
+        View glass = glassLayer(cardBox, 22, false);
+        topSheetClip(glass, 22, this);
+        wrap.addView(glass, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        wrap.addView(cardBox, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        overlay.addView(wrap, clp2);
+        rootView.addView(overlay, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        placeholderPickerView = overlay;
+        hideChrome();
         overlay.setAlpha(0f);
         overlay.animate().alpha(1f).setDuration(200).setInterpolator(ANIM_ENTER).start();
         shade.animate().alpha(1f).setDuration(200).setInterpolator(ANIM_ENTER).start();
@@ -6127,6 +6283,7 @@ public class MainActivity extends Activity {
             detailCard = null; detailClosing = false; detailFromWiz = false; detailEntryKey = null;
             restoreCurrentTabScroll();
             restoreChrome(); // Q12
+            if (placeholderDirty) { placeholderDirty = false; rebuildPages(); } // Q71：自选色落盘后刷新底层瓷砖
             // FIFO：关窗落定才开下一次点选的那张，不叠窗
             Card next = detailQueue.poll();
             if (next != null) openDetail(next, wasWiz && wizardOpen);
@@ -6364,7 +6521,9 @@ public class MainActivity extends Activity {
             LinearLayout.LayoutParams ilp = new LinearLayout.LayoutParams(imgW, imgH);
             ilp.gravity = Gravity.CENTER_HORIZONTAL;
             slide.addView(imgFrame, ilp);
-            if (b == null) { iv.setBackground(placeholderGradFor(c.id, cardR, this)); addOrgBadge(imgFrame, c.org, 1.5f); }
+            if (b == null) { iv.setBackground(placeholderGradFor(c.id, cardR, this)); addOrgBadge(imgFrame, c.org, 1.5f);
+                if (placeholderCustomEnabled) imgFrame.setOnLongClickListener(v -> { haptic(); openPlaceholderColorPicker(c); return true; });
+            }
             else {
                 // 第二层：位图级同半径切角（半径按位图/显示宽比换算）；副本失败回落源图时控件裁切仍保四角
                 float rScale = imgW > 0 ? (float) b.getWidth() / (float) imgW : 1f;
@@ -6444,6 +6603,22 @@ public class MainActivity extends Activity {
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
             mtlp.topMargin = dp(this, 10);
             bodyInner.addView(mineTagSec, mtlp);
+        }
+
+        // Q71：无真实卡面图时可自选占位底色（仅本机保存，真图卡不出现）
+        if (Img.get(this, c.image) == null) {
+            TextView colorBtn = tv(this, placeholderCustomEnabled ? "换卡面颜色 ›" : "换卡面颜色（先在设置开启自选） ›", 13.5f, Color.rgb(0x0A, 0x5C, 0xD6), true);
+            colorBtn.setBackground(rippleBg(Color.rgb(0xEE, 0xF4, 0xFB), 10));
+            colorBtn.setPadding(dp(this, 12), dp(this, 9), dp(this, 12), dp(this, 9));
+            colorBtn.setGravity(Gravity.CENTER);
+            LinearLayout.LayoutParams cbLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            cbLp.topMargin = dp(this, 10);
+            bodyInner.addView(colorBtn, cbLp);
+            colorBtn.setOnClickListener(v -> {
+                haptic();
+                if (!placeholderCustomEnabled) { showFloatToast("先在设置打开自选卡面配色"); return; }
+                openPlaceholderColorPicker(c);
+            });
         }
 
         // 学生推荐段（原样取记录里的 reason，不在详情侧改写）
@@ -11007,6 +11182,13 @@ public class MainActivity extends Activity {
         segRow(page, "界面大小", new String[][]{{"0.9","紧凑"},{"1","标准"},{"1.12","大号"}}, String.valueOf(uiScale), v -> {
             uiScale = Float.parseFloat(v); prefs.edit().putFloat("ui_scale", uiScale).apply(); haptic(); rebuildPages();
         });
+        // Q71 卡面配色：只管无真实卡面图的占位底色，与 Q72 全 App 主题/深色严格分开
+        segRow(page, "卡面配色", new String[][]{{"light","浅色柔光"},{"dark","深色沉稳"}}, placeholderStyle, v -> {
+            placeholderStyle = v; prefs.edit().putString("placeholder_style", v).apply(); haptic(); rebuildPages();
+        });
+        switchRow(page, "自选卡面配色", "开启后在无图卡详情里逐张换颜色；关闭用自动配色", placeholderCustomEnabled, on -> {
+            placeholderCustomEnabled = on; prefs.edit().putBoolean("placeholder_custom_enabled", on).apply(); haptic(); rebuildPages();
+        });
 
         sectionHead(page, "使用体验");
         switchRow(page, "高刷新率", "把刷新率拉到屏幕最高档（耗电略增）", prefs.getBoolean("high_refresh", false), on -> {
@@ -11221,6 +11403,7 @@ public class MainActivity extends Activity {
         if (welcomeOpen) { closeWelcome(); return; }
         if (changelogOpen) { closeChangelog(); return; }
         if (settingsLogOpen && "settings".equals(tab)) { settingsLogOpen = false; rebuildPages(); return; }
+        if (placeholderPickerView != null) { closePlaceholderPicker(); return; }
         if (customDetailSheet != null) { closeCustomDetail(); return; }
         if (detailCard != null) { closeDetail(); return; }
         if (filterSheet != null) { closeFilterSheet(); return; }
