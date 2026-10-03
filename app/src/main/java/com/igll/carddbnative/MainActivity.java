@@ -1610,7 +1610,7 @@ public class MainActivity extends Activity {
     // Q1 长按贴卡菜单（对照混合版 app.js openCardMenu/closeCardMenu 现行行为，删除 P-press 放大预览）：
     // 按住 450ms 触发；被按卡大小不变、原地 1:1 快照浮在轻暗遮罩上 + 2.5dp 蓝框 + 浮起阴影，其余内容被遮罩压暗；
     // 贴着被按卡浮出 224dp 小菜单（查看详情 / 添加到我的卡片 或 从我的卡片移除，细线图标禁用 emoji），菜单出现时底栏让开。
-    // 原生无 CSS backdrop 实时模糊，背景以 rgba(18,22,36,.14) 轻暗近似（混合版为 blur+轻暗）。
+    // Q11 起菜单下已垫冻结真模糊层；其余背景仍以 rgba(18,22,36,.14) 轻暗（混合版为 blur+轻暗）。
     class CardMenuTouch implements View.OnTouchListener {
         final View anchor;
         final Card card;
@@ -1873,7 +1873,7 @@ public class MainActivity extends Activity {
     }
 
     // ---------- 首页 ----------
-    // P2d：毛玻璃白悬浮搜索栏（圆角 + 淡描边 + 投影，半透近似混合版 backdrop blur）
+    // P2d/Q11：毛玻璃白悬浮搜索栏（圆角 + 淡描边 + 投影，Q11 起栏内垫 live 真模糊层，上为半透染色）
     GradientDrawable glassPillBg() {
         GradientDrawable g = new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
             new int[]{Color.argb(226, 255, 255, 255), Color.argb(204, 246, 247, 250)});
@@ -4732,7 +4732,7 @@ public class MainActivity extends Activity {
         aboutSheet = null; aboutSponsorBody = null; aboutSponsorArrow = null;
         if (sheet != null && sheet.getParent() != null) {
             View card = sheet instanceof ViewGroup && ((ViewGroup) sheet).getChildCount() > 1
-                ? ((ViewGroup) sheet).getChildAt(1) : null;
+                ? ((ViewGroup) sheet).getChildAt(((ViewGroup) sheet).getChildCount() - 1) : null; // Q11：玻璃层垫在窗下，窗体是最后一层
             if (card != null) {
                 card.animate().translationY(dp(this, 42)).alpha(0f)
                     .setDuration(180).setInterpolator(ANIM_ENTER)
