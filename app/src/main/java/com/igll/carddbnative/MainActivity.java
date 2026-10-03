@@ -289,14 +289,16 @@ public class MainActivity extends Activity {
         // Q23：与 Q3 悬浮钮同款玻璃底（glassFabBg + applyGlassFabShadow + live 玻璃层），对照混合版 .qf-top/.qf-btn
         // 同语言：44dp 圆钮、白色 .5 描边、深色细线箭头；玻璃模糊由 glassLayer 垫底。
         fab.setBackground(glassFabBg());
-        // Q34: solid white top FAB (sampling layer removed); opaque wash keeps icon contrast on any card.
+        fab.addView(glassLayer(fab, -1, true), new FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        // Q23 固定浅白染色托底（盖在模糊层之上、箭头之下）：对照混合版 .qf-top 的 background:rgba(255,255,255,.32)
         View wash = new View(this);
         wash.setClickable(false); wash.setFocusable(false);
         wash.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
         GradientDrawable washBg = new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
-            new int[]{Color.argb(255, 255, 255, 255), Color.argb(255, 248, 250, 255)});
+            new int[]{Color.argb(170, 255, 255, 255), Color.argb(156, 244, 248, 253)});
         washBg.setShape(GradientDrawable.OVAL);
-        washBg.setStroke(dp(this, 1), Color.argb(36, 20, 30, 60));
+        washBg.setStroke(dp(this, 1), Color.argb(140, 255, 255, 255));
         wash.setBackground(washBg);
         fab.addView(wash, new FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
@@ -572,7 +574,18 @@ public class MainActivity extends Activity {
             android.graphics.Matrix m = new android.graphics.Matrix();
             m.setTranslate(-left * s, -top * s);
             cv.drawBitmap(full, m, pt);
-            iv.setImageBitmap(out);
+            // Q37：live 面换帧交叉淡入 220ms（治用户 20:03 批的停稳硬跳色）——旧帧作底、新帧淡入，
+            // 不许 setImageBitmap 硬切；frozen 浮窗升起只 apply 一次、沿用直切。Q21 纪律：旧图只解引用不 recycle。
+            if ("live".equals(iv.getTag()) && iv.getDrawable() instanceof android.graphics.drawable.BitmapDrawable) {
+                android.graphics.drawable.BitmapDrawable nd = new android.graphics.drawable.BitmapDrawable(iv.getResources(), out);
+                android.graphics.drawable.TransitionDrawable td = new android.graphics.drawable.TransitionDrawable(
+                    new android.graphics.drawable.Drawable[]{ iv.getDrawable(), nd });
+                td.setCrossFadeEnabled(true);
+                iv.setImageDrawable(td);
+                td.startTransition(220);
+            } else {
+                iv.setImageBitmap(out);
+            }
             glassCrops.put(iv, out); // Q21：旧裁片只解引用不 recycle（黑匣子定案：显示列表在用时 recycle 必崩，见 noteGlassFailure）
             if (Build.VERSION.SDK_INT >= 31) {
                 // Q29：模糊 11→13、配合降采样快照呈彩色高斯柔糊；快照本身已 0.2 降采样，半径不许再堆到乳白糊墙，
@@ -590,15 +603,27 @@ public class MainActivity extends Activity {
     /** Q29：静态帧刷新——只在停稳/切页这两个时刻调用（底栏/悬浮钮/回顶/搜索胶囊共用一帧）；
      *  有浮窗在场时不刷，浮窗用的是各自升起时的冻结快照。 */
     void refreshLiveGlass() {
-        // Q34 (2026-10-03): dock/FABs/top/search capsules are solid white now; never sample.
-        mainHandler.removeCallbacks(glassRefreshTask);
-        return;
+        // Q37（推翻 Q34 纯白实底，用户 20:24–20:27 拍板回老图毛玻璃）：dock/悬浮钮/回顶/搜索胶囊改静态定格毛玻璃——
+        // 糊一帧定住、滚动中绝不调用本函数换帧；只在停稳（scheduleGlassRefresh 650ms 防抖跑完）与切页两个时刻更新，
+        // 换帧经 applyGlass 的 220ms 交叉淡入，不许硬跳色。浮窗在场不刷（浮窗用各自冻结帧）。
+        if (glassDisabled || glassCapturing || rootView == null || rootView.getWidth() <= 0) return;
+        // Q21 ③：底栏拖动/弹簧进行中不做整屏抓图——capture 是全树 draw，正是滑动发卡与 MOVE 被饿死的主因之一；落稳后防抖任务会补上最终帧。
+        if (navDragging || navSpringRunning) return;
+        if (cardMenuPop != null || filterSheet != null || wizardOpen || aboutOpen
+            || detailCard != null || welcomeOpen || changelogOpen) return;
+        captureGlassSnapshot();
+        for (ImageView iv : new java.util.ArrayList<>(glassViews)) {
+            if ("live".equals(iv.getTag()) && iv.isAttachedToWindow()) applyGlass(iv);
+        }
     }
 
     void scheduleGlassRefresh() {
-        // Q34: no capture/apply on scroll; cancel any pending static-frame task.
+        // Q37：滚动事件里绝不抓图——每次事件只重置防抖计时，滚动态势下计时永不跑完即滚动零采样；
+        // 静默停稳满 650ms 才补一帧静态毛玻璃（与 Q29 同路线、Q34 的空转已废）。
+        // Q21：底栏手势优先——拖动/弹簧期间连排队都免了，避免手势一结束就被积压的抓图任务堵住切页。
+        if (navDragging || navSpringRunning) return;
         mainHandler.removeCallbacks(glassRefreshTask);
-        return;
+        mainHandler.postDelayed(glassRefreshTask, 650);
     }
 
     // P5 空状态：对照混合版 .empty（居中、灰字、上下 36px 留白），包进白卡（圆角 14）不裸贴页面底
@@ -1493,20 +1518,23 @@ public class MainActivity extends Activity {
     }
 
     Drawable floatingBarBg() {
-        // Q34: fixed near-white solid (no sampling/tint over blur); thin edge + soft shadow via elevation.
+        // Q37：回老图毛玻璃染色——对照混合版 .dock-glass rgba(255,255,255,.58)+白色 .55 描边，均匀单色 argb 148 贴 .58；
+        // 真糊由 live 玻璃层（applyGlass blur 13+saturate 1.65）承担，此染色只作玻璃禁用时的半透兜底，不许再抢不透明度。
         GradientDrawable g = new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
-            new int[]{Color.argb(252, 255, 255, 255), Color.argb(250, 248, 250, 255)});
+            new int[]{Color.argb(148, 255, 255, 255), Color.argb(145, 248, 250, 255),
+                Color.argb(142, 238, 243, 250)});
         g.setCornerRadius(dp(this, 26));
-        g.setStroke(dp(this, 1), Color.argb(36, 20, 30, 60));
+        g.setStroke(dp(this, 1), Color.argb(140, 255, 255, 255));
         return g;
     }
 
     Drawable navPillBg() {
-        // Q34: solid light blue-grey indicator, clearly distinct from the solid dock.
-        GradientDrawable g = new GradientDrawable();
-        g.setColor(Color.rgb(0xE8, 0xF1, 0xFD));
+        // Q37：指示块染色同步回半透（对照混合版 .dock-pill rgba(255,255,255,.68) 均匀 argb 174）；透镜机制本身归 Q38。
+        GradientDrawable g = new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
+            new int[]{Color.argb(174, 255, 255, 255), Color.argb(170, 247, 250, 254),
+                Color.argb(166, 240, 245, 251)});
         g.setCornerRadius(dp(this, 18));
-        g.setStroke(dp(this, 1), Color.argb(28, 20, 30, 60));
+        g.setStroke(dp(this, 1), Color.argb(150, 255, 255, 255));
         return g;
     }
 
@@ -1600,7 +1628,8 @@ public class MainActivity extends Activity {
             navLabels.put(key, label);
             navRow.addView(item, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
         }
-        // Q34: dock is solid white; no live glass layer under navBar.
+        navWrap.addView(glassLayer(navWrap, 26, true), new FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         navWrap.addView(navBar, new FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
         root.addView(navWrap);
@@ -1778,11 +1807,12 @@ public class MainActivity extends Activity {
     // 底 rgba(255,255,255,.45)+blur28、描边 rgba(255,255,255,.55) 1dp、图标深色 #1C1C1E 细线 1.8/24 网格、svg 本体 22dp。
     // Q11 起钮内已垫真模糊快照层（见 glassLayer），此渐变只作半透染色盖在模糊上。
     Drawable glassFabBg() {
-        // Q34: fixed near-white solid oval (no glass sampling); thin edge, shadow via elevation.
-        GradientDrawable g = new GradientDrawable();
-        g.setColor(Color.argb(252, 255, 255, 255));
+        // Q37：回毛玻璃染色（对照混合版 .qf-btn rgba(255,255,255,.45) 量级 argb 118 半透），真糊由 live 玻璃层承担。
+        GradientDrawable g = new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
+            new int[]{Color.argb(118, 255, 255, 255), Color.argb(110, 248, 250, 255),
+                Color.argb(104, 232, 238, 246)});
         g.setShape(GradientDrawable.OVAL);
-        g.setStroke(dp(this, 1), Color.argb(36, 20, 30, 60));
+        g.setStroke(dp(this, 1), Color.argb(140, 255, 255, 255));
         return g;
     }
     void applyGlassFabShadow(View v) {
@@ -2004,7 +2034,8 @@ public class MainActivity extends Activity {
         fab.setClipToPadding(false);
         int n0 = activeFilterCount();
         fab.setBackground(glassFabBg());
-        // Q34: solid white FAB, no sampling layer.
+        fab.addView(glassLayer(fab, -1, true), new FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         applyGlassFabShadow(fab);
         FilterIconView icon = new FilterIconView(this);
         int pad = dp(this, 13); // 48 钮内 svg 本体 22dp：(48-22)/2
@@ -2042,7 +2073,8 @@ public class MainActivity extends Activity {
     View buildSearchFab() {
         FrameLayout fab = new FrameLayout(this);
         fab.setBackground(glassFabBg());
-        // Q34: solid white FAB, no sampling layer.
+        fab.addView(glassLayer(fab, -1, true), new FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         applyGlassFabShadow(fab);
         SearchIconView icon = new SearchIconView(this);
         int pad = dp(this, 13); // 48 钮内 svg 本体 22dp
@@ -2618,20 +2650,20 @@ public class MainActivity extends Activity {
     // ---------- 首页 ----------
     // P2d/Q11：毛玻璃白悬浮搜索栏（圆角 + 淡描边 + 投影，Q11 起栏内垫 live 真模糊层，上为半透染色）
     GradientDrawable glassPillBg() {
-        // Q34: fixed near-white solid pill (no sampling); thin edge.
-        GradientDrawable g = new GradientDrawable();
-        g.setColor(Color.argb(252, 255, 255, 255));
+        // Q37：回毛玻璃染色 argb 128/118（对照混合版 #search rgba .78+blur20 的通透下限取 Q18 校准值），真糊由 live 玻璃层承担。
+        GradientDrawable g = new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
+            new int[]{Color.argb(128, 255, 255, 255), Color.argb(118, 246, 247, 250)});
         g.setCornerRadius(dp(this, 999));
-        g.setStroke(dp(this, 1), Color.argb(36, 20, 30, 60));
+        g.setStroke(dp(this, 1), Color.argb(70, 20, 30, 60));
         return g;
     }
 
-    // Q34: float search capsule also solid white (was shallow glass).
+    // Q37: float search capsule back to shallow glass (mixed .float-search rgba(255,255,255,.85)+blur24 saturate1.7; Q29 thinned 176/166)
     GradientDrawable glassFloatBg() {
-        GradientDrawable g = new GradientDrawable();
-        g.setColor(Color.argb(252, 255, 255, 255));
+        GradientDrawable g = new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
+            new int[]{Color.argb(176, 255, 255, 255), Color.argb(166, 238, 245, 255)});
         g.setCornerRadius(dp(this, 999));
-        g.setStroke(dp(this, 1), Color.argb(36, 20, 30, 60));
+        g.setStroke(dp(this, 1), Color.argb(153, 255, 255, 255));
         return g;
     }
 
@@ -2733,7 +2765,8 @@ public class MainActivity extends Activity {
         FrameLayout inlineWrap = new FrameLayout(this);
         inlineWrap.setBackground(glassPillBg());
         if (Build.VERSION.SDK_INT >= 21) inlineWrap.setElevation(dp(this, 6));
-        // Q34: inline search capsule is solid white; no sampling layer.
+        inlineWrap.addView(glassLayer(inlineWrap, 28, true), new FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         LinearLayout inlineRow = new LinearLayout(this);
         inlineRow.setOrientation(LinearLayout.HORIZONTAL);
         inlineRow.setGravity(Gravity.CENTER_VERTICAL);
@@ -2790,7 +2823,8 @@ public class MainActivity extends Activity {
         FrameLayout floatWrap = new FrameLayout(this);
         floatWrap.setBackground(glassFloatBg());
         if (Build.VERSION.SDK_INT >= 21) floatWrap.setElevation(dp(this, 14));
-        // Q34: float search capsule is solid white; no sampling layer.
+        floatWrap.addView(glassLayer(floatWrap, 28, true), new FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         LinearLayout floatRow = new LinearLayout(this);
         floatRow.setOrientation(LinearLayout.HORIZONTAL);
         floatRow.setGravity(Gravity.CENTER_VERTICAL);
