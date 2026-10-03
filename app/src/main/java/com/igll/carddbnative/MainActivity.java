@@ -505,6 +505,65 @@ public class MainActivity extends Activity {
     java.util.Map<String, Integer> placeholderCustom = new java.util.HashMap<>();
     View placeholderPickerView = null;
     boolean placeholderDirty = false;
+    // Q72 外观：主题色与深色模式与卡面配色（Q71）严格分开、独立保存独立生效。
+    // dark_mode_pref: system(默认)/light/dark；theme_color_key: blue(默认)/teal/violet/green/orange。
+    // 只染界面强调元素（选中态/开关/链接/评分强调/底栏选中），绝不改卡面图与占位底色。
+    String darkModePref = "system";
+    String themeColorKey = "blue";
+    static final String[][] THEME_OPTS = {{"blue","蓝"},{"teal","青绿"},{"violet","紫"},{"green","翠绿"},{"orange","橙"}};
+    void loadAppearancePrefs() {
+        try {
+            darkModePref = prefs == null ? "system" : prefs.getString("dark_mode", "system");
+            if (!"light".equals(darkModePref) && !"dark".equals(darkModePref)) darkModePref = "system";
+            themeColorKey = prefs == null ? "blue" : prefs.getString("theme_color", "blue");
+            boolean ok = false;
+            for (String[] o : THEME_OPTS) if (o[0].equals(themeColorKey)) ok = true;
+            if (!ok) themeColorKey = "blue";
+        } catch (Throwable ignored) { darkModePref = "system"; themeColorKey = "blue"; }
+    }
+    boolean darkEff() {
+        if ("dark".equals(darkModePref)) return true;
+        if ("light".equals(darkModePref)) return false;
+        try {
+            int m = getResources().getConfiguration().uiMode & android.content.res.Configuration.UI_MODE_NIGHT_MASK;
+            return m == android.content.res.Configuration.UI_MODE_NIGHT_YES;
+        } catch (Throwable ignored) { return false; }
+    }
+    // 强调色：深色档同色相降饱和、提明度保对比（Q72 参数口径）
+    int accentColor() {
+        boolean d = darkEff();
+        switch (themeColorKey) {
+            case "teal": return d ? Color.rgb(0x5E,0xC8,0xB4) : Color.rgb(0x0E,0x7C,0x7B);
+            case "violet": return d ? Color.rgb(0xB3,0x9D,0xDB) : Color.rgb(0x6C,0x4B,0xD8);
+            case "green": return d ? Color.rgb(0x7E,0xD6,0x9B) : Color.rgb(0x1D,0x8A,0x49);
+            case "orange": return d ? Color.rgb(0xFF,0xB2,0x6B) : Color.rgb(0xC7,0x5A,0x00);
+            default: return d ? Color.rgb(0x6E,0xB3,0xFF) : Color.rgb(0x0A,0x5C,0xD6);
+        }
+    }
+    int accentSoftBg() {
+        return darkEff() ? Color.argb(56, Color.red(accentColor()), Color.green(accentColor()), Color.blue(accentColor()))
+                         : Color.rgb(0xE8,0xF1,0xFD);
+    }
+    // 语义色板（Q72）：底/面/浮层/主字/次字/禁用/边线，深浅两套，禁止各页再硬编码白底黑字时优先走这里
+    int colBg() { return darkEff() ? Color.rgb(0x12,0x12,0x12) : Color.rgb(0xF2,0xF3,0xF7); }
+    int colSurface() { return darkEff() ? Color.rgb(0x1E,0x1E,0x1E) : Color.WHITE; }
+    int colSheet() { return darkEff() ? Color.rgb(0x23,0x23,0x23) : Color.WHITE; }
+    int colText() { return darkEff() ? Color.argb(222,255,255,255) : Color.rgb(0x1C,0x1C,0x1E); }
+    int colText2() { return darkEff() ? Color.argb(153,255,255,255) : Color.rgb(0x8E,0x8E,0x93); }
+    int colText3() { return darkEff() ? Color.argb(97,255,255,255) : Color.rgb(0xAE,0xAE,0xB2); }
+    int colDivider() { return darkEff() ? Color.argb(26,255,255,255) : Color.argb(13,20,30,60); }
+    int colChipOff() { return darkEff() ? Color.rgb(0x2A,0x2A,0x2E) : Color.rgb(0xEE,0xF1,0xF6); }
+    // 切深色先套色再显页：根底色与状态/导航栏图标明暗在建页前就定，不许闪白
+    void applyAppearanceChrome() {
+        try {
+            if (rootView != null) rootView.setBackgroundColor(colBg());
+            Window w = getWindow();
+            int flags = w.getDecorView().getSystemUiVisibility();
+            if (darkEff()) flags &= ~(View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR | View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR);
+            else flags |= View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR | View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR;
+            w.getDecorView().setSystemUiVisibility(flags);
+        } catch (Throwable ignored) {}
+    }
     void loadPlaceholderPrefs() {
         try {
             placeholderStyle = prefs == null ? "light" : prefs.getString("placeholder_style", "light");
@@ -1066,9 +1125,9 @@ public class MainActivity extends Activity {
     View emptyState(String s) {
         LinearLayout box = new LinearLayout(this);
         box.setOrientation(LinearLayout.VERTICAL);
-        box.setBackground(roundRect(Color.WHITE, 14, this));
+        box.setBackground(roundRect(colSurface(), 14, this));
         box.setPadding(dp(this, 20), dp(this, 32), dp(this, 20), dp(this, 32));
-        TextView t = tv(this, s, 13.5f, Color.rgb(0x8E, 0x8E, 0x93), false);
+        TextView t = tv(this, s, 13.5f, colText2(), false);
         t.setGravity(android.view.Gravity.CENTER);
         t.setLineSpacing(dp(this, 3), 1f);
         box.addView(t, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
@@ -2093,6 +2152,7 @@ public class MainActivity extends Activity {
         else hapticLevel = prefs.getBoolean("haptic", true) ? 2 : 0; // 旧开关迁移：开→中档
         if (hapticLevel < 0 || hapticLevel > 3) hapticLevel = 2;
         loadPlaceholderPrefs(); // Q71
+        loadAppearancePrefs(); // Q72
         applyHighRefresh();
         try { mine = new HashSet<>(prefs.getStringSet("mine_ids", new HashSet<String>())); } catch (Exception e) { mine = new HashSet<>(); }
         sortMode = prefs.getString("sort_mode", null);
@@ -2109,7 +2169,7 @@ public class MainActivity extends Activity {
 
         FrameLayout root = new FrameLayout(this);
         rootView = root;
-        root.setBackgroundColor(Color.rgb(0xF2, 0xF3, 0xF7));
+        root.setBackgroundColor(colBg()); // Q72
 
         content = new FrameLayout(this);
         // P1b 浮感修正：内容区不再留底部硬白边，各页滚动视图全高延伸到悬浮条底下，
@@ -2119,6 +2179,7 @@ public class MainActivity extends Activity {
         root.addView(content, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         buildNav(root);
         setContentView(root);
+        applyAppearanceChrome(); // Q72：先套色再显页，切深色不闪白
         // Q29：滚动只重置停稳计时、滚动中零截图（scheduleGlassRefresh 内 650ms 防抖，见其注释）
         // Q41：滚动期条带平移跟随（只 Canvas 绘制、不重采样，与停稳计时互不干扰）
         root.getViewTreeObserver().addOnScrollChangedListener(() -> { scheduleGlassRefresh(); followBandScroll(); });
@@ -2738,7 +2799,7 @@ public class MainActivity extends Activity {
             p.setStrokeJoin(Paint.Join.ROUND);
             p.setStrokeWidth(dp(getContext(), 1.7f));
             // Q4：未选色对照混合版 .dock-glass button 的 #3A3A3C（旧 #636366 在亮玻璃+花背景上发飘读不清），选中仍 #1C1C1E
-            p.setColor(on ? Color.rgb(0x1C, 0x1C, 0x1E) : Color.rgb(0x3A, 0x3A, 0x3C));
+            p.setColor(on ? ((MainActivity) getContext()).navOnColor() : ((MainActivity) getContext()).navOffColor());
             float w = getWidth(), h = getHeight();
             float sx = w / 24f, sy = h / 24f;
             // 在 24x24 网格上画，坐标随控件尺寸缩放
@@ -2795,9 +2856,17 @@ public class MainActivity extends Activity {
     }
 
     Drawable floatingBarBg() {
-        // Q37：回老图毛玻璃染色——对照混合版 .dock-glass rgba(255,255,255,.58)+白色 .55 描边，均匀单色 argb 148 贴 .58；
-        // 真糊由 live 玻璃层（applyGlass blur 13+saturate 1.65）承担，此染色只作玻璃禁用时的半透兜底，不许再抢不透明度。
-        GradientDrawable g = new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
+        // Q37 浅色毛玻璃染色 + Q72 深色档：深色下换深色半透底+白 10% 描边，玻璃层口径不变
+        GradientDrawable g;
+        if (darkEff()) {
+            g = new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
+                new int[]{Color.argb(168, 35, 35, 38), Color.argb(162, 30, 30, 33),
+                    Color.argb(158, 28, 28, 30)});
+            g.setCornerRadius(dp(this, 26));
+            g.setStroke(dp(this, 1), Color.argb(31, 255, 255, 255));
+            return g;
+        }
+        g = new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
             new int[]{Color.argb(148, 255, 255, 255), Color.argb(145, 248, 250, 255),
                 Color.argb(142, 238, 243, 250)});
         g.setCornerRadius(dp(this, 26));
@@ -2806,8 +2875,17 @@ public class MainActivity extends Activity {
     }
 
     Drawable navPillBg() {
-        // Q37：指示块染色同步回半透（对照混合版 .dock-pill rgba(255,255,255,.68) 均匀 argb 174）；透镜机制本身归 Q38。
-        GradientDrawable g = new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
+        // Q37 浅色半透 + Q72 深色档（深色下提亮一档与 dock 底分层，透镜机制归 Q38）
+        GradientDrawable g;
+        if (darkEff()) {
+            g = new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
+                new int[]{Color.argb(120, 255, 255, 255), Color.argb(112, 245, 248, 252),
+                    Color.argb(108, 238, 243, 250)});
+            g.setCornerRadius(dp(this, 18));
+            g.setStroke(dp(this, 1), Color.argb(46, 255, 255, 255));
+            return g;
+        }
+        g = new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
             new int[]{Color.argb(174, 255, 255, 255), Color.argb(170, 247, 250, 254),
                 Color.argb(166, 240, 245, 251)});
         g.setCornerRadius(dp(this, 18));
@@ -2874,7 +2952,7 @@ public class MainActivity extends Activity {
             item.setBackground(null); // selection shown by the liquid indicator, not per-item pill
             NavIconView icon = new NavIconView(this, key);
             item.addView(icon, new LinearLayout.LayoutParams(dp(this, 23), dp(this, 23)));
-            TextView label = tv(this, t[1], 10f, Color.rgb(0x3A, 0x3A, 0x3C), false);
+            TextView label = tv(this, t[1], 10f, navOffColor(), false);
             label.setGravity(Gravity.CENTER);
             LinearLayout.LayoutParams llp = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
@@ -2943,6 +3021,9 @@ public class MainActivity extends Activity {
     // like the mixed version's button.on (color #1C1C1E + font-weight 700; its svg strokes use currentColor,
     // so icon and label tint together). Fires only on discrete tab crossings; lens motion itself stays
     // pure drawing-layer (translation/scale/alpha), no layout passes per frame.
+    // Q72：底栏未选/选中字色随深浅走语义色（深色下未选为 60% 白、选中为强调色前景深字面上的主字）
+    int navOffColor() { return darkEff() ? Color.argb(153,255,255,255) : Color.rgb(0x3A,0x3A,0x3C); }
+    int navOnColor() { return darkEff() ? Color.argb(235,255,255,255) : Color.rgb(0x1C,0x1C,0x1E); }
     void tintNavTo(int idx) {
         if (idx < 0 || idx >= navOrder.size()) return;
         navTintIdx = idx;
@@ -2953,7 +3034,7 @@ public class MainActivity extends Activity {
             if (ic != null) ic.setOn(on);
             TextView lb = navLabels.get(e.getKey());
             if (lb != null) {
-                lb.setTextColor(on ? Color.rgb(0x1C, 0x1C, 0x1E) : Color.rgb(0x3A, 0x3A, 0x3C));
+                lb.setTextColor(on ? navOnColor() : navOffColor());
                 android.graphics.Typeface cur = lb.getTypeface();
                 if (cur != null) lb.setTypeface(cur, on ? android.graphics.Typeface.BOLD : android.graphics.Typeface.NORMAL);
             }
@@ -3134,7 +3215,7 @@ public class MainActivity extends Activity {
             if (ic != null) ic.setOn(on);
             TextView lb = navLabels.get(e.getKey());
             if (lb != null) {
-                lb.setTextColor(on ? Color.rgb(0x1C, 0x1C, 0x1E) : Color.rgb(0x3A, 0x3A, 0x3C));
+                lb.setTextColor(on ? navOnColor() : navOffColor());
                 android.graphics.Typeface cur = lb.getTypeface();
                 if (cur != null) lb.setTypeface(cur, on ? android.graphics.Typeface.BOLD : android.graphics.Typeface.NORMAL);
             }
@@ -3959,7 +4040,7 @@ public class MainActivity extends Activity {
         // Q33：瓷砖圆角随图宽缩放（图宽 4% 量级），且不低于原固定 14dp——只许更圆润不许回退变尖；
         // 顶图 cover 铺满不变（Q24 优先级：铺满第一、圆角第二），四角靠外框同半径裁切、无图占位同半径。
         float tileR = Math.max(14f, cardRadiusDp(tileW / getResources().getDisplayMetrics().density));
-        box.setBackground(rippleBg(Color.WHITE, tileR));
+        box.setBackground(rippleBg(colSurface(), tileR));
         roundClip(box, tileR, this);
         int imgH = Math.max(dp(this, 40), Math.round(tileW / 1.586f));
         FrameLayout art = new FrameLayout(this);
@@ -3970,20 +4051,20 @@ public class MainActivity extends Activity {
         iv.setBackground(placeholderGradFor(c.id, 0, this));
         art.addView(iv, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         Bitmap b = Img.get(this, c.image);
-        if (b != null) iv.setImageBitmap(b); else { iv.setImageBitmap(null); addOrgBadge(art, c.org, 1f); }
+        if (b != null) { iv.setImageBitmap(b); if (darkEff()) iv.setAlpha(0.90f); } else { iv.setImageBitmap(null); addOrgBadge(art, c.org, 1f); }
 
         LinearLayout body = new LinearLayout(this);
         body.setOrientation(LinearLayout.VERTICAL);
         body.setPadding(dp(this, 8), dp(this, 7), dp(this, 8), dp(this, 10));
         box.addView(body, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
 
-        TextView name = tv(this, c.name, 13, Color.rgb(0x1C, 0x1C, 0x1E), true);
+        TextView name = tv(this, c.name, 13, colText(), true);
         name.setMaxLines(2);
         name.setMinLines(2);
         name.setEllipsize(android.text.TextUtils.TruncateAt.END);
         body.addView(name, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
 
-        TextView sub = tv(this, c.bank + " · " + orgLabel(c.org) + (c.isCredit() ? " · 信用卡" : ""), 10.5f, Color.rgb(0x8E, 0x8E, 0x93), false);
+        TextView sub = tv(this, c.bank + " · " + orgLabel(c.org) + (c.isCredit() ? " · 信用卡" : ""), 10.5f, colText2(), false);
         sub.setMaxLines(1);
         sub.setEllipsize(android.text.TextUtils.TruncateAt.END);
         body.addView(sub);
@@ -4000,7 +4081,7 @@ public class MainActivity extends Activity {
             chips.addView(chip(c.hasScore ? String.format(java.util.Locale.US, "总分 %.1f", c.score) : "总分待评分",
                 Color.rgb(0xEE, 0xF0, 0xF3), Color.rgb(0x63, 0x63, 0x66), chipSp));
         } else {
-            chips.addView(chip(String.format(java.util.Locale.US, "%.1f分", c.score), Color.rgb(0xE8, 0xF1, 0xFD), Color.rgb(0x0A, 0x5C, 0xD6), chipSp));
+            chips.addView(chip(String.format(java.util.Locale.US, "%.1f分", c.score), accentSoftBg(), accentColor(), chipSp));
         }
         chips.addView(chip("已停发".equals(c.status) ? "已停发" : "在发",
             "已停发".equals(c.status) ? Color.rgb(0xF3, 0xE8, 0xE8) : Color.rgb(0xE6, 0xF6, 0xEC),
@@ -10916,7 +10997,7 @@ public class MainActivity extends Activity {
     View buildChangelogPage() {
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
-        root.setBackgroundColor(Color.rgb(0xF2, 0xF3, 0xF7));
+        root.setBackgroundColor(colBg()); // Q72
 
         LinearLayout head = new LinearLayout(this);
         head.setOrientation(LinearLayout.HORIZONTAL);
@@ -11164,6 +11245,19 @@ public class MainActivity extends Activity {
         wizEntry.setOnClickListener(v -> { haptic(); openWizard(); });
         page.addView(wizEntry);
 
+        // Q72 外观分区：深色模式/主题色/卡面配色三件事各管各、互不染指（卡面配色只管无图占位底色）
+        sectionHead(page, "外观");
+        segRow(page, "深色模式", new String[][]{{"system","跟随系统"},{"light","浅色"},{"dark","深色"}}, darkModePref, v -> {
+            darkModePref = v; prefs.edit().putString("dark_mode", v).apply(); haptic(); applyAppearanceChrome(); rebuildPages();
+        });
+        themeColorRow(page);
+        segRow(page, "卡面配色", new String[][]{{"light","浅色柔光"},{"dark","深色沉稳"}}, placeholderStyle, v -> {
+            placeholderStyle = v; prefs.edit().putString("placeholder_style", v).apply(); haptic(); rebuildPages();
+        });
+        switchRow(page, "自选卡面配色", "开启后在无图卡详情里逐张换颜色；关闭用自动配色", placeholderCustomEnabled, on -> {
+            placeholderCustomEnabled = on; prefs.edit().putBoolean("placeholder_custom_enabled", on).apply(); haptic(); rebuildPages();
+        });
+
         sectionHead(page, "显示");
         segRow(page, "字体", new String[][]{{"builtin","软件字体"},{"system","系统字体"},{"custom","自定义"}}, fontMode, v -> {
             if ("custom".equals(v) && !hasCustomFont(this)) { haptic(); showFloatToast("先导入一个字体文件再用自定义"); openFontPicker(); return; }
@@ -11182,14 +11276,6 @@ public class MainActivity extends Activity {
         segRow(page, "界面大小", new String[][]{{"0.9","紧凑"},{"1","标准"},{"1.12","大号"}}, String.valueOf(uiScale), v -> {
             uiScale = Float.parseFloat(v); prefs.edit().putFloat("ui_scale", uiScale).apply(); haptic(); rebuildPages();
         });
-        // Q71 卡面配色：只管无真实卡面图的占位底色，与 Q72 全 App 主题/深色严格分开
-        segRow(page, "卡面配色", new String[][]{{"light","浅色柔光"},{"dark","深色沉稳"}}, placeholderStyle, v -> {
-            placeholderStyle = v; prefs.edit().putString("placeholder_style", v).apply(); haptic(); rebuildPages();
-        });
-        switchRow(page, "自选卡面配色", "开启后在无图卡详情里逐张换颜色；关闭用自动配色", placeholderCustomEnabled, on -> {
-            placeholderCustomEnabled = on; prefs.edit().putBoolean("placeholder_custom_enabled", on).apply(); haptic(); rebuildPages();
-        });
-
         sectionHead(page, "使用体验");
         switchRow(page, "高刷新率", "把刷新率拉到屏幕最高档（耗电略增）", prefs.getBoolean("high_refresh", false), on -> {
             prefs.edit().putBoolean("high_refresh", on).apply(); haptic(); applyHighRefresh(); rebuildPages();
@@ -11289,7 +11375,7 @@ public class MainActivity extends Activity {
 
     void sectionHead(LinearLayout page, String s) {
         // Q39: .set-cap .76rem/600/.02em；.set-t .98rem/600、.set-d .76rem 行高1.4
-        TextView t = tvW(this, s, 12, Color.rgb(0x8E, 0x8E, 0x93), 600);
+        TextView t = tvW(this, s, 12, colText2(), 600);
         t.setLetterSpacing(0.02f);
         LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         lp.topMargin = dp(this, 16); lp.leftMargin = dp(this, 2);
@@ -11311,16 +11397,72 @@ public class MainActivity extends Activity {
         }
     }
 
-    // 三档单选行：白卡里横排，选中蓝底（与筛选面板 chipRow 同风格）
-    void segRow(LinearLayout page, String label, String[][] opts, String cur, final SegPick pick) {
+    // Q72 主题色：五枚预置强调色圆点，选中外环为当前强调色；只染界面强调，不碰卡面/占位
+    void themeColorRow(LinearLayout page) {
         LinearLayout box = new LinearLayout(this);
         box.setOrientation(LinearLayout.VERTICAL);
-        box.setBackground(roundRect(Color.WHITE, 12, this));
+        box.setBackground(roundRect(colSurface(), 12, this));
         box.setPadding(dp(this, 14), dp(this, 10), dp(this, 14), dp(this, 12));
         LinearLayout.LayoutParams blp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         blp.topMargin = dp(this, 8);
         box.setLayoutParams(blp);
-        box.addView(tv(this, label, 14, Color.rgb(0x1C, 0x1C, 0x1E), true));
+        box.addView(tv(this, "主题色", 14, colText(), true));
+        box.addView(tv(this, "只改选中态、开关、链接与强调色，不改卡面颜色", 11.5f, colText2(), false));
+        LinearLayout row = new LinearLayout(this);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        LinearLayout.LayoutParams rlp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        rlp.topMargin = dp(this, 10);
+        box.addView(row, rlp);
+        // swatch colors shown are the light-mode accents (dark variants derive from accentColor())
+        final int[] sw = {Color.rgb(0x0A,0x5C,0xD6), Color.rgb(0x0E,0x7C,0x7B), Color.rgb(0x6C,0x4B,0xD8), Color.rgb(0x1D,0x8A,0x49), Color.rgb(0xC7,0x5A,0x00)};
+        for (int i = 0; i < THEME_OPTS.length; i++) {
+            final String key = THEME_OPTS[i][0];
+            final boolean on = key.equals(themeColorKey);
+            LinearLayout cell = new LinearLayout(this);
+            cell.setOrientation(LinearLayout.VERTICAL);
+            cell.setGravity(Gravity.CENTER_HORIZONTAL);
+            FrameLayout dotWrap = new FrameLayout(this);
+            View dot = new View(this);
+            GradientDrawable dg = new GradientDrawable();
+            dg.setShape(GradientDrawable.OVAL);
+            dg.setColor(sw[i]);
+            if (on) dg.setStroke(dp(this, 2), accentColor());
+            dot.setBackground(dg);
+            dotWrap.addView(dot, new FrameLayout.LayoutParams(dp(this, 30), dp(this, 30), Gravity.CENTER));
+            if (on) {
+                GradientDrawable ring = new GradientDrawable();
+                ring.setShape(GradientDrawable.OVAL);
+                ring.setColor(Color.TRANSPARENT);
+                ring.setStroke(dp(this, 2), accentColor());
+                FrameLayout ringV = new FrameLayout(this);
+                ringV.setBackground(ring);
+                dotWrap.addView(ringV, new FrameLayout.LayoutParams(dp(this, 38), dp(this, 38), Gravity.CENTER));
+            }
+            cell.addView(dotWrap, new LinearLayout.LayoutParams(dp(this, 38), dp(this, 38)));
+            TextView nm = tv(this, THEME_OPTS[i][1], 11, on ? accentColor() : colText2(), on);
+            nm.setGravity(Gravity.CENTER);
+            LinearLayout.LayoutParams nlp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            nlp.topMargin = dp(this, 3);
+            cell.addView(nm, nlp);
+            LinearLayout.LayoutParams clp2 = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+            row.addView(cell, clp2);
+            cell.setOnClickListener(v -> {
+                themeColorKey = key; prefs.edit().putString("theme_color", key).apply(); haptic(); rebuildPages();
+            });
+        }
+        page.addView(box);
+    }
+
+    // 三档单选行：白卡里横排，选中蓝底（与筛选面板 chipRow 同风格）
+    void segRow(LinearLayout page, String label, String[][] opts, String cur, final SegPick pick) {
+        LinearLayout box = new LinearLayout(this);
+        box.setOrientation(LinearLayout.VERTICAL);
+        box.setBackground(roundRect(colSurface(), 12, this));
+        box.setPadding(dp(this, 14), dp(this, 10), dp(this, 14), dp(this, 12));
+        LinearLayout.LayoutParams blp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        blp.topMargin = dp(this, 8);
+        box.setLayoutParams(blp);
+        box.addView(tv(this, label, 14, colText(), true));
         LinearLayout row = new LinearLayout(this);
         row.setOrientation(LinearLayout.HORIZONTAL);
         LinearLayout.LayoutParams rlp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
@@ -11328,9 +11470,9 @@ public class MainActivity extends Activity {
         box.addView(row, rlp);
         for (final String[] o : opts) {
             final boolean on = segOn(o[0], cur);
-            TextView t = tv(this, o[1], 12.5f, on ? Color.WHITE : Color.rgb(0x1C, 0x1C, 0x1E), on);
+            TextView t = tv(this, o[1], 12.5f, on ? Color.WHITE : colText(), on);
             t.setGravity(Gravity.CENTER);
-            t.setBackground(roundRect(on ? Color.rgb(0x0A, 0x5C, 0xD6) : Color.rgb(0xEE, 0xF1, 0xF6), 9, this));
+            t.setBackground(roundRect(on ? accentColor() : colChipOff(), 9, this));
             t.setPadding(dp(this, 4), dp(this, 8), dp(this, 4), dp(this, 8));
             LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
             lp.rightMargin = dp(this, 8);
@@ -11347,7 +11489,7 @@ public class MainActivity extends Activity {
         LinearLayout row = new LinearLayout(this);
         row.setOrientation(LinearLayout.HORIZONTAL);
         row.setGravity(Gravity.CENTER_VERTICAL);
-        row.setBackground(rippleBg(Color.WHITE, 12));
+        row.setBackground(rippleBg(colSurface(), 12));
         row.setClipToOutline(true);
         row.setPadding(dp(this, 14), dp(this, 10), dp(this, 12), dp(this, 10));
         LinearLayout.LayoutParams rlp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
@@ -11355,12 +11497,12 @@ public class MainActivity extends Activity {
         row.setLayoutParams(rlp);
         LinearLayout txt = new LinearLayout(this);
         txt.setOrientation(LinearLayout.VERTICAL);
-        txt.addView(tv(this, label, 14, Color.rgb(0x1C, 0x1C, 0x1E), true));
-        txt.addView(tv(this, desc, 11.5f, Color.rgb(0x8E, 0x8E, 0x93), false));
+        txt.addView(tv(this, label, 14, colText(), true));
+        txt.addView(tv(this, desc, 11.5f, colText2(), false));
         row.addView(txt, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
-        TextView sw = tv(this, on ? "开" : "关", 12.5f, on ? Color.WHITE : Color.rgb(0x8E, 0x8E, 0x93), true);
+        TextView sw = tv(this, on ? "开" : "关", 12.5f, on ? Color.WHITE : colText2(), true);
         sw.setGravity(Gravity.CENTER);
-        sw.setBackground(roundRect(on ? Color.rgb(0x0A, 0x5C, 0xD6) : Color.rgb(0xEE, 0xF1, 0xF6), 999, this));
+        sw.setBackground(roundRect(on ? accentColor() : colChipOff(), 999, this));
         sw.setPadding(dp(this, 16), dp(this, 7), dp(this, 16), dp(this, 7));
         row.addView(sw);
         row.setOnClickListener(v -> set.onSet(!on));
@@ -11370,14 +11512,14 @@ public class MainActivity extends Activity {
     View settingRow(String k, String v) {
         LinearLayout row = new LinearLayout(this);
         row.setOrientation(LinearLayout.VERTICAL);
-        row.setBackground(rippleBg(Color.WHITE, 12));
+        row.setBackground(rippleBg(colSurface(), 12));
         row.setClipToOutline(true);
         row.setPadding(dp(this, 14), dp(this, 10), dp(this, 14), dp(this, 10));
         LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         lp.topMargin = dp(this, 8);
         row.setLayoutParams(lp);
-        row.addView(tvW(this, k, 15, Color.rgb(0x1C, 0x1C, 0x1E), 600));
-        TextView sv2 = tv(this, v, 12, Color.rgb(0x8E, 0x8E, 0x93), false); bodyLH(sv2);
+        row.addView(tvW(this, k, 15, colText(), 600));
+        TextView sv2 = tv(this, v, 12, colText2(), false); bodyLH(sv2);
         row.addView(sv2);
         return row;
     }
@@ -11387,7 +11529,7 @@ public class MainActivity extends Activity {
         page.setOrientation(LinearLayout.VERTICAL);
         page.setPadding(dp(this, 14), pageTopPad(), dp(this, 14), 0);
         // Q39: .page-title 1.4rem/800/.02em、行高收紧
-        TextView pt = tvW(this, title, 24, Color.rgb(0x1C, 0x1C, 0x1E), 800);
+        TextView pt = tvW(this, title, 24, colText(), 800);
         pt.setLetterSpacing(0.02f); pt.setLineSpacing(0, 1.15f);
         page.addView(pt);
         return page;
