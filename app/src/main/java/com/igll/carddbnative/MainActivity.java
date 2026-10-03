@@ -47,6 +47,7 @@ import android.widget.FrameLayout;
 import android.widget.GridView;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
+import android.widget.HorizontalScrollView;
 import android.widget.ScrollView;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -137,7 +138,7 @@ public class MainActivity extends Activity {
     // P-scroll：当前长列表（回顶钮指向它）——详情/更新日志为覆盖层时优先于底下主页
     ScrollView activeLongScroll() {
         if (changelogOpen && changelogScroll != null) return changelogScroll;
-        if (detailView != null && detailView instanceof ScrollView) return (ScrollView) detailView;
+        if (detailScroll != null && detailCard != null) return detailScroll;
         switch (tab) {
             case "mine": return mineScrollView;
             case "student": return studentScroll;
@@ -589,6 +590,7 @@ public class MainActivity extends Activity {
         boolean hasScore;
         boolean studentPick;
         int studentOrder;
+        String studentReason;
         String spec(String key) {
             if (specs == null) return "";
             String v = specs.optString(key, "");
@@ -632,6 +634,7 @@ public class MainActivity extends Activity {
                     JSONObject sp = o.optJSONObject("student_pick");
                     cd.studentPick = sp != null;
                     cd.studentOrder = sp != null ? sp.optInt("order", 999) : 999;
+                    cd.studentReason = sp != null ? sp.optString("reason", "") : "";
                     tmp.add(cd); tmpBy.put(cd.id, cd);
                 }
                 all = tmp; byId = tmpBy;
@@ -872,7 +875,18 @@ public class MainActivity extends Activity {
     long lastDragEndAt = 0;
     String tab = "home";
     Card detailCard = null;
-    View detailView = null; // P4：详情页根视图（滑入/滑出动画用）
+    View detailView = null; // Q6：详情贴底浮窗根（遮罩+窗体+关闭字形），底层页面不切走
+    View detailSheetWrap = null;
+    View detailShade = null;
+    View detailCloseGlyph = null;
+    ScrollView detailScroll = null;
+    boolean detailClosing = false;
+    int detailVariantIdx = 0;
+    TextView detailBinView = null;
+    LinearLayout detailVerInfoBox = null;
+    java.util.List<View> detailDots = new java.util.ArrayList<>();
+    Button detailMineBtn = null;
+    final java.util.ArrayDeque<Card> detailQueue = new java.util.ArrayDeque<>();
 
     // 情景选卡状态（Phase 3a，对照 app.js 的 wiz 全局状态）
     boolean wizardOpen = false;
@@ -3442,195 +3456,425 @@ public class MainActivity extends Activity {
         return row;
     }
 
-    // ---------- 详情页 ----------
+    // ---------- 详情页（Q6 贴底浮窗，对照混合版 .panel/.backdrop/.p-*） ----------
+    // 底层页面不切走、不重绑：浮窗盖在现页之上，关窗回原页原滚动位；遮罩 rgba(0,0,0,.4)、
+    // 窗体贴底全宽、顶圆 20dp、最高 88vh、内滚、底内边 20dp；关闭字形 48dp 触控框内嵌 34dp
+    // 半透圆，右上 -4dp 微出窗外，升起时与窗同行、收窗时先冻结在原位、最后与遮罩一同淡出。
     void openDetail(Card c) { openDetail(c, false); }
 
     void openDetail(Card c, boolean fromWiz) {
+        if (c == null) return;
+        if (detailCard != null || detailClosing) { detailQueue.add(c); return; } // 连点排队 FIFO，关一开一下一张
         dismissCardMenu();
-        if (!fromWiz) captureCurrentPageScroll(); // P-keepscroll：关详情后回到打开前的位置
+        if (!fromWiz) captureCurrentPageScroll();
         detailFromWiz = fromWiz;
         detailCard = c;
-        content.removeAllViews();
-        navBar.setVisibility(View.GONE);
-        View dv = buildDetailPage(c);
-        detailView = dv;
-        content.addView(dv);
-        syncTopFab();
-        // P4：详情页从右侧轻滑入 + 淡入（260ms 减速）
-        dv.setAlpha(0f);
-        dv.setTranslationX(dp(this, 48));
-        dv.animate().alpha(1f).translationX(0f)
-            .setDuration(260).setInterpolator(ANIM_EXIT).start();
-    }
+        detailClosing = false;
+        detailVariantIdx = 0;
+        if (navWrap != null) navWrap.setVisibility(View.GONE);
 
-    void closeDetail() {
-        final View dv = detailView;
-        detailView = null;
-        final boolean[] done = {false};
-        Runnable finish = () -> {
-            if (done[0]) return; done[0] = true; // 滑出途中连按返回时别跑两遍
-            detailCard = null;
-            if (detailFromWiz && wizardOpen) {
-                // P2b：从选卡结果点进来的详情：关掉必回悬浮选卡窗且进度还在（wizSc/wizStep/wizA 未动，同混合版 detailFromWiz）；
-                // 先恢复选卡窗底下那一页，再把选卡窗叠回最上层
-                detailFromWiz = false;
-                showTab(tab);
-                showWizardPage();
-                return;
-            }
-            detailFromWiz = false;
-            navBar.setVisibility(View.VISIBLE);
-            showTab(tab);
-        };
-        // P4：详情先向右滑出淡出（180ms）再切回底下页面；无视图可动时直接切
-        if (dv != null && dv.getParent() != null) {
-            dv.animate().alpha(0f).translationX(dp(this, 48))
-                .setDuration(180).setInterpolator(ANIM_ENTER)
-                .withEndAction(finish).start();
-        } else {
-            finish.run();
-        }
-    }
+        final FrameLayout overlay = new FrameLayout(this);
+        overlay.setBackgroundColor(Color.TRANSPARENT);
+        final View shade = new View(this);
+        shade.setBackgroundColor(Color.argb(102, 0, 0, 0)); // rgba(0,0,0,.4)
+        shade.setAlpha(0f);
+        shade.setOnClickListener(v -> closeDetail());
+        overlay.addView(shade, new FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        detailShade = shade;
 
-    View buildDetailPage(final Card c) {
+        // 窗体容器（贴底）：玻璃垫 + 白窗；测高封顶 88vh
+        final FrameLayout wrap = new FrameLayout(this);
+        int screenW = getResources().getDisplayMetrics().widthPixels;
+        int screenH = getResources().getDisplayMetrics().heightPixels;
+        final int maxH = (int) (screenH * 0.88);
+
+        final LinearLayout sheetCard = new LinearLayout(this);
+        sheetCard.setOrientation(LinearLayout.VERTICAL);
+        GradientDrawable sheetBg = new GradientDrawable();
+        sheetBg.setColor(Color.rgb(0xFF, 0xFF, 0xFF));
+        float rTop = dp(this, 20);
+        sheetBg.setCornerRadii(new float[]{rTop, rTop, rTop, rTop, 0, 0, 0, 0});
+        sheetCard.setBackground(sheetBg);
+        if (Build.VERSION.SDK_INT >= 21) { sheetCard.setElevation(dp(this, 24)); sheetCard.setClipToOutline(true); }
+        sheetCard.setOnClickListener(v -> {}); // 窗体吃点击防穿透遮罩
+
+        // 内容滚动区 + 底部常驻收藏钮（窗内延续，不随内容滚走）
         ScrollView sc = new ScrollView(this);
         thinScrollbar(sc);
-        if (Build.VERSION.SDK_INT >= 23) sc.setOnScrollChangeListener((v, sx, sy, ox, oy) -> updateTopFabVisibility(sy));
-        sc.setBackgroundColor(Color.rgb(0xF2, 0xF3, 0xF7));
-        LinearLayout page = new LinearLayout(this);
-        page.setOrientation(LinearLayout.VERTICAL);
-        page.setPadding(dp(this, 16), pageTopPad(), dp(this, 16), dp(this, 28));
-        sc.addView(page);
+        sc.setBackgroundColor(Color.TRANSPARENT);
+        sc.setFillViewport(false);
+        detailScroll = sc;
+        LinearLayout body = buildDetailSheetBody(c);
+        sc.addView(body);
+        sheetCard.addView(sc, new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
 
-        LinearLayout top = new LinearLayout(this);
-        top.setOrientation(LinearLayout.HORIZONTAL);
-        top.setGravity(Gravity.CENTER_VERTICAL);
-        Button back = new Button(this);
-        back.setText("‹ 返回"); back.setTextSize(14); back.setAllCaps(false);
-        back.setBackground(roundRect(Color.WHITE, 12, this));
-        back.setOnClickListener(v -> { haptic(); closeDetail(); });
-        top.addView(back, new LinearLayout.LayoutParams(dp(this, 84), dp(this, 38)));
-        TextView title = tv(this, c.bank, 15, Color.rgb(0x1C, 0x1C, 0x1E), true);
-        LinearLayout.LayoutParams ttlp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
-        ttlp.leftMargin = dp(this, 10);
-        top.addView(title, ttlp);
-        page.addView(top);
-
-        ImageView iv = new ImageView(this);
-        // 卡面图按原比例完整显示不裁剪（对照混合版 .p-slide img：object-fit:contain、圆角 12、最大高 260）
-        iv.setScaleType(ImageView.ScaleType.FIT_CENTER);
-        iv.setBackground(placeholderGrad(12, this));
-        iv.setClipToOutline(true);
-        Bitmap b = Img.get(this, c.image);
-        int availW = getResources().getDisplayMetrics().widthPixels - dp(this, 32);
-        int imgW = availW, imgH = dp(this, 168);
-        if (b != null && b.getWidth() > 0 && b.getHeight() > 0) {
-            float ratio = (float) b.getHeight() / (float) b.getWidth();
-            imgH = Math.round(availW * ratio);
-            int maxH = dp(this, 260);
-            if (imgH > maxH) {
-                imgH = maxH;
-                imgW = Math.round(imgH / ratio);
-            }
-        }
-        LinearLayout.LayoutParams ilp = new LinearLayout.LayoutParams(imgW, imgH);
-        ilp.topMargin = dp(this, 12);
-        ilp.gravity = Gravity.CENTER_HORIZONTAL;
-        page.addView(iv, ilp);
-        if (b != null) iv.setImageBitmap(b);
-
-        TextView name = tv(this, c.name, 19, Color.rgb(0x1C, 0x1C, 0x1E), true);
-        LinearLayout.LayoutParams nlp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        nlp.topMargin = dp(this, 12);
-        page.addView(name, nlp);
-        TextView meta = tv(this, c.bank + " · " + orgLabel(c.org) + " · " + (c.isCredit() ? "信用卡" : "借记卡") + " · " + c.status
-            + " · " + (c.hasScore ? String.format(java.util.Locale.US, "%.1f分", c.score) : "待评分"),
-            12.5f, Color.rgb(0x8E, 0x8E, 0x93), false);
-        LinearLayout.LayoutParams mep = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        mep.topMargin = dp(this, 2);
-        page.addView(meta, mep);
-
-        if (c.variants != null && c.variants.length() > 1) {
-            TextView varTitle = tv(this, "子版本", 14, Color.rgb(0x1C, 0x1C, 0x1E), true);
-            LinearLayout.LayoutParams vtp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-            vtp.topMargin = dp(this, 14);
-            page.addView(varTitle, vtp);
-            LinearLayout varBox = new LinearLayout(this);
-            varBox.setOrientation(LinearLayout.VERTICAL);
-            varBox.setBackground(roundRect(Color.WHITE, 12, this));
-            varBox.setPadding(dp(this, 12), dp(this, 4), dp(this, 12), dp(this, 4));
-            LinearLayout.LayoutParams vbp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-            vbp.topMargin = dp(this, 8);
-            page.addView(varBox, vbp);
-            for (int i = 0; i < c.variants.length(); i++) {
-                JSONObject v = c.variants.optJSONObject(i);
-                if (v == null) continue;
-                String line = v.optString("name") + "（BIN " + v.optString("bin") + "）";
-                if (!v.optString("note").isEmpty()) line += "：" + v.optString("note");
-                TextView vt = tv(this, line, 12.5f, Color.rgb(0x3A, 0x3A, 0x3C), false);
-                vt.setPadding(0, dp(this, 7), 0, dp(this, 7));
-                varBox.addView(vt);
-                if (i < c.variants.length() - 1) {
-                    View div = new View(this);
-                    div.setBackgroundColor(Color.rgb(0xF0, 0xF0, 0xF5));
-                    varBox.addView(div, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, Math.max(1, dp(this, 1) / 2)));
-                }
-            }
-        }
-
-        if (c.review != null && !c.review.isEmpty()) {
-            TextView rv = tv(this, c.review, 13.5f, Color.rgb(0x3A, 0x3A, 0x3C), false);
-            rv.setBackground(roundRect(Color.rgb(0xEE, 0xF4, 0xFB), 12, this));
-            rv.setPadding(dp(this, 12), dp(this, 9), dp(this, 12), dp(this, 9));
-            LinearLayout.LayoutParams rlp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-            rlp.topMargin = dp(this, 10);
-            page.addView(rv, rlp);
-        }
-
+        LinearLayout footer = new LinearLayout(this);
+        footer.setOrientation(LinearLayout.HORIZONTAL);
+        footer.setPadding(dp(this, 16), dp(this, 10), dp(this, 16), dp(this, 20));
+        footer.setBackgroundColor(Color.WHITE);
+        sheetCard.addView(footer);
         final Button mineBtn = new Button(this);
         mineBtn.setTextSize(15); mineBtn.setAllCaps(false);
+        detailMineBtn = mineBtn;
         styleMineBtn(mineBtn, c);
         mineBtn.setOnClickListener(v -> {
             haptic();
             toggleMineWithToast(c, () -> styleMineBtn(mineBtn, c));
         });
-        LinearLayout.LayoutParams mlp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(this, 46));
-        mlp.topMargin = dp(this, 12);
-        page.addView(mineBtn, mlp);
+        footer.addView(mineBtn, new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, dp(this, 50)));
 
-        TextView specTitle = tv(this, "卡片参数", 14, Color.rgb(0x1C, 0x1C, 0x1E), true);
-        LinearLayout.LayoutParams splp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        splp.topMargin = dp(this, 16);
-        page.addView(specTitle, splp);
+        // 先量高再定版（内容可能短于封顶）
+        sheetCard.measure(View.MeasureSpec.makeMeasureSpec(screenW, View.MeasureSpec.EXACTLY),
+            View.MeasureSpec.makeMeasureSpec(maxH, View.MeasureSpec.AT_MOST));
+        int sheetH = Math.min(sheetCard.getMeasuredHeight(), maxH);
+        FrameLayout.LayoutParams wlp = new FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, sheetH);
+        wlp.gravity = Gravity.BOTTOM;
+        // Q11：窗下垫冻结玻璃层，与窗同位（顶圆 20 对齐，底边沉屏外由容器裁掉）
+        wrap.addView(glassLayer(sheetCard, 20, false), new FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        wrap.addView(sheetCard, new FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        overlay.addView(wrap, wlp);
+        detailSheetWrap = wrap;
 
+        // 关闭字形：48dp 对话框框 + 内嵌 34dp 半透圆 ✕，右上 -4dp 微出窗外（与窗同为 wrap 子层，升起同行）
+        final FrameLayout glyphFrame = new FrameLayout(this);
+        glyphFrame.setClipChildren(false); glyphFrame.setClipToPadding(false);
+        View circle = new View(this);
+        GradientDrawable cg = new GradientDrawable();
+        cg.setShape(GradientDrawable.OVAL);
+        cg.setColor(Color.argb(64, 120, 120, 128)); // rgba(120,120,128,.25)
+        circle.setBackground(cg);
+        FrameLayout.LayoutParams clp2 = new FrameLayout.LayoutParams(dp(this, 34), dp(this, 34));
+        clp2.gravity = Gravity.CENTER;
+        glyphFrame.addView(circle, clp2);
+        TextView x = tv(this, "\u2715", 15, Color.WHITE, true);
+        x.setGravity(Gravity.CENTER);
+        glyphFrame.addView(x, new FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        glyphFrame.setOnClickListener(v -> { haptic(); closeDetail(); });
+        FrameLayout.LayoutParams glp = new FrameLayout.LayoutParams(dp(this, 48), dp(this, 48));
+        glp.gravity = Gravity.TOP | Gravity.END;
+        glp.topMargin = -dp(this, 4);
+        glp.rightMargin = dp(this, 12);
+        wrap.addView(glyphFrame, glp);
+        detailCloseGlyph = glyphFrame;
+
+        // 拖拽关闭：抓手区下滑过 80dp 松手关窗（窗内滚动不受影响）
+        attachDetailDrag(wrap, sheetCard);
+
+        content.addView(overlay, new FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        overlay.bringToFront();
+        detailView = overlay;
+        syncSearchFab();
+        syncTopFab();
+        // 升起：遮罩 220ms 淡入 + 窗体（含字形）自下方滑入 240ms 同曲线家族
+        shade.animate().alpha(1f).setDuration(220).setInterpolator(ANIM_ENTER).start();
+        wrap.setTranslationY(sheetH);
+        wrap.animate().translationY(0f).setDuration(240).setInterpolator(ANIM_ENTER).start();
+    }
+
+    void attachDetailDrag(final View wrap, final View sheetCard) {
+        final float[] downY = {0f};
+        final boolean[] dragging = {false};
+        // 抓手条在滚动内容顶部，拖它下滑关窗；其余区域仍可正常滚动
+        sheetCard.setOnTouchListener((v, e) -> false);
+        if (detailScroll != null) {
+            detailScroll.setOnTouchListener((v, e) -> {
+                if (detailClosing) return false;
+                switch (e.getActionMasked()) {
+                    case MotionEvent.ACTION_DOWN:
+                        downY[0] = e.getRawY(); dragging[0] = false; return false;
+                    case MotionEvent.ACTION_MOVE:
+                        if (detailScroll.getScrollY() <= 0 && e.getRawY() - downY[0] > dp(this, 12)) {
+                            dragging[0] = true;
+                            float dy = Math.max(0f, e.getRawY() - downY[0]);
+                            if (wrap != null) wrap.setTranslationY(dy * 0.6f);
+                            return false;
+                        }
+                        return false;
+                    case MotionEvent.ACTION_UP:
+                    case MotionEvent.ACTION_CANCEL:
+                        if (dragging[0] && wrap != null) {
+                            float dy = e.getRawY() - downY[0];
+                            dragging[0] = false;
+                            if (dy > dp(this, 80)) { closeDetail(); return true; }
+                            wrap.animate().translationY(0f).setDuration(180)
+                                .setInterpolator(ANIM_ENTER).start();
+                        }
+                        return false;
+                    default: return false;
+                }
+            });
+        }
+    }
+
+    void closeDetail() {
+        if (detailCard == null || detailClosing) return;
+        detailClosing = true;
+        final View overlay = detailView;
+        final View wrap = detailSheetWrap;
+        final View shade = detailShade;
+        final View glyph = detailCloseGlyph;
+        final boolean wasWiz = detailFromWiz;
+        Runnable finish = () -> {
+            if (overlay != null && overlay.getParent() instanceof ViewGroup)
+                ((ViewGroup) overlay.getParent()).removeView(overlay);
+            detailView = null; detailSheetWrap = null; detailShade = null; detailCloseGlyph = null;
+            detailScroll = null; detailBinView = null; detailVerInfoBox = null; detailMineBtn = null;
+            detailDots = new java.util.ArrayList<>();
+            detailCard = null; detailClosing = false; detailFromWiz = false;
+            if (!wasWiz && navWrap != null) navWrap.setVisibility(View.VISIBLE);
+            if (wasWiz && wizardOpen) {
+                // 选卡窗仍在底下（未被切走），直接露回即可，进度天然保留
+                if (navWrap != null) navWrap.setVisibility(View.GONE);
+            }
+            restoreCurrentTabScroll();
+            syncSearchFab();
+            syncTopFab();
+            // FIFO：关窗落定才开下一次点选的那张，不叠窗
+            Card next = detailQueue.poll();
+            if (next != null) openDetail(next, wasWiz && wizardOpen);
+        };
+        if (overlay == null || wrap == null) { finish.run(); return; }
+        // 收窗第一程：字形先冻结——摘到浮层根上原地不动（-4dp 出窗位保持），窗体单独下滑 240ms
+        try {
+            if (glyph != null && glyph.getParent() == wrap && overlay instanceof FrameLayout) {
+                int[] gl = new int[2]; glyph.getLocationOnScreen(gl);
+                int[] ol = new int[2]; overlay.getLocationOnScreen(ol);
+                ((ViewGroup) wrap).removeView(glyph);
+                FrameLayout.LayoutParams fp = new FrameLayout.LayoutParams(dp(this, 48), dp(this, 48));
+                fp.gravity = Gravity.TOP | Gravity.START;
+                fp.leftMargin = gl[0] - ol[0]; fp.topMargin = gl[1] - ol[1];
+                ((FrameLayout) overlay).addView(glyph, fp);
+                glyph.bringToFront();
+            }
+        } catch (Throwable ignored) { /* 冻结失败不挡关窗，字形随窗走 */ }
+        int targetY = wrap.getHeight() > 0 ? wrap.getHeight() : dp(this, 420);
+        wrap.animate().translationY(targetY).setDuration(240).setInterpolator(ANIM_ENTER)
+            .withEndAction(() -> {
+                // 第二程：字形与遮罩一同淡出，落定后才拆浮层
+                if (glyph != null) glyph.animate().alpha(0f).setDuration(180)
+                    .setInterpolator(ANIM_EXIT).start();
+                if (shade != null) shade.animate().alpha(0f).setDuration(180)
+                    .setInterpolator(ANIM_EXIT).withEndAction(finish).start();
+                else finish.run();
+            }).start();
+    }
+
+    String variantBinText(Card c, int idx) {
+        if (c.variants == null || c.variants.length() == 0) return "\u2014";
+        JSONObject v = c.variants.optJSONObject(Math.max(0, Math.min(idx, c.variants.length() - 1)));
+        if (v == null) return "\u2014";
+        String bin = v.optString("bin", "");
+        String nm = v.optString("name", "");
+        if (bin == null || bin.isEmpty()) return "\u2014";
+        return (nm == null || nm.isEmpty()) ? bin : bin + "\uFF08" + nm + "\uFF09";
+    }
+
+    void updateDetailVariant(int idx) {
+        detailVariantIdx = idx;
+        Card c = detailCard;
+        if (c == null) return;
+        for (int i = 0; i < detailDots.size(); i++) {
+            View d = detailDots.get(i);
+            boolean on = i == idx;
+            GradientDrawable g = new GradientDrawable();
+            g.setColor(on ? Color.rgb(0x3A, 0x3A, 0x3C) : Color.rgb(0xD8, 0xD8, 0xDE));
+            g.setCornerRadius(dp(this, 3));
+            d.setBackground(g);
+        }
+        // LinearLayout 子项宽度切换（LinearLayout.LayoutParams）
+        for (int i = 0; i < detailDots.size(); i++) {
+            View d = detailDots.get(i);
+            if (d.getLayoutParams() instanceof LinearLayout.LayoutParams) {
+                LinearLayout.LayoutParams lp2 = (LinearLayout.LayoutParams) d.getLayoutParams();
+                lp2.width = dp(this, i == idx ? 18 : 6);
+                d.setLayoutParams(lp2);
+            }
+        }
+        if (detailBinView != null) detailBinView.setText(variantBinText(c, idx));
+        if (detailVerInfoBox != null) {
+            detailVerInfoBox.removeAllViews();
+            fillVerInfo(detailVerInfoBox, c, idx);
+        }
+    }
+
+    void fillVerInfo(LinearLayout box, Card c, int idx) {
+        if (c.variants == null || c.variants.length() == 0) return;
+        JSONObject v = c.variants.optJSONObject(Math.max(0, Math.min(idx, c.variants.length() - 1)));
+        if (v == null) return;
+        String nm = v.optString("name", "");
+        String bin = v.optString("bin", "");
+        String note = v.optString("note", "");
+        TextView t = tv(this, nm + (bin == null || bin.isEmpty() ? "" : " \u00B7 BIN " + bin),
+            14, Color.rgb(0x1C, 0x1C, 0x1E), true);
+        box.addView(t);
+        if (note != null && !note.isEmpty()) {
+            TextView n = tv(this, note, 12.5f, Color.rgb(0x3A, 0x3A, 0x3C), false);
+            n.setLineSpacing(0, 1.4f);
+            LinearLayout.LayoutParams nlp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            nlp.topMargin = dp(this, 4);
+            box.addView(n, nlp);
+        }
+    }
+
+    LinearLayout buildDetailSheetBody(final Card c) {
+        LinearLayout page = new LinearLayout(this);
+        page.setOrientation(LinearLayout.VERTICAL);
+        page.setBackgroundColor(Color.WHITE);
+
+        // ---- 图廊（.p-gal/.p-track/.p-slide）：整宽横滑，图原比例 contain、圆角 12、阴影，高封顶 260 ----
+        final boolean hasVar = c.variants != null && c.variants.length() > 0;
+        final int nSlides = hasVar ? c.variants.length() : 1;
+        LinearLayout gal = new LinearLayout(this);
+        gal.setOrientation(LinearLayout.VERTICAL);
+        GradientDrawable galBg = new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
+            new int[]{Color.rgb(0xF1, 0xF1, 0xF4), Color.WHITE});
+        gal.setBackground(galBg);
+        page.addView(gal);
+
+        final HorizontalScrollView hsv = new HorizontalScrollView(this);
+        hsv.setHorizontalScrollBarEnabled(false);
+        hsv.setFillViewport(true);
+        LinearLayout track = new LinearLayout(this);
+        track.setOrientation(LinearLayout.HORIZONTAL);
+        hsv.addView(track);
+        gal.addView(hsv);
+        final int screenW = getResources().getDisplayMetrics().widthPixels;
+        detailDots = new java.util.ArrayList<>();
+        for (int i = 0; i < nSlides; i++) {
+            String imgPath = c.image;
+            String slideName = "";
+            if (hasVar) {
+                JSONObject vv = c.variants.optJSONObject(i);
+                if (vv != null) {
+                    String vi = vv.optString("image", "");
+                    if (vi != null && !vi.isEmpty()) imgPath = vi;
+                    slideName = vv.optString("name", "");
+                }
+            }
+            LinearLayout slide = new LinearLayout(this);
+            slide.setOrientation(LinearLayout.VERTICAL);
+            slide.setGravity(Gravity.CENTER_HORIZONTAL);
+            slide.setPadding(dp(this, 22), dp(this, 16), dp(this, 22), dp(this, 4));
+            track.addView(slide, new LinearLayout.LayoutParams(screenW, ViewGroup.LayoutParams.WRAP_CONTENT));
+            ImageView iv = new ImageView(this);
+            iv.setScaleType(ImageView.ScaleType.FIT_CENTER);
+            iv.setBackground(placeholderGrad(12, this));
+            iv.setClipToOutline(true);
+            if (Build.VERSION.SDK_INT >= 21) iv.setElevation(dp(this, 6));
+            Bitmap b = Img.get(this, imgPath);
+            int availW = screenW - dp(this, 44);
+            int imgW = availW, imgH = dp(this, 168);
+            if (b != null && b.getWidth() > 0 && b.getHeight() > 0) {
+                float ratio = (float) b.getHeight() / (float) b.getWidth();
+                imgH = Math.round(availW * ratio);
+                int maxH = dp(this, 260);
+                if (imgH > maxH) { imgH = maxH; imgW = Math.round(imgH / ratio); }
+            }
+            LinearLayout.LayoutParams ilp = new LinearLayout.LayoutParams(imgW, imgH);
+            ilp.gravity = Gravity.CENTER_HORIZONTAL;
+            slide.addView(iv, ilp);
+            if (b != null) iv.setImageBitmap(b);
+            if (slideName != null && !slideName.isEmpty()) {
+                TextView sn = tv(this, slideName, 12, Color.rgb(0x8E, 0x8E, 0x93), true);
+                sn.setGravity(Gravity.CENTER);
+                LinearLayout.LayoutParams snp = new LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+                snp.topMargin = dp(this, 10);
+                slide.addView(sn, snp);
+            }
+        }
+        if (nSlides > 1) {
+            LinearLayout dots = new LinearLayout(this);
+            dots.setOrientation(LinearLayout.HORIZONTAL);
+            dots.setGravity(Gravity.CENTER);
+            dots.setPadding(0, dp(this, 10), 0, dp(this, 6));
+            gal.addView(dots);
+            for (int i = 0; i < nSlides; i++) {
+                View d = new View(this);
+                GradientDrawable g = new GradientDrawable();
+                g.setColor(i == 0 ? Color.rgb(0x3A, 0x3A, 0x3C) : Color.rgb(0xD8, 0xD8, 0xDE));
+                g.setCornerRadius(dp(this, 3));
+                d.setBackground(g);
+                LinearLayout.LayoutParams dlp = new LinearLayout.LayoutParams(
+                    dp(this, i == 0 ? 18 : 6), dp(this, 6));
+                dlp.leftMargin = dp(this, 3); dlp.rightMargin = dp(this, 3);
+                dots.addView(d, dlp);
+                detailDots.add(d);
+            }
+            hsv.setOnScrollChangeListener((v, sx, sy, ox, oy) -> {
+                int idx = Math.max(0, Math.min(nSlides - 1, Math.round((float) sx / Math.max(1, screenW))));
+                if (idx != detailVariantIdx) updateDetailVariant(idx);
+            });
+        }
+
+        // ---- 正文（.p-body）：卡名 + 元信息行 ----
+        LinearLayout bodyInner = new LinearLayout(this);
+        bodyInner.setOrientation(LinearLayout.VERTICAL);
+        bodyInner.setPadding(dp(this, 18), dp(this, 16), dp(this, 18), dp(this, 8));
+        page.addView(bodyInner);
+
+        TextView name = tv(this, c.name, 19, Color.rgb(0x1C, 0x1C, 0x1E), true);
+        name.setLineSpacing(0, 1.15f);
+        bodyInner.addView(name);
+        // 状态直接取记录自身（与规格同源 specs 外的 status 字段），不二次加工
+        String metaTxt = c.bank + " \u00B7 " + orgLabel(c.org) + " \u00B7 " + c.status
+            + " \u00B7 " + (c.hasScore ? String.format(java.util.Locale.US, "%.1f\u5206", c.score) : "\u5F85\u8BC4\u5206");
+        TextView meta = tv(this, metaTxt, 12.5f, Color.rgb(0x8E, 0x8E, 0x93), false);
+        LinearLayout.LayoutParams mep = new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        mep.topMargin = dp(this, 2);
+        bodyInner.addView(meta, mep);
+
+        // 当前版本信息（首版，随横滑切换与 BIN 同步）
+        if (hasVar) {
+            LinearLayout vib = new LinearLayout(this);
+            vib.setOrientation(LinearLayout.VERTICAL);
+            vib.setBackground(roundRect(Color.rgb(0xF6, 0xF6, 0xF8), 10, this));
+            vib.setPadding(dp(this, 12), dp(this, 10), dp(this, 12), dp(this, 10));
+            LinearLayout.LayoutParams vlp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            vlp.topMargin = dp(this, 10);
+            bodyInner.addView(vib, vlp);
+            detailVerInfoBox = vib;
+            fillVerInfo(vib, c, 0);
+        }
+
+        // 学生推荐段（原样取记录里的 reason，不在详情侧改写）
+        if (c.studentPick && c.studentReason != null && !c.studentReason.isEmpty()) {
+            bodyInner.addView(detailSectionTitle("\u5B66\u751F\u63A8\u8350"));
+            TextView st = tv(this, c.studentReason, 13.5f, Color.rgb(0x3A, 0x3A, 0x3C), false);
+            st.setLineSpacing(0, 1.45f);
+            bodyInner.addView(st);
+        }
+
+        // 点评（保留既有口径，规格之前展示）
+        if (c.review != null && !c.review.isEmpty()) {
+            bodyInner.addView(detailSectionTitle("\u70B9\u8BC4"));
+            TextView rv = tv(this, c.review, 13.5f, Color.rgb(0x3A, 0x3A, 0x3C), false);
+            rv.setLineSpacing(0, 1.45f);
+            rv.setBackground(roundRect(Color.rgb(0xEE, 0xF4, 0xFB), 12, this));
+            rv.setPadding(dp(this, 12), dp(this, 9), dp(this, 12), dp(this, 9));
+            bodyInner.addView(rv, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        }
+
+        // ---- 规格（.p-sec + .spec）：显式 12 键顺序、状态不重复入表、URL 值整行剔除 ----
+        bodyInner.addView(detailSectionTitle("\u89C4\u683C"));
         if (c.specs != null) {
-            // 参数整卡：白底圆角一整张，行间 1px 细线分隔、紧凑行高（对照混合版 .spec）
             LinearLayout specBox = new LinearLayout(this);
             specBox.setOrientation(LinearLayout.VERTICAL);
-            specBox.setBackground(roundRect(Color.WHITE, 14, this));
-            specBox.setPadding(dp(this, 14), dp(this, 4), dp(this, 14), dp(this, 4));
-            LinearLayout.LayoutParams sbp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-            sbp.topMargin = dp(this, 8);
-            page.addView(specBox, sbp);
-            java.util.List<String[]> rows = new ArrayList<>();
-            // 固定优先键序（对照混合版 specRows 与 PROGRESS 已知注意），其余键随后，避免 org.json 无序打乱主参数
-            String[] prefKeys = {"卡片名称", "BIN", "币种支持", "货币转换费（FTF）", "货币转换费", "3DS", "自动购汇", "网付", "年费", "发行情况"};
-            java.util.Set<String> usedKeys = new HashSet<>();
-            for (String k : prefKeys) {
-                String v = c.specs.optString(k, "");
-                if (v == null || v.isEmpty() || usedKeys.contains(k)) continue;
-                rows.add(new String[]{k, v});
-                usedKeys.add(k);
-            }
-            Iterator<String> keys = c.specs.keys();
-            while (keys.hasNext()) {
-                String k = keys.next();
-                if (usedKeys.contains(k)) continue;
-                String v = c.specs.optString(k, "");
-                if (v == null || v.isEmpty()) continue;
-                rows.add(new String[]{k, v});
-                usedKeys.add(k);
-            }
+            specBox.setPadding(0, 0, 0, 0);
+            bodyInner.addView(specBox);
+            java.util.List<String[]> rows = detailSpecRows(c);
             for (int i = 0; i < rows.size(); i++) {
                 LinearLayout row = new LinearLayout(this);
                 row.setOrientation(LinearLayout.HORIZONTAL);
@@ -3640,23 +3884,69 @@ public class MainActivity extends Activity {
                 TextView kt = tv(this, rows.get(i)[0], 12.5f, Color.rgb(0x8E, 0x8E, 0x93), false);
                 row.addView(kt, new LinearLayout.LayoutParams(dp(this, 108), ViewGroup.LayoutParams.WRAP_CONTENT));
                 TextView vt = tv(this, rows.get(i)[1], 12.5f, Color.rgb(0x1C, 0x1C, 0x1E), false);
+                vt.setGravity(Gravity.END);
+                if ("BIN".equals(rows.get(i)[0]) && hasVar) detailBinView = vt;
                 row.addView(vt, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
                 if (i < rows.size() - 1) {
                     View div = new View(this);
-                    div.setBackgroundColor(Color.rgb(0xF0, 0xF0, 0xF5));
-                    specBox.addView(div, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, Math.max(1, dp(this, 1) / 2)));
+                    div.setBackgroundColor(Color.argb(18, 20, 30, 60));
+                    specBox.addView(div, new LinearLayout.LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT, Math.max(1, dp(this, 1) / 2)));
                 }
             }
         }
-        return sc;
+        return page;
+    }
+
+    TextView detailSectionTitle(String s) {
+        TextView t = tv(this, s, 15, Color.rgb(0x1C, 0x1C, 0x1E), true);
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        lp.topMargin = dp(this, 14); lp.bottomMargin = dp(this, 8);
+        t.setLayoutParams(lp);
+        return t;
+    }
+
+    // 规格行：与混合版 specRows 同一 12 键显式顺序；状态已在标题区展示故不入表；值为网址整行剔除
+    java.util.List<String[]> detailSpecRows(Card c) {
+        String[] order = {"\u5361\u7EC4\u7EC7", "\u53D1\u5361\u884C", "\u5361\u79CD", "BIN", "\u5E74\u8D39", "\u8D27\u5E01\u8F6C\u6362\u8D39\uFF08FTF\uFF09", "3DS", "\u7F51\u4ED8", "Apple Pay", "\u81EA\u52A8\u8D2D\u6C47", "\u5883\u5916ATM", "\u72B6\u6001"};
+        java.util.Set<String> inOrder = new java.util.HashSet<>(java.util.Arrays.asList(order));
+        java.util.List<String[]> rows = new java.util.ArrayList<>();
+        if (c.specs == null) return rows;
+        boolean hasVar = c.variants != null && c.variants.length() > 0;
+        for (String k : order) {
+            if ("\u72B6\u6001".equals(k)) continue; // 标题区已承载状态，规格表不重复
+            String v;
+            if ("BIN".equals(k) && hasVar) v = variantBinText(c, detailVariantIdx);
+            else v = c.specs.optString(k, "");
+            if (v == null || v.isEmpty()) continue;
+            if (v.contains("http://") || v.contains("https://")) continue; // 网址行整行剔除，不留空标签
+            rows.add(new String[]{k, v});
+        }
+        Iterator<String> keys = c.specs.keys();
+        while (keys.hasNext()) {
+            String k = keys.next();
+            if (inOrder.contains(k)) continue;
+            if ("\u72B6\u6001".equals(k)) continue;
+            String v = c.specs.optString(k, "");
+            if (v == null || v.isEmpty()) continue;
+            if (v.contains("http://") || v.contains("https://")) continue;
+            rows.add(new String[]{k, v});
+        }
+        return rows;
     }
 
     void styleMineBtn(Button b, Card c) {
-        // 对照混合版 .mine-toggle：未收藏蓝底白字、已收藏绿底白字，利落主按钮（圆角 12）
+        // Q6 常驻收藏钮（对照混合版 .p-fab）：玻璃白底、未收藏蓝字、已收藏绿字带勾，圆角 16
         boolean in = mine.contains(c.id);
-        b.setText(in ? "✓ 已在我的卡片（点此移除）" : "＋ 加入我的卡片");
-        b.setTextColor(Color.WHITE);
-        b.setBackground(roundRect(in ? Color.rgb(0x34, 0xC7, 0x59) : Color.rgb(0x0A, 0x5C, 0xD6), 12, this));
+        b.setText(in ? "\u2713 已在我的卡片" : "+ 加入我的卡片");
+        b.setTextColor(in ? Color.rgb(0x34, 0xC7, 0x59) : Color.rgb(0x00, 0x7A, 0xFF));
+        GradientDrawable fb = new GradientDrawable();
+        fb.setColor(Color.argb(199, 255, 255, 255));
+        fb.setCornerRadius(dp(this, 16));
+        fb.setStroke(dp(this, 1), Color.argb(90, 255, 255, 255));
+        b.setBackground(fb);
+        if (Build.VERSION.SDK_INT >= 21) b.setElevation(dp(this, 8));
     }
 
     // ---------- 学生推荐（Phase 2b，对照 app.js studentReason/studentFit/studentPageHtml） ----------
