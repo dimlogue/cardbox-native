@@ -2,7 +2,6 @@ package com.igll.carddbnative;
 
 import android.animation.ValueAnimator;
 import android.app.Activity;
-import android.app.AlertDialog;
 import android.app.Dialog;
 import android.content.Context;
 import android.content.Intent;
@@ -148,7 +147,8 @@ public class MainActivity extends Activity {
     boolean isChromeCovered() {
         return welcomeOpen || changelogOpen || wizardOpen || aboutOpen
             || filterSheet != null || detailCard != null || cardMenuPop != null
-            || customFormSheet != null || customDetailSheet != null || binSheet != null || addSheetView != null;
+            || customFormSheet != null || customDetailSheet != null || binSheet != null || addSheetView != null
+            || delConfirmSheet != null;
     }
     void hideFabsNow() {
         cancelTopFabShow();
@@ -1250,6 +1250,8 @@ public class MainActivity extends Activity {
     boolean customOpen = false;
     LinearLayout customTilesBox = null; // Q56：展开态色带容器，就地重排/重衔接用，不整页重建
     View customFormSheet = null; // Q8：表单改为根层浮卡（原 Dialog 全宽平纸已废）
+    View delConfirmSheet = null; // Q52：删卡确认贴底小窗（废系统 AlertDialog）
+    boolean delConfirmClosing = false;
     // Q19：自定义卡详情改为与 Q6 数据库详情同规范的贴底浮窗（原居中 AlertDialog 白框已废）
     View customDetailSheet = null;
     View customDetailWrap = null;
@@ -3992,7 +3994,7 @@ public class MainActivity extends Activity {
         LinearLayout card = new LinearLayout(this);
         card.setOrientation(LinearLayout.VERTICAL);
         GradientDrawable cg = new GradientDrawable();
-        cg.setColor(Color.argb(168, 255, 255, 255)); // Q29：192→168 减薄，冻结模糊的彩色透进来
+        cg.setColor(Color.argb(247, 255, 255, 255)); // Q52 对照 cardapp #filterSheet：rgba(255,255,255,.97) 近实白（原 168 半透发雾、用户点名不美观）
         cg.setCornerRadius(dp(this, 24));
         cg.setStroke(dp(this, 1), Color.argb(18, 20, 30, 60));
         card.setBackground(cg);
@@ -6294,25 +6296,107 @@ public class MainActivity extends Activity {
         refreshMineKeepScroll();
     }
 
+    // Q52：废全 App 唯一系统 AlertDialog（居中白框+系统钮），改与 Q6/Q19 同基建的贴底确认小窗——
+    // 遮罩 rgba(0,0,0,.4)、窗体实白仅顶圆 22dp 贴屏底、标题 17sp/800+一句说明、取消/删除双钮
+    // （删除 #E03131 红字），开窗 hideChrome（Q12）、关窗 restoreChrome，删后撤销条沿现行。
     void confirmDeleteCustom(final CustomCard c) {
-        new AlertDialog.Builder(this)
-            .setTitle("删除这张自定义卡？")
-            .setMessage("「" + c.name + "」删了就没了，备注也会一起清掉。")
-            .setNegativeButton("取消", null)
-            .setPositiveButton("删除", (d, w) -> {
-                final int idx = customCards.indexOf(c);
-                customCards.remove(c);
+        if (c == null || delConfirmSheet != null || delConfirmClosing) return;
+        delConfirmClosing = false;
+        hideChrome(); // Q12
+        final FrameLayout sheet = new FrameLayout(this);
+        View shade = new View(this);
+        shade.setBackgroundColor(Color.argb(102, 0, 0, 0)); // .dlg-backdrop rgba(0,0,0,.4)
+        shade.setAlpha(0f);
+        shade.setOnClickListener(v -> closeDelConfirm());
+        sheet.addView(shade, new FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        LinearLayout card = new LinearLayout(this);
+        card.setOrientation(LinearLayout.VERTICAL);
+        GradientDrawable cg = new GradientDrawable();
+        cg.setColor(Color.rgb(0xFF, 0xFF, 0xFF));
+        float rTop = dp(this, 22);
+        cg.setCornerRadii(new float[]{rTop, rTop, rTop, rTop, 0, 0, 0, 0});
+        card.setBackground(cg);
+        if (Build.VERSION.SDK_INT >= 21) { card.setElevation(dp(this, 24)); topSheetClip(card, 22, this); }
+        card.setOnClickListener(v -> {}); // 窗体吃点击防穿透遮罩
+        card.setPadding(dp(this, 18), dp(this, 18), dp(this, 18), dp(this, 14) + navBarH());
+        card.addView(tv(this, "删除这张自定义卡？", 17, Color.rgb(0x1C, 0x1C, 0x1E), true));
+        TextView msg = tv(this, "「" + c.name + "」删了就没了，备注也会一起清掉。", 13.5f, Color.rgb(0x8E, 0x8E, 0x93), false);
+        LinearLayout.LayoutParams msgLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        msgLp.topMargin = dp(this, 8);
+        card.addView(msg, msgLp);
+        LinearLayout btns = new LinearLayout(this);
+        btns.setOrientation(LinearLayout.HORIZONTAL);
+        LinearLayout.LayoutParams btnsLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        btnsLp.topMargin = dp(this, 18);
+        card.addView(btns, btnsLp);
+        TextView cancelB = tv(this, "取消", 15, Color.rgb(0x1C, 0x1C, 0x1E), false);
+        cancelB.setGravity(Gravity.CENTER);
+        cancelB.setBackground(rippleBg(Color.rgb(0xF2, 0xF3, 0xF7), 14));
+        cancelB.setOnClickListener(v -> { haptic(); closeDelConfirm(); });
+        LinearLayout.LayoutParams cbLp = new LinearLayout.LayoutParams(0, dp(this, 48), 1f);
+        btns.addView(cancelB, cbLp);
+        TextView delB = tv(this, "删除", 15, Color.rgb(0xE0, 0x31, 0x31), true);
+        delB.setGravity(Gravity.CENTER);
+        delB.setBackground(rippleBg(Color.rgb(0xFD, 0xEE, 0xEE), 14));
+        delB.setOnClickListener(v -> {
+            haptic();
+            final int idx = customCards.indexOf(c);
+            customCards.remove(c);
+            saveCustomCards();
+            refreshMineKeepScroll();
+            closeDelConfirm();
+            showFloatToast("已删除这张自定义卡", "撤销", () -> {
+                int at = idx < 0 ? customCards.size() : Math.min(idx, customCards.size());
+                customCards.add(at, c);
                 saveCustomCards();
                 refreshMineKeepScroll();
-                showFloatToast("已删除这张自定义卡", "撤销", () -> {
-                    int at = idx < 0 ? customCards.size() : Math.min(idx, customCards.size());
-                    customCards.add(at, c);
-                    saveCustomCards();
-                    refreshMineKeepScroll();
-                    showFloatToast("已恢复「" + c.name + "」");
-                });
-            })
-            .show();
+                showFloatToast("已恢复「" + c.name + "」");
+            });
+        });
+        LinearLayout.LayoutParams dbLp = new LinearLayout.LayoutParams(0, dp(this, 48), 1f);
+        dbLp.leftMargin = dp(this, 10);
+        btns.addView(delB, dbLp);
+        FrameLayout.LayoutParams clp = new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        clp.gravity = Gravity.BOTTOM;
+        clp.leftMargin = dp(this, 12); clp.rightMargin = dp(this, 12); clp.bottomMargin = 0;
+        FrameLayout wrap = new FrameLayout(this);
+        View glass = glassLayer(card, 22, false);
+        topSheetClip(glass, 22, this); // Q54：玻璃轮廓与窗体同，不得在窗外露面
+        wrap.addView(glass, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        wrap.addView(card, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        sheet.addView(wrap, clp);
+        content.addView(sheet);
+        delConfirmSheet = sheet;
+        sheet.setAlpha(0f);
+        sheet.animate().alpha(1f).setDuration(200).setInterpolator(ANIM_ENTER).start();
+        shade.animate().alpha(1f).setDuration(200).setInterpolator(ANIM_ENTER).start();
+        wrap.setTranslationY(dp(this, 42));
+        wrap.animate().translationY(0f).setDuration(ANIM_DUR_SHEET_IN).setInterpolator(ANIM_ENTER).start();
+    }
+
+    void closeDelConfirm() {
+        final View sheet = delConfirmSheet;
+        if (sheet == null || delConfirmClosing) return;
+        delConfirmClosing = true;
+        if (sheet.getParent() == null) { delConfirmSheet = null; delConfirmClosing = false; restoreChrome(); return; }
+        View wrap = sheet instanceof ViewGroup && ((ViewGroup) sheet).getChildCount() > 1
+            ? ((ViewGroup) sheet).getChildAt(1) : null;
+        if (wrap != null) {
+            wrap.animate().translationY(dp(this, 42)).alpha(0f)
+                .setDuration(ANIM_DUR_SHEET_OUT).setInterpolator(ANIM_EXIT)
+                .withEndAction(() -> {
+                    if (sheet.getParent() != null) ((ViewGroup) sheet.getParent()).removeView(sheet);
+                    if (delConfirmSheet == sheet) delConfirmSheet = null;
+                    delConfirmClosing = false;
+                    restoreChrome(); // Q12
+                }).start();
+            sheet.animate().alpha(0f).setDuration(ANIM_DUR_SHEET_OUT).start();
+        } else {
+            ((ViewGroup) sheet.getParent()).removeView(sheet);
+            delConfirmSheet = null; delConfirmClosing = false;
+            restoreChrome(); // Q12
+        }
     }
 
     // Q19 对照混合版 app.js openCustomDetail + styles.css .panel/.cc-hero/.p-close/.p-sec/.spec/.dlg-actions：
@@ -8759,6 +8843,7 @@ public class MainActivity extends Activity {
         if (detailCard != null) { closeDetail(); return; }
         if (filterSheet != null) { closeFilterSheet(); return; }
         if (binSheet != null) { closeBinQuery(); return; }
+        if (delConfirmSheet != null) { closeDelConfirm(); return; }
         if (addSheetView != null) { closeAddSheet(addSheetView); return; }
         if (customFormSheet != null) { closeCustomForm(); return; }
         if (wizardOpen) {
