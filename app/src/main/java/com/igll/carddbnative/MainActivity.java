@@ -76,6 +76,10 @@ public class MainActivity extends Activity {
         int id = getResources().getIdentifier("status_bar_height", "dimen", "android");
         return id > 0 ? getResources().getDimensionPixelSize(id) : dp(this, 24);
     }
+    // P2d-fix：带大标题页面的顶部安全留白 = 状态栏高度 + 舒适间距，标题文字绝不进状态栏
+    int pageTopPad() { return statusBarH() + dp(this, 16); }
+    // P2d-fix：长页面底部安全留白，确保末行能完整滚出悬浮 dock 之外（dock 高约 67dp+底边距 12dp）
+    int dockPad() { return dp(this, 112); }
     static GradientDrawable roundRect(int color, float radiusDp, Context c) {
         GradientDrawable g = new GradientDrawable();
         g.setColor(color); g.setCornerRadius(dp(c, radiusDp));
@@ -3372,7 +3376,8 @@ public class MainActivity extends Activity {
         page.addView(settingRow("迁移进度", "全部卡片 / 详情 / 我的卡片 / 学生推荐 / 筛选 / 资讯 / 情景选卡 / 自定义卡 / 拖动 / 字体与界面大小 / 高刷 / 触感 / 欢迎页 / 更新日志 / 数据 OTA 已迁移"));
         ScrollView sv = new ScrollView(this);
         sv.setClipToPadding(false);
-        page.setPadding(dp(this, 14), dp(this, 12), dp(this, 14), dp(this, 104));
+        // P2d-fix：此前这里把 basePage 的顶部留白覆盖成 12dp，标题被压进状态栏；改用 pageTopPad()/dockPad()
+        page.setPadding(dp(this, 14), pageTopPad(), dp(this, 14), dockPad());
         sv.addView(page);
         return sv;
     }
@@ -3470,7 +3475,7 @@ public class MainActivity extends Activity {
     LinearLayout basePage(String title) {
         LinearLayout page = new LinearLayout(this);
         page.setOrientation(LinearLayout.VERTICAL);
-        page.setPadding(dp(this, 14), statusBarH() + dp(this, 12), dp(this, 14), 0);
+        page.setPadding(dp(this, 14), pageTopPad(), dp(this, 14), 0);
         page.addView(tv(this, title, 24, Color.rgb(0x1C, 0x1C, 0x1E), true));
         return page;
     }
