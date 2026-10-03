@@ -752,6 +752,12 @@ public class MainActivity extends Activity {
             haptic();
             focusSearch();
         });
+        fab.setOnTouchListener((v, e) -> {
+            if (e.getAction() == MotionEvent.ACTION_DOWN) v.animate().scaleX(0.9f).scaleY(0.9f).setDuration(90).start();
+            else if (e.getAction() == MotionEvent.ACTION_UP || e.getAction() == MotionEvent.ACTION_CANCEL)
+                v.animate().scaleX(1f).scaleY(1f).setDuration(120).start();
+            return false;
+        });
         return fab;
     }
 
