@@ -943,11 +943,12 @@ public class MainActivity extends Activity {
         LinearLayout.LayoutParams clp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         clp.topMargin = dp(this, 6);
         box.addView(chips, clp);
-        chips.addView(chip(String.format(java.util.Locale.US, "%.1f分", c.score), Color.rgb(0xE8, 0xF1, 0xFD), Color.rgb(0x0A, 0x5C, 0xD6)));
+        float chipSp = nc == 3 ? 8.5f : 10f;
+        chips.addView(chip(String.format(java.util.Locale.US, "%.1f分", c.score), Color.rgb(0xE8, 0xF1, 0xFD), Color.rgb(0x0A, 0x5C, 0xD6), chipSp));
         chips.addView(chip("已停发".equals(c.status) ? "已停发" : "在发",
             "已停发".equals(c.status) ? Color.rgb(0xF3, 0xE8, 0xE8) : Color.rgb(0xE6, 0xF6, 0xEC),
-            "已停发".equals(c.status) ? Color.rgb(0xB0, 0x23, 0x2B) : Color.rgb(0x1D, 0x8A, 0x49)));
-        if (mine.contains(c.id)) chips.addView(chip("已添加", Color.rgb(0xE6, 0xF6, 0xEC), Color.rgb(0x1D, 0x8A, 0x49)));
+            "已停发".equals(c.status) ? Color.rgb(0xB0, 0x23, 0x2B) : Color.rgb(0x1D, 0x8A, 0x49), chipSp));
+        if (mine.contains(c.id)) chips.addView(chip("已添加", Color.rgb(0xE6, 0xF6, 0xEC), Color.rgb(0x1D, 0x8A, 0x49), chipSp));
         // P-press 长按放大预览（我的卡片页会覆盖此长按为拖动排序，语义不冲突）
         box.setOnLongClickListener(v -> { showPressPreview(box); return true; });
         return box;
@@ -1025,7 +1026,11 @@ public class MainActivity extends Activity {
     }
 
     TextView chip(String s, int bg, int fg) {
-        TextView t = tv(this, s, 10, fg, true);
+        return chip(s, bg, fg, 10f);
+    }
+
+    TextView chip(String s, int bg, int fg, float sp) {
+        TextView t = tv(this, s, sp, fg, true);
         t.setBackground(roundRect(bg, 7, this));
         t.setPadding(dp(this, 6), dp(this, 3), dp(this, 6), dp(this, 3));
         LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
