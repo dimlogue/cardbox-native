@@ -255,6 +255,80 @@ public class MainActivity extends Activity {
         return g;
     }
 
+    // ---------- Q18 崩溃留痕 + 玻璃自动降级 ----------
+    void noteGlassFailure() {
+        glassFailCount++;
+        if (glassFailCount >= 3 && !glassDisabled) {
+            glassDisabled = true;
+            try { if (prefs != null) prefs.edit().putBoolean("glass_disabled", true).apply(); } catch (Throwable ignored) {}
+            // clear all live glass images/effects so tint fallback shows, never drag the page down
+            try {
+                for (ImageView iv : new java.util.ArrayList<>(glassViews)) {
+                    try { iv.setImageBitmap(null); if (Build.VERSION.SDK_INT >= 31) iv.setRenderEffect(null); } catch (Throwable ignored) {}
+                }
+                if (glassSnap != null && !glassSnap.isRecycled()) glassSnap.recycle();
+                glassSnap = null;
+            } catch (Throwable ignored) {}
+        }
+    }
+    void noteGlassSuccess() { if (glassFailCount > 0) glassFailCount = 0; }
+
+    void installCrashHandler() {
+        try { sCrashVersion = appVersion(); } catch (Throwable ignored) { sCrashVersion = ""; }
+        final Thread.UncaughtExceptionHandler prev = Thread.getDefaultUncaughtExceptionHandler();
+        Thread.setDefaultUncaughtExceptionHandler((t, e) -> {
+            try {
+                java.io.StringWriter sw = new java.io.StringWriter();
+                java.io.PrintWriter pw = new java.io.PrintWriter(sw);
+                e.printStackTrace(pw); pw.flush();
+                StringBuilder sb = new StringBuilder();
+                sb.append("time=").append(new java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.US).format(new java.util.Date())).append("\n");
+                sb.append("version=").append(sCrashVersion).append("\n");
+                sb.append("page=").append(sCrashTab).append("\n");
+                sb.append("thread=").append(t == null ? "" : t.getName()).append("\n");
+                sb.append(sw.toString());
+                String txt = sb.toString();
+                // file first (survives even if prefs write races process death)
+                try {
+                    File f = new File(getFilesDir(), "crash_last.txt");
+                    FileOutputStream fos = new FileOutputStream(f, false);
+                    fos.write(txt.getBytes("UTF-8")); fos.close();
+                } catch (Throwable ignored) {}
+                try {
+                    if (prefs != null) prefs.edit().putString("crash_log", txt).commit();
+                } catch (Throwable ignored) {}
+            } catch (Throwable ignored) {}
+            if (prev != null) prev.uncaughtException(t, e);
+            else { android.os.Process.killProcess(android.os.Process.myPid()); System.exit(10); }
+        });
+    }
+    void loadCrashLog() {
+        crashLogText = null;
+        try { if (prefs != null) crashLogText = prefs.getString("crash_log", null); } catch (Throwable ignored) {}
+        if (crashLogText == null || crashLogText.trim().isEmpty()) {
+            try {
+                File f = new File(getFilesDir(), "crash_last.txt");
+                if (f.exists()) {
+                    FileInputStream in = new FileInputStream(f);
+                    ByteArrayOutputStream bos = new ByteArrayOutputStream();
+                    byte[] buf = new byte[8192]; int n;
+                    while ((n = in.read(buf)) > 0) bos.write(buf, 0, n);
+                    in.close();
+                    crashLogText = new String(bos.toByteArray(), "UTF-8");
+                    if (crashLogText != null && prefs != null) {
+                        try { prefs.edit().putString("crash_log", crashLogText).apply(); } catch (Throwable ignored) {}
+                    }
+                }
+            } catch (Throwable ignored) { crashLogText = null; }
+        }
+        if (crashLogText != null && crashLogText.trim().isEmpty()) crashLogText = null;
+    }
+    void clearCrashLog() {
+        crashLogText = null;
+        try { if (prefs != null) prefs.edit().remove("crash_log").apply(); } catch (Throwable ignored) {}
+        try { File f = new File(getFilesDir(), "crash_last.txt"); if (f.exists()) f.delete(); } catch (Throwable ignored) {}
+    }
+
     // ---------- Q11 真毛玻璃地基 ----------
     void pruneGlass() {
         java.util.Iterator<ImageView> it = glassViews.iterator();
@@ -271,6 +345,16 @@ public class MainActivity extends Activity {
 
     /** 建一层玻璃模糊层：host 是它要贴合的玻璃面（定位/抓图时整面让开），radiusDp<0 为椭圆。 */
     ImageView glassLayer(View host, float radiusDp, boolean live) {
+        if (glassDisabled) {
+            // Q18: glass chain auto-disabled after consecutive failures -> return invisible placeholder,
+            // tint underneath takes over; never crash the host page for glass.
+            ImageView ph = new ImageView(this);
+            ph.setClickable(false); ph.setFocusable(false);
+            ph.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
+            ph.setTag(live ? "live" : "frozen");
+            ph.setVisibility(View.INVISIBLE);
+            return ph;
+        }
         if (!live) captureGlassSnapshot(); // 浮窗升起前先抓底层（此时浮窗本体还没入树，抓到的就是它身后的画面）
         final ImageView iv = new ImageView(this);
         iv.setScaleType(ImageView.ScaleType.FIT_XY);
@@ -330,6 +414,7 @@ public class MainActivity extends Activity {
             rootView.draw(cv);
         } catch (Throwable t) {
             out = null; // degrade: keep previous frame; tint underneath still renders
+            noteGlassFailure();
         } finally {
             for (java.util.Map.Entry<View, Integer> e : saved.entrySet()) {
                 try { e.getKey().setVisibility(e.getValue()); } catch (Throwable ignored) {}
@@ -340,6 +425,7 @@ public class MainActivity extends Activity {
             Bitmap old = glassSnap;
             glassSnap = out;
             if (old != null && old != out && !old.isRecycled()) old.recycle();
+            noteGlassSuccess();
         }
         return glassSnap;
     }
@@ -380,18 +466,21 @@ public class MainActivity extends Activity {
             Bitmap old = glassCrops.put(iv, out);
             if (old != null && old != out && !old.isRecycled()) old.recycle(); // swap new in first, then recycle old (never draw a recycled bitmap)
             if (Build.VERSION.SDK_INT >= 31) {
-                // Q16 (4): blur radius 24 -> 13 (snapshot is already 0.2-downsampled/soft); cards under glass must stay recognisable
-                try { iv.setRenderEffect(RenderEffect.createBlurEffect(13f, 13f, Shader.TileMode.CLAMP)); }
-                catch (Throwable t) { /* unsupported on some devices: downsample softness remains */ }
+                // Q18 (4): blur 13 -> 11 + saturation 1.4 kept: snapshot already 0.2-downsampled,
+                // lower radius keeps background colour/shape recognisable (no milky wall)
+                try { iv.setRenderEffect(RenderEffect.createBlurEffect(11f, 11f, Shader.TileMode.CLAMP)); }
+                catch (Throwable t) { noteGlassFailure(); }
             }
+            noteGlassSuccess();
         } catch (Throwable t) {
+            noteGlassFailure();
             try { iv.setImageBitmap(null); if (Build.VERSION.SDK_INT >= 31) iv.setRenderEffect(null); } catch (Throwable ignored) {}
         }
     }
 
     /** 滚动停稳后刷新 live 玻璃（底栏/悬浮钮/回顶/搜索胶囊）；有浮窗在场时不刷，浮窗用的是冻结快照。 */
     void refreshLiveGlass() {
-        if (glassCapturing || rootView == null || rootView.getWidth() <= 0) return;
+        if (glassDisabled || glassCapturing || rootView == null || rootView.getWidth() <= 0) return;
         if (cardMenuPop != null || filterSheet != null || wizardOpen || aboutOpen
             || detailCard != null || welcomeOpen || changelogOpen) return;
         captureGlassSnapshot();
@@ -799,6 +888,12 @@ public class MainActivity extends Activity {
     long lastLiveGlassMs = 0; // Q16: throttle stamp for scrolling-time live re-sampling
     final Runnable liveGlassTask = new Runnable() { public void run() { refreshLiveGlass(); } };
     final java.util.Map<ImageView, Integer> glassRetry = new java.util.HashMap<>(); // Q16: layout retry cap per glass layer
+    // Q18: glass consecutive-failure auto-disable + crash trace
+    int glassFailCount = 0;
+    boolean glassDisabled = false;
+    String crashLogText = null;
+    static volatile String sCrashTab = "home";
+    static volatile String sCrashVersion = "";
 
     FrameLayout content;
     FrameLayout navBar;
@@ -954,6 +1049,11 @@ public class MainActivity extends Activity {
         w.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE);
 
         prefs = getSharedPreferences("cardbox_native", MODE_PRIVATE);
+        // Q18: crash trace first (so even early onCreate crashes are recorded), then restore glass-disable flag
+        glassDisabled = false;
+        try { glassDisabled = prefs.getBoolean("glass_disabled", false); } catch (Throwable ignored) {}
+        loadCrashLog();
+        installCrashHandler();
         fontMode = prefs.getString("font_mode", "default");
         uiScale = prefs.getFloat("ui_scale", 1f);
         if (uiScale != 0.9f && uiScale != 1f && uiScale != 1.12f) uiScale = 1f;
@@ -1422,21 +1522,43 @@ public class MainActivity extends Activity {
     void showTab(String key) {
         dismissCardMenu();
         tab = key;
+        sCrashTab = key;
         content.removeAllViews();
-        View page = pages.get(key);
-        if (page == null) {
-            switch (key) {
-                case "student": page = buildStudentPage(); break;
-                case "mine": page = buildMinePage(); break;
-                case "news": page = buildNewsPage(); break;
-                case "settings": page = buildSettingsPage(); break;
-                default: page = buildHomePage();
+        View page = null;
+        try {
+            page = pages.get(key);
+            if (page == null) {
+                switch (key) {
+                    case "student": page = buildStudentPage(); break;
+                    case "mine": page = buildMinePage(); break;
+                    case "news": page = buildNewsPage(); break;
+                    case "settings": page = buildSettingsPage(); break;
+                    default: page = buildHomePage();
+                }
+                pages.put(key, page);
+            } else if ("mine".equals(key)) {
+                // 我的卡片每次进来重建，保证收藏增减即时反映
+                page = buildMinePage();
+                pages.put(key, page);
             }
-            pages.put(key, page);
-        } else if ("mine".equals(key)) {
-            // 我的卡片每次进来重建，保证收藏增减即时反映
-            page = buildMinePage();
-            pages.put(key, page);
+        } catch (Throwable t) {
+            // Q18: any page-build crash must not kill the app; record via crash handler path + fallback home
+            noteGlassFailure();
+            try {
+                java.io.StringWriter sw = new java.io.StringWriter();
+                t.printStackTrace(new java.io.PrintWriter(sw));
+                String txt = "page-build failed tab=" + key + " version=" + sCrashVersion + "\n" + sw.toString();
+                try { prefs.edit().putString("crash_log", txt).apply(); } catch (Throwable ignored) {}
+                crashLogText = txt;
+            } catch (Throwable ignored) {}
+            pages.remove(key);
+            if (!"home".equals(key)) {
+                try { page = buildHomePage(); pages.put("home", page); tab = "home"; sCrashTab = "home"; }
+                catch (Throwable t2) { page = new FrameLayout(this); }
+            } else {
+                page = new FrameLayout(this);
+            }
+            try { showFloatToast("页面打开失败，已回到首页"); } catch (Throwable ignored) {}
         }
         content.addView(page);
         if (rootView != null) rootView.post(() -> refreshLiveGlass()); // Q11：切页后按新页画面刷新玻璃
@@ -2050,8 +2172,9 @@ public class MainActivity extends Activity {
     // ---------- 首页 ----------
     // P2d/Q11：毛玻璃白悬浮搜索栏（圆角 + 淡描边 + 投影，Q11 起栏内垫 live 真模糊层，上为半透染色）
     GradientDrawable glassPillBg() {
+        // Q18 (4): tint 148 -> 128 so background colour/shape stays recognisable through the capsule
         GradientDrawable g = new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
-            new int[]{Color.argb(148, 255, 255, 255), Color.argb(136, 246, 247, 250)});
+            new int[]{Color.argb(128, 255, 255, 255), Color.argb(118, 246, 247, 250)});
         g.setCornerRadius(dp(this, 999));
         g.setStroke(dp(this, 1), Color.argb(70, 20, 30, 60));
         return g;
@@ -5438,6 +5561,60 @@ public class MainActivity extends Activity {
         page.addView(updRow);
 
         sectionHead(page, "关于");
+        // Q18: last-crash trace at top of About (copyable / clearable); empty when no crash recorded
+        if (crashLogText != null && !crashLogText.trim().isEmpty()) {
+            LinearLayout crashBox = new LinearLayout(this);
+            crashBox.setOrientation(LinearLayout.VERTICAL);
+            crashBox.setBackground(roundRect(Color.rgb(0xFF, 0xF1, 0xF0), 12, this));
+            crashBox.setPadding(dp(this, 14), dp(this, 10), dp(this, 14), dp(this, 12));
+            LinearLayout.LayoutParams cbp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            cbp.topMargin = dp(this, 8);
+            crashBox.setLayoutParams(cbp);
+            crashBox.addView(tv(this, "最近一次崩溃记录", 14, Color.rgb(0xB0, 0x2A, 0x20), true));
+            TextView crashTv = tv(this, crashLogText, 11, Color.rgb(0x5A, 0x2A, 0x24), false);
+            crashTv.setTextIsSelectable(true);
+            LinearLayout.LayoutParams clp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            clp.topMargin = dp(this, 6);
+            crashTv.setLayoutParams(clp);
+            crashBox.addView(crashTv);
+            LinearLayout crashBtns = new LinearLayout(this);
+            crashBtns.setOrientation(LinearLayout.HORIZONTAL);
+            LinearLayout.LayoutParams bpl = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            bpl.topMargin = dp(this, 10);
+            crashBtns.setLayoutParams(bpl);
+            Button copyBtn = new Button(this);
+            copyBtn.setText("复制记录"); copyBtn.setTextSize(12.5f); copyBtn.setAllCaps(false);
+            copyBtn.setBackground(roundRect(Color.rgb(0x0A, 0x5C, 0xD6), 9, this));
+            copyBtn.setTextColor(Color.WHITE);
+            copyBtn.setOnClickListener(v -> {
+                haptic();
+                try {
+                    android.content.ClipboardManager cm = (android.content.ClipboardManager) getSystemService(CLIPBOARD_SERVICE);
+                    if (cm != null) cm.setPrimaryClip(android.content.ClipData.newPlainText("crash", crashLogText));
+                    showFloatToast("崩溃记录已复制");
+                } catch (Throwable ignored) { showFloatToast("复制失败"); }
+            });
+            crashBtns.addView(copyBtn, new LinearLayout.LayoutParams(0, dp(this, 38), 1f));
+            Button clearBtn = new Button(this);
+            clearBtn.setText("清除记录"); clearBtn.setTextSize(12.5f); clearBtn.setAllCaps(false);
+            clearBtn.setBackground(roundRect(Color.rgb(0xEE, 0xF1, 0xF6), 9, this));
+            clearBtn.setOnClickListener(v -> { haptic(); clearCrashLog(); rebuildPages(); showFloatToast("崩溃记录已清除"); });
+            LinearLayout.LayoutParams clrLp = new LinearLayout.LayoutParams(0, dp(this, 38), 1f);
+            clrLp.leftMargin = dp(this, 10);
+            crashBtns.addView(clearBtn, clrLp);
+            crashBox.addView(crashBtns);
+            // glass status line (Q18 auto-disable visibility)
+            if (glassDisabled) {
+                TextView gs = tv(this, "玻璃效果已自动停用（连续失败后回落半透，不影响使用）", 11, Color.rgb(0x8E, 0x8E, 0x93), false);
+                LinearLayout.LayoutParams gsl = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+                gsl.topMargin = dp(this, 8);
+                gs.setLayoutParams(gsl);
+                crashBox.addView(gs);
+            }
+            page.addView(crashBox);
+        } else if (glassDisabled) {
+            page.addView(settingRow("玻璃效果", "已自动停用（连续失败后回落半透，不影响使用）"));
+        }
         page.addView(settingRow("版本", appVersion() + "（原生版）"));
         View logRow = settingRow("更新日志", settingsLogOpen ? "收起更新日志" : "每个版本改了什么 ›");
         logRow.setOnClickListener(v -> { haptic(); settingsLogOpen = !settingsLogOpen; rebuildPages(); });
