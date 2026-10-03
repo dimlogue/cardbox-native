@@ -197,13 +197,134 @@ public class MainActivity extends Activity {
                 GradientDrawable thumb = new GradientDrawable();
                 thumb.setColor(Color.argb(118, 92, 108, 140));
                 thumb.setCornerRadius(dp(this, 3));
-                thumb.setSize(dp(this, 3), dp(this, 48));
+                thumb.setSize(dp(this, 3), dp(this, 34)); // Q49：thumb 长度能缩则缩（原 48 过长）
                 sv.setVerticalScrollbarThumbDrawable(thumb);
                 GradientDrawable track = new GradientDrawable();
                 track.setColor(Color.TRANSPARENT);
                 sv.setVerticalScrollbarTrackDrawable(track);
             } catch (Exception e) { /* 低版本/个别机型回落系统细条 */ }
         }
+    }
+    // Q49：短内容列表（资讯 6 条/我的卡片）指示从简到近乎无——直接关掉系统滚动条，不挂长条
+    void noScrollbar(ScrollView sv) {
+        if (sv == null) return;
+        sv.setVerticalScrollBarEnabled(false);
+        sv.setHorizontalScrollBarEnabled(false);
+    }
+    // Q49：可拖拽滚动条（对照混合版 .sbar：right 3px、thumb 5px 拖时 7px、min 34px、
+    // 滚动显 1100ms 淡出、拖时百分比气泡；轨道只落在宿主可视区内，上下边距由 attach 处避开 dock/手势条）
+    class DragBarView extends View {
+        ScrollView target;
+        boolean persistent;
+        boolean dragging;
+        boolean shown;
+        Paint thumbPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        Paint bubblePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        Paint bubbleText = new Paint(Paint.ANTI_ALIAS_FLAG);
+        Runnable hideTask = () -> { if (!dragging && !persistent) { shown = false; animate().alpha(0f).setDuration(300).start(); } };
+        DragBarView(Context c, ScrollView sv, boolean pers) {
+            super(c);
+            target = sv; persistent = pers;
+            setAlpha(pers ? 1f : 0f);
+            shown = pers;
+            thumbPaint.setStyle(Paint.Style.FILL);
+            bubblePaint.setStyle(Paint.Style.FILL);
+            bubblePaint.setColor(Color.argb(224, 28, 32, 44));
+            bubbleText.setColor(Color.WHITE);
+            bubbleText.setTextSize(dp(c, 11));
+            bubbleText.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+            bubbleText.setTextAlign(Paint.Align.CENTER);
+            sv.getViewTreeObserver().addOnScrollChangedListener(() -> {
+                if (!persistent) {
+                    if (!shown) { shown = true; animate().cancel(); animate().alpha(1f).setDuration(150).start(); }
+                    mainHandler.removeCallbacks(hideTask);
+                    mainHandler.postDelayed(hideTask, 1100);
+                }
+                invalidate();
+            });
+        }
+        // Q49：computeVerticalScroll* 为 protected，改用子视图高度/自身高度/ scrollY 公开量自算
+        int contentH() { return target.getChildCount() > 0 ? target.getChildAt(0).getHeight() : 0; }
+        int maxScroll() {
+            return Math.max(0, contentH() - target.getHeight());
+        }
+        float thumbH() {
+            int h = getHeight(); if (h <= 0) return dp(getContext(), 34);
+            int range = contentH();
+            int extent = target.getHeight();
+            if (range <= 0) return h;
+            float th = h * ((float) extent / (float) range);
+            return Math.max(dp(getContext(), 34), Math.min(h, th));
+        }
+        boolean scrollableEnough() {
+            // 混合版 syncSbar：maxScroll 不足半屏不显；日志框 persistent 例外（有滚动即显）
+            int extent = target.getHeight();
+            return maxScroll() > (persistent ? 1 : extent * 0.5f);
+        }
+        @Override protected void onDraw(Canvas cv) {
+            super.onDraw(cv);
+            if (target == null || getHeight() <= 0 || !scrollableEnough()) return;
+            float th = thumbH();
+            int max = maxScroll();
+            float p = max > 0 ? (float) target.getScrollY() / (float) max : 0f;
+            float top = p * (getHeight() - th);
+            float w = dp(getContext(), dragging ? 7 : 5);
+            float right = getWidth() - dp(getContext(), 3);
+            thumbPaint.setColor(Color.argb(dragging ? 140 : 92, 20, 30, 60));
+            cv.drawRoundRect(new RectF(right - w, top, right, top + th), dp(getContext(), 3), dp(getContext(), 3), thumbPaint);
+            if (dragging) {
+                String txt = Math.round(p * 100) + "%";
+                float bw = dp(getContext(), 40), bh = dp(getContext(), 22);
+                float bx = right - w - dp(getContext(), 8) - bw;
+                float by = top + th / 2f - bh / 2f;
+                cv.drawRoundRect(new RectF(bx, by, bx + bw, by + bh), dp(getContext(), 8), dp(getContext(), 8), bubblePaint);
+                cv.drawText(txt, bx + bw / 2f, by + bh / 2f + dp(getContext(), 4), bubbleText);
+            }
+        }
+        void jumpTo(float y) {
+            int max = maxScroll(); if (max <= 0) return;
+            float th = thumbH();
+            float r = (y - th / 2f) / Math.max(1f, getHeight() - th);
+            r = Math.max(0f, Math.min(1f, r));
+            target.scrollTo(0, Math.round(r * max));
+            invalidate();
+        }
+        @Override public boolean onTouchEvent(MotionEvent e) {
+            if (target == null || !scrollableEnough()) return false;
+            switch (e.getActionMasked()) {
+                case MotionEvent.ACTION_DOWN:
+                    dragging = true;
+                    getParent().requestDisallowInterceptTouchEvent(true);
+                    mainHandler.removeCallbacks(hideTask);
+                    if (!shown) { shown = true; animate().cancel(); animate().alpha(1f).setDuration(120).start(); }
+                    jumpTo(e.getY());
+                    invalidate();
+                    return true;
+                case MotionEvent.ACTION_MOVE:
+                    if (dragging) { jumpTo(e.getY()); return true; }
+                    return false;
+                case MotionEvent.ACTION_UP:
+                case MotionEvent.ACTION_CANCEL:
+                    dragging = false;
+                    getParent().requestDisallowInterceptTouchEvent(false);
+                    if (!persistent) { mainHandler.removeCallbacks(hideTask); mainHandler.postDelayed(hideTask, 1100); }
+                    invalidate();
+                    return true;
+                default: return super.onTouchEvent(e);
+            }
+        }
+    }
+    // Q49：把可拖拽滚动条挂到宿主 FrameLayout 右侧；top/bottom 边距即轨道范围，绝不探进 dock/手势条
+    DragBarView attachDragBar(FrameLayout host, ScrollView sv, boolean persistent, int topDp, int bottomDp) {
+        sv.setVerticalScrollBarEnabled(false);
+        DragBarView bar = new DragBarView(this, sv, persistent);
+        FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(dp(this, 22), ViewGroup.LayoutParams.MATCH_PARENT);
+        lp.gravity = Gravity.RIGHT | Gravity.TOP;
+        lp.topMargin = dp(this, topDp);
+        lp.bottomMargin = dp(this, bottomDp) + navBarH(); // Q49/Q26：轨道下止于 dock 上沿，绝不探进手势小白条区
+        lp.rightMargin = dp(this, 2);
+        host.addView(bar, lp);
+        return bar;
     }
     // P-scroll：当前长列表（回顶钮指向它）——详情/更新日志为覆盖层时优先于底下主页
     ScrollView activeLongScroll() {
@@ -3387,6 +3508,8 @@ public class MainActivity extends Activity {
         });
         page.addView(homeScroll, new FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        // Q49：全部卡片长列表必备可拖拽滚动条（轨道 top 120dp 起、bottom 100dp 止于 dock 上沿）
+        attachDragBar(page, homeScroll, false, 120, 100);
 
         LinearLayout col = new LinearLayout(this);
         col.setOrientation(LinearLayout.VERTICAL);
@@ -5301,7 +5424,11 @@ public class MainActivity extends Activity {
         listBox.setOrientation(LinearLayout.VERTICAL);
         listBox.setPadding(0, dp(this, 10), 0, dockPad());
         sv.addView(listBox);
-        page.addView(sv, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
+        // Q49：学生页同为长列表（混合版 syncSbar onList 含 student），挂可拖拽滚动条
+        FrameLayout stuWrap = new FrameLayout(this);
+        stuWrap.addView(sv, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        attachDragBar(stuWrap, sv, false, 8, 100);
+        page.addView(stuWrap, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
 
         for (final Card c : stu) {
             LinearLayout cardBox = new LinearLayout(this);
@@ -5607,7 +5734,7 @@ public class MainActivity extends Activity {
 
         // 整页可滚：自定义卡展开后不会把卡库收藏网格挤没（色带多时纵向滚动看）
         ScrollView sv = new ScrollView(this);
-        thinScrollbar(sv);
+        noScrollbar(sv); // Q49：我的卡片内容不多，滚动指示从简到近乎无，不挂长条
         sv.setFillViewport(true);
         sv.setClipToPadding(false);
         mineScrollView = sv;
@@ -7675,7 +7802,7 @@ public class MainActivity extends Activity {
         page.addView(newsMeta, mLp);
 
         ScrollView sv = new ScrollView(this);
-        thinScrollbar(sv);
+        noScrollbar(sv); // Q49：资讯仅 6 条，滚动指示从简到近乎无，不挂长条
         sv.setClipToPadding(false);
         newsScroll = sv;
         if (Build.VERSION.SDK_INT >= 23) sv.setOnScrollChangeListener((v, sx, sy, ox, oy) -> { pageScrollSaveY.put("news", sy); updateTopFabVisibility(sy); });
@@ -8219,13 +8346,16 @@ public class MainActivity extends Activity {
         head.addView(ht, htlp);
 
         changelogScroll = new ScrollView(this);
-        thinScrollbarPersistent(changelogScroll);
         LinearLayout page = new LinearLayout(this);
         page.setOrientation(LinearLayout.VERTICAL);
         page.setPadding(dp(this, 16), dp(this, 6), dp(this, 16), dp(this, 16));
         changelogScroll.addView(page);
         if (Build.VERSION.SDK_INT >= 23) changelogScroll.setOnScrollChangeListener((v, sx, sy, ox, oy) -> updateTopFabVisibility(sy));
-        root.addView(changelogScroll, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
+        // Q49：更新日志长列表可拖拽黑条（常显细条、按住拖快速拉动全文）
+        FrameLayout logWrap = new FrameLayout(this);
+        logWrap.addView(changelogScroll, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        attachDragBar(logWrap, changelogScroll, true, 8, 8);
+        root.addView(logWrap, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
 
         List<LogEntry> logs = loadChangelog();
         if (logs.isEmpty()) {
@@ -8278,7 +8408,6 @@ public class MainActivity extends Activity {
         box.setLayoutParams(blp);
 
         settingsLogScroll = new ScrollView(this);
-        thinScrollbarPersistent(settingsLogScroll);
         settingsLogScroll.setOverScrollMode(View.OVER_SCROLL_NEVER);
         int h = (int) (getResources().getDisplayMetrics().heightPixels * 0.52f);
         h = Math.max(dp(this, 240), Math.min(h, dp(this, 520)));
@@ -8309,7 +8438,11 @@ public class MainActivity extends Activity {
                 v.getParent().requestDisallowInterceptTouchEvent(false);
             return false;
         });
-        box.addView(settingsLogScroll, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, h));
+        // Q49：设置页内嵌日志框同备可拖拽黑条（常显、按住拖快速拉动）
+        FrameLayout inlineLogWrap = new FrameLayout(this);
+        inlineLogWrap.addView(settingsLogScroll, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        attachDragBar(inlineLogWrap, settingsLogScroll, true, 6, 6);
+        box.addView(inlineLogWrap, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, h));
 
         LinearLayout actions = new LinearLayout(this);
         actions.setOrientation(LinearLayout.HORIZONTAL);
