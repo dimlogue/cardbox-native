@@ -3554,7 +3554,7 @@ public class MainActivity extends Activity {
                     .setDuration(180).setInterpolator(ANIM_ENTER)
                     .withEndAction(() -> {
                         if (sheet.getParent() != null) ((ViewGroup) sheet.getParent()).removeView(sheet);
-                        navBar.setVisibility(View.VISIBLE);
+                        if (navWrap != null) navWrap.setVisibility(View.VISIBLE); // Q32
                         syncSearchFab();
                     }).start();
                 sheet.animate().alpha(0f).setDuration(180).start();
@@ -3562,7 +3562,7 @@ public class MainActivity extends Activity {
             }
             ((ViewGroup) sheet.getParent()).removeView(sheet);
         }
-        navBar.setVisibility(View.VISIBLE);
+        if (navWrap != null) navWrap.setVisibility(View.VISIBLE); // Q32
         syncSearchFab();
     }
 
@@ -3575,7 +3575,7 @@ public class MainActivity extends Activity {
     // P2b：选卡改悬浮窗——对照混合版 .wizard/.wiz-shade/.wiz-sheet：全屏轻遮罩（rgba(15,20,40,.46)）
     // +贴底大圆角窗（顶圆角 26、max-height 88vh、柔影），底层页面留在后面，关窗回到原页原位。
     void showWizardPage() {
-        navBar.setVisibility(View.GONE);
+        if (navWrap != null) navWrap.setVisibility(View.GONE); // Q32: hide whole dock incl. glass layer - hiding navBar alone leaks a glass strip at screen bottom
         // P4：窗已在场时是步骤切换（新内容横向滑入），否则是首次打开（整窗升起）
         boolean stepSwitch = wizardSheet != null && wizardSheet.getParent() != null;
         if (wizardSheet != null && wizardSheet.getParent() != null)
@@ -5789,7 +5789,7 @@ public class MainActivity extends Activity {
         captureCurrentPageScroll();
         aboutOpen = true;
         aboutSponsorOpen = false;
-        navBar.setVisibility(View.GONE);
+        if (navWrap != null) navWrap.setVisibility(View.GONE); // Q32: hide whole dock incl. glass layer - hiding navBar alone leaks a glass strip at screen bottom
         if (aboutSheet != null && aboutSheet.getParent() != null)
             ((ViewGroup) aboutSheet.getParent()).removeView(aboutSheet);
         final FrameLayout sheet = new FrameLayout(this);
@@ -5854,7 +5854,7 @@ public class MainActivity extends Activity {
                     .setDuration(180).setInterpolator(ANIM_ENTER)
                     .withEndAction(() -> {
                         if (sheet.getParent() != null) ((ViewGroup) sheet.getParent()).removeView(sheet);
-                        navBar.setVisibility(View.VISIBLE);
+                        if (navWrap != null) navWrap.setVisibility(View.VISIBLE); // Q32
                         syncSearchFab();
                     }).start();
                 sheet.animate().alpha(0f).setDuration(180).start();
@@ -5862,7 +5862,7 @@ public class MainActivity extends Activity {
             }
             ((ViewGroup) sheet.getParent()).removeView(sheet);
         }
-        navBar.setVisibility(View.VISIBLE);
+        if (navWrap != null) navWrap.setVisibility(View.VISIBLE); // Q32
         syncSearchFab();
     }
 
@@ -6084,7 +6084,7 @@ public class MainActivity extends Activity {
     void showWelcome() {
         captureCurrentPageScroll();
         welcomeOpen = true;
-        navBar.setVisibility(View.GONE);
+        if (navWrap != null) navWrap.setVisibility(View.GONE); // Q32: hide whole dock incl. glass layer - hiding navBar alone leaks a glass strip at screen bottom
         content.removeAllViews();
         content.addView(buildWelcomePage());
     }
@@ -6092,7 +6092,7 @@ public class MainActivity extends Activity {
     void closeWelcome() {
         prefs.edit().putBoolean("welcomed", true).apply();
         welcomeOpen = false;
-        navBar.setVisibility(View.VISIBLE);
+        if (navWrap != null) navWrap.setVisibility(View.VISIBLE); // Q32
         showTab(tab);
     }
 
@@ -6201,7 +6201,7 @@ public class MainActivity extends Activity {
     void showChangelog() {
         captureCurrentPageScroll();
         changelogOpen = true;
-        navBar.setVisibility(View.GONE);
+        if (navWrap != null) navWrap.setVisibility(View.GONE); // Q32: hide whole dock incl. glass layer - hiding navBar alone leaks a glass strip at screen bottom
         content.removeAllViews();
         content.addView(buildChangelogPage());
         syncTopFab();
@@ -6209,7 +6209,7 @@ public class MainActivity extends Activity {
 
     void closeChangelog() {
         changelogOpen = false;
-        navBar.setVisibility(View.VISIBLE);
+        if (navWrap != null) navWrap.setVisibility(View.VISIBLE); // Q32
         showTab(tab);
     }
 
