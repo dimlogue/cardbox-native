@@ -15,12 +15,15 @@ import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Paint;
 import android.graphics.Path;
+import android.graphics.PorterDuff;
+import android.graphics.PorterDuffXfermode;
 import android.graphics.RectF;
 import android.graphics.drawable.Drawable;
 import android.graphics.drawable.GradientDrawable;
 import android.graphics.drawable.RippleDrawable;
 import android.graphics.ColorMatrix;
 import android.graphics.ColorMatrixColorFilter;
+import android.graphics.Outline;
 import android.graphics.RenderEffect;
 import android.graphics.Shader;
 import android.os.Build;
@@ -37,6 +40,7 @@ import android.view.animation.OvershootInterpolator;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.ViewOutlineProvider;
 import android.view.Window;
 import android.view.WindowManager;
 import android.view.inputmethod.InputMethodManager;
@@ -326,6 +330,36 @@ public class MainActivity extends Activity {
             new int[]{ Color.rgb(0xED, 0xF2, 0xFB), Color.rgb(0xE3, 0xE9, 0xF8), Color.rgb(0xEF, 0xEAF, 0xF7) });
         g.setCornerRadius(dp(c, radiusDp));
         return g;
+    }
+    // Q27：圆角裁切不能只靠默认 BACKGROUND outline（GradientDrawable/RippleDrawable 的 outline 在部分机型上
+    // 退化为直角矩形，ImageView 的方形位图四角便盖过圆角背景、elevation 阴影也按直角轮廓打出黑角）。
+    // 显式给视图装 RoundRect outline 并 clipToOutline，位图/背景/阴影三者共用同一圆角半径。
+    static void roundClip(final View v, final float radiusDp, final Context c) {
+        try {
+            final float r = dp(c, radiusDp);
+            v.setOutlineProvider(new ViewOutlineProvider() {
+                @Override public void getOutline(View view, Outline outline) {
+                    outline.setRoundRect(0, 0, view.getWidth(), view.getHeight(), r);
+                }
+            });
+            v.setClipToOutline(true);
+        } catch (Throwable ignored) { /* 个别机型 outline 异常时保留原背景圆角，不为裁切冒崩点 */ }
+    }
+    // Q27（用户 19:24 钉法）：位图级四角圆角——按显示尺寸把半径换算到位图坐标里，用 SRC_IN 把源图
+    // 四角真切成透明，不靠视图 outline 硬剪；源图在 Img 缓存里多处共用，只出圆角副本、绝不动源图。
+    static Bitmap roundBitmap(Bitmap src, float radiusPx) {
+        if (src == null || src.getWidth() <= 0 || src.getHeight() <= 0) return src;
+        try {
+            Bitmap out = Bitmap.createBitmap(src.getWidth(), src.getHeight(), Bitmap.Config.ARGB_8888);
+            Canvas cv = new Canvas(out);
+            Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);
+            RectF rf = new RectF(0, 0, src.getWidth(), src.getHeight());
+            cv.drawRoundRect(rf, radiusPx, radiusPx, p);
+            p.setXfermode(new PorterDuffXfermode(PorterDuff.Mode.SRC_IN));
+            cv.drawBitmap(src, 0, 0, p);
+            p.setXfermode(null);
+            return out;
+        } catch (Throwable t) { return src; } // 圆角副本失败回落源图，不为修角冒崩点
     }
 
     // ---------- Q18 崩溃留痕 + 玻璃自动降级 ----------
@@ -2172,6 +2206,7 @@ public class MainActivity extends Activity {
         box.setOrientation(LinearLayout.VERTICAL);
         box.setBackground(rippleBg(Color.WHITE, 14));
         box.setClipToOutline(true);
+        roundClip(box, 14, this); // Q27：瓷砖同机制——外框显式圆角轮廓，顶图四角随瓷砖一同裁净
         AbsListView.LayoutParams lp = new AbsListView.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         box.setLayoutParams(lp);
 
@@ -3822,6 +3857,7 @@ public class MainActivity extends Activity {
         ImageView iv = new ImageView(this);
         iv.setScaleType(ImageView.ScaleType.CENTER_CROP);
         iv.setBackground(placeholderGrad(9, this));
+        roundClip(iv, 9, this); // Q27 同机制：缩略图自身圆角裁切，不靠父行轮廓
         row.addView(iv, new LinearLayout.LayoutParams(dp(this, 76), dp(this, 48)));
         Bitmap b = Img.get(this, c.image);
         if (b != null) iv.setImageBitmap(b);
@@ -4194,7 +4230,7 @@ public class MainActivity extends Activity {
             ImageView iv = new ImageView(this);
             iv.setScaleType(ImageView.ScaleType.FIT_CENTER);
             iv.setBackground(placeholderGrad(12, this));
-            iv.setClipToOutline(true);
+            roundClip(iv, 12, this); // Q27：显式圆角轮廓，位图/占位渐变/阴影同半径，根除四角黑边
             if (Build.VERSION.SDK_INT >= 21) iv.setElevation(dp(this, 6));
             Bitmap b = Img.get(this, imgPath);
             int availW = screenW - dp(this, 44);
@@ -4208,7 +4244,12 @@ public class MainActivity extends Activity {
             LinearLayout.LayoutParams ilp = new LinearLayout.LayoutParams(imgW, imgH);
             ilp.gravity = Gravity.CENTER_HORIZONTAL;
             slide.addView(iv, ilp);
-            if (b != null) iv.setImageBitmap(b);
+            if (b != null) {
+                // Q27：有真图时撤掉占位底（免其颜色从圆角外透出），图本身按位图级圆角出（半径按位图/显示宽比换算）
+                iv.setBackground(null);
+                float rScale = imgW > 0 ? (float) b.getWidth() / (float) imgW : 1f;
+                iv.setImageBitmap(roundBitmap(b, dp(this, 12) * rScale));
+            }
             if (slideName != null && !slideName.isEmpty()) {
                 TextView sn = tv(this, slideName, 12, Color.rgb(0x8E, 0x8E, 0x93), true);
                 sn.setGravity(Gravity.CENTER);
@@ -4512,6 +4553,7 @@ public class MainActivity extends Activity {
             ImageView iv = new ImageView(this);
             iv.setScaleType(ImageView.ScaleType.CENTER_CROP);
             iv.setBackground(placeholderGrad(9, this));
+            roundClip(iv, 9, this); // Q27 同机制：缩略图自身圆角裁切，不靠父卡轮廓
             top.addView(iv, new LinearLayout.LayoutParams(dp(this, 72), dp(this, 44)));
             Bitmap b = Img.get(this, c.image);
             if (b != null) iv.setImageBitmap(b);
