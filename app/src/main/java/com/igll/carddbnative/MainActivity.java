@@ -84,6 +84,136 @@ public class MainActivity extends Activity {
     int pageTopPad() { return statusBarH() + dp(this, 16); }
     // P2d-fix：长页面底部安全留白，确保末行能完整滚出悬浮 dock 之外（dock 高约 67dp+底边距 12dp）
     int dockPad() { return dp(this, 112); }
+    // P-scroll：全 App 长列表统一细淡滚动条——3dp 细窄、低对比蓝灰，滚动时显、停稳后淡出，不许一根长粗条挂右边
+    void thinScrollbar(ScrollView sv) { thinScrollbar(sv, true); }
+    // 更新日志这类短框常驻需求：同款细淡，但不自动淡出（用户 15:28 要求右侧滑杆常显）
+    void thinScrollbarPersistent(ScrollView sv) { thinScrollbar(sv, false); }
+    void thinScrollbar(ScrollView sv, boolean fade) {
+        if (sv == null) return;
+        sv.setVerticalScrollBarEnabled(true);
+        sv.setHorizontalScrollBarEnabled(false);
+        sv.setScrollBarStyle(View.SCROLLBARS_INSIDE_OVERLAY);
+        sv.setScrollbarFadingEnabled(fade);
+        if (fade) {
+            sv.setScrollBarFadeDuration(650);
+            sv.setScrollBarDefaultDelayBeforeFade(350);
+        }
+        try { sv.setScrollBarSize(dp(this, 3)); } catch (Exception e) { /* 个别机型静默 */ }
+        if (Build.VERSION.SDK_INT >= 29) {
+            try {
+                GradientDrawable thumb = new GradientDrawable();
+                thumb.setColor(Color.argb(118, 92, 108, 140));
+                thumb.setCornerRadius(dp(this, 3));
+                thumb.setSize(dp(this, 3), dp(this, 48));
+                sv.setVerticalScrollbarThumbDrawable(thumb);
+                GradientDrawable track = new GradientDrawable();
+                track.setColor(Color.TRANSPARENT);
+                sv.setVerticalScrollbarTrackDrawable(track);
+            } catch (Exception e) { /* 低版本/个别机型回落系统细条 */ }
+        }
+    }
+    // P-scroll：当前长列表（回顶钮指向它）——详情/更新日志为覆盖层时优先于底下主页
+    ScrollView activeLongScroll() {
+        if (changelogOpen && changelogScroll != null) return changelogScroll;
+        if (detailView != null && detailView instanceof ScrollView) return (ScrollView) detailView;
+        switch (tab) {
+            case "mine": return mineScrollView;
+            case "student": return studentScroll;
+            case "news": return newsScroll;
+            case "settings": return settingsScroll;
+            default: return homeScroll;
+        }
+    }
+    void updateTopFabVisibility(int y) {
+        if (topFab == null) return;
+        boolean show = y > dp(this, 420);
+        if (show && topFab.getVisibility() != View.VISIBLE) {
+            topFab.animate().cancel();
+            topFab.setVisibility(View.VISIBLE);
+            topFab.setAlpha(0f); topFab.setScaleX(0.82f); topFab.setScaleY(0.82f);
+            topFab.animate().alpha(1f).scaleX(1f).scaleY(1f).setDuration(190)
+                .setInterpolator(new DecelerateInterpolator()).start();
+        } else if (!show && topFab.getVisibility() == View.VISIBLE) {
+            final View fab = topFab;
+            fab.animate().cancel();
+            fab.animate().alpha(0f).scaleX(0.85f).scaleY(0.85f).setDuration(150)
+                .setInterpolator(new DecelerateInterpolator())
+                .withEndAction(() -> { if (fab == topFab) fab.setVisibility(View.GONE); }).start();
+        }
+    }
+    void syncTopFab() {
+        boolean covered = welcomeOpen || wizardOpen || aboutOpen || filterSheet != null;
+        ScrollView sv = activeLongScroll();
+        if (sv == null || (covered && !changelogOpen)) {
+            if (topFab != null && topFab.getParent() != null) ((ViewGroup) topFab.getParent()).removeView(topFab);
+            topFab = null;
+            return;
+        }
+        if (topFab == null || topFab.getParent() != content) {
+            if (topFab != null && topFab.getParent() != null) ((ViewGroup) topFab.getParent()).removeView(topFab);
+            topFab = buildTopFab();
+            FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(dp(this, 46), dp(this, 46));
+            lp.gravity = Gravity.END | Gravity.BOTTOM;
+            lp.rightMargin = dp(this, 16);
+            lp.bottomMargin = dp(this, "home".equals(tab) && !changelogOpen ? 158 : 96);
+            content.addView(topFab, lp);
+            topFab.setVisibility(View.GONE);
+        } else if (topFab.getLayoutParams() instanceof FrameLayout.LayoutParams) {
+            FrameLayout.LayoutParams lp = (FrameLayout.LayoutParams) topFab.getLayoutParams();
+            int wantBottom = dp(this, "home".equals(tab) && !changelogOpen ? 158 : 96);
+            if (lp.bottomMargin != wantBottom) { lp.bottomMargin = wantBottom; topFab.setLayoutParams(lp); }
+        }
+        updateTopFabVisibility(sv.getScrollY());
+    }
+    // P-scroll：平滑回顶（ValueAnimator 减速曲线，按距离定 240–520ms，与悬浮搜索回顶同一套手感语言）
+    void smoothScrollTop(final ScrollView sv) {
+        if (sv == null) return;
+        final int from = sv.getScrollY();
+        if (from <= 0) return;
+        long dur = Math.min(520, 240 + from / 5);
+        ValueAnimator va = ValueAnimator.ofInt(from, 0);
+        va.setDuration(dur);
+        va.setInterpolator(new DecelerateInterpolator());
+        va.addUpdateListener(a -> sv.scrollTo(0, (int) a.getAnimatedValue()));
+        va.start();
+    }
+    // P-scroll：细线向上箭头（Canvas 线条，与导航/搜索图标同语言，禁用 emoji）
+    class TopIconView extends View {
+        TopIconView(Context c) { super(c); }
+        @Override protected void onDraw(Canvas cv) {
+            Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);
+            p.setStyle(Paint.Style.STROKE);
+            p.setStrokeCap(Paint.Cap.ROUND);
+            p.setStrokeJoin(Paint.Join.ROUND);
+            p.setStrokeWidth(dp(getContext(), 2.0f));
+            p.setColor(Color.rgb(0x0A, 0x5C, 0xD6));
+            float sx = getWidth() / 24f, sy = getHeight() / 24f;
+            cv.drawLine(12f * sx, 19.5f * sy, 12f * sx, 5.5f * sy, p);
+            cv.drawLine(6.2f * sx, 11.2f * sy, 12f * sx, 5.2f * sy, p);
+            cv.drawLine(17.8f * sx, 11.2f * sy, 12f * sx, 5.2f * sy, p);
+        }
+    }
+    View buildTopFab() {
+        FrameLayout fab = new FrameLayout(this);
+        GradientDrawable bg = new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
+            new int[]{Color.argb(238, 255, 255, 255), Color.argb(222, 244, 248, 253)});
+        bg.setShape(GradientDrawable.OVAL);
+        bg.setStroke(dp(this, 1), Color.argb(70, 20, 30, 60));
+        fab.setBackground(bg);
+        if (Build.VERSION.SDK_INT >= 21) fab.setElevation(dp(this, 10));
+        TopIconView icon = new TopIconView(this);
+        int pad = dp(this, 11);
+        icon.setPadding(pad, pad, pad, pad);
+        fab.addView(icon, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        fab.setOnClickListener(v -> { haptic(); smoothScrollTop(activeLongScroll()); });
+        fab.setOnTouchListener((v, e) -> {
+            if (e.getAction() == MotionEvent.ACTION_DOWN) v.animate().scaleX(0.9f).scaleY(0.9f).setDuration(90).start();
+            else if (e.getAction() == MotionEvent.ACTION_UP || e.getAction() == MotionEvent.ACTION_CANCEL)
+                v.animate().scaleX(1f).scaleY(1f).setDuration(120).start();
+            return false;
+        });
+        return fab;
+    }
     static GradientDrawable roundRect(int color, float radiusDp, Context c) {
         GradientDrawable g = new GradientDrawable();
         g.setColor(color); g.setCornerRadius(dp(c, radiusDp));
@@ -464,6 +594,8 @@ public class MainActivity extends Activity {
     // P2c 悬浮筛选钮（与搜索钮同排同浮感，有已选条件时带角标计数）
     View filterFab = null;
     TextView filterFabBadge = null;
+    // P-scroll 悬浮回顶圆钮（长列表滚过一段后出现，点了平滑回顶）
+    View topFab = null;
     // P-searchfix：首页悬浮搜索栏本体与显隐状态（滚动时收起/失焦，不再赖在视角上）
     View homeSearchBar = null;
     boolean homeSearchBarShown = true;
@@ -901,6 +1033,7 @@ public class MainActivity extends Activity {
                 ((ViewGroup) filterFab.getParent()).removeView(filterFab);
             filterFab = null;
             filterFabBadge = null;
+            syncTopFab();
             return;
         }
         // 搜索钮
@@ -935,6 +1068,7 @@ public class MainActivity extends Activity {
         } else {
             updateFilterFabBadge();
         }
+        syncTopFab();
     }
 
     void updateFilterFabBadge() {
@@ -1273,6 +1407,7 @@ public class MainActivity extends Activity {
         FrameLayout page = new FrameLayout(this);
 
         homeScroll = new ScrollView(this);
+        thinScrollbar(homeScroll);
         homeScroll.setFillViewport(true);
         homeScroll.setClipToPadding(false);
         // P-searchfix：列表滚动时搜索自动收起/失焦；点列表区域（框外）收键盘
@@ -1289,6 +1424,7 @@ public class MainActivity extends Activity {
                 setHomeSearchBarShown(true, true);
             }
             lastHomeScrollY = scrollY;
+            updateTopFabVisibility(scrollY);
         });
         page.addView(homeScroll, new FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
@@ -1643,6 +1779,7 @@ public class MainActivity extends Activity {
         chead.addView(doneT);
         card.addView(chead);
         ScrollView sc = new ScrollView(this);
+        thinScrollbar(sc);
         sc.setBackgroundColor(Color.TRANSPARENT);
         LinearLayout panel = new LinearLayout(this);
         panel.setOrientation(LinearLayout.VERTICAL);
@@ -2269,6 +2406,7 @@ public class MainActivity extends Activity {
         headWrap.setPadding(dp(this, 18), dp(this, 2), dp(this, 18), 0);
         col.addView(headWrap);
         ScrollView sv = new ScrollView(this);
+        thinScrollbar(sv);
         sv.setBackgroundColor(Color.TRANSPARENT);
         LinearLayout page = new LinearLayout(this);
         page.setOrientation(LinearLayout.VERTICAL);
@@ -2488,6 +2626,7 @@ public class MainActivity extends Activity {
         View dv = buildDetailPage(c);
         detailView = dv;
         content.addView(dv);
+        syncTopFab();
         // P4：详情页从右侧轻滑入 + 淡入（260ms 减速）
         dv.setAlpha(0f);
         dv.setTranslationX(dp(this, 48));
@@ -2526,6 +2665,7 @@ public class MainActivity extends Activity {
 
     View buildDetailPage(final Card c) {
         ScrollView sc = new ScrollView(this);
+        thinScrollbar(sc);
         sc.setBackgroundColor(Color.rgb(0xF2, 0xF3, 0xF7));
         LinearLayout page = new LinearLayout(this);
         page.setOrientation(LinearLayout.VERTICAL);
@@ -2801,9 +2941,10 @@ public class MainActivity extends Activity {
         page.addView(sect, sectLp);
 
         ScrollView sv = new ScrollView(this);
+        thinScrollbar(sv);
         sv.setClipToPadding(false);
         studentScroll = sv;
-        if (Build.VERSION.SDK_INT >= 23) sv.setOnScrollChangeListener((v, sx, sy, ox, oy) -> pageScrollSaveY.put("student", sy));
+        if (Build.VERSION.SDK_INT >= 23) sv.setOnScrollChangeListener((v, sx, sy, ox, oy) -> { pageScrollSaveY.put("student", sy); updateTopFabVisibility(sy); });
         LinearLayout listBox = new LinearLayout(this);
         listBox.setOrientation(LinearLayout.VERTICAL);
         listBox.setPadding(0, dp(this, 10), 0, dockPad());
@@ -3105,11 +3246,12 @@ public class MainActivity extends Activity {
 
         // 整页可滚：自定义卡展开后不会把卡库收藏网格挤没（色带多时纵向滚动看）
         ScrollView sv = new ScrollView(this);
+        thinScrollbar(sv);
         sv.setFillViewport(true);
         sv.setClipToPadding(false);
         mineScrollView = sv;
         if (Build.VERSION.SDK_INT >= 23) {
-            sv.setOnScrollChangeListener((v, sx, sy, ox, oy) -> { mineScrollSaveY = sy; pageScrollSaveY.put("mine", sy); });
+            sv.setOnScrollChangeListener((v, sx, sy, ox, oy) -> { mineScrollSaveY = sy; pageScrollSaveY.put("mine", sy); updateTopFabVisibility(sy); });
         }
         LinearLayout inner = new LinearLayout(this);
         inner.setOrientation(LinearLayout.VERTICAL);
@@ -3591,6 +3733,7 @@ public class MainActivity extends Activity {
         final int[] styleSel = {draft.style};
 
         ScrollView sv = new ScrollView(this);
+        thinScrollbar(sv);
         LinearLayout form = new LinearLayout(this);
         form.setOrientation(LinearLayout.VERTICAL);
         form.setPadding(dp(this, 18), dp(this, 14), dp(this, 18), dp(this, 18));
@@ -3960,9 +4103,10 @@ public class MainActivity extends Activity {
         page.addView(newsMeta, mLp);
 
         ScrollView sv = new ScrollView(this);
+        thinScrollbar(sv);
         sv.setClipToPadding(false);
         newsScroll = sv;
-        if (Build.VERSION.SDK_INT >= 23) sv.setOnScrollChangeListener((v, sx, sy, ox, oy) -> pageScrollSaveY.put("news", sy));
+        if (Build.VERSION.SDK_INT >= 23) sv.setOnScrollChangeListener((v, sx, sy, ox, oy) -> { pageScrollSaveY.put("news", sy); updateTopFabVisibility(sy); });
         newsListBox = new LinearLayout(this);
         newsListBox.setOrientation(LinearLayout.VERTICAL);
         newsListBox.setPadding(0, dp(this, 2), 0, dockPad());
@@ -4044,6 +4188,7 @@ public class MainActivity extends Activity {
         }
         card.setOnClickListener(v -> {}); // 窗体吃掉点击，防穿透遮罩误关
         ScrollView sv = new ScrollView(this);
+        thinScrollbar(sv);
         sv.setFillViewport(false);
         LinearLayout body = buildAboutBody();
         sv.addView(body);
@@ -4329,6 +4474,7 @@ public class MainActivity extends Activity {
 
     View buildWelcomePage() {
         ScrollView sc = new ScrollView(this);
+        thinScrollbar(sc);
         sc.setBackgroundColor(Color.WHITE);
         sc.setFillViewport(true);
         LinearLayout page = new LinearLayout(this);
@@ -4434,6 +4580,7 @@ public class MainActivity extends Activity {
         navBar.setVisibility(View.GONE);
         content.removeAllViews();
         content.addView(buildChangelogPage());
+        syncTopFab();
     }
 
     void closeChangelog() {
@@ -4463,12 +4610,12 @@ public class MainActivity extends Activity {
         head.addView(ht, htlp);
 
         changelogScroll = new ScrollView(this);
-        changelogScroll.setVerticalScrollBarEnabled(true);
-        changelogScroll.setScrollbarFadingEnabled(false);
+        thinScrollbarPersistent(changelogScroll);
         LinearLayout page = new LinearLayout(this);
         page.setOrientation(LinearLayout.VERTICAL);
         page.setPadding(dp(this, 16), dp(this, 6), dp(this, 16), dp(this, 16));
         changelogScroll.addView(page);
+        if (Build.VERSION.SDK_INT >= 23) changelogScroll.setOnScrollChangeListener((v, sx, sy, ox, oy) -> updateTopFabVisibility(sy));
         root.addView(changelogScroll, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
 
         List<LogEntry> logs = loadChangelog();
@@ -4522,8 +4669,7 @@ public class MainActivity extends Activity {
         box.setLayoutParams(blp);
 
         settingsLogScroll = new ScrollView(this);
-        settingsLogScroll.setVerticalScrollBarEnabled(true);
-        settingsLogScroll.setScrollbarFadingEnabled(false);
+        thinScrollbarPersistent(settingsLogScroll);
         settingsLogScroll.setOverScrollMode(View.OVER_SCROLL_NEVER);
         int h = (int) (getResources().getDisplayMetrics().heightPixels * 0.52f);
         h = Math.max(dp(this, 240), Math.min(h, dp(this, 520)));
@@ -4618,9 +4764,10 @@ public class MainActivity extends Activity {
         page.addView(aboutRow);
         page.addView(settingRow("迁移进度", "全部卡片 / 详情 / 我的卡片 / 学生推荐 / 筛选 / 资讯 / 情景选卡 / 自定义卡 / 拖动 / 字体与界面大小 / 高刷 / 触感 / 欢迎页 / 更新日志 / 数据 OTA 已迁移"));
         ScrollView sv = new ScrollView(this);
+        thinScrollbar(sv);
         sv.setClipToPadding(false);
         settingsScroll = sv;
-        if (Build.VERSION.SDK_INT >= 23) sv.setOnScrollChangeListener((v, sx, sy, ox, oy) -> pageScrollSaveY.put("settings", sy));
+        if (Build.VERSION.SDK_INT >= 23) sv.setOnScrollChangeListener((v, sx, sy, ox, oy) -> { pageScrollSaveY.put("settings", sy); updateTopFabVisibility(sy); });
         // P2d-fix：此前这里把 basePage 的顶部留白覆盖成 12dp，标题被压进状态栏；改用 pageTopPad()/dockPad()
         page.setPadding(dp(this, 14), pageTopPad(), dp(this, 14), dockPad());
         sv.addView(page);
