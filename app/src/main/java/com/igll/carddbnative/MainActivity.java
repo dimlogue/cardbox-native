@@ -1262,6 +1262,7 @@ public class MainActivity extends Activity {
     // ---------- 自定义卡片（Phase 3b，对照 app.js 的 CUSTOM_STYLES / customCards） ----------
     static class CustomCard {
         String id, name, bank, org, note;
+        String acctClass = ""; // Q65：用户自有账户标记（""/"一类"/"二类"），纯手填，未设不显示
         int style;
     }
     static final int[][] CUSTOM_STYLES = {
@@ -1270,6 +1271,19 @@ public class MainActivity extends Activity {
     };
     static final String[] CUSTOM_ORGS = {"Visa", "万事达", "美国运通", "银联", "JCB"};
     java.util.List<CustomCard> customCards = new ArrayList<>();
+    // Q65 我的卡片条目（一张库卡可有多条，分别标一类/二类）：标记只存本机 mine_entries，不写回卡库/OTA
+    static class MineEntry {
+        String key, cardId, acctClass;
+        MineEntry(String k, String id, String cls) { key = k; cardId = id; acctClass = cls == null ? "" : cls; }
+    }
+    static class MineRow {
+        Card card; MineEntry entry;
+        MineRow(Card c, MineEntry e) { card = c; entry = e; }
+    }
+    java.util.List<MineEntry> mineEntries = new ArrayList<>();
+    View acctPickerView = null;
+    String detailEntryKey = null;
+    static final String ACCT_CLASS_HINT = "一类是全功能账户，存款取现转账消费不限额；二类功能受限，日累计转出等限额以发卡行现行规则为准。不标就不显示标签。";
     boolean customOpen = false;
     boolean mineOpen = true; // Q22：混合版 mineOpen（cardbox_mine_open）对应原生 prefs mine_open，默认展开
     LinearLayout customTilesBox = null; // Q56：展开态色带容器，就地重排/重衔接用，不整页重建
@@ -1375,6 +1389,7 @@ public class MainActivity extends Activity {
                 c.bank = o.optString("bank");
                 c.org = o.optString("org");
                 c.note = o.optString("note");
+                c.acctClass = normAcctClass(o.optString("cls", ""));
                 c.style = o.optInt("style", 0);
                 if (c.id == null || c.id.isEmpty()) c.id = "custom-" + i;
                 if (c.style < 0 || c.style >= CUSTOM_STYLES.length) c.style = 0;
@@ -1395,6 +1410,7 @@ public class MainActivity extends Activity {
                         c.bank = o.optString("bank");
                         c.org = o.optString("org");
                         c.note = o.optString("note");
+                        c.acctClass = normAcctClass(o.optString("cls", ""));
                         c.style = o.optInt("style", 0);
                         if (c.id == null || c.id.isEmpty()) c.id = "custom-" + i;
                         if (c.style < 0 || c.style >= CUSTOM_STYLES.length) c.style = 0;
@@ -1415,12 +1431,116 @@ public class MainActivity extends Activity {
                 o.put("bank", c.bank == null ? "" : c.bank);
                 o.put("org", c.org == null ? "" : c.org);
                 o.put("note", c.note == null ? "" : c.note);
+                o.put("cls", c.acctClass == null ? "" : c.acctClass);
                 o.put("style", c.style);
                 arr.put(o);
             }
             // Q21：自定义卡是用户资产，apply() 异步落盘在紧接着的崩溃/强杀下可能来不及刷盘；JSON 很小，直接 commit 同步落盘。
             prefs.edit().putString("custom_cards", arr.toString()).commit();
         } catch (Throwable e) { /* 存不下就保持内存中的列表 */ }
+    }
+
+    static String normAcctClass(String s) {
+        if ("一类".equals(s) || "二类".equals(s)) return s;
+        return "";
+    }
+
+    // Q65 条目存储：mine_entries 为真相（key/cardId/cls），mine Set 与 mineOrder 仅作旧口径投影同步
+    java.util.List<MineEntry> entriesForCard(String cardId) {
+        java.util.List<MineEntry> out = new ArrayList<>();
+        if (cardId == null || mineEntries == null) return out;
+        for (MineEntry e : mineEntries) if (cardId.equals(e.cardId)) out.add(e);
+        return out;
+    }
+
+    MineEntry findEntryByKey(String key) {
+        if (key == null || mineEntries == null) return null;
+        for (MineEntry e : mineEntries) if (key.equals(e.key)) return e;
+        return null;
+    }
+
+    void syncMineProjection() {
+        java.util.LinkedHashSet<String> ids = new java.util.LinkedHashSet<>();
+        java.util.List<String> order = new ArrayList<>();
+        if (mineEntries != null) for (MineEntry e : mineEntries) {
+            if (e.cardId == null || e.cardId.isEmpty()) continue;
+            ids.add(e.cardId); order.add(e.cardId);
+        }
+        mine = new HashSet<>(ids);
+        mineOrder = order;
+    }
+
+    void saveMineEntries() {
+        try {
+            JSONArray arr = new JSONArray();
+            if (mineEntries != null) for (MineEntry e : mineEntries) {
+                JSONObject o = new JSONObject();
+                o.put("key", e.key == null ? "" : e.key);
+                o.put("id", e.cardId == null ? "" : e.cardId);
+                o.put("cls", e.acctClass == null ? "" : e.acctClass);
+                arr.put(o);
+            }
+            syncMineProjection();
+            prefs.edit().putString("mine_entries", arr.toString())
+                .putStringSet("mine_ids", new HashSet<>(mine))
+                .putString("mine_order", new JSONArray(mineOrder).toString()).commit();
+        } catch (Throwable ignored) {}
+    }
+
+    void loadMineEntries() {
+        mineEntries = new ArrayList<>();
+        try {
+            if (prefs != null && prefs.contains("mine_entries")) {
+                JSONArray arr = new JSONArray(prefs.getString("mine_entries", "[]"));
+                for (int i = 0; i < arr.length(); i++) {
+                    JSONObject o = arr.getJSONObject(i);
+                    String id = o.optString("id", "");
+                    if (id.isEmpty()) continue;
+                    String key = o.optString("key", "");
+                    if (key.isEmpty()) key = id + "#m" + i;
+                    mineEntries.add(new MineEntry(key, id, normAcctClass(o.optString("cls", ""))));
+                }
+                syncMineProjection();
+                return;
+            }
+        } catch (Throwable ignored) { mineEntries = new ArrayList<>(); }
+        // 迁移：旧 mine_ids + mine_order -> 每卡一条未标条目（不推断类别）
+        try {
+            java.util.LinkedHashSet<String> ids = new java.util.LinkedHashSet<>();
+            if (mineOrder != null) for (String id : mineOrder) if (id != null && !id.isEmpty() && mine.contains(id)) ids.add(id);
+            if (mine != null) for (String id : mine) if (id != null && !id.isEmpty()) ids.add(id);
+            int i = 0;
+            for (String id : ids) mineEntries.add(new MineEntry(id + "#m" + (i++), id, ""));
+            syncMineProjection();
+            if (prefs != null) prefs.edit().putString("mine_entries", new JSONArray().toString()).commit();
+            saveMineEntries();
+        } catch (Throwable ignored) {}
+    }
+
+    String newMineEntryKey(String cardId) {
+        String base = cardId + "#" + System.currentTimeMillis();
+        String k = base; int n = 1;
+        while (findEntryByKey(k) != null) k = base + "-" + (n++);
+        return k;
+    }
+
+    void paintChoiceChip(TextView t, boolean on) {
+        if (on) {
+            GradientDrawable g = new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
+                new int[]{Color.rgb(0x0A, 0x84, 0xFF), Color.rgb(0x00, 0x66, 0xE6)});
+            g.setCornerRadius(dp(this, 999));
+            t.setBackground(g);
+            t.setTextColor(Color.WHITE);
+            try { t.setTypeface(weightTypeface(this, 700)); } catch (Throwable ignored) {}
+        } else {
+            GradientDrawable g = new GradientDrawable();
+            g.setColor(Color.rgb(0xF2, 0xF3, 0xF7));
+            g.setCornerRadius(dp(this, 999));
+            g.setStroke(dp(this, 1), Color.argb(13, 20, 30, 60));
+            t.setBackground(g);
+            t.setTextColor(Color.rgb(0x1C, 0x1C, 0x1E));
+            try { t.setTypeface(weightTypeface(this, 400)); } catch (Throwable ignored) {}
+        }
     }
 
     GradientDrawable customGradient(int style) {
@@ -1782,6 +1902,7 @@ public class MainActivity extends Activity {
         try { bankOpen = new HashSet<>(prefs.getStringSet("bank_open", new HashSet<String>())); } catch (Exception e) { bankOpen = new HashSet<>(); }
         loadCustomCards();
         loadMineOrder();
+        loadMineEntries();
         Store.load(this);
         try { nfcAdapter = NfcAdapter.getDefaultAdapter(this); } catch (Throwable ignored) { nfcAdapter = null; }
 
@@ -1950,29 +2071,171 @@ public class MainActivity extends Activity {
     // 收藏切换统一入口：移除出「撤销」（按原顺序恢复，因 mineOrder 未动、重新加入即回原位）、加入给普通提示
     // Q21：收藏集合同走 commit 同步落盘——用户资产不赌 apply() 的异步刷盘窗口（崩溃/强杀紧跟保存时不丢）。
     void persistMineSet() {
-        try { prefs.edit().putStringSet("mine_ids", new HashSet<>(mine)).commit(); } catch (Throwable ignored) {}
+        // Q65 后真相在 mineEntries；保留此入口给旧调用，统一转条目落盘
+        if (mineEntries != null) saveMineEntries();
+        else try { prefs.edit().putStringSet("mine_ids", new HashSet<>(mine)).commit(); } catch (Throwable ignored) {}
+    }
+
+    // Q65 加入：弹一类/二类选择（可不标），选完才落条目；同一库卡可再加第二条分别标记
+    void addMineEntry(final Card c, final String cls, final Runnable uiRefresh) {
+        if (c == null) return;
+        mineEntries.add(new MineEntry(newMineEntryKey(c.id), c.id, normAcctClass(cls)));
+        saveMineEntries();
+        pages.remove("mine");
+        if (uiRefresh != null) uiRefresh.run();
+        showFloatToast("已加入我的卡片：" + c.name);
+    }
+
+    void removeMineEntriesForCard(final Card c, final Runnable uiRefresh) {
+        if (c == null) return;
+        final java.util.List<MineEntry> snap = new ArrayList<>();
+        final java.util.List<Integer> snapIdx = new ArrayList<>();
+        for (int i = 0; i < mineEntries.size(); i++) if (c.id.equals(mineEntries.get(i).cardId)) {
+            snap.add(mineEntries.get(i)); snapIdx.add(i);
+        }
+        if (snap.isEmpty()) return;
+        mineEntries.removeAll(snap);
+        saveMineEntries();
+        pages.remove("mine");
+        if (uiRefresh != null) uiRefresh.run();
+        showFloatToast("已从我的卡片移除：" + c.name, "撤销", () -> {
+            for (int i = 0; i < snap.size(); i++) {
+                int at = Math.min(snapIdx.get(i), mineEntries.size());
+                mineEntries.add(at, snap.get(i));
+            }
+            saveMineEntries();
+            pages.remove("mine");
+            if (uiRefresh != null) uiRefresh.run();
+            showFloatToast("已恢复：" + c.name);
+        });
+    }
+
+    void removeSingleMineEntry(final MineEntry e, final Runnable uiRefresh) {
+        if (e == null) return;
+        final int at = mineEntries.indexOf(e);
+        if (at < 0) return;
+        mineEntries.remove(at);
+        saveMineEntries();
+        pages.remove("mine");
+        if (uiRefresh != null) uiRefresh.run();
+        showFloatToast("已移除这张", "撤销", () -> {
+            mineEntries.add(Math.min(at, mineEntries.size()), e);
+            saveMineEntries();
+            pages.remove("mine");
+            if (uiRefresh != null) uiRefresh.run();
+            showFloatToast("已恢复");
+        });
+    }
+
+    void setMineEntryClass(final MineEntry e, final String cls) {
+        if (e == null) return;
+        e.acctClass = normAcctClass(cls);
+        saveMineEntries();
+        pages.remove("mine");
     }
 
     void toggleMineWithToast(final Card c, final Runnable uiRefresh) {
-        if (mine.contains(c.id)) {
-            mine.remove(c.id);
-            persistMineSet();
-            pages.remove("mine");
-            if (uiRefresh != null) uiRefresh.run();
-            showFloatToast("已从我的卡片移除：" + c.name, "撤销", () -> {
-                mine.add(c.id);
-                persistMineSet();
-                pages.remove("mine");
-                if (uiRefresh != null) uiRefresh.run();
-                showFloatToast("已恢复：" + c.name);
-            });
-        } else {
-            mine.add(c.id);
-            persistMineSet();
-            pages.remove("mine");
-            if (uiRefresh != null) uiRefresh.run();
-            showFloatToast("已加入我的卡片：" + c.name);
+        if (c == null) return;
+        if (!entriesForCard(c.id).isEmpty()) removeMineEntriesForCard(c, uiRefresh);
+        else openAcctClassPicker(c, "加入我的卡片", false, uiRefresh);
+    }
+
+    // 首页加卡钮：未加走选择窗；已加再点出「再加一张 / 移除」窗，不直接整卡移除
+    void handleMineAddButton(final Card c, final Runnable uiRefresh) {
+        if (c == null) return;
+        if (entriesForCard(c.id).isEmpty()) openAcctClassPicker(c, "加入我的卡片", false, uiRefresh);
+        else openAcctClassPicker(c, "再加一张", true, uiRefresh);
+    }
+
+    TextView acctOptionRow(String label, String desc) {
+        TextView t = tv(this, label, 15, Color.rgb(0x1C, 0x1C, 0x1E), true);
+        t.setGravity(Gravity.CENTER_VERTICAL);
+        t.setPadding(dp(this, 14), dp(this, 11), dp(this, 14), dp(this, 11));
+        t.setBackground(rippleBg(Color.rgb(0xF2, 0xF3, 0xF7), 12));
+        if (desc != null && !desc.isEmpty()) t.setText(label + "  ·  " + desc);
+        return t;
+    }
+
+    void closeAcctClassPicker() {
+        View v = acctPickerView;
+        acctPickerView = null;
+        if (v != null && v.getParent() instanceof ViewGroup) ((ViewGroup) v.getParent()).removeView(v);
+    }
+
+    // Q65 选择窗：不标/一类/二类三选 + 一句说明；manage=true 时多一条移除已有（全部）
+    void openAcctClassPicker(final Card c, final String title, final boolean manage, final Runnable uiRefresh) {
+        if (c == null) return;
+        closeAcctClassPicker();
+        if (rootView == null) { addMineEntry(c, "", uiRefresh); return; }
+        final FrameLayout overlay = new FrameLayout(this);
+        View shade = new View(this);
+        shade.setBackgroundColor(Color.argb(102, 0, 0, 0));
+        shade.setAlpha(0f);
+        shade.setOnClickListener(v -> closeAcctClassPicker());
+        overlay.addView(shade, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        LinearLayout cardBox = new LinearLayout(this);
+        cardBox.setOrientation(LinearLayout.VERTICAL);
+        GradientDrawable cg = new GradientDrawable();
+        cg.setColor(Color.WHITE);
+        float rTop = dp(this, 22);
+        cg.setCornerRadii(new float[]{rTop, rTop, rTop, rTop, 0, 0, 0, 0});
+        cardBox.setBackground(cg);
+        if (Build.VERSION.SDK_INT >= 21) { cardBox.setElevation(dp(this, 24)); topSheetClip(cardBox, 22, this); }
+        cardBox.setOnClickListener(v -> {});
+        cardBox.setPadding(dp(this, 18), dp(this, 18), dp(this, 18), dp(this, 14) + navBarH());
+        cardBox.addView(tv(this, title, 17, Color.rgb(0x1C, 0x1C, 0x1E), true));
+        TextView sub = tv(this, c.name, 12.5f, Color.rgb(0x8E, 0x8E, 0x93), false);
+        LinearLayout.LayoutParams subLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        subLp.topMargin = dp(this, 4);
+        cardBox.addView(sub, subLp);
+        final String[] opts = {"", "一类", "二类"};
+        final String[] labs = {"不标", "一类", "二类"};
+        final String[] descs = {"加入后不显示类别标签", "全功能账户", "功能受限，限额以银行规则为准"};
+        for (int i = 0; i < opts.length; i++) {
+            final String cls = opts[i];
+            TextView row = acctOptionRow(labs[i], descs[i]);
+            LinearLayout.LayoutParams rlp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            rlp.topMargin = dp(this, 8);
+            cardBox.addView(row, rlp);
+            row.setOnClickListener(v -> { haptic(); closeAcctClassPicker(); addMineEntry(c, cls, uiRefresh); });
         }
+        TextView hint = tv(this, ACCT_CLASS_HINT, 12, Color.rgb(0x8E, 0x8E, 0x93), false);
+        hint.setLineSpacing(0, 1.45f);
+        LinearLayout.LayoutParams hlp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        hlp.topMargin = dp(this, 12);
+        cardBox.addView(hint, hlp);
+        if (manage) {
+            TextView rm = tv(this, "移除已有（全部 " + entriesForCard(c.id).size() + " 张）", 14, Color.rgb(0xE0, 0x31, 0x31), true);
+            rm.setGravity(Gravity.CENTER);
+            rm.setPadding(0, dp(this, 11), 0, dp(this, 11));
+            LinearLayout.LayoutParams rmlp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            rmlp.topMargin = dp(this, 8);
+            cardBox.addView(rm, rmlp);
+            rm.setOnClickListener(v -> { haptic(); closeAcctClassPicker(); removeMineEntriesForCard(c, uiRefresh); });
+        }
+        TextView cancel = tv(this, manage ? "取消" : "先不加", 14, Color.rgb(0x8E, 0x8E, 0x93), false);
+        cancel.setGravity(Gravity.CENTER);
+        cancel.setPadding(0, dp(this, 11), 0, dp(this, 4));
+        LinearLayout.LayoutParams canLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        canLp.topMargin = dp(this, 4);
+        cardBox.addView(cancel, canLp);
+        cancel.setOnClickListener(v -> { haptic(); closeAcctClassPicker(); });
+        FrameLayout.LayoutParams clp = new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        clp.gravity = Gravity.BOTTOM;
+        clp.leftMargin = dp(this, 12); clp.rightMargin = dp(this, 12);
+        FrameLayout wrap = new FrameLayout(this);
+        View glass = glassLayer(cardBox, 22, false);
+        topSheetClip(glass, 22, this);
+        wrap.addView(glass, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        wrap.addView(cardBox, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        overlay.addView(wrap, clp);
+        rootView.addView(overlay, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        acctPickerView = overlay;
+        overlay.setAlpha(0f);
+        overlay.animate().alpha(1f).setDuration(200).setInterpolator(ANIM_ENTER).start();
+        shade.animate().alpha(1f).setDuration(200).setInterpolator(ANIM_ENTER).start();
+        wrap.setTranslationY(dp(this, 42));
+        wrap.animate().translationY(0f).setDuration(ANIM_DUR_SHEET_IN).setInterpolator(ANIM_ENTER).start();
     }
 
     // 字体/界面大小变化后整页重建（各页都是缓存 View，必须重造才生效）
@@ -3224,6 +3487,10 @@ public class MainActivity extends Activity {
     // Q24：卡图改全幅 cover 铺满图区（对照混合版 .art/.art-img object-fit:cover，图区贴瓷砖顶边满宽、不留白、
     // 不拉伸；圆角靠瓷砖外框 clipToOutline 平滑裁切，冲突时保铺满）+ 图右上半透圆加卡钮（.mine-btn）。
     View cardTile(final Card c, ViewGroup parent, int nCols) {
+        return cardTile(c, parent, nCols, "");
+    }
+
+    View cardTile(final Card c, ViewGroup parent, int nCols, final String acctClass) {
         LinearLayout box = new LinearLayout(this);
         box.setOrientation(LinearLayout.VERTICAL);
         box.setClipToOutline(true);
@@ -3277,6 +3544,9 @@ public class MainActivity extends Activity {
             "已停发".equals(c.status) ? Color.rgb(0xB0, 0x23, 0x2B) : Color.rgb(0x1D, 0x8A, 0x49), chipSp));
         final TextView addedChip = chip("已添加", Color.rgb(0xE6, 0xF6, 0xEC), Color.rgb(0x1D, 0x8A, 0x49), chipSp);
         if (mine.contains(c.id)) chips.addView(addedChip);
+        // Q65：类别标签只在用户自有条目瓷砖出现（我的卡片传入 acctClass），未标完全不占位；样式同现行 chips
+        if (acctClass != null && !acctClass.isEmpty())
+            chips.addView(chip(acctClass, Color.rgb(0xF0, 0xF7, 0xFF), Color.rgb(0x2F, 0x6F, 0xD0), chipSp));
 
         // Q51：特点标签行（对照混合版 featChips——FEATS 顺序逐卡渲染命中的标签，
         // .feats 流式换行、最多两行溢出截断；此前原生瓷砖只出评分/状态行，标签全缺）
@@ -3305,7 +3575,7 @@ public class MainActivity extends Activity {
         });
         mineBtn.setOnClickListener(v -> {
             haptic();
-            toggleMineWithToast(c, () -> {
+            handleMineAddButton(c, () -> {
                 boolean in = mine.contains(c.id);
                 mineBtn.setOn(in);
                 if (in) { if (addedChip.getParent() == null) chips.addView(addedChip); }
@@ -5248,7 +5518,12 @@ public class MainActivity extends Activity {
     // 底层页面不切走、不重绑：浮窗盖在现页之上，关窗回原页原滚动位；遮罩 rgba(0,0,0,.4)、
     // 窗体贴底全宽、顶圆 20dp、最高 88vh、内滚、底内边 20dp；关闭钮 Q30 改为长在窗体内部：
     // 对照混合版 .p-close（34dp 半透圆、top/right 12dp、.panel 子层随窗升降），禁止根层独立字形冻结/淡出。
-    void openDetail(Card c) { openDetail(c, false); }
+    void openDetail(Card c) { detailEntryKey = null; openDetail(c, false); }
+
+    void openDetailEntry(Card c, MineEntry e) {
+        detailEntryKey = e == null ? null : e.key;
+        openDetail(c, false);
+    }
 
     void openDetail(Card c, boolean fromWiz) {
         if (c == null) return;
@@ -5421,7 +5696,7 @@ public class MainActivity extends Activity {
             detailView = null; detailSheetWrap = null; detailShade = null; detailCloseGlyph = null;
             detailScroll = null; detailBinView = null; detailVerInfoBox = null;
             detailDots = new java.util.ArrayList<>();
-            detailCard = null; detailClosing = false; detailFromWiz = false;
+            detailCard = null; detailClosing = false; detailFromWiz = false; detailEntryKey = null;
             restoreCurrentTabScroll();
             restoreChrome(); // Q12
             // FIFO：关窗落定才开下一次点选的那张，不叠窗
@@ -5493,6 +5768,106 @@ public class MainActivity extends Activity {
             nlp.topMargin = dp(this, 4);
             box.addView(n, nlp);
         }
+    }
+
+    // Q65 详情内「我的标记」：只对用户自有条目出现；可直接改 不标/一类/二类，并可再加一张或移除本张
+    View buildDetailMineTagSection(final Card c) {
+        MineEntry target = detailEntryKey == null ? null : findEntryByKey(detailEntryKey);
+        if (target != null && !c.id.equals(target.cardId)) target = null;
+        java.util.List<MineEntry> mineOfCard = entriesForCard(c.id);
+        if (target == null) {
+            if (mineOfCard.size() == 1) target = mineOfCard.get(0);
+            else if (mineOfCard.size() > 1) {
+                LinearLayout box = new LinearLayout(this);
+                box.setOrientation(LinearLayout.VERTICAL);
+                box.setBackground(roundRect(Color.rgb(0xF6, 0xF6, 0xF8), 12, this));
+                box.setPadding(dp(this, 12), dp(this, 10), dp(this, 12), dp(this, 10));
+                box.addView(tv(this, "我的标记", 13, Color.rgb(0x1C, 0x1C, 0x1E), true));
+                StringBuilder sb = new StringBuilder("这张卡在我的卡片里有 " + mineOfCard.size() + " 张：");
+                for (int i = 0; i < mineOfCard.size(); i++) {
+                    if (i > 0) sb.append("、");
+                    String cl = mineOfCard.get(i).acctClass;
+                    sb.append(cl == null || cl.isEmpty() ? "未标" : cl);
+                }
+                sb.append("。去「我的卡片」点开对应那张改标记。");
+                TextView tx = tv(this, sb.toString(), 12, Color.rgb(0x8E, 0x8E, 0x93), false);
+                tx.setLineSpacing(0, 1.45f);
+                LinearLayout.LayoutParams tlp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+                tlp.topMargin = dp(this, 4);
+                box.addView(tx, tlp);
+                return box;
+            } else return null;
+        }
+        final MineEntry tgt = target;
+        LinearLayout box = new LinearLayout(this);
+        box.setOrientation(LinearLayout.VERTICAL);
+        box.setBackground(roundRect(Color.rgb(0xF6, 0xF6, 0xF8), 12, this));
+        box.setPadding(dp(this, 12), dp(this, 10), dp(this, 12), dp(this, 10));
+        box.addView(tv(this, "我的标记（这张）", 13, Color.rgb(0x1C, 0x1C, 0x1E), true));
+        LinearLayout chipsRow = new LinearLayout(this);
+        chipsRow.setOrientation(LinearLayout.HORIZONTAL);
+        LinearLayout.LayoutParams crlp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        crlp.topMargin = dp(this, 8);
+        box.addView(chipsRow, crlp);
+        final String[] vals = {"", "一类", "二类"};
+        final String[] labs = {"不标", "一类", "二类"};
+        final java.util.List<TextView> chipViews = new ArrayList<>();
+        final Runnable[] paint = new Runnable[1];
+        paint[0] = () -> { for (int i = 0; i < chipViews.size(); i++) paintChoiceChip(chipViews.get(i), vals[i].equals(tgt.acctClass == null ? "" : tgt.acctClass)); };
+        for (int i = 0; i < vals.length; i++) {
+            final String v = vals[i];
+            TextView b = tv(this, labs[i], 12.5f, Color.rgb(0x1C, 0x1C, 0x1E), false);
+            b.setSingleLine(true);
+            b.setGravity(Gravity.CENTER);
+            b.setPadding(dp(this, 13), dp(this, 7), dp(this, 13), dp(this, 7));
+            b.setOnTouchListener((vv, e) -> {
+                if (e.getAction() == MotionEvent.ACTION_DOWN) pressBounce(vv, true);
+                else if (e.getAction() == MotionEvent.ACTION_UP || e.getAction() == MotionEvent.ACTION_CANCEL) pressBounce(vv, false);
+                return false;
+            });
+            b.setOnClickListener(vv -> {
+                haptic();
+                setMineEntryClass(tgt, v);
+                paint[0].run();
+                showFloatToast(v.isEmpty() ? "已取消标记" : "已标为" + v);
+            });
+            LinearLayout.LayoutParams blp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            if (i > 0) blp.leftMargin = dp(this, 6);
+            b.setLayoutParams(blp);
+            chipViews.add(b);
+            chipsRow.addView(b);
+        }
+        paint[0].run();
+        TextView hint = tv(this, ACCT_CLASS_HINT, 11.5f, Color.rgb(0x8E, 0x8E, 0x93), false);
+        hint.setLineSpacing(0, 1.45f);
+        LinearLayout.LayoutParams hlp2 = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        hlp2.topMargin = dp(this, 8);
+        box.addView(hint, hlp2);
+        LinearLayout acts = new LinearLayout(this);
+        acts.setOrientation(LinearLayout.HORIZONTAL);
+        LinearLayout.LayoutParams alp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        alp.topMargin = dp(this, 10);
+        box.addView(acts, alp);
+        TextView addMore = tv(this, "再加一张", 12.5f, Color.rgb(0x0A, 0x5C, 0xD6), true);
+        addMore.setGravity(Gravity.CENTER);
+        addMore.setPadding(dp(this, 12), dp(this, 7), dp(this, 12), dp(this, 7));
+        addMore.setBackground(rippleBg(Color.rgb(0xE8, 0xF1, 0xFD), 999));
+        acts.addView(addMore, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        addMore.setOnClickListener(vv -> { haptic(); openAcctClassPicker(c, "再加一张", false, null); });
+        TextView rmOne = tv(this, "移除这张", 12.5f, Color.rgb(0xE0, 0x31, 0x31), true);
+        rmOne.setGravity(Gravity.CENTER);
+        rmOne.setPadding(dp(this, 12), dp(this, 7), dp(this, 12), dp(this, 7));
+        LinearLayout.LayoutParams rlp2 = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        rlp2.leftMargin = dp(this, 8);
+        acts.addView(rmOne, rlp2);
+        rmOne.setOnClickListener(vv -> {
+            haptic();
+            final MineEntry rm = tgt;
+            closeDetail();
+            // 等关窗落定再移除，避免详情重建与移除竞态；撤销可恢复本张
+            mainHandler.postDelayed(() -> removeSingleMineEntry(rm, null), 260);
+        });
+        return box;
     }
 
     LinearLayout buildDetailSheetBody(final Card c) {
@@ -5632,6 +6007,15 @@ public class MainActivity extends Activity {
             bodyInner.addView(vib, vlp);
             detailVerInfoBox = vib;
             fillVerInfo(vib, c, 0);
+        }
+
+        // Q65：用户自有条目的类别标记（仅在我的卡片条目/已收藏单条时出现，未标不占位）
+        View mineTagSec = buildDetailMineTagSection(c);
+        if (mineTagSec != null) {
+            LinearLayout.LayoutParams mtlp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            mtlp.topMargin = dp(this, 10);
+            bodyInner.addView(mineTagSec, mtlp);
         }
 
         // 学生推荐段（原样取记录里的 reason，不在详情侧改写）
@@ -6258,9 +6642,16 @@ public class MainActivity extends Activity {
             TextView mt = (TextView) page.getChildAt(0);
             mt.setTextSize(27 * uiScale); mt.setLetterSpacing(-0.01f);
         }
-        List<Card> mineCards = new ArrayList<>();
-        for (Card c : Store.all) if (mine.contains(c.id)) mineCards.add(c);
-        applyMineOrder(mineCards);
+        // Q65：我的卡片按条目渲染（同卡可一类/二类两条并存）；分析仍按去重后的产品算覆盖，不重复计同一张产品
+        java.util.List<MineRow> mineRows = new ArrayList<>();
+        java.util.List<Card> mineCards = new ArrayList<>();
+        java.util.Set<String> seenOwned = new java.util.HashSet<>();
+        for (MineEntry e : mineEntries) {
+            Card mc = Store.byId.get(e.cardId);
+            if (mc == null) continue;
+            mineRows.add(new MineRow(mc, e));
+            if (seenOwned.add(mc.id)) mineCards.add(mc);
+        }
 
         // 整页可滚：自定义卡展开后不会把卡库收藏网格挤没（色带多时纵向滚动看）
         ScrollView sv = new ScrollView(this);
@@ -6280,9 +6671,9 @@ public class MainActivity extends Activity {
         if (mineScrollSaveY > 0) sv.post(() -> sv.scrollTo(0, mineScrollSaveY));
         // Q22 页级构成对照混合版：自定义区在前（index.html #customSec 先于 #grid），其后卡包分析，再「我的卡片」折叠条+瓷砖
         inner.addView(buildCustomSection());
-        if (!mineCards.isEmpty()) inner.addView(buildMineAnalysis(mineCards));
+        if (!mineRows.isEmpty()) inner.addView(buildMineAnalysis(mineCards));
 
-        if (mineCards.isEmpty()) {
+        if (mineRows.isEmpty()) {
             // 混合版 #empty 口径：居中灰字、上下 36dp 留白，不包白卡
             TextView em = tv(this, "没有符合条件的卡，换个筛选试试。", 13.5f, Color.rgb(0x8E, 0x8E, 0x93), false);
             em.setGravity(Gravity.CENTER);
@@ -6302,7 +6693,7 @@ public class MainActivity extends Activity {
         barLp.bottomMargin = dp(this, 10);
         inner.addView(barRow, barLp);
         barRow.addView(tvW(this, "我的卡片", 14.5f, Color.rgb(0x3A, 0x3A, 0x3C), 600));
-        TextView cnt = tv(this, mineCards.size() + " 张", 13, Color.rgb(0x8E, 0x8E, 0x93), false);
+        TextView cnt = tv(this, mineRows.size() + " 张", 13, Color.rgb(0x8E, 0x8E, 0x93), false);
         LinearLayout.LayoutParams cntLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         cntLp.leftMargin = dp(this, 8);
         barRow.addView(cnt, cntLp);
@@ -6318,12 +6709,12 @@ public class MainActivity extends Activity {
             try { prefs.edit().putBoolean("mine_open", mineOpen).commit(); } catch (Throwable ignored) {}
             refreshMineKeepScroll();
         });
-        if (mineOpen) addMineCardRows(inner, mineCards, sv);
+        if (mineOpen) addMineCardRows(inner, mineRows, sv);
         return page;
     }
 
     // 我的卡片网格：双列；长按拖动排序（对照 app.js startMineDrag/endMineDrag 的落位换序与 450ms 点击锁）
-    void addMineCardRows(LinearLayout container, final List<Card> list, final ScrollView sv) {
+    void addMineCardRows(LinearLayout container, final List<MineRow> list, final ScrollView sv) {
         final int mineCols = 2;
         container.setClipChildren(false);
         for (int i = 0; i < list.size(); i += mineCols) {
@@ -6336,16 +6727,17 @@ public class MainActivity extends Activity {
             container.addView(row);
             for (int j = 0; j < mineCols; j++) {
                 if (i + j < list.size()) {
-                    final Card c = list.get(i + j);
+                    final MineRow mr = list.get(i + j);
+                    final Card c = mr.card;
                     final int idx = i + j;
-                    final View tile = cardTile(c, row, mineCols);
+                    final View tile = cardTile(c, row, mineCols, mr.entry.acctClass);
                     tile.setOnTouchListener(null); // Q1：我的卡片页长按拖动优先，清掉 cardTile 默认贴卡菜单触摸
                     LinearLayout.LayoutParams tlp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1f);
                     if (j > 0) tlp.leftMargin = dp(this, 10);
                     tile.setLayoutParams(tlp);
                     tile.setOnClickListener(v -> {
                         if (System.currentTimeMillis() - lastDragEndAt < 450) return; // 拖后点击锁，同混合版
-                        openDetail(c);
+                        openDetailEntry(c, mr.entry);
                     });
                     tile.setOnLongClickListener(v -> { startMineTileDrag(tile, list, idx, sv); return true; });
                     row.addView(tile);
@@ -6360,7 +6752,7 @@ public class MainActivity extends Activity {
         }
     }
 
-    void startMineTileDrag(final View tile, final List<Card> list, final int fromIdx, final ScrollView sv) {
+    void startMineTileDrag(final View tile, final List<MineRow> list, final int fromIdx, final ScrollView sv) {
         tile.setScaleX(1.04f); tile.setScaleY(1.04f); tile.setAlpha(0.92f);
         tile.setElevation(dp(this, 8));
         if (tile.getParent() instanceof ViewGroup) ((ViewGroup) tile.getParent()).bringChildToFront(tile);
@@ -6391,7 +6783,7 @@ public class MainActivity extends Activity {
         });
     }
 
-    void finishMineTileDrag(View tile, List<Card> list, int fromIdx, float dx, float dy, ScrollView sv) {
+    void finishMineTileDrag(View tile, List<MineRow> list, int fromIdx, float dx, float dy, ScrollView sv) {
         tile.setOnTouchListener(null);
         tile.setTranslationX(0); tile.setTranslationY(0);
         tile.setScaleX(1f); tile.setScaleY(1f); tile.setAlpha(1f);
@@ -6408,11 +6800,14 @@ public class MainActivity extends Activity {
         int toCol = Math.max(0, Math.min(fromIdx % mineCols + dCol, mineCols - 1));
         int toIdx = Math.max(0, Math.min(toRow * mineCols + toCol, list.size() - 1));
         if (toIdx != fromIdx) {
-            Card moved = list.remove(fromIdx);
+            MineRow moved = list.remove(fromIdx);
             list.add(toIdx, moved);
-            mineOrder = new ArrayList<>();
-            for (Card c : list) mineOrder.add(c.id);
-            saveMineOrder();
+            // 条目顺序即 mineEntries 中这些条目的相对顺序：抽出后按新序插回原位置段
+            java.util.List<MineEntry> ordered = new ArrayList<>();
+            for (MineRow r : list) ordered.add(r.entry);
+            mineEntries.removeAll(ordered);
+            mineEntries.addAll(0, ordered);
+            saveMineEntries();
             showFloatToast("顺序已保存");
         }
         showTab("mine");
@@ -6536,6 +6931,14 @@ public class MainActivity extends Activity {
             mtv.setMaxLines(1);
             mtv.setEllipsize(android.text.TextUtils.TruncateAt.END);
             tx.addView(mtv);
+            // Q65：自建卡类别 chip 与瓷砖同语言（浅底小字），未标不占位
+            if (c.acctClass != null && !c.acctClass.isEmpty()) {
+                TextView clsChip = chip(c.acctClass, Color.rgb(0xF0, 0xF7, 0xFF), Color.rgb(0x2F, 0x6F, 0xD0), 9.5f);
+                LinearLayout.LayoutParams cclp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+                cclp.topMargin = dp(this, 5);
+                clsChip.setLayoutParams(cclp);
+                tx.addView(clsChip);
+            }
             // 三颗 30dp 半透玻璃小圆钮：上移/下移/删除（细字形，禁用态半透明；删除走二次确认+撤销）
             final FrameLayout tileF = tile;
             row.addView(customMoveBtn("↑", i == 0, v -> moveCustom(customTileIndex(tileF), -1)));
@@ -7076,12 +7479,13 @@ public class MainActivity extends Activity {
         LinearLayout specBox = new LinearLayout(this);
         specBox.setOrientation(LinearLayout.VERTICAL);
         inner.addView(specBox);
-        String[][] rows = {
-            {"卡片名称", dash(c.name)},
-            {"发卡银行", dash(c.bank)},
-            {"卡组织", dash(c.org)},
-            {"备注", dash(c.note)},
-        };
+        java.util.List<String[]> rowList = new ArrayList<>();
+        rowList.add(new String[]{"卡片名称", dash(c.name)});
+        rowList.add(new String[]{"发卡银行", dash(c.bank)});
+        rowList.add(new String[]{"卡组织", dash(c.org)});
+        if (c.acctClass != null && !c.acctClass.isEmpty()) rowList.add(new String[]{"账户类别", c.acctClass});
+        rowList.add(new String[]{"备注", dash(c.note)});
+        String[][] rows = rowList.toArray(new String[0][]);
         for (int i = 0; i < rows.length; i++) {
             specBox.addView(customDetailRow(rows[i][0], rows[i][1]));
             if (i < rows.length - 1) {
@@ -7091,6 +7495,55 @@ public class MainActivity extends Activity {
                     ViewGroup.LayoutParams.MATCH_PARENT, Math.max(1, dp(this, 1) / 2)));
             }
         }
+        // Q65：详情内直接改类别（不标/一类/二类），改完重开本窗使规格行与色带 chip 同步
+        LinearLayout tagBox = new LinearLayout(this);
+        tagBox.setOrientation(LinearLayout.VERTICAL);
+        LinearLayout.LayoutParams tagLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        tagLp.topMargin = dp(this, 14);
+        inner.addView(tagBox, tagLp);
+        tagBox.addView(tv(this, "我的标记", 13, Color.rgb(0x1C, 0x1C, 0x1E), true));
+        LinearLayout tagRow = new LinearLayout(this);
+        tagRow.setOrientation(LinearLayout.HORIZONTAL);
+        LinearLayout.LayoutParams trLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        trLp.topMargin = dp(this, 8);
+        tagBox.addView(tagRow, trLp);
+        final String[] tVals = {"", "一类", "二类"};
+        final String[] tLabs = {"不标", "一类", "二类"};
+        final java.util.List<TextView> tViews = new ArrayList<>();
+        final Runnable[] tPaint = new Runnable[1];
+        tPaint[0] = () -> { for (int i = 0; i < tViews.size(); i++) paintChoiceChip(tViews.get(i), tVals[i].equals(c.acctClass == null ? "" : c.acctClass)); };
+        for (int i = 0; i < tVals.length; i++) {
+            final String v = tVals[i];
+            TextView b = tv(this, tLabs[i], 12.5f, Color.rgb(0x1C, 0x1C, 0x1E), false);
+            b.setSingleLine(true);
+            b.setGravity(Gravity.CENTER);
+            b.setPadding(dp(this, 13), dp(this, 7), dp(this, 13), dp(this, 7));
+            b.setOnTouchListener((vv, e) -> {
+                if (e.getAction() == MotionEvent.ACTION_DOWN) pressBounce(vv, true);
+                else if (e.getAction() == MotionEvent.ACTION_UP || e.getAction() == MotionEvent.ACTION_CANCEL) pressBounce(vv, false);
+                return false;
+            });
+            b.setOnClickListener(vv -> {
+                haptic();
+                c.acctClass = v;
+                saveCustomCards();
+                tPaint[0].run();
+                showFloatToast(v.isEmpty() ? "已取消标记" : "已标为" + v);
+                closeCustomDetailNow();
+                openCustomDetail(c);
+            });
+            LinearLayout.LayoutParams blp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            if (i > 0) blp.leftMargin = dp(this, 6);
+            b.setLayoutParams(blp);
+            tViews.add(b);
+            tagRow.addView(b);
+        }
+        tPaint[0].run();
+        TextView thint = tv(this, ACCT_CLASS_HINT, 11.5f, Color.rgb(0x8E, 0x8E, 0x93), false);
+        thint.setLineSpacing(0, 1.45f);
+        LinearLayout.LayoutParams thLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        thLp.topMargin = dp(this, 8);
+        tagBox.addView(thint, thLp);
 
         // .dlg-actions 底部动作行：左搜银行（蓝）/右删除（红），无发卡行时只留删除占满
         LinearLayout acts = new LinearLayout(this);
@@ -8139,10 +8592,12 @@ public class MainActivity extends Activity {
         if (!isNew) {
             draft.id = edit.id; draft.name = edit.name; draft.bank = edit.bank;
             draft.org = edit.org; draft.note = edit.note; draft.style = edit.style;
+            draft.acctClass = edit.acctClass == null ? "" : edit.acctClass;
         } else {
-            draft.id = null; draft.name = ""; draft.bank = ""; draft.org = ""; draft.note = ""; draft.style = 0;
+            draft.id = null; draft.name = ""; draft.bank = ""; draft.org = ""; draft.note = ""; draft.style = 0; draft.acctClass = "";
         }
         final String[] orgSel = {draft.org == null ? "" : draft.org};
+        final String[] acctSel = {draft.acctClass == null ? "" : draft.acctClass};
         final int[] styleSel = {draft.style};
 
         captureCurrentPageScroll();
@@ -8227,6 +8682,32 @@ public class MainActivity extends Activity {
             }
         }
         paintOrgs.run();
+        // Q65 账户类别（可不选）：不标/一类/二类，默认不标、不推断；下方一句说明，全文词条归 Q66
+        form.addView(customFormLabel("账户类别（可不选）"));
+        LinearLayout acctRow = new LinearLayout(this);
+        acctRow.setOrientation(LinearLayout.HORIZONTAL);
+        form.addView(acctRow, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        final String[] aVals = {"", "一类", "二类"};
+        final String[] aLabs = {"不标", "一类", "二类"};
+        final java.util.List<TextView> acctChips = new ArrayList<>();
+        final Runnable[] paintAcct = new Runnable[1];
+        paintAcct[0] = () -> { for (int i = 0; i < acctChips.size(); i++) paintChoiceChip(acctChips.get(i), aVals[i].equals(acctSel[0])); };
+        for (int i = 0; i < aVals.length; i++) {
+            final String av = aVals[i];
+            TextView b = formOrgChip(aLabs[i]);
+            b.setOnClickListener(v -> { haptic(); acctSel[0] = av; paintAcct[0].run(); });
+            LinearLayout.LayoutParams ablp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            if (i > 0) ablp.leftMargin = dp(this, 6);
+            b.setLayoutParams(ablp);
+            acctChips.add(b);
+            acctRow.addView(b);
+        }
+        paintAcct[0].run();
+        TextView acctHint = tv(this, ACCT_CLASS_HINT, 11.5f, Color.rgb(0x8E, 0x8E, 0x93), false);
+        acctHint.setLineSpacing(0, 1.45f);
+        LinearLayout.LayoutParams ahLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        ahLp.topMargin = dp(this, 6);
+        form.addView(acctHint, ahLp);
         form.addView(customFormLabel("卡面样式"));
         // 卡面 3×2 大色块：每块高 40dp、间隔 10dp、圆角 8（.swatch 量级），选中蓝边+浅蓝外圈
         final java.util.List<View> swatchCells = new ArrayList<>();
@@ -8336,6 +8817,7 @@ public class MainActivity extends Activity {
                 c.org = orgSel[0];
                 c.note = inNote.getText().toString().trim();
                 c.style = styleSel[0];
+                c.acctClass = normAcctClass(acctSel[0]);
                 customCards.add(c);
                 customOpen = true;
                 showFloatToast("已添加「" + name + "」");
@@ -8345,6 +8827,7 @@ public class MainActivity extends Activity {
                 edit.org = orgSel[0];
                 edit.note = inNote.getText().toString().trim();
                 edit.style = styleSel[0];
+                edit.acctClass = normAcctClass(acctSel[0]);
                 showFloatToast("已保存「" + name + "」");
             }
             saveCustomCards();
