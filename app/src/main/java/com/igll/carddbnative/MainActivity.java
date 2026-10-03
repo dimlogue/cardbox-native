@@ -291,6 +291,8 @@ public class MainActivity extends Activity {
         }
         @Override public boolean onTouchEvent(MotionEvent e) {
             if (target == null || !scrollableEnough()) return false;
+            // Q49：非拖动态且已淡出时不拦截右缘点击（瓷砖/＋钮优先），条显形期内才可抓
+            if (!persistent && !shown && !dragging) return false;
             switch (e.getActionMasked()) {
                 case MotionEvent.ACTION_DOWN:
                     dragging = true;
