@@ -921,7 +921,11 @@ public class MainActivity extends Activity {
         });
         return fab;
     }
-    static GradientDrawable roundRect(int color, float radiusDp, Context c) {
+    GradientDrawable roundRect(int color, float radiusDp, Context c) {
+        // Q94 铺开：全站白卡收口——凡以纯白/语义面色作底的圆角卡，一律换 Soft 柔面
+        // （半透明浅蓝白渐变＋白色发丝边），各页不必逐处改建面代码即同语言；
+        // 彩色底（胶囊/状态色/强调色）不拦截，仍走平色。
+        if (color == Color.WHITE || color == colSurface()) return softFaceBg(radiusDp);
         GradientDrawable g = new GradientDrawable();
         g.setColor(color); g.setCornerRadius(dp(c, radiusDp));
         return g;
@@ -1102,10 +1106,10 @@ public class MainActivity extends Activity {
     int colText3() { return darkEff() ? Color.argb(97,255,255,255) : Color.rgb(0xAE,0xAE,0xB2); }
     int colDivider() { return darkEff() ? Color.argb(26,255,255,255) : Color.argb(13,20,30,60); }
     int colChipOff() { return darkEff() ? Color.rgb(0x2A,0x2A,0x2E) : Color.rgb(0xEE,0xF1,0xF6); }
-    // Q94 试点视觉 token（Soft UI＋轻玻璃拟态，用户 2026-10-04 15:43 参照图定版、19:08 试点开闸）：
-    // 雾蓝渐变页底、半透明浅蓝白柔面、20–28dp 大圆角、柔和外阴影＋极淡内高光（靠顶部提亮渐变与白色细描边近似）、
-    // 图标落圆角胶囊底；主题色只作点缀不作大面。本段只供首页与自有卡编辑弹层试点调用，
-    // 其余页面不许擅自接入——铺全页须用户看过试点点头后另起一段。深色档给深雾蓝等值，不许深色下亮底。
+    // Q94 试点视觉 token（Soft UI＋轻玻璃拟态，用户 2026-10-04 15:43 参照图定版、19:08 试点开闸、
+    // 19:22 方向通过后铺开全 App）：雾蓝渐变页底、半透明浅蓝白柔面、20–28dp 大圆角、柔和外阴影＋
+    // 极淡内高光（靠顶部提亮渐变与白色细描边近似）、图标落圆角胶囊底；主题色只作点缀不作大面。
+    // 深色档给深雾蓝等值，不许深色下亮底。
     // 设计移植自停工 WIP 分支 wip/q94-pilot 的 token 助手（其基线为 2.06 只取设计、落点按 2.11 现行重做）。
     GradientDrawable softPageBg() {
         if (darkEff()) {
@@ -1148,6 +1152,13 @@ public class MainActivity extends Activity {
             g.setStroke(dp(this, 1), Color.argb(170, 255, 255, 255));
         }
         g.setCornerRadius(dp(this, 26));
+        return g;
+    }
+    /** 贴底窗柔面（顶圆底直）：与 softSheetBg 同色系，专供贴底大窗（详情/向导/BIN/添加等）。 */
+    GradientDrawable softSheetTopBg(float topDp) {
+        GradientDrawable g = softSheetBg();
+        float r = dp(this, topDp);
+        g.setCornerRadii(new float[]{r, r, r, r, 0, 0, 0, 0});
         return g;
     }
     /** 图标胶囊底：柔蓝小托盘，图标坐进去（参照图口径）。 */
@@ -1196,7 +1207,7 @@ public class MainActivity extends Activity {
         } else {
             g = new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
                 new int[]{Color.argb(178, 255, 255, 255), Color.argb(166, 244, 248, 253)});
-            g.setStroke(dp(this, 1), Color.argb(160, 255, 255, 255));
+            g.setStroke(dp(this, 1), Color.argb(100, 255, 255, 255)); // Q94 铺开：dock 描边收软，不与玻璃高光描边叠成硬带
         }
         g.setCornerRadius(dp(this, 26));
         return g;
@@ -1238,10 +1249,10 @@ public class MainActivity extends Activity {
                 new int[]{scaleColorAlpha(Color.argb(96, 52, 52, 58), ts), scaleColorAlpha(Color.argb(84, 40, 40, 46), ts), scaleColorAlpha(Color.argb(76, 34, 34, 40), ts)});
         } else {
             g = new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
-                new int[]{scaleColorAlpha(Color.argb(84, 255, 255, 255), ts), scaleColorAlpha(Color.argb(72, 246, 249, 253), ts), scaleColorAlpha(Color.argb(64, 238, 244, 250), ts)});
+                new int[]{scaleColorAlpha(Color.argb(120, 255, 255, 255), ts), scaleColorAlpha(Color.argb(110, 248, 250, 253), ts), scaleColorAlpha(Color.argb(100, 240, 245, 251), ts)}); // Q94 铺开：染色加白去花
         }
         if (oval) g.setShape(GradientDrawable.OVAL); else g.setCornerRadius(dp(this, radiusDp));
-        g.setStroke(dp(this, 1), darkEff() ? Color.argb(44, 255, 255, 255) : Color.argb(110, 255, 255, 255));
+        g.setStroke(dp(this, 1), darkEff() ? Color.argb(44, 255, 255, 255) : Color.argb(84, 255, 255, 255)); // Q94 铺开：描边收软
         return g;
     }
     GradientDrawable glassWashDrawable(float radiusDp, boolean oval) {
@@ -1252,10 +1263,10 @@ public class MainActivity extends Activity {
                 new int[]{scaleColorAlpha(Color.argb(34, 255, 255, 255), ts), scaleColorAlpha(Color.argb(22, 255, 255, 255), ts)});
         } else {
             g = new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
-                new int[]{scaleColorAlpha(Color.argb(96, 255, 255, 255), ts), scaleColorAlpha(Color.argb(78, 248, 250, 253), ts)});
+                new int[]{scaleColorAlpha(Color.argb(58, 255, 255, 255), ts), scaleColorAlpha(Color.argb(44, 248, 250, 253), ts)}); // Q94 铺开：提亮压平，不再顶出一条白带
         }
         if (oval) g.setShape(GradientDrawable.OVAL); else g.setCornerRadius(dp(this, radiusDp));
-        g.setStroke(dp(this, 1), darkEff() ? Color.argb(36, 255, 255, 255) : Color.argb(120, 255, 255, 255));
+        g.setStroke(dp(this, 1), darkEff() ? Color.argb(36, 255, 255, 255) : Color.argb(72, 255, 255, 255)); // Q94 铺开：描边收软
         return g;
     }
     View glassWashView(float radiusDp, boolean oval) {
@@ -1279,7 +1290,14 @@ public class MainActivity extends Activity {
     // 切深色先套色再显页：根底色与状态/导航栏图标明暗在建页前就定，不许闪白
     void applyAppearanceChrome() {
         try {
-            if (rootView != null) rootView.setBackgroundColor(colBg());
+            if (rootView != null) rootView.setBackground(softPageBg()); // Q94 铺开：同根页底
+            // 19:37 验收项「切深色」：dock 与药丸底色在 buildNav 只套过一次，深浅切换时
+            // 一并按当前档重套，并按当前页签实测重钉药丸几何（四种验收姿势之一）。
+            if (navBar != null) navBar.setBackground(dockBarBg());
+            if (navIndicator != null) {
+                navIndicator.setBackground(navPillBg());
+                layoutNavIndicator(Math.max(0, navOrder == null ? 0 : navOrder.indexOf(tab)), false);
+            }
             Window w = getWindow();
             int flags = w.getDecorView().getSystemUiVisibility();
             if (darkEff()) flags &= ~(View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR | View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR);
@@ -1551,7 +1569,7 @@ public class MainActivity extends Activity {
             GradientDrawable fg = new GradientDrawable();
             fg.setColor(Color.TRANSPARENT);
             if (radiusDp < 0) fg.setShape(GradientDrawable.OVAL); else fg.setCornerRadius(dp(this, radiusDp));
-            fg.setStroke(dp(this, 1), Color.argb(95, 255, 255, 255));
+            fg.setStroke(dp(this, 1), Color.argb(48, 255, 255, 255)); // Q94 铺开：高光描边收软（旧 95 在 dock 顶沿勒出一条发白硬带，19:22 点名）
             try { iv.setForeground(fg); } catch (Throwable t) { /* some OEMs unsupported -> no highlight */ }
         }
     }
@@ -1782,6 +1800,14 @@ public class MainActivity extends Activity {
                     canvas.scale(1f / BACKDROP_SCALE, 1f / BACKDROP_SCALE);
                     canvas.drawBitmap(band, 0, 0, backdropPaint);
                 } else {
+                    // 19:37 定点②切页守卫窗：条带刚作废、新带未落位这几帧里，屏幕快照
+                    // 还是上一页的旧帧——照旧回落画出来就是在新页签周围晕一圈旧色
+                    // （实拍药丸旁橙红晕的来源）。守卫窗（切页后 400ms）内 live 件不画
+                    // 旧帧，宿主浅透染色先顶着，新带由 showTab 的 +32ms 立即重抓接上。
+                    if ("live".equals(getTag())
+                        && android.os.SystemClock.uptimeMillis() - glassTabSwitchMs < 400) {
+                        canvas.restore(); return;
+                    }
                     // Q94 回落链（用户 19:10 点名快速甩动玻璃变黑）：条带不可用/已过期时
                     // 一律落最近一帧有效背板（屏幕快照），绝不落空帧；屏幕帧也没有时什么
                     // 都不画，宿主下方的浅透染色兜底显形——染色已按浅透口径收淡，不许发黑。
@@ -2229,7 +2255,7 @@ public class MainActivity extends Activity {
     View emptyState(String s) {
         LinearLayout box = new LinearLayout(this);
         box.setOrientation(LinearLayout.VERTICAL);
-        box.setBackground(roundRect(colSurface(), 14, this));
+        box.setBackground(roundRect(colSurface(), 20, this)); // Q94 铺开：空状态卡圆角向 20 档
         box.setPadding(dp(this, 20), dp(this, 32), dp(this, 20), dp(this, 32));
         TextView t = tv(this, s, 13.5f, colText2(), false);
         t.setGravity(android.view.Gravity.CENTER);
@@ -2996,22 +3022,9 @@ public class MainActivity extends Activity {
     }
 
     void paintChoiceChip(TextView t, boolean on) {
-        if (on) {
-            GradientDrawable g = new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
-                new int[]{Color.rgb(0x0A, 0x84, 0xFF), Color.rgb(0x00, 0x66, 0xE6)});
-            g.setCornerRadius(dp(this, 999));
-            t.setBackground(g);
-            t.setTextColor(Color.WHITE);
-            try { t.setTypeface(weightTypeface(this, 700)); } catch (Throwable ignored) {}
-        } else {
-            GradientDrawable g = new GradientDrawable();
-            g.setColor(Color.rgb(0xF2, 0xF3, 0xF7));
-            g.setCornerRadius(dp(this, 999));
-            g.setStroke(dp(this, 1), Color.argb(13, 20, 30, 60));
-            t.setBackground(g);
-            t.setTextColor(Color.rgb(0x1C, 0x1C, 0x1E));
-            try { t.setTypeface(weightTypeface(this, 400)); } catch (Throwable ignored) {}
-        }
+        // Q94 铺开：全站选片统一试点漆法（选中浅雾蓝胶囊＋深蓝墨字、未选柔面发丝边），
+        // 废原高饱和蓝渐变整坨（筛选窗与各表单同口径）。
+        softFormChipPaint(t, on);
     }
 
     GradientDrawable customGradient(int style) {
@@ -3513,7 +3526,7 @@ public class MainActivity extends Activity {
 
         FrameLayout root = new FrameLayout(this);
         rootView = root;
-        root.setBackgroundColor(colBg()); // Q72
+        root.setBackground(softPageBg()); // Q94 铺开：全站页底统一雾蓝渐变（各页透出同一底）
 
         content = new FrameLayout(this);
         // P1b 浮感修正：内容区不再留底部硬白边，各页滚动视图全高延伸到悬浮条底下，
@@ -3805,8 +3818,7 @@ public class MainActivity extends Activity {
         overlay.addView(shade, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         LinearLayout cardBox = new LinearLayout(this);
         cardBox.setOrientation(LinearLayout.VERTICAL);
-        GradientDrawable cg = new GradientDrawable();
-        cg.setColor(colSheet()); // Q92：走语义浮层色，不再写死纯白
+        GradientDrawable cg = softSheetBg(); // Q94 铺开：窗身换 Soft 柔面（原 Q92 语义平色）
         cg.setCornerRadius(dp(this, 22)); // Q92：四角全圆（窗改浮起式，不再贴底直角）
         cardBox.setBackground(cg);
         if (Build.VERSION.SDK_INT >= 21) { cardBox.setElevation(dp(this, 24)); roundClip(cardBox, 22, this); }
@@ -3936,8 +3948,7 @@ public class MainActivity extends Activity {
         overlay.addView(shade, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         LinearLayout cardBox = new LinearLayout(this);
         cardBox.setOrientation(LinearLayout.VERTICAL);
-        GradientDrawable cg = new GradientDrawable();
-        cg.setColor(colSheet()); // Q92：语义浮层色 + 四角全圆浮起（同批口径）
+        GradientDrawable cg = softSheetBg(); // Q94 铺开：窗身换 Soft 柔面（原 Q92 语义平色）
         cg.setCornerRadius(dp(this, 22));
         cardBox.setBackground(cg);
         if (Build.VERSION.SDK_INT >= 21) { cardBox.setElevation(dp(this, 24)); roundClip(cardBox, 22, this); }
@@ -4402,6 +4413,50 @@ public class MainActivity extends Activity {
         return (navRow.getWidth() - dp(this, 16)) / 5f;
     }
 
+    // ---------- Q94 铺开：带输入悬浮窗的键盘感知（用户 19:29 点名） ----------
+    // 窗口 edge-to-edge + ADJUST_RESIZE 在 decorFits=false 时不落到内容，底锚窗会被
+    // 键盘直接压住（实拍在线搜卡下半截被盖、搜索框够不着）。统一口径：带输入的悬浮窗
+    // 开窗时登记其底锚视图，根布局监听量 IME 高度（窗口高-可见框下沿，>120dp 才算
+    // 键盘、避开手势条），键盘在场时把该视图 bottomMargin 抬到键盘顶沿之上 8dp，
+    // 落下恢复登记时的原值。margin 随每帧布局跟随键盘动画（即 IME 自身曲线家族），
+    // 不另起动画器；关窗视图摘除后自动注销。
+    static class ImeLift { View v; int baseMargin; }
+    final java.util.List<ImeLift> imeLifts = new java.util.ArrayList<>();
+    boolean imeLiftHooked = false;
+    final android.graphics.Rect imeFrame = new android.graphics.Rect();
+
+    void registerImeLift(View v) {
+        if (v == null) return;
+        for (ImeLift l : imeLifts) if (l.v == v) { applyImeLift(); return; } // 已登记不重记 base（可能是已抬值）
+        ImeLift l = new ImeLift();
+        l.v = v;
+        android.view.ViewGroup.LayoutParams lp = v.getLayoutParams();
+        l.baseMargin = lp instanceof FrameLayout.LayoutParams ? ((FrameLayout.LayoutParams) lp).bottomMargin : 0;
+        imeLifts.add(l);
+        if (!imeLiftHooked && rootView != null) {
+            imeLiftHooked = true;
+            rootView.getViewTreeObserver().addOnGlobalLayoutListener(() -> applyImeLift());
+        }
+        applyImeLift();
+    }
+
+    void applyImeLift() {
+        if (imeLifts.isEmpty() || rootView == null) return;
+        try {
+            getWindow().getDecorView().getWindowVisibleDisplayFrame(imeFrame);
+            int imeH = rootView.getHeight() - imeFrame.bottom;
+            boolean kb = imeH > dp(this, 120);
+            for (int i = imeLifts.size() - 1; i >= 0; i--) {
+                ImeLift l = imeLifts.get(i);
+                if (l.v.getParent() == null) { imeLifts.remove(i); continue; }
+                if (!(l.v.getLayoutParams() instanceof FrameLayout.LayoutParams)) continue;
+                FrameLayout.LayoutParams lp = (FrameLayout.LayoutParams) l.v.getLayoutParams();
+                int want = kb ? Math.max(l.baseMargin, imeH + dp(this, 8)) : l.baseMargin;
+                if (lp.bottomMargin != want) { lp.bottomMargin = want; l.v.setLayoutParams(lp); }
+            }
+        } catch (Throwable ignored) {}
+    }
+
     // Q38/Q35: tint follows the lens - the cell under the moving lens gets the dark icon + bold label,
     // like the mixed version's button.on (color #1C1C1E + font-weight 700; its svg strokes use currentColor,
     // so icon and label tint together). Fires only on discrete tab crossings; lens motion itself stays
@@ -4426,27 +4481,74 @@ public class MainActivity extends Activity {
         }
     }
 
+    // Q94 铺开（用户 19:28 点名）：药丸落位改「页签实测边界」——旧实现按均分槽位估算
+    // （(行宽-16)/5 等分 +3dp 内缩），与页签图标+文字的实测中心对不齐，药丸偏在一侧像错位气泡。
+    // 改：直接量所选页签 View 在 navBar 坐标里的实测中心与宽高，药丸横竖都以它为中心严丝合缝；
+    // 弹簧/拖动中的小数位在相邻页签实测中心之间插值，不再假设等分。
+    View navItemAt(int idx) {
+        if (navOrder == null || navOrder.isEmpty()) return null;
+        int i = Math.max(0, Math.min(navOrder.size() - 1, idx));
+        return navItems.get(navOrder.get(i));
+    }
+    float navItemCenterX(View it) { return navRow.getLeft() + it.getLeft() + it.getWidth() / 2f; }
+    float navItemCenterY(View it) { return navRow.getTop() + it.getTop() + it.getHeight() / 2f; }
+
+    // 19:37 定点①：药丸纵向对位改按「图标+文字视觉块」——量图标顶→文字底的实测包围（navBar 坐标）。
+    // 旧整格中心把页签上下 8dp padding 也算进去，高度又被钳到 52dp 只罩格子上半，真机看着偏上；
+    // 改药丸罩住视觉块整块、以块中心为心、高度随块走（块高+10dp，仅受栏高约束），
+    // 字体缩放/行高变化时块走到哪药丸跟到哪。量不到子件时回落整格中心。
+    float[] navVisualBlockY(View it) {
+        if (!(it instanceof ViewGroup) || navRow == null) return null;
+        ViewGroup vg = (ViewGroup) it;
+        if (vg.getChildCount() < 2) return null;
+        View ic = vg.getChildAt(0), lb = vg.getChildAt(1);
+        if (ic == null || lb == null || ic.getHeight() <= 0 || lb.getHeight() <= 0) return null;
+        float base = navRow.getTop() + it.getTop();
+        return new float[]{base + ic.getTop(), base + lb.getBottom()};
+    }
+    float navCenterFor(float pos) {
+        int n = navOrder == null ? 0 : navOrder.size();
+        if (n <= 0) return 0f;
+        float p = Math.max(0f, Math.min(n - 1f, pos));
+        int i0 = (int) Math.floor(p);
+        View a = navItemAt(i0);
+        if (a == null || a.getWidth() <= 0) { float s = navSlotW(); return s > 0 ? dp(this, 8) + p * s + s / 2f : 0f; }
+        if (i0 >= n - 1) return navItemCenterX(a);
+        View b = navItemAt(i0 + 1);
+        if (b == null || b.getWidth() <= 0) return navItemCenterX(a);
+        float f = p - i0;
+        return navItemCenterX(a) + (navItemCenterX(b) - navItemCenterX(a)) * f;
+    }
+
     void layoutNavIndicator(int idx, boolean snap) {
         if (navIndicator == null) return;
-        float slot = navSlotW();
-        if (slot <= 0) {
-            // Q98：旧实现无界自投递——navRow 宽度持续为 0（底栏未落位/被整面隐藏）时每帧
-            // repost 空转烧主线程。加上限 40 次（约首帧布局窗口）后停手，下一次正经调用再续。
+        View it = navItemAt(idx);
+        if (it == null || it.getWidth() <= 0 || it.getHeight() <= 0) {
+            // Q98：未落位时有界重试（上限 40 次），不许无界自投递空转。
             if (navBar != null && ++navIndicatorRetry <= 40) navBar.post(() -> layoutNavIndicator(idx, snap));
             return;
         }
         navIndicatorRetry = 0;
-        int w = Math.max(dp(this, 40), Math.round(slot - dp(this, 6)));
-        View sample = navItems.get("home");
-        int h = sample != null && sample.getHeight() > 0 ? sample.getHeight() - dp(this, 4) : dp(this, 52);
-        h = Math.max(dp(this, 40), Math.min(dp(this, 52), h)); // Q99：药丸限高，防探出 dock
+        // 药丸尺寸随所选页签实测：宽=页签宽-4dp；纵向按视觉块（19:37 定点①）——
+        // 罩住图标+文字整块、以块中心为心、高度随块走，仅受栏高约束不再钳矮一截；
+        // 量不到视觉块时回落旧口径（整格中心＋40–52dp 钳高，Q99 防探出 dock）。
+        int w = Math.max(dp(this, 40), it.getWidth() - dp(this, 4));
+        float[] blk = navVisualBlockY(it);
+        float cy; int h;
+        if (blk != null) {
+            cy = (blk[0] + blk[1]) / 2f;
+            int maxH = navBar.getHeight() > 0 ? navBar.getHeight() - dp(this, 6) : dp(this, 58);
+            h = Math.max(dp(this, 40), Math.min(maxH, Math.round(blk[1] - blk[0]) + dp(this, 10)));
+        } else {
+            cy = navItemCenterY(it);
+            h = Math.max(dp(this, 40), Math.min(dp(this, 52), it.getHeight() - dp(this, 4)));
+        }
         FrameLayout.LayoutParams lp = (FrameLayout.LayoutParams) navIndicator.getLayoutParams();
-        // Q99：药丸纵向居中收进栏内（旧 topMargin 10dp 靠顶，用户实拍探出 dock 上沿）；
-        // 横向仍由 placeNavIndicator 的 translationX 驱动，gravity 只管纵向居中。
-        if (lp.width != w || lp.height != h || lp.topMargin != 0
-            || lp.gravity != (Gravity.LEFT | Gravity.CENTER_VERTICAL)) {
-            lp.width = w; lp.height = h; lp.topMargin = 0;
-            lp.gravity = Gravity.LEFT | Gravity.CENTER_VERTICAL;
+        int wantTop = Math.round(cy - h / 2f);
+        if (lp.width != w || lp.height != h || lp.topMargin != wantTop
+            || lp.gravity != (Gravity.LEFT | Gravity.TOP)) {
+            lp.width = w; lp.height = h; lp.topMargin = wantTop;
+            lp.gravity = Gravity.LEFT | Gravity.TOP;
             navIndicator.setLayoutParams(lp);
         }
         navIndicator.setPivotX(w / 2f); navIndicator.setPivotY(h / 2f); // stretch around the drop's centre
@@ -4454,11 +4556,31 @@ public class MainActivity extends Activity {
         placeNavIndicator(0f);
     }
 
+    // 19:37 定点②：页签尚未落位（冷启首帧/重建瞬间）时的均分兜底——栏宽（量不到时屏宽
+    // 减 dock 左右边距）五等分取格心，先把药丸钉在目标页签格子上，不许留空窗/停在旧位。
+    float navFallbackCenterX(float pos) {
+        int n = navOrder == null || navOrder.isEmpty() ? 5 : navOrder.size();
+        int barW = navBar != null ? navBar.getWidth() : 0;
+        if (barW <= 0 && rootView != null) barW = rootView.getWidth() - dp(this, 24);
+        if (barW <= 0) barW = getResources().getDisplayMetrics().widthPixels - dp(this, 24);
+        if (barW <= 0) return 0f;
+        float slot = barW / (float) n;
+        float pp = Math.max(0f, Math.min(n - 1f, pos));
+        return slot * pp + slot / 2f;
+    }
+
     void placeNavIndicator(float vel) {
         if (navIndicator == null || navBar == null) return;
-        float slot = navSlotW(); if (slot <= 0) return;
-        float x = dp(this, 8) + navPos * slot + dp(this, 3);
-        navIndicator.setTranslationX(x);
+        float cx = navCenterFor(navPos);
+        if (cx <= 0) cx = navFallbackCenterX(navPos); // 定点②：实测没就绪先均分钉位
+        if (cx <= 0) {
+            // 连兜底都无从算（布局全未起）：有界排一次实测落位，本帧保留上一位置，
+            // 不许跳回左上角默认位、更不许就此失踪。
+            if (navIndicatorRetry <= 40) navBar.post(() -> layoutNavIndicator(Math.max(0, Math.round(navPos)), false));
+            return;
+        }
+        int pw = navIndicator.getLayoutParams() != null ? navIndicator.getLayoutParams().width : dp(this, 60);
+        navIndicator.setTranslationX(cx - pw / 2f);
         // Q38: jelly stretch follows speed, capped at about +25% wide (squash inversely on Y).
         float stretch = Math.min(1.25f, 1f + Math.abs(vel) * 0.012f);
         navIndicator.setScaleX(stretch);
@@ -4467,12 +4589,24 @@ public class MainActivity extends Activity {
     }
 
     // Q21：rawX（屏幕坐标）→ 标签小数位：以 navRow 在屏位置为原点，跨条目滑动时坐标连续不跳变。
+    // Q94 铺开：映射改按页签实测中心（首尾中心线性反解），手指压在哪个页签中心药丸就落哪，
+    // 与 placeNavIndicator 的实测中心插值同一口径，不再按均分槽位估算。
     void navDragTo(float rawX) {
-        float slot = navSlotW(); if (slot <= 0 || navRow == null) return;
+        if (navRow == null) return;
         int[] loc = new int[2]; navRow.getLocationOnScreen(loc);
         float navX = rawX - loc[0];
-        float p = (navX - dp(this, 8)) / slot - 0.5f;
-        p = Math.max(-0.12f, Math.min(4.12f, p));
+        int n = navOrder == null ? 0 : navOrder.size();
+        View first = navItemAt(0), last = navItemAt(n - 1);
+        float p;
+        if (n > 1 && first != null && last != null && first.getWidth() > 0 && last.getWidth() > 0) {
+            float c0 = first.getLeft() + first.getWidth() / 2f;
+            float cN = last.getLeft() + last.getWidth() / 2f;
+            p = cN > c0 ? (navX - c0) / (cN - c0) * (n - 1) : 0f;
+        } else {
+            float slot = navSlotW(); if (slot <= 0) return;
+            p = (navX - dp(this, 8)) / slot - 0.5f;
+        }
+        p = Math.max(-0.12f, Math.min(n - 1f + 0.12f, p));
         float vel = (p - navPos) * 18f;
         navPos = p;
         navSpringV = vel; // Q38: hand the finger's velocity to the spring on release (no dead stop)
@@ -4518,6 +4652,10 @@ public class MainActivity extends Activity {
                     if (switchPage) {
                         String key = navOrder.get(target);
                         if (!key.equals(tab)) showTab(key); else layoutNavIndicator(target, false);
+                    } else {
+                        // 定点②：不切页的落定（切页弹簧/拖动回弹）也按目标页签实测重钉
+                        // 尺寸与纵向——重建页/未落位帧之后药丸自愈回正位，不等下一次交互。
+                        layoutNavIndicator(target, false);
                     }
                     return;
                 }
@@ -4587,6 +4725,13 @@ public class MainActivity extends Activity {
         }
         content.addView(page);
         currentPageView = page;
+        // 19:37 定点②：切页条带立刻重抓，不等 280ms 淡入落定那一发——条带只画新页滚动
+        // 子树本身，页面淡入的 alpha/位移不污染取样；一帧后页面已落位即可出带，新页首建
+        // 高度未起时 140ms 再补一发（代次守卫防连切抓半路页）。旧页屏幕帧在守卫窗内由
+        // GlassBackdropView 挡住不画，不许旧色在新页签周围晕开（实拍橙红晕就是它）。
+        final int genBand = glassTabGen;
+        mainHandler.postDelayed(() -> { if (genBand == glassTabGen) captureBand(); }, 32);
+        mainHandler.postDelayed(() -> { if (genBand == glassTabGen && bandBmp == null) captureBand(); }, 140);
         // Q64：旧页已退场（不再垫底淡出），与 Q63 清旧帧合起来达成「切换瞬间不见上一页」。
         // Q21：弹簧/拖动未落稳时不抓玻璃全图（整屏 draw 会抢主线程、拖动随之发卡）；落稳后由滚动停稳防抖补刷。
         // Q63：不再切页即刻抓图——旧版 post 立即抓，抓到的是旧页淡出+新页淡入的混帧，旧页文字被烤进
@@ -4628,7 +4773,7 @@ public class MainActivity extends Activity {
         int targetIdx = navOrder.indexOf(key);
         if (targetIdx >= 0 && navIndicator != null) {
             if (Math.abs(navPos - targetIdx) > 0.01f) springNavTo(targetIdx, false);
-            else navSettled = targetIdx;
+            else { navSettled = targetIdx; layoutNavIndicator(targetIdx, false); } // 定点②：已对齐也重钉一遍实测位
         }
     }
 
@@ -4881,10 +5026,7 @@ public class MainActivity extends Activity {
         LinearLayout card = new LinearLayout(this);
         card.setOrientation(LinearLayout.VERTICAL);
         // Q45：添加底表改为贴底形态——仅顶部圆角、底部直角直达屏底，消灭底部两角透出遮罩的黑三角
-        GradientDrawable addBg = new GradientDrawable();
-        addBg.setColor(colSheet()); // Q54 实底口径 + Q72 深色浮层，窗身一整块同色到底
-        float addR = dp(this, 22);
-        addBg.setCornerRadii(new float[]{addR, addR, addR, addR, 0, 0, 0, 0});
+        GradientDrawable addBg = softSheetTopBg(22); // Q94 铺开：窗身换 Soft 柔面（原 Q54/Q72 实底）
         card.setBackground(addBg);
         if (Build.VERSION.SDK_INT >= 21) { card.setElevation(dp(this, 24)); topSheetClip(card, 22, this); } // Q45 顶圆底直轮廓
         card.setPadding(dp(this, 18), dp(this, 16), dp(this, 18), dp(this, 12) + navBarH());
@@ -5615,13 +5757,10 @@ public class MainActivity extends Activity {
         // Q33：瓷砖圆角随图宽缩放（图宽 4% 量级），且不低于原固定 14dp——只许更圆润不许回退变尖；
         // 顶图 cover 铺满不变（Q24 优先级：铺满第一、圆角第二），四角靠外框同半径裁切、无图占位同半径。
         // Q94：首页柔面圆角下限抬到 22dp（Soft 语言 20–28 档），图区裁切同半径自动跟随。
-        float tileR = Math.max(softFace ? 22f : 14f, cardRadiusDp(tileW / getResources().getDisplayMetrics().density));
-        if (softFace) {
-            box.setBackground(softFaceRipple(tileR));
-            softShadow(box, 6);
-        } else {
-            box.setBackground(rippleBg(colSurface(), tileR));
-        }
+        // Q94 铺开：全站瓷砖统一柔面（原 softFace 仅首页）——柔面涟漪＋柔影，圆角下限 20dp。
+        float tileR = Math.max(softFace ? 22f : 20f, cardRadiusDp(tileW / getResources().getDisplayMetrics().density));
+        box.setBackground(softFaceRipple(tileR));
+        softShadow(box, 6);
         roundClip(box, tileR, this);
         int imgH = Math.max(dp(this, 40), Math.round(tileW / 1.586f));
         FrameLayout art = new FrameLayout(this);
@@ -5909,7 +6048,7 @@ public class MainActivity extends Activity {
         GradientDrawable pbg = new GradientDrawable();
         pbg.setColor(Color.argb(172, 255, 255, 255)); // Q29：198→172 减薄，冻结模糊的彩色透进来
         pbg.setCornerRadius(dp(this, 16));
-        pbg.setStroke(dp(this, 1), Color.argb(46, 20, 30, 60));
+        pbg.setStroke(dp(this, 1), Color.argb(150, 255, 255, 255)); // Q94 铺开：黑边扫除——深灰描边改白色发丝边
         pop.setBackground(pbg);
         if (Build.VERSION.SDK_INT >= 21) pop.setElevation(dp(this, 24));
         pop.setPadding(dp(this, 6), dp(this, 6), dp(this, 6), dp(this, 6));
@@ -6183,6 +6322,7 @@ public class MainActivity extends Activity {
 
         LinearLayout col = new LinearLayout(this);
         col.setOrientation(LinearLayout.VERTICAL);
+        col.setClipChildren(false); // Q94 铺开：同 homeList，最后一行阴影不被 col 边界二次硬裁
         // Q10: title + inline search flow together under the status bar; nothing floats over them.
         col.setPadding(dp(this, 14), statusBarH() + dp(this, 16), dp(this, 14), dockPad());
         homeScroll.addView(col, new ScrollView.LayoutParams(
@@ -6274,6 +6414,7 @@ public class MainActivity extends Activity {
 
         homeList = new LinearLayout(this);
         homeList.setOrientation(LinearLayout.VERTICAL);
+        homeList.setClipChildren(false); // Q94 铺开：同 addCardRowAt，最后一行瓷砖阴影不被硬裁成线
         col.addView(homeList, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
         anchorDragBarToList(homeDragBar, homeList); // Q98：轨道顶与拇指行程同锚卡片列表头（下限状态栏+8dp）
 
@@ -6612,6 +6753,11 @@ public class MainActivity extends Activity {
         int i = rowIdx * cols;
         LinearLayout row = new LinearLayout(this);
         row.setOrientation(LinearLayout.HORIZONTAL);
+        // Q94 铺开（用户 19:28 点名）：瓷砖柔影原被 container（homeList）以 clipChildren 按行
+        // 边界硬裁——中间行裁口贴着瓷砖底边看不出来，最后一行下方是整段留白，裁出的直边就
+        // 成横贯列表底部的一条细线。放开行与容器的 clipChildren，阴影在留白里自然晕开；
+        // 瓷砖自身 roundClip 轮廓裁切不受影响。
+        row.setClipChildren(false);
         LinearLayout.LayoutParams rlp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         rlp.topMargin = dp(this, 10);
         row.setLayoutParams(rlp);
@@ -7413,10 +7559,7 @@ public class MainActivity extends Activity {
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         LinearLayout card = new LinearLayout(this);
         card.setOrientation(LinearLayout.VERTICAL);
-        GradientDrawable cg = new GradientDrawable();
-        cg.setColor(colSheet()); // Q14 近白不透口径 + Q72 深色浮层，窗身一整块同色到底
-        float rTop = dp(this, 26);
-        cg.setCornerRadii(new float[]{rTop, rTop, rTop, rTop, 0, 0, 0, 0});
+        GradientDrawable cg = softSheetTopBg(26); // Q94 铺开：窗身换 Soft 柔面（原 Q14/Q72 实底）
         card.setBackground(cg);
         if (Build.VERSION.SDK_INT >= 21) {
             card.setElevation(dp(this, 24));
@@ -7888,10 +8031,7 @@ public class MainActivity extends Activity {
 
         final LinearLayout sheetCard = new LinearLayout(this);
         sheetCard.setOrientation(LinearLayout.VERTICAL);
-        GradientDrawable sheetBg = new GradientDrawable();
-        sheetBg.setColor(colSheet()); // Q72
-        float rTop = dp(this, 20);
-        sheetBg.setCornerRadii(new float[]{rTop, rTop, rTop, rTop, 0, 0, 0, 0});
+        GradientDrawable sheetBg = softSheetTopBg(20); // Q94 铺开：窗身换 Soft 柔面（原 Q72 实底）
         sheetCard.setBackground(sheetBg);
         if (Build.VERSION.SDK_INT >= 21) { sheetCard.setElevation(dp(this, 24)); topSheetClip(sheetCard, 20, this); } // Q45 顶圆底直轮廓
         sheetCard.setOnClickListener(v -> {}); // 窗体吃点击防穿透遮罩
@@ -8237,7 +8377,7 @@ public class MainActivity extends Activity {
     LinearLayout buildDetailSheetBody(final Card c) {
         LinearLayout page = new LinearLayout(this);
         page.setOrientation(LinearLayout.VERTICAL);
-        page.setBackgroundColor(colSheet()); // Q83：正文底跟随窗体语义色（原写死白，深色下整窗割裂）
+        page.setBackgroundColor(Color.TRANSPARENT); // Q94 铺开：窗身柔面由 sheetCard 承担（原 Q83 colSheet 实底）
 
         // ---- 图廊（.p-gal/.p-track/.p-slide）：整宽横滑，图原比例 contain、圆角 12、阴影，高封顶 260 ----
         final boolean hasVar = c.variants != null && c.variants.length() > 0;
@@ -8409,11 +8549,14 @@ public class MainActivity extends Activity {
             });
         }
 
-        // 学生推荐段（原样取记录里的 reason，不在详情侧改写）
-        if (c.studentPick && c.studentReason != null && !c.studentReason.isEmpty()) {
+        // 学生推荐段（优先原样取记录里的 reason；为空时按学生页同口径 studentReason() 兜底，
+        // 保证多列模式点进详情也看得到推荐理由——Q94 铺开 19:28 点名）
+        String stuReasonTxt = (c.studentReason != null && !c.studentReason.isEmpty()) ? c.studentReason
+            : (c.studentPick ? studentReason(c) : "");
+        if (c.studentPick && stuReasonTxt != null && !stuReasonTxt.isEmpty()) {
             bodyInner.addView(detailSectionTitle("\u5B66\u751F\u63A8\u8350"));
             LinearLayout stCard = detailInfoCard();
-            TextView st = tv(this, c.studentReason, 13.5f, colText(), false);
+            TextView st = tv(this, stuReasonTxt, 13.5f, colText(), false);
             st.setLineSpacing(0, 1.45f);
             stCard.addView(st);
             bodyInner.addView(stCard, new LinearLayout.LayoutParams(
@@ -8690,6 +8833,7 @@ public class MainActivity extends Activity {
         LinearLayout hero = new LinearLayout(this);
         hero.setOrientation(LinearLayout.HORIZONTAL);
         hero.setBackground(roundRect(Color.WHITE, 18, this));
+        hero.setClipToOutline(true); softShadow(hero, 5); // Q94 铺开：统计卡柔面＋柔影
         hero.setPadding(dp(this, 16), dp(this, 14), dp(this, 16), dp(this, 14));
         LinearLayout.LayoutParams hlp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         hlp.topMargin = dp(this, 12);
@@ -8724,16 +8868,49 @@ public class MainActivity extends Activity {
         sectLp.topMargin = dp(this, 14);
         col.addView(sect, sectLp);
 
+        // Q94 铺开（用户 19:28 点名）：学生页加列数切换——列表模式保留完整推荐理由，
+        // 2/3 列走首页同款瓷砖紧凑排（图/名/评分＋适合小字），完整理由在详情
+        // 「学生推荐」段兜底（见 buildDetailSheetBody）；选择存本机 student_cols，默认列表。
+        final int stuCols = Math.max(1, Math.min(3, prefs == null ? 1 : prefs.getInt("student_cols", 1)));
+        LinearLayout modeRow = new LinearLayout(this);
+        modeRow.setOrientation(LinearLayout.HORIZONTAL);
+        LinearLayout.LayoutParams mrlp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        mrlp.topMargin = dp(this, 10);
+        col.addView(modeRow, mrlp);
+        String[][] stuModes = {{"1", "列表"}, {"2", "2 列"}, {"3", "3 列"}};
+        for (String[] mo : stuModes) {
+            final int mv = Integer.parseInt(mo[0]);
+            TextView mt = tv(this, mo[1], 12, colText(), mv == stuCols);
+            mt.setGravity(Gravity.CENTER);
+            mt.setPadding(dp(this, 14), dp(this, 6), dp(this, 14), dp(this, 6));
+            softFormChipPaint(mt, mv == stuCols);
+            LinearLayout.LayoutParams mlp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            mlp.rightMargin = dp(this, 8);
+            modeRow.addView(mt, mlp);
+            mt.setOnClickListener(v -> {
+                if (stuCols == mv) return;
+                haptic();
+                try { prefs.edit().putInt("student_cols", mv).apply(); } catch (Throwable ignored) {}
+                pages.remove("student");
+                showTab("student");
+            });
+        }
+        LinearLayout stuListBox = new LinearLayout(this);
+        stuListBox.setOrientation(LinearLayout.VERTICAL);
+        stuListBox.setClipChildren(false);
+        col.addView(stuListBox, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        if (stuCols <= 1) {
         boolean stuAnchored = false;
         for (final Card c : stu) {
             LinearLayout cardBox = new LinearLayout(this);
             cardBox.setOrientation(LinearLayout.VERTICAL);
-            cardBox.setBackground(rippleBg(Color.WHITE, 14));
+            cardBox.setBackground(rippleBg(Color.WHITE, 18)); // Q94 铺开：学生卡柔面（roundRect 收口）＋圆角收向 18
+            softShadow(cardBox, 5);
             cardBox.setClipToOutline(true);
             cardBox.setPadding(dp(this, 12), dp(this, 10), dp(this, 12), dp(this, 12));
             LinearLayout.LayoutParams clp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
             clp.topMargin = dp(this, 10);
-            col.addView(cardBox, clp);
+            stuListBox.addView(cardBox, clp);
             if (!stuAnchored) { stuAnchored = true; anchorDragBarToList(stuDragBar, cardBox); } // Q98：首卡即列表头
             cardBox.setOnClickListener(v -> openDetail(c));
             attachCardMenuLongPress(cardBox, c, false);
@@ -8786,7 +8963,49 @@ public class MainActivity extends Activity {
             }
         }
 
-        TextView note = tv(this, "推荐理由按卡库资料整理，仅供参考", 11, Color.rgb(0x8E, 0x8E, 0x93), false);
+        } else {
+            anchorDragBarToList(stuDragBar, stuListBox);
+            int stuGap = dp(this, 10);
+            for (int i = 0; i < stu.size(); i += stuCols) {
+                LinearLayout grow = new LinearLayout(this);
+                grow.setOrientation(LinearLayout.HORIZONTAL);
+                grow.setClipChildren(false);
+                LinearLayout.LayoutParams grlp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+                grlp.topMargin = dp(this, 10);
+                stuListBox.addView(grow, grlp);
+                for (int j = 0; j < stuCols; j++) {
+                    if (i + j < stu.size()) {
+                        final Card c = stu.get(i + j);
+                        View tile = cardTile(c, grow, stuCols, "", false, false, false);
+                        // 适合标签收成瓷砖小字一行；完整推荐理由点进详情看
+                        try {
+                            java.util.List<String> fit = studentFit(c);
+                            if (!fit.isEmpty() && tile instanceof LinearLayout && ((LinearLayout) tile).getChildCount() > 1) {
+                                LinearLayout tbody = (LinearLayout) ((LinearLayout) tile).getChildAt(1);
+                                TextView ft = tv(this, "适合 " + android.text.TextUtils.join(" · ", fit), stuCols >= 3 ? 8.5f : 9.5f, colText2(), false);
+                                ft.setMaxLines(1);
+                                ft.setEllipsize(android.text.TextUtils.TruncateAt.END);
+                                LinearLayout.LayoutParams flp2 = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+                                flp2.topMargin = dp(this, 4);
+                                tbody.addView(ft, flp2);
+                            }
+                        } catch (Throwable ignored) {}
+                        LinearLayout.LayoutParams tlp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1f);
+                        if (j > 0) tlp.leftMargin = stuGap;
+                        tile.setLayoutParams(tlp);
+                        tile.setOnClickListener(v -> openDetail(c));
+                        grow.addView(tile);
+                    } else {
+                        View spacer = new View(this);
+                        LinearLayout.LayoutParams slp = new LinearLayout.LayoutParams(0, 1, 1f);
+                        if (j > 0) slp.leftMargin = stuGap;
+                        grow.addView(spacer, slp);
+                    }
+                }
+            }
+        }
+
+        TextView note = tv(this, stuCols <= 1 ? "推荐理由按卡库资料整理，仅供参考" : "点卡进详情看完整推荐理由", 11, Color.rgb(0x8E, 0x8E, 0x93), false);
         note.setGravity(Gravity.CENTER);
         LinearLayout.LayoutParams nlp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         nlp.topMargin = dp(this, 12);
@@ -9174,7 +9393,7 @@ public class MainActivity extends Activity {
     void openOwnActs() {
         // Q92 二级页模板：顶部圆形细线返回 + 标题（不用白药丸、不用底部灰色返回大块）、
         // 内容卡片化、行动钮统一 softPrimaryBtn、空状态瘦身居中。
-        FrameLayout ov = new FrameLayout(this); ov.setBackgroundColor(colBg());
+        FrameLayout ov = new FrameLayout(this); ov.setBackground(softPageBg()); // Q94 铺开：模块页雾蓝页底
         LinearLayout col = new LinearLayout(this); col.setOrientation(LinearLayout.VERTICAL);
         col.setPadding(dp(this, 14), 0, dp(this, 14), dockPad());
         ov.addView(col);
@@ -9217,6 +9436,7 @@ public class MainActivity extends Activity {
         f.addView(ok);
         FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT); lp.gravity = Gravity.BOTTOM; lp.leftMargin = dp(this,12); lp.rightMargin = dp(this,12); lp.bottomMargin = dp(this,12) + navBarH();
         parentOv.addView(f, lp);
+        registerImeLift(f); // Q94 铺开：键盘感知抬窗
     }
 
     // Q92「我的卡片」顶部汇总卡：原深蓝仪表盘四格瘦身并入（统计一排 + verdict 一行），
@@ -9225,6 +9445,7 @@ public class MainActivity extends Activity {
         LinearLayout box = new LinearLayout(this);
         box.setOrientation(LinearLayout.VERTICAL);
         box.setBackground(rippleBg(colSurface(), 20)); // Q94 token：卡面圆角向 20dp 档
+        softShadow(box, 5); // Q94 铺开：汇总卡柔影
         box.setClipToOutline(true);
         box.setPadding(dp(this, 14), dp(this, 12), dp(this, 14), dp(this, 12));
         LinearLayout.LayoutParams bp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
@@ -10141,10 +10362,7 @@ public class MainActivity extends Activity {
 
         final LinearLayout sheetCard = new LinearLayout(this);
         sheetCard.setOrientation(LinearLayout.VERTICAL);
-        GradientDrawable sheetBg = new GradientDrawable();
-        sheetBg.setColor(Color.WHITE);
-        float rTop = dp(this, 20);
-        sheetBg.setCornerRadii(new float[]{rTop, rTop, rTop, rTop, 0, 0, 0, 0});
+        GradientDrawable sheetBg = softSheetTopBg(20); // Q94 铺开：窗身换 Soft 柔面（原写死纯白）
         sheetCard.setBackground(sheetBg);
         if (Build.VERSION.SDK_INT >= 21) { sheetCard.setElevation(dp(this, 24)); topSheetClip(sheetCard, 20, this); } // Q45 顶圆底直轮廓
         sheetCard.setOnClickListener(v -> {}); // 窗体吃点击防穿透遮罩
@@ -10223,7 +10441,7 @@ public class MainActivity extends Activity {
     LinearLayout buildCustomDetailBody(final CustomCard c) {
         LinearLayout page = new LinearLayout(this);
         page.setOrientation(LinearLayout.VERTICAL);
-        page.setBackgroundColor(Color.WHITE);
+        page.setBackgroundColor(Color.TRANSPARENT); // Q94 铺开：窗身柔面由 sheetCard 承担，正文透出同面
 
         // Q48：hero 改独立圆角卡——四角同半径 16dp、四边内缩留白，不再顶着窗体顶圆在两上角露白边
         // （与 Q46 收款码卡片口径一致）；编辑钮移出色块，入下方信息区（见 buildCustomDetailBody 信息头行）。
@@ -10528,7 +10746,18 @@ public class MainActivity extends Activity {
             e.setBackground(g);
         };
         paint.run();
-        e.setOnFocusChangeListener((v, has) -> paint.run());
+        // Q94 铺开（19:29 同批）：聚焦后等键盘升起落定，把输入框滚进窗内可见区
+        // （窗体已由 registerImeLift 抬到键盘之上，内部 ScrollView 再把焦点行送到位）；并补量两次 IME 高度。
+        e.setOnFocusChangeListener((v, has) -> {
+            paint.run();
+            if (has) {
+                applyImeLift();
+                v.postDelayed(() -> {
+                    applyImeLift();
+                    try { v.requestRectangleOnScreen(new android.graphics.Rect(0, 0, v.getWidth(), v.getHeight()), false); } catch (Throwable ignored) {}
+                }, 330);
+            }
+        });
         LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         lp.topMargin = dp(this, 6);
         e.setLayoutParams(lp);
@@ -11124,10 +11353,7 @@ public class MainActivity extends Activity {
         sheet.addView(shade, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         LinearLayout card = new LinearLayout(this);
         card.setOrientation(LinearLayout.VERTICAL);
-        GradientDrawable cg = new GradientDrawable();
-        cg.setColor(colSheet()); // Q54 实底口径 + Q72 深色浮层，玻璃退为纯垫底
-        float binR = dp(this, 22); // Q45：仅顶部圆角、底部直角贴屏底（原四角同圆时底部两角露遮罩成黑三角）
-        cg.setCornerRadii(new float[]{binR, binR, binR, binR, 0, 0, 0, 0});
+        GradientDrawable cg = softSheetTopBg(22); // Q94 铺开：窗身换 Soft 柔面（原 Q54/Q72 实底）；Q45 顶圆底直不变
         card.setBackground(cg);
         if (Build.VERSION.SDK_INT >= 21) { card.setElevation(dp(this, 24)); topSheetClip(card, 22, this); } // Q45 顶圆底直轮廓
         card.setOnClickListener(v -> {});
@@ -11194,6 +11420,7 @@ public class MainActivity extends Activity {
         binWrap.addView(card, new FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         sheet.addView(binWrap, clp);
+        registerImeLift(binWrap); // Q94 铺开：键盘感知抬窗
         content.addView(sheet);
         binSheet = sheet;
         sheet.setAlpha(0f);
@@ -11375,26 +11602,12 @@ public class MainActivity extends Activity {
     }
 
     void paintFormOrgChip(TextView t, boolean on) {
-        if (on) {
-            GradientDrawable g = new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
-                new int[]{Color.rgb(0x0A, 0x84, 0xFF), Color.rgb(0x00, 0x66, 0xE6)});
-            g.setCornerRadius(dp(this, 999));
-            t.setBackground(g);
-            t.setTextColor(Color.WHITE);
-            try { t.setTypeface(t.getTypeface(), android.graphics.Typeface.BOLD); } catch (Throwable ignored) {}
-        } else {
-            GradientDrawable g = new GradientDrawable();
-            g.setColor(Color.rgb(0xF2, 0xF3, 0xF7));
-            g.setCornerRadius(dp(this, 999));
-            g.setStroke(dp(this, 1), Color.argb(13, 20, 30, 60));
-            t.setBackground(g);
-            t.setTextColor(Color.rgb(0x1C, 0x1C, 0x1E));
-            try { t.setTypeface(weightTypeface(this, 400)); } catch (Throwable ignored) {}
-        }
+        // Q94 铺开：同 paintChoiceChip 统一试点漆法（原蓝渐变整坨退役）。
+        softFormChipPaint(t, on);
     }
 
-    // Q94 试点：自有卡编辑窗专用的 Soft 选片漆法（样板弹层口径，不动其它表单的 paintChoiceChip/
-    // paintFormOrgChip 共享漆法）——选中＝浅雾蓝胶囊托底＋深蓝墨字（FClash 式整块托底同语言），
+    // Q94 选片统一漆法（试点出自自有卡编辑窗，2.13 起 paintChoiceChip/paintFormOrgChip 全站
+    // 同口径）——选中＝浅雾蓝胶囊托底＋深蓝墨字（FClash 式整块托底同语言），
     // 未选＝半透柔面＋发丝描边；不再整坨高饱和蓝渐变。
     void softFormChipPaint(TextView t, boolean on) {
         if (on) {
@@ -11755,6 +11968,7 @@ public class MainActivity extends Activity {
         formWrap.addView(card, new FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         sheet.addView(formWrap, clp);
+        registerImeLift(formWrap); // Q94 铺开：键盘感知抬窗
         content.addView(sheet);
         customFormSheet = sheet;
         sheet.setAlpha(0f);
@@ -11850,8 +12064,7 @@ public class MainActivity extends Activity {
         View shade = new View(this); shade.setBackgroundColor(Color.argb(102,0,0,0)); shade.setAlpha(0f);
         sheet.addView(shade, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         LinearLayout card = new LinearLayout(this); card.setOrientation(LinearLayout.VERTICAL);
-        GradientDrawable cg = new GradientDrawable(); cg.setColor(Color.rgb(0xFF,0xFF,0xFF));
-        float rTop = dp(this,22); cg.setCornerRadii(new float[]{rTop,rTop,rTop,rTop,0,0,0,0}); card.setBackground(cg);
+        GradientDrawable cg = softSheetTopBg(22); card.setBackground(cg); // Q94 铺开：窗身换 Soft 柔面（原写死纯白）
         if (Build.VERSION.SDK_INT >= 21) { card.setElevation(dp(this,24)); topSheetClip(card,22,this); }
         card.setOnClickListener(v->{}); card.setPadding(dp(this,18),dp(this,18),dp(this,18),dp(this,14)+navBarH());
         card.addView(tv(this,title,17,Color.rgb(0x1C,0x1C,0x1E),true));
@@ -12803,7 +13016,7 @@ public class MainActivity extends Activity {
         hideChrome();
         simkeepClosing = false;
         final FrameLayout overlay = new FrameLayout(this);
-        overlay.setBackgroundColor(colBg());
+        overlay.setBackground(softPageBg()); // Q94 铺开：模块页雾蓝页底
         LinearLayout col = new LinearLayout(this);
         col.setOrientation(LinearLayout.VERTICAL);
         overlay.addView(col, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
@@ -12940,7 +13153,7 @@ public class MainActivity extends Activity {
         shade.setOnClickListener(v -> closeSimKeepForm());
         sheet.addView(shade, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         LinearLayout card = new LinearLayout(this); card.setOrientation(LinearLayout.VERTICAL);
-        GradientDrawable cg = new GradientDrawable(); cg.setColor(colSheet()); cg.setStroke(dp(this, 1), Color.argb(140, 255, 255, 255));
+        GradientDrawable cg = softSheetBg(); // Q94 铺开：窗身换 Soft 柔面（原 Q92 语义平色＋白描边）
         cg.setCornerRadius(dp(this, 22)); // Q92 浮起窗四角全圆
         card.setBackground(cg);
         if (Build.VERSION.SDK_INT >= 21) { card.setElevation(dp(this, 24)); roundClip(card, 22, this); }
@@ -13029,6 +13242,7 @@ public class MainActivity extends Activity {
         sheet.addView(wrap, clp);
         content.addView(sheet, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         simkeepFormSheet = sheet;
+        registerImeLift(wrap); // Q94 铺开：键盘感知抬窗
         animShadeIn(shade); animSheetIn(wrap);
     }
     void closeSimKeepFormNow() {
@@ -13125,7 +13339,7 @@ public class MainActivity extends Activity {
         hideChrome();
         subfollowClosing = false;
         final FrameLayout overlay = new FrameLayout(this);
-        overlay.setBackgroundColor(colBg());
+        overlay.setBackground(softPageBg()); // Q94 铺开：模块页雾蓝页底
         LinearLayout col = new LinearLayout(this);
         col.setOrientation(LinearLayout.VERTICAL);
         overlay.addView(col, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
@@ -13262,7 +13476,7 @@ public class MainActivity extends Activity {
         shade.setOnClickListener(v -> closeSubFollowForm());
         sheet.addView(shade, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         LinearLayout card = new LinearLayout(this); card.setOrientation(LinearLayout.VERTICAL);
-        GradientDrawable cg = new GradientDrawable(); cg.setColor(colSheet()); cg.setStroke(dp(this, 1), Color.argb(140, 255, 255, 255));
+        GradientDrawable cg = softSheetBg(); // Q94 铺开：窗身换 Soft 柔面（原 Q92 语义平色＋白描边）
         cg.setCornerRadius(dp(this, 22)); // Q92 浮起窗四角全圆
         card.setBackground(cg);
         if (Build.VERSION.SDK_INT >= 21) { card.setElevation(dp(this, 24)); roundClip(card, 22, this); }
@@ -13363,6 +13577,7 @@ public class MainActivity extends Activity {
         sheet.addView(wrap, clp);
         content.addView(sheet, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         subfollowFormSheet = sheet;
+        registerImeLift(wrap); // Q94 铺开：键盘感知抬窗
         animShadeIn(shade); animSheetIn(wrap);
     }
     void closeSubFollowFormNow() {
@@ -13455,7 +13670,7 @@ public class MainActivity extends Activity {
         hideChrome();
         footprintClosing = false;
         final FrameLayout overlay = new FrameLayout(this);
-        overlay.setBackgroundColor(colBg());
+        overlay.setBackground(softPageBg()); // Q94 铺开：模块页雾蓝页底
         LinearLayout col = new LinearLayout(this);
         col.setOrientation(LinearLayout.VERTICAL);
         overlay.addView(col, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
@@ -13604,7 +13819,7 @@ public class MainActivity extends Activity {
         shade.setOnClickListener(v -> closeFootprintForm());
         sheet.addView(shade, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         LinearLayout card = new LinearLayout(this); card.setOrientation(LinearLayout.VERTICAL);
-        GradientDrawable cg = new GradientDrawable(); cg.setColor(colSheet()); cg.setStroke(dp(this, 1), Color.argb(140, 255, 255, 255));
+        GradientDrawable cg = softSheetBg(); // Q94 铺开：窗身换 Soft 柔面（原 Q92 语义平色＋白描边）
         cg.setCornerRadius(dp(this, 22)); // Q92 浮起窗四角全圆
         card.setBackground(cg);
         if (Build.VERSION.SDK_INT >= 21) { card.setElevation(dp(this, 24)); roundClip(card, 22, this); }
@@ -13702,6 +13917,7 @@ public class MainActivity extends Activity {
         sheet.addView(wrap, clp);
         content.addView(sheet, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         footprintFormSheet = sheet;
+        registerImeLift(wrap); // Q94 铺开：键盘感知抬窗
         animShadeIn(shade); animSheetIn(wrap);
     }
     void closeFootprintFormNow() {
@@ -13983,8 +14199,7 @@ public class MainActivity extends Activity {
         sheet.addView(shade, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         LinearLayout card = new LinearLayout(this);
         card.setOrientation(LinearLayout.VERTICAL);
-        GradientDrawable cg = new GradientDrawable();
-        cg.setColor(colSheet()); // Q92：语义浮层色 + 四角全圆浮起（同批口径）
+        GradientDrawable cg = softSheetBg(); // Q94 铺开：窗身换 Soft 柔面（原 Q92 语义平色）
         cg.setCornerRadius(dp(this, 22));
         card.setBackground(cg);
         if (Build.VERSION.SDK_INT >= 21) { card.setElevation(dp(this, 24)); roundClip(card, 22, this); }
@@ -14047,6 +14262,7 @@ public class MainActivity extends Activity {
         sheet.addView(wrap, clp);
         content.addView(sheet);
         extSheet = sheet;
+        registerImeLift(wrap); // Q94 铺开：键盘升起时整窗抬到键盘顶沿之上
         extClosing = false;
         sheet.setAlpha(0f);
         sheet.animate().alpha(1f).setDuration(ANIM_DUR_SHADE_IN).setInterpolator(ANIM_ENTER).start();
@@ -14168,6 +14384,7 @@ public class MainActivity extends Activity {
             LinearLayout card = new LinearLayout(this);
             card.setOrientation(LinearLayout.VERTICAL);
             card.setBackground(rippleBg(Color.WHITE, 16));
+            card.setClipToOutline(true); softShadow(card, 5); // Q94 铺开：资讯卡柔面＋柔影
             card.setClipToOutline(true);
             card.setPadding(dp(this, 14), dp(this, 12), dp(this, 14), dp(this, 12));
             LinearLayout.LayoutParams clp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
@@ -14403,7 +14620,7 @@ public class MainActivity extends Activity {
     View buildAboutPage() {
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
-        root.setBackgroundColor(colBg()); // Q72 语义底，整页素净排版、无玻璃垫底
+        root.setBackground(softPageBg()); // Q94 铺开：雾蓝页底（原 Q72 语义平底）
 
         // Q92：全站二级页头（圆形细线返回钮 + 20/800 标题），废原生白药丸返回钮
         root.addView(pageBackHead(S("about"), () -> { haptic(); closeAbout(); }),
@@ -14999,7 +15216,7 @@ public class MainActivity extends Activity {
     View buildChangelogPage() {
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
-        root.setBackgroundColor(colBg()); // Q72
+        root.setBackground(softPageBg()); // Q94 铺开：雾蓝页底（原 Q72）
 
         // Q92：全站二级页头（圆形细线返回钮 + 标题），废原生白药丸返回钮
         root.addView(pageBackHead("更新日志", () -> { haptic(); closeChangelog(); }),
@@ -15427,7 +15644,7 @@ public class MainActivity extends Activity {
     void themeColorRow(LinearLayout page) {
         LinearLayout box = new LinearLayout(this);
         box.setOrientation(LinearLayout.VERTICAL);
-        box.setBackground(roundRect(colSurface(), 12, this));
+        box.setBackground(roundRect(colSurface(), 18, this)); // Q94 铺开：设置卡圆角收向 Soft 档
         box.setPadding(dp(this, 14), dp(this, 10), dp(this, 14), dp(this, 12));
         LinearLayout.LayoutParams blp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         blp.topMargin = dp(this, 8);
@@ -15483,7 +15700,7 @@ public class MainActivity extends Activity {
     void segRow(LinearLayout page, String label, String[][] opts, String cur, final SegPick pick) {
         LinearLayout box = new LinearLayout(this);
         box.setOrientation(LinearLayout.VERTICAL);
-        box.setBackground(roundRect(colSurface(), 12, this));
+        box.setBackground(roundRect(colSurface(), 18, this)); // Q94 铺开：设置卡圆角收向 Soft 档
         box.setPadding(dp(this, 14), dp(this, 10), dp(this, 14), dp(this, 12));
         LinearLayout.LayoutParams blp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         blp.topMargin = dp(this, 8);
@@ -15496,9 +15713,10 @@ public class MainActivity extends Activity {
         box.addView(row, rlp);
         for (final String[] o : opts) {
             final boolean on = segOn(o[0], cur);
-            TextView t = tv(this, o[1], 12.5f, on ? Color.WHITE : colText(), on);
+            TextView t = tv(this, o[1], 12.5f, on ? accentColor() : colText(), on);
             t.setGravity(Gravity.CENTER);
-            t.setBackground(roundRect(on ? accentColor() : colChipOff(), 9, this));
+            // Q94 铺开：选中改浅雾蓝胶囊＋强调色字（试点选片同语言），废原整坨实心蓝
+            t.setBackground(on ? softCapsuleBg(9) : roundRect(colChipOff(), 9, this));
             t.setPadding(dp(this, 4), dp(this, 8), dp(this, 4), dp(this, 8));
             LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
             lp.rightMargin = dp(this, 8);
@@ -15527,7 +15745,7 @@ public class MainActivity extends Activity {
         final boolean enabled = !glassDisabled;
         LinearLayout box = new LinearLayout(this);
         box.setOrientation(LinearLayout.VERTICAL);
-        box.setBackground(roundRect(colSurface(), 12, this));
+        box.setBackground(roundRect(colSurface(), 18, this)); // Q94 铺开：设置卡圆角收向 Soft 档
         box.setPadding(dp(this, 14), dp(this, 10), dp(this, 14), dp(this, 12));
         LinearLayout.LayoutParams blp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         blp.topMargin = dp(this, 8);
@@ -15547,9 +15765,10 @@ public class MainActivity extends Activity {
         for (final String[] o : opts) {
             final int lv = Integer.parseInt(o[0]);
             final boolean on = glassLevel == lv;
-            TextView t = tv(this, o[1], 12.5f, on ? Color.WHITE : colText(), on);
+            TextView t = tv(this, o[1], 12.5f, on ? accentColor() : colText(), on);
             t.setGravity(Gravity.CENTER);
-            t.setBackground(roundRect(on ? accentColor() : colChipOff(), 9, this));
+            // Q94 铺开：同 segRow 浅雾蓝胶囊选中态
+            t.setBackground(on ? softCapsuleBg(9) : roundRect(colChipOff(), 9, this));
             t.setPadding(dp(this, 4), dp(this, 8), dp(this, 4), dp(this, 8));
             LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
             lp.rightMargin = dp(this, 8);
@@ -15574,7 +15793,7 @@ public class MainActivity extends Activity {
         LinearLayout row = new LinearLayout(this);
         row.setOrientation(LinearLayout.HORIZONTAL);
         row.setGravity(Gravity.CENTER_VERTICAL);
-        row.setBackground(rippleBg(colSurface(), 12));
+        row.setBackground(rippleBg(colSurface(), 16)); // Q94 铺开：设置行柔面圆角
         row.setClipToOutline(true);
         row.setPadding(dp(this, 14), dp(this, 10), dp(this, 12), dp(this, 10));
         LinearLayout.LayoutParams rlp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
@@ -15596,7 +15815,7 @@ public class MainActivity extends Activity {
     View settingRow(String k, String v) {
         LinearLayout row = new LinearLayout(this);
         row.setOrientation(LinearLayout.VERTICAL);
-        row.setBackground(rippleBg(colSurface(), 12));
+        row.setBackground(rippleBg(colSurface(), 16)); // Q94 铺开：设置行柔面圆角
         row.setClipToOutline(true);
         row.setPadding(dp(this, 14), dp(this, 10), dp(this, 14), dp(this, 10));
         LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
