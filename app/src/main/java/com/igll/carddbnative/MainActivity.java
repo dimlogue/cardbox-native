@@ -462,7 +462,7 @@ public class MainActivity extends Activity {
     // 原生等价：navWrap（dock）+searchFab/filterFab/addFab/topFab 同退同回；关窗恢复走 sync* 的
     // ANIM_ENTER 淡入缩放（P4-fix 曲线），dock 本身 180ms 淡入，不再各处散写 navWrap VISIBLE。
     boolean isChromeCovered() {
-        return welcomeOpen || helloOpen || changelogOpen || wizardOpen || aboutPageOpen
+        return helloOpen || changelogOpen || wizardOpen || aboutPageOpen
             || filterSheet != null || detailCard != null || cardMenuPop != null
             || customFormSheet != null || customDetailSheet != null || binSheet != null || addSheetView != null
             || extSheet != null || showcaseView != null || simkeepView != null || simkeepFormSheet != null
@@ -1639,7 +1639,7 @@ public class MainActivity extends Activity {
         // Q21 ③：底栏拖动/弹簧进行中不做整屏抓图——capture 是全树 draw，正是滑动发卡与 MOVE 被饿死的主因之一；落稳后防抖任务会补上最终帧。
         if (navDragging || navSpringRunning) return;
         if (cardMenuPop != null || filterSheet != null || wizardOpen || aboutPageOpen
-            || detailCard != null || welcomeOpen || helloOpen || changelogOpen) return;
+            || detailCard != null || helloOpen || changelogOpen) return;
         captureGlassSnapshot();
         rebuildBand(); // Q41：停稳/切页帧顺带生成条带，滚动期靠它平移跟随（失败自动回落静态帧）
         for (ImageView iv : new java.util.ArrayList<>(glassViews)) {
@@ -2593,10 +2593,10 @@ public class MainActivity extends Activity {
     int wizStep = 0;
     Map<String, String> wizA = new HashMap<>();
 
-    // 欢迎页 / 更新日志（Phase 4b，对照 app.js showWelcome/renderChangelog）
-    boolean welcomeOpen = false;
+    // 更新日志（Phase 4b，对照 app.js renderChangelog）
     boolean changelogOpen = false;
-    // Q80 欢迎收尾「你好」页：仅首启走完欢迎页后出现一次，深底彩卡飞入叠摞+极简笑脸，点任意处淡入主界面。
+    // Q80/Q93 「你好」页（全 App 唯一欢迎）：首启直达、仅此一次，深底彩卡飞入叠摞+极简笑脸，点任意处淡入主界面；
+    // Q93 起旧白底欢迎页整套删除（用户 15:54 点名），⋯ 菜单「欢迎页」入口亦直落本页。
     boolean helloOpen = false;
     boolean helloClosing = false;
     View helloView = null;
@@ -3014,7 +3014,7 @@ public class MainActivity extends Activity {
 
         showTab("home");
         if (prefs == null || prefs.getBoolean("auto_check_update", true)) checkDataUpdate(false); // Q62: auto only detects
-        if (!prefs.getBoolean("welcomed", false)) showWelcome();
+        if (!prefs.getBoolean("welcomed", false) && !prefs.getBoolean("hello_done", false)) showHello(); // Q93：旧欢迎页已删，首启直达「你好」
     }
 
     @Override protected void onResume() {
@@ -13960,25 +13960,11 @@ public class MainActivity extends Activity {
     }
 
     // ---------- 欢迎页 / 更新日志（Phase 4b） ----------
-    void showWelcome() {
-        captureCurrentPageScroll();
-        welcomeOpen = true;
-        if (navWrap != null) navWrap.setVisibility(View.GONE); // Q32: hide whole dock incl. glass layer - hiding navBar alone leaks a glass strip at screen bottom
-        content.removeAllViews();
-        content.addView(buildWelcomePage());
-    }
+    // Q93：旧欢迎页（showWelcome/closeWelcome/buildWelcomePage，白底「欢迎使用卡盒」整套）已按用户 15:54 点名删除，
+    // 首启与 ⋯ 菜单入口直达下方「你好」页，不再经旧页中转。
 
-    void closeWelcome() {
-        boolean firstHello = !prefs.getBoolean("welcomed", false) && !prefs.getBoolean("hello_done", false);
-        prefs.edit().putBoolean("welcomed", true).apply();
-        welcomeOpen = false;
-        if (firstHello) { showHello(); return; } // Q80：首启收尾只此一次，设置重开欢迎页不再过「你好」
-        if (navWrap != null) navWrap.setVisibility(View.VISIBLE); // Q32
-        showTab(tab);
-    }
-
-    // ---------- Q80 「你好」收尾页 ----------
-    // 仅首次启动走完欢迎页最后一页出现一次（hello_done 落盘后永不再现），日常启动不构建此视图、不拖冷启动。
+    // ---------- Q80/Q93 「你好」页（全 App 唯一欢迎） ----------
+    // 首启（welcomed/hello_done 均未落）或 ⋯ 菜单「欢迎页」入口直达本页；hello_done 落盘后日常启动不再构建、不拖冷启动。
     // 动效学 Tiny Cards 节奏自写：深底上五张彩色卡面自四周飞入依次叠成一摞，顶卡极简笑脸收束；
     // 全程只动 View 绘制层（translation/scale/alpha/rotation），不抓图不采样，时长走 Q74 的 ANIM_ENTER/SHEET_IN 口径。
     static class HelloFaceView extends View {
@@ -14006,6 +13992,7 @@ public class MainActivity extends Activity {
     }
 
     void showHello() {
+        captureCurrentPageScroll(); // 同其余整页浮层口径：关闭后 showTab 恢复原页滚动位置
         helloOpen = true;
         helloClosing = false;
         helloFlat = false;
@@ -14018,9 +14005,14 @@ public class MainActivity extends Activity {
     void closeHello() {
         if (helloClosing || !helloOpen) return;
         helloClosing = true;
-        try { prefs.edit().putBoolean("hello_done", true).apply(); } catch (Throwable ignored) {}
+        try { prefs.edit().putBoolean("hello_done", true).putBoolean("welcomed", true).apply(); } catch (Throwable ignored) {}
         final View gone = helloView;
+        // 单次落定：淡出动画 endAction 与 postDelayed 兜底两条路只许一条真正收尾，
+        // 防动画被取消时两边各跑一次 showTab（欢迎收尾是全 App 唯一从动画回调切页的路径，收口在此一处）
+        final boolean[] finished = { false };
         Runnable finish = () -> {
+            if (finished[0]) return;
+            finished[0] = true;
             helloOpen = false;
             helloClosing = false;
             helloView = null;
@@ -14132,8 +14124,19 @@ public class MainActivity extends Activity {
         };
         styleTrial.run();
         final Runnable spread = () -> {
+            // Q93：平放步距按舞台实宽收拢——卡 196dp 缩 0.62 后半宽约 61dp，步距取
+            // min(108dp, 舞台半幅 − 半卡宽 − 6dp 余量)，窄屏自动收拢、旋 3° 后四角也不出屏
+            // （旧固定 ±108dp 步距在约 360dp 屏上左右各出血约 20dp 被屏幕切边，用户 15:50 点名）。
+            float stepX = dp(this, 108);
+            if (helloFlat) {
+                int sw = stage.getWidth();
+                if (sw <= 0) sw = dp(this, 320);
+                float halfAvail = sw / 2f - dp(this, 6);
+                float cardHalf = dp(this, 196) * 0.62f / 2f;
+                stepX = Math.min(stepX, Math.max(dp(this, 40), halfAvail - cardHalf));
+            }
             for (int i = 0; i < n; i++) {
-                float tx = helloFlat ? dp(this, (i % 3 - 1) * 108) : 0f;
+                float tx = helloFlat ? (i % 3 - 1) * stepX : 0f;
                 float ty = helloFlat ? dp(this, (i / 3) * 108 - 40) : dp(this, (n - 1 - i) * 13);
                 float rot = helloFlat ? (i - 2) * 3f : (i - (n - 1) / 2f) * 2.2f;
                 float sc = helloFlat ? 0.62f : 1f;
@@ -14191,78 +14194,6 @@ public class MainActivity extends Activity {
             hint.animate().alpha(1f).setStartDelay(tail + 300).setDuration(ANIM_DUR_FADE).setInterpolator(ANIM_ENTER).start();
         });
         return root;
-    }
-
-    View buildWelcomePage() {
-        ScrollView sc = new ScrollView(this);
-        thinScrollbar(sc);
-        sc.setBackgroundColor(Color.WHITE);
-        sc.setFillViewport(true);
-        LinearLayout page = new LinearLayout(this);
-        page.setOrientation(LinearLayout.VERTICAL);
-        page.setPadding(dp(this, 26), statusBarH() + dp(this, 22), dp(this, 26), dp(this, 18) + navBarH()); // Q26：欢迎页底部按钮避开手势条
-        sc.addView(page);
-
-        TextView logo = tv(this, "卡", 30, Color.WHITE, true);
-        logo.setGravity(Gravity.CENTER);
-        GradientDrawable lg = new GradientDrawable(GradientDrawable.Orientation.TL_BR,
-            new int[]{Color.rgb(0x0A, 0x84, 0xFF), Color.rgb(0x5E, 0x5C, 0xE6)});
-        lg.setCornerRadius(dp(this, 18));
-        logo.setBackground(lg);
-        page.addView(logo, new LinearLayout.LayoutParams(dp(this, 64), dp(this, 64)));
-
-        TextView title = tv(this, "欢迎使用卡盒", 28, Color.rgb(0x1C, 0x1C, 0x1E), true);
-        LinearLayout.LayoutParams tlp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        tlp.topMargin = dp(this, 16);
-        page.addView(title, tlp);
-        TextView sub = tv(this, "把银行卡装进一个盒子，出门刷卡不再纠结。", 14, Color.rgb(0x8E, 0x8E, 0x93), false);
-        sub.setLineSpacing(0, 1.35f);
-        LinearLayout.LayoutParams slp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        slp.topMargin = dp(this, 8);
-        page.addView(sub, slp);
-
-        String n = String.valueOf(Store.all.size());
-        String[][] feats = {
-            {"▤", "银行卡图鉴", n + " 张借记卡与信用卡，费率、币种、权益一次看清"},
-            {"◎", "情景选卡", "留学、旅游、海淘、日常，答几道题给你推荐合适的卡"},
-            {"★", "我的卡片", "收藏自己的卡，能看卡包实力，还能拖动排序"},
-            {"⊘", "断网可用", "数据存在手机里，没网也能查，更新不用重装"},
-        };
-        for (String[] f : feats) {
-            LinearLayout row = new LinearLayout(this);
-            row.setOrientation(LinearLayout.HORIZONTAL);
-            row.setGravity(Gravity.TOP);
-            LinearLayout.LayoutParams rlp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-            rlp.topMargin = dp(this, 15);
-            page.addView(row, rlp);
-            TextView ic = tv(this, f[0], 19, Color.rgb(0x0A, 0x5C, 0xD6), true);
-            ic.setGravity(Gravity.CENTER);
-            ic.setBackground(roundRect(Color.rgb(0xEE, 0xF4, 0xFF), 13, this));
-            row.addView(ic, new LinearLayout.LayoutParams(dp(this, 44), dp(this, 44)));
-            LinearLayout tx = new LinearLayout(this);
-            tx.setOrientation(LinearLayout.VERTICAL);
-            LinearLayout.LayoutParams txlp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
-            txlp.leftMargin = dp(this, 13);
-            row.addView(tx, txlp);
-            tx.addView(tv(this, f[1], 14.5f, Color.rgb(0x1C, 0x1C, 0x1E), true));
-            TextView d = tv(this, f[2], 12.5f, Color.rgb(0x8E, 0x8E, 0x93), false);
-            d.setLineSpacing(0, 1.3f);
-            tx.addView(d);
-        }
-
-        TextView go = softPrimaryBtn("开始使用");
-        go.setTextSize(15.5f);
-        LinearLayout.LayoutParams glp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(this, 52));
-        glp.topMargin = dp(this, 26);
-        page.addView(go, glp);
-        go.setOnClickListener(v -> { haptic(); closeWelcome(); });
-
-        TextView note = tv(this, "卡片数据仅供参考，办卡以银行最新公告为准", 11, Color.rgb(0xC7, 0xC7, 0xCC), false);
-        note.setGravity(Gravity.CENTER);
-        LinearLayout.LayoutParams nlp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        nlp.topMargin = dp(this, 12);
-        page.addView(note, nlp);
-        return sc;
     }
 
     static class LogEntry { String v; List<String> notes = new ArrayList<>(); }
@@ -14512,7 +14443,7 @@ public class MainActivity extends Activity {
         card.setPadding(dp(this, 6), dp(this, 6), dp(this, 6), dp(this, 6));
         card.addView(moreMenuRow("scene", "情景选卡", () -> openWizard()));
         card.addView(moreMenuRow("log", "更新日志", () -> { settingsLogOpen = true; rebuildPages(); }));
-        card.addView(moreMenuRow("welcome", "欢迎页", () -> showWelcome()));
+        card.addView(moreMenuRow("welcome", "欢迎页", () -> showHello())); // Q93：旧欢迎页已删，入口直达「你好」页
         card.addView(moreMenuRow("about", "关于卡盒", () -> openAbout()));
         int menuW = dp(this, 208);
         // Q92：同糊层事故防线——cardWrap 先测 card 实高、钉死像素高，玻璃/wash 显式同高，
@@ -14910,7 +14841,6 @@ public class MainActivity extends Activity {
         if (cardMenuPop != null) { closeCardMenu(); return; }
         if (aboutPageOpen) { closeAbout(); return; }
         if (helloOpen) { closeHello(); return; }
-        if (welcomeOpen) { closeWelcome(); return; }
         if (changelogOpen) { closeChangelog(); return; }
         if (settingsLogOpen && "settings".equals(tab)) { settingsLogOpen = false; rebuildPages(); return; }
         if (placeholderPickerView != null) { closePlaceholderPicker(); return; }
