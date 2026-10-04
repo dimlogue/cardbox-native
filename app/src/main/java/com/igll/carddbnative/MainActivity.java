@@ -307,15 +307,30 @@ public class MainActivity extends Activity {
         boolean persistent;
         boolean dragging;
         boolean shown;
+        View rangeAnchor = null; // Q91：拇指行程的起点锚（首页=卡片列表头）——行程只对应锚点之后的滚动段
+        // Q91：锚点在滚动内容里的纵向偏移（逐级 getTop 累加到 target 为止），布局变化（英雄卡显隐等）实时跟随
+        int rangeStartPx() {
+            if (rangeAnchor == null || target == null) return 0;
+            int y = 0;
+            View v = rangeAnchor;
+            while (v != null && v != target) {
+                y += v.getTop();
+                android.view.ViewParent par = v.getParent();
+                v = par instanceof View ? (View) par : null;
+            }
+            return Math.max(0, y);
+        }
         Paint thumbPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
         Paint bubblePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
         Paint bubbleText = new Paint(Paint.ANTI_ALIAS_FLAG);
-        Runnable hideTask = () -> { if (!dragging && !persistent) { shown = false; animate().alpha(0f).setDuration(300).start(); } };
+        // Q91：淡出落定即 GONE，不许半透明残段挂在右缘（真机首页右上两截断胶囊）
+        Runnable hideTask = () -> { if (!dragging && !persistent) { shown = false; animate().alpha(0f).setDuration(300).withEndAction(() -> { if (!shown && !dragging && !persistent) setVisibility(GONE); }).start(); } };
         DragBarView(Context c, ScrollView sv, boolean pers) {
             super(c);
             target = sv; persistent = pers;
             setAlpha(pers ? 1f : 0f);
             shown = pers;
+            if (!pers) setVisibility(GONE); // Q91：非拖动态初始即消失，显形由滚动监听点亮
             thumbPaint.setStyle(Paint.Style.FILL);
             bubblePaint.setStyle(Paint.Style.FILL);
             bubblePaint.setColor(Color.argb(224, 28, 32, 44));
@@ -325,7 +340,7 @@ public class MainActivity extends Activity {
             bubbleText.setTextAlign(Paint.Align.CENTER);
             sv.getViewTreeObserver().addOnScrollChangedListener(() -> {
                 if (!persistent) {
-                    if (!shown) { shown = true; animate().cancel(); animate().alpha(1f).setDuration(150).start(); }
+                    if (!shown) { shown = true; setVisibility(VISIBLE); animate().cancel(); animate().alpha(1f).setDuration(150).start(); }
                     mainHandler.removeCallbacks(hideTask);
                     mainHandler.postDelayed(hideTask, 1100);
                 }
@@ -355,7 +370,9 @@ public class MainActivity extends Activity {
             if (target == null || getHeight() <= 0 || !scrollableEnough()) return;
             float th = thumbH();
             int max = maxScroll();
-            float p = max > 0 ? (float) target.getScrollY() / (float) max : 0f;
+            // Q91：行程自锚点（卡片列表头）起算，不再把标题/英雄卡那段滚动摊进拇指行程——与日志页「整页即列表」同口径
+            int start = Math.min(rangeStartPx(), max);
+            float p = max > start ? Math.max(0f, Math.min(1f, (float) (target.getScrollY() - start) / (float) (max - start))) : 0f;
             float top = p * (getHeight() - th);
             // Q76：玻璃胶囊条——8–10dp 可抓宽度、清晰明亮，拖时 10dp、滚动显形期 9dp、常显 8dp
             float w = dp(getContext(), dragging ? 10 : 8.5f);
@@ -386,10 +403,11 @@ public class MainActivity extends Activity {
         }
         void jumpTo(float y) {
             int max = maxScroll(); if (max <= 0) return;
+            int start = Math.min(rangeStartPx(), max); // Q91：与 onDraw 同口径，行程只落在锚点之后的滚动段
             float th = thumbH();
             float r = (y - th / 2f) / Math.max(1f, getHeight() - th);
             r = Math.max(0f, Math.min(1f, r));
-            target.scrollTo(0, Math.round(r * max));
+            target.scrollTo(0, Math.round(start + r * (max - start)));
             invalidate();
         }
         @Override public boolean onTouchEvent(MotionEvent e) {
@@ -401,7 +419,7 @@ public class MainActivity extends Activity {
                     dragging = true;
                     getParent().requestDisallowInterceptTouchEvent(true);
                     mainHandler.removeCallbacks(hideTask);
-                    if (!shown) { shown = true; animate().cancel(); animate().alpha(1f).setDuration(120).start(); }
+                    if (!shown) { shown = true; setVisibility(VISIBLE); animate().cancel(); animate().alpha(1f).setDuration(120).start(); }
                     jumpTo(e.getY());
                     invalidate();
                     return true;
@@ -1862,6 +1880,7 @@ public class MainActivity extends Activity {
     View updateTipSheet = null; boolean updateTipClosing = false;
     View updateConfirmSheet = null; boolean updateConfirmClosing = false;
     String pendingUpdateJson = null; int pendingUpdateVer = -1; boolean updateApplying = false;
+    boolean updateApplyArmed = false; // Q91：仅确认窗「去更新」可置真，applyPendingUpdate 进门先验后即销，堵死一切绕过确认的写库路径
     // Q19：自定义卡详情改为与 Q6 数据库详情同规范的贴底浮窗（原居中 AlertDialog 白框已废）
     View customDetailSheet = null;
     View customDetailWrap = null;
@@ -1894,6 +1913,7 @@ public class MainActivity extends Activity {
     java.util.List<ExtCard> extItems = null;
     boolean extFetchStarted = false;
     boolean extLoading = false;
+    boolean extFetchFailed = false; // Q91：双线都没拉到且无可用索引时置真（有缓存则不算失败）
     String extQuery = "";
     LinearLayout extResultBox = null;
     TextView extMeta = null;
@@ -2442,6 +2462,7 @@ public class MainActivity extends Activity {
     java.util.Set<String> scoreDimsSel = new java.util.LinkedHashSet<>();
     LinearLayout homeList = null;
     ScrollView homeScroll = null;
+    DragBarView homeDragBar = null;
     LinearLayout homeHero = null; // Q15：卡库总览英雄卡（仅无搜索/无筛选时显示，同混合版 lib-hero 口径）
     // Q61 下拉刷新（仅首页列表在顶部时接管下拉，松手触发双线检查更新；带轻量指示，不跳顶、不丢位置）
     TextView homePullText = null;
@@ -5254,8 +5275,15 @@ public class MainActivity extends Activity {
         pullLp.gravity = Gravity.TOP | Gravity.CENTER_HORIZONTAL;
         pullLp.topMargin = statusBarH() + dp(this, 10);
         page.addView(homePullBar, pullLp);
-        // Q49：全部卡片长列表必备可拖拽滚动条（轨道 top 120dp 起、bottom 100dp 止于 dock 上沿）
-        attachDragBar(page, homeScroll, false, 120, 100);
+        // Q49/Q91：全部卡片长列表可拖拽滚动条——轨道改为与日志页同口径（自视口顶部、状态栏下 8dp 起，
+        // 旧 120dp 固定顶距废除），拇指行程锚到卡片列表头（homeList 建好后回填 rangeAnchor）：
+        // 拖条滑的只是卡片那一段，不再从页面最顶部把标题/英雄卡的滚动摊进行程
+        homeDragBar = attachDragBar(page, homeScroll, false, 8, 100);
+        try {
+            FrameLayout.LayoutParams blp2 = (FrameLayout.LayoutParams) homeDragBar.getLayoutParams();
+            blp2.topMargin = statusBarH() + dp(this, 8);
+            homeDragBar.setLayoutParams(blp2);
+        } catch (Throwable ignored) {}
 
         LinearLayout col = new LinearLayout(this);
         col.setOrientation(LinearLayout.VERTICAL);
@@ -5350,6 +5378,7 @@ public class MainActivity extends Activity {
         homeList = new LinearLayout(this);
         homeList.setOrientation(LinearLayout.VERTICAL);
         col.addView(homeList, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        if (homeDragBar != null) homeDragBar.rangeAnchor = homeList; // Q91：滚动条行程自卡片列表头起算
 
         // Q10 inline search capsule (mixed header .top/#search): in-flow under the title, pill 999,
         // glass white rgba(255,255,255,.78)+blur20, thin magnifier, clear-X circle appears once typing.
@@ -7529,11 +7558,22 @@ public class MainActivity extends Activity {
         if (c.hasScore) chips.add(chip("评分 " + String.format(java.util.Locale.US, "%.1f", c.score), accentColor(), Color.WHITE, 12f));
         for (String[] f : FEATS) if (featMatch(c, f[0])) chips.add(chip(f[1], chipBg, colText(), 12f));
         if (c.studentPick) chips.add(chip("学生推荐", accentColor(), Color.WHITE, 12f));
+        // Q91：宽度按文字实测（Paint 量 12sp 粗体实宽），旧版「字数×0.68」把中文宽度估小、
+        // 行内总宽溢出后后面的胶囊被横向 LinearLayout 挤成一字宽、文字竖排成条（真机「评分 9.8」竖条）。
+        Paint chipMp = new Paint(Paint.ANTI_ALIAS_FLAG);
+        chipMp.setTextSize(12f * uiScale * getResources().getDisplayMetrics().scaledDensity);
+        try { chipMp.setTypeface(weightTypeface(this, 700)); } catch (Throwable ignored) {}
+        for (TextView ch : chips) {
+            // 单行钉死：任何胶囊都不许换行竖排，万一单个超宽只许尾部省略
+            ch.setSingleLine(true);
+            ch.setMaxLines(1);
+            ch.setEllipsize(android.text.TextUtils.TruncateAt.END);
+        }
         int maxW = getResources().getDisplayMetrics().widthPixels - dp(this, 36);
         LinearLayout row = null;
         int rowW = 0;
         for (TextView ch : chips) {
-            int w = (int) (ch.getText().length() * dp(this, 12) * 0.68f) + dp(this, 22);
+            int w = (int) Math.ceil(chipMp.measureText(ch.getText().toString())) + dp(this, 12);
             if (row == null || (rowW > 0 && rowW + w > maxW)) {
                 row = new LinearLayout(this);
                 row.setOrientation(LinearLayout.HORIZONTAL);
@@ -10658,6 +10698,9 @@ public class MainActivity extends Activity {
         }).start();
     }
     void applyPendingUpdate() {
+        // Q91：没有确认窗「去更新」的武装标记，一律不写库（cards-ota.json 唯一写入口在此收口）
+        if (!updateApplyArmed) return;
+        updateApplyArmed = false;
         if (updateApplying) return;
         final String json = pendingUpdateJson; final int ver = pendingUpdateVer;
         if (json == null || ver <= Store.dataVersion) { showFloatToast("已是最新数据（v" + Store.dataVersion + "）"); return; }
@@ -10699,9 +10742,11 @@ public class MainActivity extends Activity {
         wrap.addView(card,new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,ViewGroup.LayoutParams.MATCH_PARENT));
         sheet.addView(wrap,clp);
         sheet.setTag(new Object[]{wrap, cb, ob, shade});
+        final long sheetShownAt = System.currentTimeMillis();
         cb.setOnClickListener(v->{haptic(); closeUpdateSheet(sheet);});
         shade.setOnClickListener(v->closeUpdateSheet(sheet));
-        ob.setOnClickListener(v->{haptic(); closeUpdateSheet(sheet); if(onOk!=null) mainHandlerPost(onOk);});
+        // Q91：确认类窗开窗 450ms 内不理「去更新」——防提示窗与确认窗同位叠开时连点/误触穿透成「一点就自己更了」
+        ob.setOnClickListener(v->{ if (System.currentTimeMillis() - sheetShownAt < 450) return; haptic(); closeUpdateSheet(sheet); if(onOk!=null) mainHandlerPost(onOk); });
         return sheet;
     }
     void mainHandlerPost(Runnable r){ try{ new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(r,190);}catch(Throwable e){ r.run(); } }
@@ -10713,7 +10758,7 @@ public class MainActivity extends Activity {
     void showUpdateConfirm(){
         if(updateConfirmSheet!=null) return; if(pendingUpdateVer<=Store.dataVersion){ if(pendingUpdateJson==null){ checkDataUpdate(true); return; } }
         updateConfirmClosing=false;
-        FrameLayout sheet=buildUpdateSheet("更新数据","确定要更新数据吗？更新会覆盖当前卡库数据；你自己添加的卡片和收藏不会被改动，重复的卡会被合并删除。","取消","去更新",()->applyPendingUpdate());
+        FrameLayout sheet=buildUpdateSheet("更新数据","确定要更新数据吗？更新会覆盖当前卡库数据；你自己添加的卡片和收藏不会被改动，重复的卡会被合并删除。","取消","去更新",()->{ updateApplyArmed = true; applyPendingUpdate(); });
         updateConfirmSheet=sheet; content.addView(sheet); animateUpdateSheetIn(sheet);
     }
     void animateUpdateSheetIn(FrameLayout sheet){
@@ -10981,8 +11026,8 @@ public class MainActivity extends Activity {
                     String json = Store.readAll(conn.getInputStream()); conn.disconnect();
                     java.util.List<ExtCard> parsed = parseExtended(json);
                     if (parsed == null) continue;
+                    // Q91：双线全取（仿 Q59），不再首线命中就收工——jsDelivr 回旧缓存时还有 raw 兜底，取条数多者
                     if (best == null || parsed.size() > best.size()) { best = parsed; bestJson = json; }
-                    if (parsed.size() > 0) break;
                 } catch (Throwable ignored) {}
             }
             final java.util.List<ExtCard> fBest = best;
@@ -10992,9 +11037,13 @@ public class MainActivity extends Activity {
                 extFetchStarted = false;
                 if (fBest != null) {
                     extItems = fBest;
+                    extFetchFailed = false;
                     if (fJson != null && prefs != null) {
                         try { prefs.edit().putString("extended_cache", fJson).apply(); } catch (Throwable ignored) {}
                     }
+                } else {
+                    // Q91：双线都没拉到——有缓存继续用缓存，只有手里一条都没有才算拉取失败
+                    extFetchFailed = (extItems == null || extItems.isEmpty());
                 }
                 if (onDone != null) onDone.run();
                 if (extSheet != null) renderExtResults();
@@ -11047,50 +11096,106 @@ public class MainActivity extends Activity {
         renderExtResults();
     }
 
+    // Q91：搜卡窗内分区标题（本地卡库 / 扩展卡库），与窗内既有灰字口径同档
+    void addExtSectionHead(String s) {
+        if (extResultBox == null) return;
+        TextView h = tv(this, s, 12.5f, Color.rgb(0x3A, 0x3A, 0x3C), true);
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        lp.topMargin = dp(this, extResultBox.getChildCount() > 0 ? 14 : 2);
+        extResultBox.addView(h, lp);
+    }
+
     void renderExtResults() {
         if (extResultBox == null) return;
         extResultBox.removeAllViews();
         ensureExtended();
         String q = extQuery == null ? "" : extQuery.trim().toLowerCase();
-        // 本地核心库命中数（断网/扩展无结果时给出去向，不假装扩展有）
-        int localHits = 0;
+        // Q91：本地核心库结果与首页搜索同口径（卡名/银行/BIN/关键词）——不论扩展拉没拉到都直接列在窗内，
+        // 不再只报一个「本地有 N 张」的人数把人打发回首页（真机搜「南京银行」一张不列的根因）。
+        java.util.List<Card> localCards = new ArrayList<>();
         if (!q.isEmpty()) {
             for (Card lc : Store.all) {
-                String hay = ((lc.name == null ? "" : lc.name) + " " + (lc.bank == null ? "" : lc.bank) + " " + orgLabel(lc.org)).toLowerCase();
-                if (hay.contains(q)) localHits++;
+                String bin = lc.spec("BIN");
+                if (lc.name.toLowerCase().contains(q) || lc.bank.toLowerCase().contains(q)
+                    || bin.contains(q) || (lc.keywords != null && lc.keywords.toLowerCase().contains(q))) localCards.add(lc);
             }
         }
         if (extMeta != null) {
             int total = extItems == null ? 0 : extItems.size();
             if (extLoading) extMeta.setText("正在拉取扩展索引… 已缓存 " + total + " 条");
+            else if (total == 0 && extFetchFailed) extMeta.setText("扩展索引暂时拉不到 · 本地核心库 " + Store.all.size() + " 张照常可搜");
             else if (total == 0) extMeta.setText("扩展索引暂无缓存 · 本地核心库 " + Store.all.size() + " 张仍可搜");
             else extMeta.setText("扩展卡库 " + total + " 条 · 本地核心库 " + Store.all.size() + " 张");
         }
-        if (extItems == null || extItems.isEmpty()) {
-            TextView em = tv(this, extLoading ? "正在拉取扩展卡库…" : "暂时拉不到扩展卡库\n检查网络后再试；本地卡库在首页仍可搜索。", 13.5f, Color.rgb(0x8E, 0x8E, 0x93), false);
-            em.setGravity(Gravity.CENTER);
-            em.setPadding(dp(this, 16), dp(this, 28), dp(this, 16), dp(this, 28));
-            extResultBox.addView(em);
-            return;
-        }
         java.util.List<ExtCard> hits = new ArrayList<>();
-        for (ExtCard e : extItems) {
+        if (extItems != null) for (ExtCard e : extItems) {
             if (q.isEmpty()) { hits.add(e); continue; }
             String hay = ((e.name == null ? "" : e.name) + " " + (e.bank == null ? "" : e.bank) + " " + (e.org == null ? "" : e.org) + " " + orgLabel(e.org == null ? "" : e.org) + " " + (e.type == null ? "" : e.type)).toLowerCase();
             if (hay.contains(q)) hits.add(e);
         }
-        if (hits.isEmpty()) {
-            String msg = "扩展卡库里没找到「" + (extQuery == null ? "" : extQuery.trim()) + "」";
-            if (localHits > 0) msg += "\n本地卡库有 " + localHits + " 张相似卡，去首页搜索看看。";
-            else msg += "\n换个卡名或银行试试，冷门卡会随扩展索引持续增补。";
-            TextView em = tv(this, msg, 13.5f, Color.rgb(0x8E, 0x8E, 0x93), false);
-            em.setGravity(Gravity.CENTER);
-            em.setPadding(dp(this, 16), dp(this, 28), dp(this, 16), dp(this, 28));
-            extResultBox.addView(em);
-            return;
+        boolean anyShown = false;
+        boolean noteShown = false;
+        // Q91：本地核心库分区——命中直接列行，点行关窗进详情；扩展拉不到也不许让这一区缺席
+        if (!localCards.isEmpty()) {
+            anyShown = true;
+            addExtSectionHead("本地卡库 · " + localCards.size() + " 张（点开看详情）");
+            int shownL = 0;
+            for (final Card lc : localCards) {
+                if (shownL++ >= 60) break;
+                LinearLayout lrow = new LinearLayout(this);
+                lrow.setOrientation(LinearLayout.HORIZONTAL);
+                lrow.setGravity(Gravity.CENTER_VERTICAL);
+                lrow.setBackground(rippleBg(Color.rgb(0xF8, 0xF8, 0xFA), 12));
+                lrow.setPadding(dp(this, 10), dp(this, 10), dp(this, 10), dp(this, 10));
+                LinearLayout.LayoutParams lrlp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+                lrlp.topMargin = dp(this, 8);
+                extResultBox.addView(lrow, lrlp);
+                FrameLayout lthumb = new FrameLayout(this);
+                lthumb.setBackground(placeholderGradFor(lc.id, 8, this));
+                roundClip(lthumb, 8, this);
+                if (hasOrgBadge(lc.org)) {
+                    addOrgBadge(lthumb, lc.org, 0.7f);
+                } else {
+                    TextView los = tv(this, (lc.org == null || lc.org.trim().isEmpty()) ? "卡" : orgLabel(lc.org.trim()), 10, Color.WHITE, true);
+                    los.setGravity(Gravity.CENTER);
+                    los.setShadowLayer(dp(this, 1), 0, dp(this, 0.5f), Color.argb(120, 0, 0, 0));
+                    lthumb.addView(los, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+                }
+                lrow.addView(lthumb, new LinearLayout.LayoutParams(dp(this, 56), dp(this, 36)));
+                LinearLayout lmid = new LinearLayout(this);
+                lmid.setOrientation(LinearLayout.VERTICAL);
+                LinearLayout.LayoutParams lmlp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+                lmlp.leftMargin = dp(this, 10);
+                lrow.addView(lmid, lmlp);
+                lmid.addView(tv(this, lc.name == null ? "" : lc.name, 15, Color.rgb(0x1C, 0x1C, 0x1E), true));
+                StringBuilder lsub = new StringBuilder();
+                if (lc.bank != null && !lc.bank.trim().isEmpty()) lsub.append(lc.bank.trim());
+                String lol = (lc.org == null || lc.org.trim().isEmpty()) ? "" : orgLabel(lc.org.trim());
+                if (!lol.isEmpty()) { if (lsub.length() > 0) lsub.append(" · "); lsub.append(lol); }
+                if (lsub.length() > 0) lsub.append(" · ");
+                lsub.append(lc.isCredit() ? "信用卡" : "借记卡").append(" · 本地卡库");
+                lmid.addView(tv(this, lsub.toString(), 12, Color.rgb(0x8E, 0x8E, 0x93), false));
+                lrow.setOnClickListener(v -> { haptic(); closeExtendedSearchNow(); openDetail(lc); });
+            }
         }
-        TextView cnt = tv(this, "找到 " + hits.size() + " 张" + (hits.size() > 60 ? "（只显示前 60 张，输入更准的关键词）" : ""), 12, Color.rgb(0x8E, 0x8E, 0x93), false);
-        extResultBox.addView(cnt);
+        if (hits.isEmpty()) {
+            // Q91：扩展侧只给一行状态说明，不再整窗躺平；本地有结果时这一行退居次席
+            String note = null;
+            if (extLoading) note = "扩展卡库正在拉取…";
+            else if ((extItems == null || extItems.isEmpty()) && extFetchFailed) note = "扩展卡库暂时拉不到（两条线路都没通），检查网络后点下方「刷新索引」再试。";
+            else if (!q.isEmpty()) note = "扩展卡库里没找到「" + (extQuery == null ? "" : extQuery.trim()) + "」";
+            if (note != null) {
+                noteShown = true;
+                TextView nt = tv(this, note, 12.5f, Color.rgb(0x8E, 0x8E, 0x93), false);
+                LinearLayout.LayoutParams nlp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+                nlp.topMargin = dp(this, 12);
+                extResultBox.addView(nt, nlp);
+            }
+        }
+        if (!hits.isEmpty()) {
+            anyShown = true;
+            addExtSectionHead("扩展卡库 · " + hits.size() + " 条" + (hits.size() > 60 ? "（只显示前 60 条，输入更准的关键词）" : ""));
+        }
         int shown = 0;
         for (final ExtCard e : hits) {
             if (shown++ >= 60) break;
@@ -11161,11 +11266,17 @@ public class MainActivity extends Activity {
             row.addView(addBtn, alp);
             if (!added) addBtn.setOnClickListener(v -> { haptic(); addExtToMine(e); });
         }
-        if (!q.isEmpty() && localHits > 0) {
-            TextView lh = tv(this, "本地卡库另有 " + localHits + " 张相似卡，在首页搜索即可查看。", 12, Color.rgb(0x8E, 0x8E, 0x93), false);
-            LinearLayout.LayoutParams lhp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-            lhp.topMargin = dp(this, 12);
-            extResultBox.addView(lh, lhp);
+        // Q91：两边都真没有（且扩展状态行也没出）才显空状态，不许拿「拉不到」冒充「没结果」
+        if (!anyShown && !noteShown) {
+            String msg;
+            if (extLoading) msg = "正在拉取扩展卡库…";
+            else if (!q.isEmpty()) msg = "本地与扩展卡库都没找到「" + (extQuery == null ? "" : extQuery.trim()) + "」\n换个卡名或银行试试，冷门卡会随扩展索引持续增补。";
+            else if (extFetchFailed) msg = "扩展卡库暂时拉不到\n检查网络后点下方「刷新索引」再试；本地卡库在首页照常可搜。";
+            else msg = "扩展卡库暂无内容";
+            TextView em = tv(this, msg, 13.5f, Color.rgb(0x8E, 0x8E, 0x93), false);
+            em.setGravity(Gravity.CENTER);
+            em.setPadding(dp(this, 16), dp(this, 28), dp(this, 16), dp(this, 28));
+            extResultBox.addView(em);
         }
     }
 
