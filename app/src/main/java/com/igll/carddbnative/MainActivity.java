@@ -4249,6 +4249,7 @@ public class MainActivity extends Activity {
     java.util.Set<String> scoreDimsSel = new java.util.LinkedHashSet<>();
     LinearLayout homeList = null;
     ScrollView homeScroll = null;
+    long homeScrollMoveMs = 0; // Q116：最近一次首页滚动位移时刻，续帧搭行据此给甩动让路
     DragBarView homeDragBar = null;
     LinearLayout homeHero = null; // Q15：卡库总览英雄卡（仅无搜索/无筛选时显示，同混合版 lib-hero 口径）
     // Q61 下拉刷新（仅首页列表在顶部时接管下拉，松手触发双线检查更新；带轻量指示，不跳顶、不丢位置）
@@ -5406,7 +5407,7 @@ public class MainActivity extends Activity {
             item.addView(label, llp);
             // Q38 (FClash-style lens, mechanism re-implemented by hand): press starts the lens gliding,
             // lifting the finger commits the page switch on spring settle - never mid-flight.
-            item.setOnClickListener(v -> { if (!navDragging) { haptic(); springNavTo(idx, true); } });
+            item.setOnClickListener(v -> { if (!navDragging) { haptic(); navTapTo(idx); } });
             // Q17/Q21: drag on the dock itself - finger drags the drop, passing a tab ticks haptic, release springs to nearest and only then switches page.
             // Q21 ③ 触摸竞争治理：按下即向父级声明不许拦截（底栏整条手势归条目独占），坐标统一用 rawX 换算到 navRow，
             // 手指滑出起始条目后仍由按下条目独占 MOVE 流，不再出现滑到一半被别的视图抢走而「滑不动」。
@@ -5429,12 +5430,13 @@ public class MainActivity extends Activity {
                     case MotionEvent.ACTION_UP:
                         try { v.getParent().requestDisallowInterceptTouchEvent(false); } catch (Throwable ignored) {}
                         if (navDragging) { navDragging = false; settleNav(); return true; }
-                        // Q38: lift commits - spring to the pressed tab, page switches on settle.
+                        // Q38 原口径：lift commits、落稳才切页；Q116（2.29）点击路径改
+                        // 即点即切（navTapTo），此注释让位新口径，落稳切页只余拖动路径。
                         // Guard: a press that slid far off the dock vertically is an abort, not a tap.
                         if (Math.abs(e.getRawY() - navDownRawY) > dp(this, 48)) {
                             springNavTo(Math.max(0, navOrder.indexOf(tab)), false); return true;
                         }
-                        haptic(); springNavTo(idx, true); return true;
+                        haptic(); navTapTo(idx); return true;
                     case MotionEvent.ACTION_CANCEL:
                         try { v.getParent().requestDisallowInterceptTouchEvent(false); } catch (Throwable ignored) {}
                         if (navDragging) { navDragging = false; settleNav(); return true; }
@@ -5689,6 +5691,22 @@ public class MainActivity extends Activity {
 
     void settleNav() { springNavTo(Math.max(0, Math.min(4, Math.round(navPos))), true); }
 
+    // Q116（2.29）：点击切页改即点即切。旧 Q38 口径「抬指提交、弹簧落稳才 showTab」让
+    // 每次点按都先等弹簧飞完：k=210、阻尼比 0.68 的包络衰减率 ζω≈9.85/s，从相邻页签
+    // 位移衰减到落位阈值（|Δ|<0.002 且 |v|<0.08）读码估算约 0.5s、跨多页签约 0.65s，
+    // 再叠切页首帧开销——即用户真机「切页过渡卡、还要停约一秒」的构成主因。点击路径
+    // 直接 showTab（其尾段本就 springNavTo(…,false) 让药丸携当前速度飞向目标），页面
+    // 淡入与药丸飞行同帧并行；已在目标页时只让药丸回钉、不重走切页。拖动路径
+    // （settleNav→springNavTo(…,true)）的「落位才切页」是 Q17 定版手势语义，不动；
+    // 弹簧刚度/阻尼（Q38 手感定版）一字未改。
+    void navTapTo(int idx) {
+        if (navOrder == null || idx < 0 || idx >= navOrder.size()) return;
+        String key = navOrder.get(idx);
+        if (key == null) return;
+        if (key.equals(tab)) { springNavTo(idx, false); return; } // 已在本页：只回钉药丸
+        showTab(key);
+    }
+
     // hand-written damped spring (no libs), Q38 tuning: stiffness 210, damping ratio ~0.68 -> about 500ms
     // settle with a slight overshoot; retargeting mid-flight KEEPS the current velocity (FClash-style lens).
     // Q21 ①：全程只许一条回路——启动时摘除旧任务并自增代次，帧内先验代次再推进；取消/新弹簧/手指接管任一发生，旧回路当帧自尽。
@@ -5767,9 +5785,14 @@ public class MainActivity extends Activity {
                 }
                 pages.put(key, page);
             } else if ("mine".equals(key)) {
-                // 我的卡片每次进来重建，保证收藏增减即时反映
-                page = buildMinePage();
-                pages.put(key, page);
+                // Q116（2.29）：旧口径每次进来整页重建保「收藏增减即时反映」；改签名
+                // 守卫（computeMineSig 对构建全部输入），输入没变就复用缓存页，任一
+                // 在别处发生的增减/改序/换数据都会失配、当场仍走整页重建，语义不变。
+                // pendingScrollCustom 是「建完即定位到自定义区」的一次性指令，有它必重建。
+                if (pendingScrollCustom || !computeMineSig().equals(mineBuiltSig)) {
+                    page = buildMinePage();
+                    pages.put(key, page);
+                }
             }
         } catch (Throwable t) {
             // Q18: any page-build crash must not kill the app; record via crash handler path + fallback home
@@ -7466,6 +7489,7 @@ public class MainActivity extends Activity {
             pageScrollSaveY.put("home", scrollY);
             if (floatSearchOpen && scrollY != oldScrollY) closeFloatSearch();
             lastHomeScrollY = scrollY;
+            homeScrollMoveMs = android.os.SystemClock.uptimeMillis(); // Q116
             updateTopFabVisibility(scrollY);
         });
         page.addView(homeScroll, new FrameLayout.LayoutParams(
@@ -7829,7 +7853,12 @@ public class MainActivity extends Activity {
         // Q21 ②：签名未变的重复 refresh（切页回来、关详情、关筛选）不再把 213 张瓷砖连图带字重搭一遍——这是切页发慢的主因。
         String sig = homeSig();
         if (sig.equals(homeRenderSig) && homeList.getChildCount() > 0) {
-            if (homeCount != null) homeCount.setText("共 " + filteredHome().size() + " 张");
+            // Q116：字面没变就不写——每次回首页都 setText 同一句话，等于让该行无端
+            // 失效、整页跟着走一遍布局遍历；其余路径（过滤重算等）本就便宜，不动。
+            if (homeCount != null) {
+                String ct = "共 " + filteredHome().size() + " 张";
+                if (!ct.contentEquals(homeCount.getText())) homeCount.setText(ct);
+            }
             return;
         }
         // P-keepscroll：重渲染前记下滚动位置——列表一清空高度骤降，系统会把 scrollY 钳到顶，重建后按原位恢复
@@ -7931,6 +7960,13 @@ public class MainActivity extends Activity {
         final Runnable[] step = new Runnable[1];
         step[0] = () -> {
             if (gen != homeRenderGen || container != homeList) return; // 已有更新一轮渲染接管
+            // Q116（2.29）：续帧搭的全是视口外的尾部行——用户正在甩列表的这几帧不跟
+            // 甩动抢主线程，滚动停稳后立即续上；首帧 4 行同步节奏与最终产出不变。
+            if (homeScroll != null
+                    && android.os.SystemClock.uptimeMillis() - homeScrollMoveMs < 150) {
+                mainHandler.postDelayed(step[0], 120);
+                return;
+            }
             int end = Math.min(rows, next[0] + 4);
             for (int r = next[0]; r < end; r++) addCardRowAt(container, list, r, insertAt);
             next[0] = end;
@@ -10947,6 +10983,37 @@ public class MainActivity extends Activity {
         return cell;
     }
 
+    // Q116（2.29）：我的卡片页构建输入签名。旧口径 showTab 每次进入都整页重建（汇总卡
+    // ＋宫格＋工具宫格＋自定义区＋境外能力分析＋全部瓷砖同步组装），是切页主线程重活
+    // 之一。签名覆盖构建实际读到的一切：条目序与全字段、自定义卡序与全字段、列数、
+    // 数据版本、页内两开关（mine_open/limit_shared_bank）、自定义区展开态；showTab
+    // 进入时与上次构建签名比对，一致才复用缓存页——在别处发生的收藏增减、自定义
+    // 卡改序/改名、OTA 换数据都会让签名失配、当场照旧重建，「收藏增减即时反映」
+    // 语义不变，只是没变化时不再白搭一遍。外观/语言/深色切换本就走 rebuildPages
+    // 清页缓存（page 取不到必重建），不入签名。
+    String mineBuiltSig = null;
+    String computeMineSig() {
+        StringBuilder sb = new StringBuilder();
+        sb.append(Store.dataVersion).append('|').append(cols).append('|')
+          .append(prefs == null || prefs.getBoolean("mine_open", true)).append('|')
+          .append(prefs == null || prefs.getBoolean("limit_shared_bank", true)).append('|')
+          .append(customOpen).append('|');
+        if (mineEntries != null) for (MineEntry e : mineEntries) {
+            if (e == null) continue;
+            sb.append(e.cardId).append(':').append(e.acctClass).append(':').append(e.pan).append(':')
+              .append(e.limitYuan).append(':').append(e.billDay).append(':').append(e.dueDay).append(';');
+        }
+        sb.append('#');
+        if (customCards != null) for (CustomCard cc : customCards) {
+            if (cc == null) continue;
+            sb.append(cc.id).append(':').append(cc.name).append(':').append(cc.bank).append(':')
+              .append(cc.org).append(':').append(cc.note).append(':').append(cc.style).append(':')
+              .append(cc.acctClass).append(':').append(cc.kind).append(':').append(cc.pan).append(':')
+              .append(cc.limitYuan).append(':').append(cc.billDay).append(':').append(cc.dueDay).append(';');
+        }
+        return sb.toString();
+    }
+
     View buildMinePage() {
         // Q94：标题头改随内容滚走（用户 19:11 点名同款固定头一并改）——改前 basePage
         // 固定标题钉在滚动区之上；改后与首页同口径：整页一根 ScrollView，27sp 标题
@@ -11054,6 +11121,7 @@ public class MainActivity extends Activity {
         TextView addSub = tv(this, "自定义卡片 / 在线查卡 ›", 12, colText2(), false);
         addRow.addView(addSub);
         addRow.setOnClickListener(v -> { haptic(); openAddSheet(); });
+        mineBuiltSig = computeMineSig(); // Q116：构建成功才记账，构建抛错下次照旧重建
         return page;
     }
 
