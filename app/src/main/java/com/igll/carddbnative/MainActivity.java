@@ -2008,6 +2008,7 @@ public class MainActivity extends Activity {
     boolean detailClosing = false;
     int detailVariantIdx = 0;
     TextView detailBinView = null;
+    TextView detailPrimaryBtn = null; // Q83：详情窗底部常驻主按钮（未加入=加入我的卡片，已加入=管理入口）
     LinearLayout detailVerInfoBox = null;
     java.util.List<View> detailDots = new java.util.ArrayList<>();
     final java.util.ArrayDeque<Card> detailQueue = new java.util.ArrayDeque<>();
@@ -2807,6 +2808,7 @@ public class MainActivity extends Activity {
                 nb.setPadding(0, 0, 0, dp(this, 10) + navBarH());
                 detailScroll.addView(nb);
                 detailScroll.scrollTo(0, 0);
+                updateDetailPrimary(detailCard); // Q83：正文重建后底部主按钮两态同步
             }
         } catch (Throwable ignored) {}
     }
@@ -6579,12 +6581,25 @@ public class MainActivity extends Activity {
         sc.setFillViewport(false);
         detailScroll = sc;
         LinearLayout body = buildDetailSheetBody(c);
-        body.setPadding(0, 0, 0, dp(this, 10) + navBarH()); // Q28：内容落窗底，末行让开系统手势条
+        body.setPadding(0, 0, 0, dp(this, 10)); // Q83：窗底改为常驻主按钮栏，内容末行不再直落窗底
         sc.addView(body);
         sheetCard.addView(sc, new LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
 
-        // Q28：详情只看不加入，底部收藏行整行移除，滚动区直落窗底
+        // Q83 底部常驻主按钮：用户 2026-10-04 06:11 点名的沉浸式详情结构（大图英雄区+标题+标签+
+        // 分块信息卡+底部主按钮）；口径上取代 Q28 的「详情只看不加入、底部行整行移除」——
+        // 未加入点它走 Q65 类别选择，已加入点它进同一个窗管理（再加一张/移除已有）。
+        LinearLayout detailFoot = new LinearLayout(this);
+        detailFoot.setOrientation(LinearLayout.HORIZONTAL);
+        detailFoot.setPadding(dp(this, 18), dp(this, 10), dp(this, 18), dp(this, 10) + navBarH());
+        detailPrimaryBtn = tv(this, "", 15, Color.WHITE, true);
+        detailPrimaryBtn.setGravity(Gravity.CENTER);
+        detailPrimaryBtn.setPadding(0, dp(this, 13), 0, dp(this, 13));
+        detailPrimaryBtn.setOnClickListener(v -> { haptic(); onDetailPrimary(detailCard); });
+        detailFoot.addView(detailPrimaryBtn, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+        sheetCard.addView(detailFoot, new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        updateDetailPrimary(c);
 
         // 先量高再定版（内容可能短于封顶）
         sheetCard.measure(View.MeasureSpec.makeMeasureSpec(screenW, View.MeasureSpec.EXACTLY),
@@ -6702,7 +6717,7 @@ public class MainActivity extends Activity {
         Runnable finish = () -> {
             if (overlay != null && overlay.getParent() instanceof ViewGroup)
                 ((ViewGroup) overlay.getParent()).removeView(overlay);
-            detailView = null; detailSheetWrap = null; detailShade = null; detailCloseGlyph = null;
+            detailView = null; detailSheetWrap = null; detailShade = null; detailCloseGlyph = null; detailPrimaryBtn = null;
             detailScroll = null; detailBinView = null; detailVerInfoBox = null;
             detailDots = new java.util.ArrayList<>();
             detailCard = null; detailClosing = false; detailFromWiz = false; detailEntryKey = null;
@@ -6740,7 +6755,7 @@ public class MainActivity extends Activity {
             View d = detailDots.get(i);
             boolean on = i == idx;
             GradientDrawable g = new GradientDrawable();
-            g.setColor(on ? Color.rgb(0x3A, 0x3A, 0x3C) : Color.rgb(0xD8, 0xD8, 0xDE));
+            g.setColor(on ? colText() : (darkEff() ? Color.rgb(0x48, 0x48, 0x4C) : Color.rgb(0xD8, 0xD8, 0xDE)));
             g.setCornerRadius(dp(this, 3));
             d.setBackground(g);
         }
@@ -6768,10 +6783,10 @@ public class MainActivity extends Activity {
         String bin = v.optString("bin", "");
         String note = v.optString("note", "");
         TextView t = tv(this, nm + (bin == null || bin.isEmpty() ? "" : " \u00B7 BIN " + bin),
-            14, Color.rgb(0x1C, 0x1C, 0x1E), true);
+            14, colText(), true);
         box.addView(t);
         if (note != null && !note.isEmpty()) {
-            TextView n = tv(this, note, 12.5f, Color.rgb(0x3A, 0x3A, 0x3C), false);
+            TextView n = tv(this, note, 12.5f, colText2(), false);
             n.setLineSpacing(0, 1.4f);
             LinearLayout.LayoutParams nlp = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
@@ -6883,7 +6898,7 @@ public class MainActivity extends Activity {
     LinearLayout buildDetailSheetBody(final Card c) {
         LinearLayout page = new LinearLayout(this);
         page.setOrientation(LinearLayout.VERTICAL);
-        page.setBackgroundColor(Color.WHITE);
+        page.setBackgroundColor(colSheet()); // Q83：正文底跟随窗体语义色（原写死白，深色下整窗割裂）
 
         // ---- 图廊（.p-gal/.p-track/.p-slide）：整宽横滑，图原比例 contain、圆角 12、阴影，高封顶 260 ----
         final boolean hasVar = c.variants != null && c.variants.length() > 0;
@@ -6891,7 +6906,9 @@ public class MainActivity extends Activity {
         LinearLayout gal = new LinearLayout(this);
         gal.setOrientation(LinearLayout.VERTICAL);
         GradientDrawable galBg = new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
-            new int[]{Color.rgb(0xF1, 0xF1, 0xF4), Color.WHITE});
+            darkEff()
+                ? new int[]{Color.rgb(0x2A, 0x2A, 0x2E), colSheet()}
+                : new int[]{Color.rgb(0xF1, 0xF1, 0xF4), colSheet()});
         gal.setBackground(galBg);
         page.addView(gal);
 
@@ -6955,7 +6972,7 @@ public class MainActivity extends Activity {
                 iv.setImageBitmap(roundBitmap(b, dp(this, cardR) * rScale));
             }
             if (slideName != null && !slideName.isEmpty()) {
-                TextView sn = tv(this, slideName, 12, Color.rgb(0x8E, 0x8E, 0x93), true);
+                TextView sn = tv(this, slideName, 12, colText3(), true);
                 sn.setGravity(Gravity.CENTER);
                 LinearLayout.LayoutParams snp = new LinearLayout.LayoutParams(
                     ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
@@ -6972,7 +6989,7 @@ public class MainActivity extends Activity {
             for (int i = 0; i < nSlides; i++) {
                 View d = new View(this);
                 GradientDrawable g = new GradientDrawable();
-                g.setColor(i == 0 ? Color.rgb(0x3A, 0x3A, 0x3C) : Color.rgb(0xD8, 0xD8, 0xDE));
+                g.setColor(i == 0 ? colText() : (darkEff() ? Color.rgb(0x48, 0x48, 0x4C) : Color.rgb(0xD8, 0xD8, 0xDE)));
                 g.setCornerRadius(dp(this, 3));
                 d.setBackground(g);
                 LinearLayout.LayoutParams dlp = new LinearLayout.LayoutParams(
@@ -6993,30 +7010,29 @@ public class MainActivity extends Activity {
         bodyInner.setPadding(dp(this, 18), dp(this, 16), dp(this, 18), dp(this, 8));
         page.addView(bodyInner);
 
-        // Q39: .p-title 1.2rem/800
-        TextView name = tvW(this, c.name, 19, Color.rgb(0x1C, 0x1C, 0x1E), 800);
+        // Q83：标题放大到 22sp/800 做英雄区落点（原 Q39 的 .p-title 19sp 保留字重口径）
+        TextView name = tvW(this, c.name, 22, colText(), 800);
         name.setLineSpacing(0, 1.15f);
         bodyInner.addView(name);
         // 状态直接取记录自身（与规格同源 specs 外的 status 字段），不二次加工
         String metaTxt = c.bank + " \u00B7 " + orgLabel(c.org) + " \u00B7 " + c.status
             + " \u00B7 " + (c.hasScore ? String.format(java.util.Locale.US, "%.1f\u5206", c.score) : "\u5F85\u8BC4\u5206");
         // Q39: .p-sub .88rem 次级行
-        TextView meta = tv(this, metaTxt, 13.5f, Color.rgb(0x8E, 0x8E, 0x93), false); bodyLH(meta);
+        TextView meta = tv(this, metaTxt, 13.5f, colText3(), false); bodyLH(meta);
         LinearLayout.LayoutParams mep = new LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         mep.topMargin = dp(this, 2);
         bodyInner.addView(meta, mep);
 
-        // 当前版本信息（首版，随横滑切换与 BIN 同步）
+        // Q83 标题下标签流：组织/卡种/状态/银行/评分/特点/学生推荐，身份一眼扫完
+        bodyInner.addView(buildDetailChips(c));
+
+        // 当前版本信息（首版，随横滑切换与 BIN 同步）；Q83：入分块信息卡
         if (hasVar) {
-            LinearLayout vib = new LinearLayout(this);
-            vib.setOrientation(LinearLayout.VERTICAL);
-            vib.setBackground(roundRect(Color.rgb(0xF6, 0xF6, 0xF8), 10, this));
-            vib.setPadding(dp(this, 12), dp(this, 10), dp(this, 12), dp(this, 10));
-            LinearLayout.LayoutParams vlp = new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-            vlp.topMargin = dp(this, 10);
-            bodyInner.addView(vib, vlp);
+            bodyInner.addView(detailSectionTitle("版本信息"));
+            LinearLayout vib = detailInfoCard();
+            bodyInner.addView(vib, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
             detailVerInfoBox = vib;
             fillVerInfo(vib, c, 0);
         }
@@ -7033,7 +7049,7 @@ public class MainActivity extends Activity {
         // Q71：无真实卡面图时可自选占位底色（仅本机保存，真图卡不出现）
         if (Img.get(this, c.image) == null) {
             TextView colorBtn = tv(this, placeholderCustomEnabled ? "换卡面颜色 ›" : "换卡面颜色（先在设置开启自选） ›", 13.5f, Color.rgb(0x0A, 0x5C, 0xD6), true);
-            colorBtn.setBackground(rippleBg(Color.rgb(0xEE, 0xF4, 0xFB), 10));
+            colorBtn.setBackground(rippleBg(colSurface(), 10));
             colorBtn.setPadding(dp(this, 12), dp(this, 9), dp(this, 12), dp(this, 9));
             colorBtn.setGravity(Gravity.CENTER);
             LinearLayout.LayoutParams cbLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
@@ -7049,29 +7065,31 @@ public class MainActivity extends Activity {
         // 学生推荐段（原样取记录里的 reason，不在详情侧改写）
         if (c.studentPick && c.studentReason != null && !c.studentReason.isEmpty()) {
             bodyInner.addView(detailSectionTitle("\u5B66\u751F\u63A8\u8350"));
-            TextView st = tv(this, c.studentReason, 13.5f, Color.rgb(0x3A, 0x3A, 0x3C), false);
+            LinearLayout stCard = detailInfoCard();
+            TextView st = tv(this, c.studentReason, 13.5f, colText(), false);
             st.setLineSpacing(0, 1.45f);
-            bodyInner.addView(st);
+            stCard.addView(st);
+            bodyInner.addView(stCard, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
         }
 
         // 点评（保留既有口径，规格之前展示）
         if (c.review != null && !c.review.isEmpty()) {
             bodyInner.addView(detailSectionTitle("\u70B9\u8BC4"));
-            TextView rv = tv(this, c.review, 13.5f, Color.rgb(0x3A, 0x3A, 0x3C), false);
+            LinearLayout rvCard = detailInfoCard();
+            TextView rv = tv(this, c.review, 13.5f, colText(), false);
             rv.setLineSpacing(0, 1.45f);
-            rv.setBackground(roundRect(Color.rgb(0xEE, 0xF4, 0xFB), 12, this));
-            rv.setPadding(dp(this, 12), dp(this, 9), dp(this, 12), dp(this, 9));
-            bodyInner.addView(rv, new LinearLayout.LayoutParams(
+            rvCard.addView(rv);
+            bodyInner.addView(rvCard, new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
         }
 
         // ---- 规格（.p-sec + .spec）：显式 12 键顺序、状态不重复入表、URL 值整行剔除 ----
         bodyInner.addView(detailSectionTitle("\u89C4\u683C"));
         if (c.specs != null) {
-            LinearLayout specBox = new LinearLayout(this);
-            specBox.setOrientation(LinearLayout.VERTICAL);
-            specBox.setPadding(0, 0, 0, 0);
-            bodyInner.addView(specBox);
+            LinearLayout specBox = detailInfoCard();
+            bodyInner.addView(specBox, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
             java.util.List<String[]> rows = detailSpecRows(c);
             for (int i = 0; i < rows.size(); i++) {
                 LinearLayout row = new LinearLayout(this);
@@ -7079,15 +7097,15 @@ public class MainActivity extends Activity {
                 row.setGravity(Gravity.TOP);
                 row.setPadding(0, dp(this, 8), 0, dp(this, 8));
                 specBox.addView(row);
-                TextView kt = tv(this, rows.get(i)[0], 12.5f, Color.rgb(0x8E, 0x8E, 0x93), false);
+                TextView kt = tv(this, rows.get(i)[0], 12.5f, colText3(), false);
                 row.addView(kt, new LinearLayout.LayoutParams(dp(this, 108), ViewGroup.LayoutParams.WRAP_CONTENT));
-                TextView vt = tv(this, rows.get(i)[1], 12.5f, Color.rgb(0x1C, 0x1C, 0x1E), false);
+                TextView vt = tv(this, rows.get(i)[1], 12.5f, colText(), false);
                 vt.setGravity(Gravity.END);
                 if ("BIN".equals(rows.get(i)[0]) && hasVar) detailBinView = vt;
                 row.addView(vt, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
                 if (i < rows.size() - 1) {
                     View div = new View(this);
-                    div.setBackgroundColor(Color.argb(18, 20, 30, 60));
+                    div.setBackgroundColor(darkEff() ? Color.rgb(0x3A, 0x3A, 0x3C) : Color.rgb(0xE6, 0xE6, 0xEB));
                     specBox.addView(div, new LinearLayout.LayoutParams(
                         ViewGroup.LayoutParams.MATCH_PARENT, Math.max(1, dp(this, 1) / 2)));
                 }
@@ -7097,12 +7115,95 @@ public class MainActivity extends Activity {
     }
 
     TextView detailSectionTitle(String s) {
-        TextView t = tv(this, s, 15, Color.rgb(0x1C, 0x1C, 0x1E), true);
+        TextView t = tv(this, s, 15, colText(), true);
         LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        lp.topMargin = dp(this, 14); lp.bottomMargin = dp(this, 8);
+        lp.topMargin = dp(this, 16); lp.bottomMargin = dp(this, 8);
         t.setLayoutParams(lp);
         return t;
+    }
+
+    // Q83 分块信息卡：语义色素面圆角块承载一段信息，标题在块外上方（分组式结构）
+    LinearLayout detailInfoCard() {
+        LinearLayout box = new LinearLayout(this);
+        box.setOrientation(LinearLayout.VERTICAL);
+        box.setBackground(roundRect(colSurface(), 16, this));
+        box.setPadding(dp(this, 14), dp(this, 12), dp(this, 14), dp(this, 12));
+        return box;
+    }
+
+    // Q83 标题下标签流：组织/卡种/状态/银行/评分/特点/学生推荐，手动估宽换行（全库无 FlowLayout 先例，不引新组件）
+    LinearLayout buildDetailChips(Card c) {
+        LinearLayout wrap = new LinearLayout(this);
+        wrap.setOrientation(LinearLayout.VERTICAL);
+        java.util.List<TextView> chips = new java.util.ArrayList<>();
+        int chipBg = darkEff() ? Color.rgb(0x2E, 0x2E, 0x33) : Color.rgb(0xEF, 0xF1, 0xF6);
+        chips.add(chip(orgLabel(c.org), chipBg, colText(), 12f));
+        chips.add(chip(c.isCredit() ? "信用卡" : "借记卡", chipBg, colText(), 12f));
+        if (c.status != null && !c.status.isEmpty()) chips.add(chip(c.status, chipBg, colText(), 12f));
+        if (c.bank != null && !c.bank.isEmpty()) chips.add(chip(c.bank, chipBg, colText(), 12f));
+        if (c.hasScore) chips.add(chip("评分 " + String.format(java.util.Locale.US, "%.1f", c.score), accentColor(), Color.WHITE, 12f));
+        for (String[] f : FEATS) if (featMatch(c, f[0])) chips.add(chip(f[1], chipBg, colText(), 12f));
+        if (c.studentPick) chips.add(chip("学生推荐", accentColor(), Color.WHITE, 12f));
+        int maxW = getResources().getDisplayMetrics().widthPixels - dp(this, 36);
+        LinearLayout row = null;
+        int rowW = 0;
+        for (TextView ch : chips) {
+            int w = (int) (ch.getText().length() * dp(this, 12) * 0.68f) + dp(this, 22);
+            if (row == null || (rowW > 0 && rowW + w > maxW)) {
+                row = new LinearLayout(this);
+                row.setOrientation(LinearLayout.HORIZONTAL);
+                LinearLayout.LayoutParams rlp = new LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+                if (wrap.getChildCount() > 0) rlp.topMargin = dp(this, 6);
+                wrap.addView(row, rlp);
+                rowW = 0;
+            }
+            LinearLayout.LayoutParams clp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            if (rowW > 0) clp.leftMargin = dp(this, 6);
+            row.addView(ch, clp);
+            rowW += w + dp(this, 6);
+        }
+        LinearLayout.LayoutParams lp2 = new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        lp2.topMargin = dp(this, 10);
+        wrap.setLayoutParams(lp2);
+        return wrap;
+    }
+
+    // Q83 底部主按钮两态：未加入=蓝紫渐变实心主按钮；已加入=素面管理入口
+    void updateDetailPrimary(Card c) {
+        if (detailPrimaryBtn == null || c == null) return;
+        boolean joined = !entriesForCard(c.id).isEmpty();
+        if (joined) {
+            detailPrimaryBtn.setText("已加入我的卡片 · 管理");
+            detailPrimaryBtn.setTextColor(colText());
+            detailPrimaryBtn.setBackground(roundRect(colSurface(), 14, this));
+        } else {
+            detailPrimaryBtn.setText("加入我的卡片");
+            detailPrimaryBtn.setTextColor(Color.WHITE);
+            GradientDrawable g = new GradientDrawable(GradientDrawable.Orientation.LEFT_RIGHT,
+                new int[]{Color.rgb(0x0A, 0x84, 0xFF), Color.rgb(0x5E, 0x5C, 0xE6)});
+            g.setCornerRadius(dp(this, 14));
+            detailPrimaryBtn.setBackground(g);
+        }
+    }
+
+    void onDetailPrimary(Card c) {
+        if (c == null) return;
+        Runnable rf = () -> refreshDetailSheetAll(c);
+        if (entriesForCard(c.id).isEmpty()) openAcctClassPicker(c, "加入我的卡片", false, rf);
+        else handleMineAddButton(c, rf);
+    }
+
+    // Q83：详情内任何「我的卡片」状态变化后统一刷新（底部主按钮 + 正文重建）
+    void refreshDetailSheetAll(Card c) {
+        if (c == null) return;
+        if (detailCard != null && detailScroll != null && c.id != null && c.id.equals(detailCard.id)) {
+            updateDetailPrimary(c);
+            refreshDetailPlaceholderBody(c);
+        }
     }
 
     // 规格行：与混合版 specRows 同一 12 键显式顺序；状态已在标题区展示故不入表；值为网址整行剔除
