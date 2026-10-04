@@ -2757,6 +2757,16 @@ public class MainActivity extends Activity {
         int bh = Math.max(1, Math.round(rootView.getHeight() * BACKDROP_SCALE));
         java.util.Map<View, Integer> saved = new java.util.HashMap<>();
         backdropCapturing = true;
+        // Q115（2.28）：抓帧期间暂关当前页滚动条——vivo 系滚动条为白色宽胶囊（带小三角），
+        // 滚动停稳/开窗抓帧时它若还醒着会被原样烤进背板，透过玻璃读成面板「内滚条」
+        // （23:57 图证，⋯ 菜单开窗两次强制抓帧必中）。同步 draw 一帧内关/恢复，用户无感；
+        // 全玻璃件共用此一口（底栏/各窗同沾光）。captureGlassSnapshot 为 Q97 后封存旧链，不动。
+        ScrollView capBarSv = bandScroll();
+        boolean capBarWas = false;
+        if (capBarSv != null) {
+            capBarWas = capBarSv.isVerticalScrollBarEnabled();
+            if (capBarWas) capBarSv.setVerticalScrollBarEnabled(false);
+        }
         try {
             for (ImageView iv : new java.util.ArrayList<>(glassViews)) {
                 View h = glassHosts.get(iv);
@@ -2783,6 +2793,9 @@ public class MainActivity extends Activity {
         } finally {
             for (java.util.Map.Entry<View, Integer> e : saved.entrySet()) {
                 try { e.getKey().setVisibility(e.getValue()); } catch (Throwable ignored) {}
+            }
+            if (capBarSv != null && capBarWas) { // Q115：与暂关成对恢复
+                try { capBarSv.setVerticalScrollBarEnabled(true); } catch (Throwable ignored) {}
             }
             backdropCapturing = false;
         }
@@ -4213,6 +4226,7 @@ public class MainActivity extends Activity {
     View cardMenuPop = null;
     View cardMenuGlass = null; // Q11：长按菜单下的冻结模糊层
     View moreMenuOverlay = null; // Q58：设置页 ⋯ 菜单（从按钮角长出、点外部收回）
+    boolean moreMenuBarWas = true; // Q115：开菜单前设置页滚动条原开关态（开菜单全程暂关，关菜单恢复）
     boolean moreMenuBackdropFrozen = false; // Q102：⋯ 菜单开窗期间冻结背板重抓，开窗那刻已同步抓存一帧
 
     // 筛选状态（Phase 2a-1：与混合版 chipRow 相同的单选切换语义，点已选项再点一次取消）
@@ -7239,12 +7253,19 @@ public class MainActivity extends Activity {
         popInWrap.leftMargin = cmPad; popInWrap.topMargin = cmPad;
         popWrap.addView(pop, popInWrap);
         FrameLayout.LayoutParams wlp = new FrameLayout.LayoutParams(popW + cmPad * 2, popH + cmPad * 2);
-        wlp.leftMargin = Math.max(0, pl - cmPad); wlp.topMargin = Math.max(0, pt - cmPad);
+        // Q115（2.28）：同 ⋯ 菜单病——内 pop 已夹在屏内 12dp，但外扩 cmPad 的整框从未对
+        // 屏沿再夹：贴右/贴底的卡开菜单时整框右沿/下沿正压屏沿、24dp 阴影溢出。整框对
+        // 四沿统一夹（左/上留 2dp、右/下留 10dp），内 pop 随框平移数 dp；原点改按锚卡
+        // 中心/锚沿在框内坐标算，夹后仍从卡上长出。
+        final int wrapW115 = popW + cmPad * 2, wrapH115 = popH + cmPad * 2;
+        final int wl115 = Math.max(dp(this, 2), Math.min(rootW - wrapW115 - dp(this, 10), pl - cmPad));
+        final int wt115 = Math.max(dp(this, 2), Math.min(rootH - wrapH115 - dp(this, 10), pt - cmPad));
+        wlp.leftMargin = wl115; wlp.topMargin = wt115;
         rootView.addView(popWrap, wlp);
         cardMenuPop = popWrap;
         cardMenuGlass = null;
-        popWrap.setPivotX(Math.max(0, Math.min(popW + cmPad * 2, left + w / 2 - Math.max(0, pl - cmPad))));
-        popWrap.setPivotY(below ? cmPad : cmPad + popH);
+        popWrap.setPivotX(Math.max(0, Math.min(wrapW115, left + w / 2 - wl115)));
+        popWrap.setPivotY(Math.max(0, Math.min(wrapH115, (below ? top + h : top) - wt115)));
         popWrap.setAlpha(0f); popWrap.setScaleX(0.94f); popWrap.setScaleY(0.94f);
         popWrap.animate().alpha(1f).scaleX(1f).scaleY(1f)
             .setDuration(ANIM_DUR_CARDMENU_IN).setInterpolator(ANIM_ENTER).start();
@@ -13459,6 +13480,8 @@ public class MainActivity extends Activity {
         String id, term, aka, category, body;
         // Q114（2.27）：英文双语字段（种子 glossary.json 的 *_en；OTA 旧版数据无此字段时为空、显示回落中文）
         String termEn, akaEn, categoryEn, bodyEn;
+        // Q115（2.28）：合并条（一/二/三类账户）的档位子条（序 III/II/I）；非空 = 本条为合并条，本体 body 不走普通正文渲染
+        List<GlossaryItem> tiers;
         String dTerm() { return EN_MODE && termEn != null && !termEn.isEmpty() ? termEn : (term == null ? "" : term); }
         String dAka() { return EN_MODE && akaEn != null && !akaEn.isEmpty() ? akaEn : (aka == null ? "" : aka); }
         String dCategory() { return EN_MODE && categoryEn != null && !categoryEn.isEmpty() ? categoryEn : (category == null ? "" : category); }
@@ -13466,6 +13489,7 @@ public class MainActivity extends Activity {
     }
     List<GlossaryItem> glossaryItems = null;
     java.util.Set<String> glossaryOpen = new java.util.HashSet<>();
+    String glossaryAcctTierId = "acct3"; // Q115：合并条当前档（默认 III，档位序 III/II/I 为用户口径）；深链/点档覆盖
     boolean glossaryFetchStarted = false;
     LinearLayout glossaryBox = null;
     TextView glossaryMeta = null;
@@ -13536,8 +13560,63 @@ public class MainActivity extends Activity {
                 // Q114：双语字段（旧版/远端数据缺字段时为空串，显示层回落中文）
                 g.termEn = o.optString("term_en"); g.akaEn = o.optString("aka_en");
                 g.categoryEn = o.optString("category_en"); g.bodyEn = o.optString("body_en");
+                // Q115：合并条的档位子条（种子已合并形态）；子条字段与主条同构、正文整段保全
+                JSONArray tiersArr = o.optJSONArray("tiers");
+                if (tiersArr != null) {
+                    List<GlossaryItem> ts = new ArrayList<>();
+                    for (int j = 0; j < tiersArr.length(); j++) {
+                        JSONObject to = tiersArr.optJSONObject(j);
+                        if (to == null) continue;
+                        GlossaryItem tg = new GlossaryItem();
+                        tg.id = to.optString("id"); tg.term = to.optString("term");
+                        tg.aka = to.optString("aka"); tg.category = to.optString("category");
+                        tg.body = to.optString("body");
+                        tg.termEn = to.optString("term_en"); tg.akaEn = to.optString("aka_en");
+                        tg.categoryEn = to.optString("category_en"); tg.bodyEn = to.optString("body_en");
+                        if (tg.id == null || tg.id.isEmpty() || tg.term == null || tg.term.isEmpty()) continue;
+                        ts.add(tg);
+                    }
+                    if (!ts.isEmpty()) g.tiers = ts;
+                }
                 if (g.id == null || g.id.isEmpty() || g.term == null || g.term.isEmpty()) continue;
                 out.add(g);
+            }
+            // Q115（2.28，用户 22:04 提议）：一/二/三类账户三条在解析层合并为一条（展开区
+            // 内 III/II/I 三档切换）。种子已是合并形态（tiers）时无残留三条、天然跳过；
+            // prefs 缓存与 OTA 远端仍是旧三条数据，靠此分组在运行时回落成同一条——旧数据
+            // 回落逻辑不破、三档中英正文整段搬进子条不丢字。合并条落第一条原位。
+            GlossaryItem m1 = null, m2 = null, m3 = null;
+            int firstIdx = -1;
+            for (int i = 0; i < out.size(); i++) {
+                String id0 = out.get(i).id;
+                if ("acct1".equals(id0) || "acct2".equals(id0) || "acct3".equals(id0)) {
+                    if (firstIdx < 0) firstIdx = i;
+                    if ("acct1".equals(id0)) m1 = out.get(i);
+                    else if ("acct2".equals(id0)) m2 = out.get(i);
+                    else m3 = out.get(i);
+                }
+            }
+            int acctN = (m1 != null ? 1 : 0) + (m2 != null ? 1 : 0) + (m3 != null ? 1 : 0);
+            if (acctN >= 2 && firstIdx >= 0) {
+                GlossaryItem mg = new GlossaryItem();
+                mg.id = "acct";
+                mg.term = "账户分类（一/二/三类）"; mg.termEn = "Account Classes (I / II / III)";
+                mg.aka = "一类账户 · 二类账户 · 三类账户"; mg.akaEn = "Class I · Class II · Class III";
+                GlossaryItem anyTier = m1 != null ? m1 : (m2 != null ? m2 : m3);
+                mg.category = anyTier.category; mg.categoryEn = anyTier.categoryEn;
+                mg.body = ""; mg.bodyEn = ""; // 折叠态靠 aka 行预览，正文在展开区按档出
+                mg.tiers = new ArrayList<>();
+                if (m3 != null) mg.tiers.add(m3); // 档位序 III / II / I（用户口径）
+                if (m2 != null) mg.tiers.add(m2);
+                if (m1 != null) mg.tiers.add(m1);
+                List<GlossaryItem> grouped = new ArrayList<>();
+                for (int i = 0; i < out.size(); i++) {
+                    if (i == firstIdx) grouped.add(mg);
+                    String gid = out.get(i).id;
+                    if ("acct1".equals(gid) || "acct2".equals(gid) || "acct3".equals(gid)) continue;
+                    grouped.add(out.get(i));
+                }
+                out = grouped;
             }
             return out;
         } catch (Exception e) { return null; }
@@ -13588,6 +13667,12 @@ public class MainActivity extends Activity {
 
     void openGlossaryTerm(String id) {
         if (id == null) return;
+        // Q115：旧深链仍指单条 acct1/2/3（账户分类窗「查看卡片常识 ›」指 acct1）——映射到
+        // 合并条并预选对应档，落点/展开逻辑照旧走 id="acct"。
+        if ("acct1".equals(id) || "acct2".equals(id) || "acct3".equals(id)) {
+            glossaryAcctTierId = id;
+            id = "acct";
+        }
         pendingGlossaryId = id;
         glossaryOpen.add(id);
         // Q94：真切页不许覆盖层冒充（用户 19:13 点名）——改前：详情还盖在屏上、底栏
@@ -13647,7 +13732,58 @@ public class MainActivity extends Activity {
                 card.addView(aka, akp);
             }
             String bodyTxt = g.dBody();
-            if (!bodyTxt.isEmpty()) {
+            if (g.tiers != null && !g.tiers.isEmpty()) {
+                // Q115：合并条——折叠态靠 aka 行（三档名）预览；展开态出 III/II/I 三档
+                // 分段（同 segRow 浅雾蓝胶囊选中口径）＋当前档别名/正文＋统一尾注。点档
+                // 只换档不收卡（档钮自带点击、卡面点击仍是展开/收起）。
+                if (open) {
+                    GlossaryItem cur = null;
+                    for (GlossaryItem tg : g.tiers) if (tg.id.equals(glossaryAcctTierId)) cur = tg;
+                    if (cur == null) { cur = g.tiers.get(0); glossaryAcctTierId = cur.id; }
+                    final GlossaryItem curTier = cur;
+                    LinearLayout tierRow = new LinearLayout(this);
+                    tierRow.setOrientation(LinearLayout.HORIZONTAL);
+                    LinearLayout.LayoutParams trp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+                    trp.topMargin = dp(this, 10);
+                    card.addView(tierRow, trp);
+                    for (final GlossaryItem tg : g.tiers) {
+                        boolean on = tg == curTier;
+                        String pillTxt;
+                        if (isEn()) { // 英文档名走短式，长式 Class III Account 在等分档内必溢
+                            if ("acct1".equals(tg.id)) pillTxt = "Class I";
+                            else if ("acct2".equals(tg.id)) pillTxt = "Class II";
+                            else if ("acct3".equals(tg.id)) pillTxt = "Class III";
+                            else pillTxt = tg.dTerm();
+                        } else pillTxt = tg.dTerm();
+                        TextView pill = tv(this, pillTxt, 12.5f, on ? accentColor() : colText(), on);
+                        pill.setGravity(Gravity.CENTER);
+                        pill.setBackground(on ? softCapsuleBg(9) : roundRect(colChipOff(), 9, this));
+                        pill.setSingleLine(true); pill.setMaxLines(1); pill.setEllipsize(android.text.TextUtils.TruncateAt.END);
+                        pill.setPadding(dp(this, 4), dp(this, 8), dp(this, 4), dp(this, 8));
+                        LinearLayout.LayoutParams plp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+                        plp.rightMargin = dp(this, 8);
+                        pill.setLayoutParams(plp);
+                        pill.setOnClickListener(v -> { haptic(); glossaryAcctTierId = tg.id; renderGlossary(); });
+                        tierRow.addView(pill);
+                    }
+                    String tAka = curTier.dAka();
+                    if (!tAka.isEmpty()) {
+                        TextView ta = tv(this, tAka, 12, colText2(), false);
+                        LinearLayout.LayoutParams tap = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+                        tap.topMargin = dp(this, 8);
+                        card.addView(ta, tap);
+                    }
+                    TextView tb = tv(this, curTier.dBody(), 13, inkBody(), false);
+                    tb.setLineSpacing(dp(this, 2), 1f);
+                    LinearLayout.LayoutParams tbp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+                    tbp.topMargin = dp(this, 6);
+                    card.addView(tb, tbp);
+                    TextView note = tv(this, isEn() ? "Exact rules follow the issuer's and card network's current terms." : "具体规则以发卡行与卡组织现行说明为准。", 11.5f, colText2(), false);
+                    LinearLayout.LayoutParams nlp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+                    nlp.topMargin = dp(this, 8);
+                    card.addView(note, nlp);
+                }
+            } else if (!bodyTxt.isEmpty()) {
                 TextView bd = tv(this, bodyTxt, 13, inkBody(), false);
                 bd.setLineSpacing(dp(this, 2), 1f);
                 LinearLayout.LayoutParams bdp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
@@ -16644,10 +16780,25 @@ public class MainActivity extends Activity {
         return rowL;
     }
 
+    /** Q115：关 ⋯ 菜单后把设置页滚动条开关恢复到开菜单前（开菜单时暂关防透/防烤，见 openMoreMenu）。 */
+    void restoreMenuPageBar() {
+        if (settingsScroll != null && moreMenuBarWas) {
+            try { settingsScroll.setVerticalScrollBarEnabled(true); } catch (Throwable ignored) {}
+        }
+    }
+
     void openMoreMenu(View anchor) {
         if (moreMenuOverlay != null) { closeMoreMenu(); return; }
         if (anchor == null || content == null) return;
         haptic();
+        // Q115（2.28）：开菜单全程暂关设置页滚动条——vivo 系滚动条是白色宽胶囊（带小
+        // 三角），用户滑完设置页立刻点 ⋯ 时它还醒着：一路活生生透过玻璃面、一路被下面
+        // 两次 captureBackdrop 烤进冻结背板，面板里读成「内滚条」（23:57 图证）。关菜单
+        // 三路（closeMoreMenu/dismissMoreMenuNow/行点击经 closeMoreMenu）统一恢复。
+        if (settingsScroll != null) {
+            moreMenuBarWas = settingsScroll.isVerticalScrollBarEnabled();
+            settingsScroll.setVerticalScrollBarEnabled(false);
+        }
         // Q102：趁菜单未上屏、画面静止先同步抓一帧背板存档，随后开窗全程冻结重抓——旧链在
         // 菜单缩放动画期间按 preDraw 反复整屏重抓＋隐藏/恢复全部玻璃宿主，背景随之抽搐闪烁。
         backdropLastCapMs = 0L;
@@ -16702,8 +16853,19 @@ public class MainActivity extends Activity {
         int[] cl = new int[2]; content.getLocationOnScreen(cl);
         int anchorRight = al[0] - cl[0] + anchor.getWidth();
         int anchorTop = al[1] - cl[1];
-        // card 本体落位与旧版一致（左 = max(12, anchorRight-menuW)、上 = max(pageTop, anchor 底+6)），外框再往外让 menuPad
-        clp.leftMargin = Math.max(dp(this, 2), Math.max(dp(this, 12), anchorRight - menuW) - menuPad);
+        // Q115（2.28，用户 23:57 图证面板右沿冲出屏幕）：2.18 的 Q104 修法只把玻璃宿主
+        // 外扩 menuPad 盖住阴影带、锚点公式仍只保「内卡右沿 = anchorRight」——外扩后
+        // 的整框右沿 = anchorRight + menuPad 再无人夹。设置页横向 padding 14dp 小于
+        // menuPad 16dp，整框恒越屏 2dp、再叠 18dp elevation 阴影，看着就是面板冲出
+        // 屏幕（修了又复发即此：当年夹的是内卡、不是整框）。根治：整框右沿先对
+        // 「宿主宽 −10dp」封顶再回推左沿，内卡随框左移数 dp；缩放原点改按锚点右沿
+        // 在框内坐标算，左移后仍贴 ⋯ 钮角长出。
+        final int wrapW115 = menuW + menuPad * 2;
+        int hostW115 = content.getWidth() > 0 ? content.getWidth() : (rootView != null ? rootView.getWidth() : 0);
+        int wrapRight115 = anchorRight + menuPad;
+        if (hostW115 > 0) wrapRight115 = Math.min(wrapRight115, hostW115 - dp(this, 10));
+        final int wrapLeft115 = Math.max(dp(this, 2), wrapRight115 - wrapW115);
+        clp.leftMargin = wrapLeft115;
         clp.topMargin = Math.max(dp(this, 2), Math.max(pageTopPad(), anchorTop + anchor.getHeight() + dp(this, 6)) - menuPad);
         overlay.addView(cardWrap, clp);
         content.addView(overlay, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
@@ -16717,7 +16879,8 @@ public class MainActivity extends Activity {
             try { captureBackdrop(); } catch (Throwable ignored) {}
         });
         // 缩放原点贴按钮角（右上）：菜单像从 ⋯ 钮角上长出来；缩放与淡入同步、带轻回弹。
-        cardWrap.setPivotX(menuPad + menuW);
+        // Q115：原点 x 改按锚点右沿在整框内坐标（整框夹后左移过，原 menuPad+menuW 已不对位）。
+        cardWrap.setPivotX(Math.max(0, Math.min(wrapW115, anchorRight - wrapLeft115)));
         cardWrap.setPivotY(menuPad);
         cardWrap.setScaleX(0.72f); cardWrap.setScaleY(0.72f); cardWrap.setAlpha(0f);
         cardWrap.animate().scaleX(1f).scaleY(1f).alpha(1f)
@@ -16725,6 +16888,7 @@ public class MainActivity extends Activity {
     }
 
     void closeMoreMenu() {
+        restoreMenuPageBar(); // Q115：滚动条恢复（菜单未开时空转无碍）
         final View ov = moreMenuOverlay;
         if (ov == null) return;
         moreMenuBackdropFrozen = false; // Q102：关菜单即解冻背板重抓（淡出 190ms 内背板静止无碍）
@@ -16744,6 +16908,7 @@ public class MainActivity extends Activity {
     }
 
     void dismissMoreMenuNow() {
+        restoreMenuPageBar(); // Q115：切页等即刻退场路径同恢复设置页滚动条
         moreMenuBackdropFrozen = false; // Q102：菜单退场即解冻背板重抓
         View ov = moreMenuOverlay;
         moreMenuOverlay = null;
