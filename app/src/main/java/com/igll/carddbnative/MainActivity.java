@@ -680,22 +680,23 @@ public class MainActivity extends Activity {
                 cv.drawText(txt, bx + bw / 2f, by + bh / 2f + dp(getContext(), 4.5f), bubbleText);
             }
         }
-        // Q99：进度/拇指顶抽成共用口径（onDraw 与触摸命中同一套数学，不再各算一份）
+        // Q94 改全页口径（用户 19:10 点名）：改前 0% 锚在 rangeStartPx（首页=卡片列表头
+        // 之下），拖到 0% 列表停在中段而非真顶；改后 0%=滚动内容真实顶部、100%=真实
+        // 底部，thumbProgress/jumpTo 一律 scrollY/maxScroll。轨道顶的视觉锚（列表头）
+        // 与 rangeAnchor 保留不动——那是外观位置，与百分比映射是两回事。
         float thumbProgress() {
             int max = maxScroll();
-            int start = Math.min(rangeStartPx(), max);
-            return max > start ? Math.max(0f, Math.min(1f, (float) (target.getScrollY() - start) / (float) (max - start))) : 0f;
+            return max > 0 ? Math.max(0f, Math.min(1f, (float) target.getScrollY() / (float) max)) : 0f;
         }
         float thumbTopFor(float th) {
             return thumbProgress() * (getHeight() - th);
         }
         void jumpTo(float y) {
             int max = maxScroll(); if (max <= 0) return;
-            int start = Math.min(rangeStartPx(), max); // Q91：与 onDraw 同口径，行程只落在锚点之后的滚动段
             float th = thumbH();
             float r = (y - th / 2f) / Math.max(1f, getHeight() - th);
             r = Math.max(0f, Math.min(1f, r));
-            target.scrollTo(0, Math.round(start + r * (max - start)));
+            target.scrollTo(0, Math.round(r * max)); // Q94：与 thumbProgress 同一全页口径
             invalidate();
         }
         @Override public boolean onTouchEvent(MotionEvent e) {
@@ -752,9 +753,10 @@ public class MainActivity extends Activity {
         host.addView(bar, lp);
         return bar;
     }
-    // Q98：长列表滚动条轨道顶锚定死——轨道自卡片列表头起算（拇指行程 rangeAnchor 同步指向列表头），
-    // 且无论如何不进状态栏：顶距下限 = 状态栏高 + 8dp。布局落位后按列表头在内容坐标中的
-    // 纵向偏移（静止时即其屏幕纵坐标）一次性钉死，两页（首页/学生）同一口径。
+    // Q98：长列表滚动条轨道顶锚定死——轨道自卡片列表头起算，且无论如何不进状态栏：
+    // 顶距下限 = 状态栏高 + 8dp。布局落位后按列表头在内容坐标中的纵向偏移（静止时即
+    // 其屏幕纵坐标）一次性钉死，两页（首页/学生）同一口径。Q94：此处只管轨道外观位置；
+    // 百分比映射已改全页口径（thumbProgress/jumpTo 不再读 rangeAnchor），锚点字段保留。
     void anchorDragBarToList(final DragBarView bar, final View listHead) {
         if (bar == null || listHead == null) return;
         bar.rangeAnchor = listHead;
@@ -1100,6 +1102,119 @@ public class MainActivity extends Activity {
     int colText3() { return darkEff() ? Color.argb(97,255,255,255) : Color.rgb(0xAE,0xAE,0xB2); }
     int colDivider() { return darkEff() ? Color.argb(26,255,255,255) : Color.argb(13,20,30,60); }
     int colChipOff() { return darkEff() ? Color.rgb(0x2A,0x2A,0x2E) : Color.rgb(0xEE,0xF1,0xF6); }
+    // Q94 试点视觉 token（Soft UI＋轻玻璃拟态，用户 2026-10-04 15:43 参照图定版、19:08 试点开闸）：
+    // 雾蓝渐变页底、半透明浅蓝白柔面、20–28dp 大圆角、柔和外阴影＋极淡内高光（靠顶部提亮渐变与白色细描边近似）、
+    // 图标落圆角胶囊底；主题色只作点缀不作大面。本段只供首页与自有卡编辑弹层试点调用，
+    // 其余页面不许擅自接入——铺全页须用户看过试点点头后另起一段。深色档给深雾蓝等值，不许深色下亮底。
+    // 设计移植自停工 WIP 分支 wip/q94-pilot 的 token 助手（其基线为 2.06 只取设计、落点按 2.11 现行重做）。
+    GradientDrawable softPageBg() {
+        if (darkEff()) {
+            return new GradientDrawable(GradientDrawable.Orientation.TL_BR,
+                new int[]{Color.rgb(0x15, 0x1E, 0x2E), Color.rgb(0x10, 0x17, 0x25), Color.rgb(0x0C, 0x12, 0x1E)});
+        }
+        return new GradientDrawable(GradientDrawable.Orientation.TL_BR,
+            new int[]{Color.rgb(0xD7, 0xE7, 0xF8), Color.rgb(0xE8, 0xF1, 0xFB), Color.rgb(0xF6, 0xF9, 0xFD)});
+    }
+    /** 半透明浅蓝白柔面：顶部更白（内高光近似）＋白色细描边收口；radiusDp 取 20–28 档。 */
+    GradientDrawable softFaceBg(float radiusDp) {
+        GradientDrawable g;
+        if (darkEff()) {
+            g = new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
+                new int[]{Color.argb(240, 34, 45, 63), Color.argb(232, 25, 34, 50)});
+            g.setStroke(dp(this, 1), Color.argb(70, 255, 255, 255));
+        } else {
+            g = new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
+                new int[]{Color.argb(243, 255, 255, 255), Color.argb(233, 238, 245, 253)});
+            g.setStroke(dp(this, 1), Color.argb(160, 255, 255, 255));
+        }
+        g.setCornerRadius(dp(this, radiusDp));
+        return g;
+    }
+    /** 柔面＋按压涟漪（涟漪色随主题色，与 rippleBg 同口径）。 */
+    Drawable softFaceRipple(float radiusDp) {
+        int ac = accentColor();
+        return new RippleDrawable(ColorStateList.valueOf(Color.argb(38, Color.red(ac), Color.green(ac), Color.blue(ac))), softFaceBg(radiusDp), null);
+    }
+    /** 弹层柔面：比卡面再透一档，让遮罩与身后内容隐隐透出（轻玻璃），圆角由调用方按窗形覆盖。 */
+    GradientDrawable softSheetBg() {
+        GradientDrawable g;
+        if (darkEff()) {
+            g = new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
+                new int[]{Color.argb(243, 30, 39, 56), Color.argb(236, 22, 30, 45)});
+            g.setStroke(dp(this, 1), Color.argb(80, 255, 255, 255));
+        } else {
+            g = new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
+                new int[]{Color.argb(246, 253, 254, 255), Color.argb(238, 240, 246, 252)});
+            g.setStroke(dp(this, 1), Color.argb(170, 255, 255, 255));
+        }
+        g.setCornerRadius(dp(this, 26));
+        return g;
+    }
+    /** 图标胶囊底：柔蓝小托盘，图标坐进去（参照图口径）。 */
+    GradientDrawable softCapsuleBg(float radiusDp) {
+        GradientDrawable g = new GradientDrawable();
+        g.setColor(darkEff() ? Color.rgb(0x2B, 0x3D, 0x5E) : Color.rgb(0xD3, 0xE4, 0xF8));
+        g.setCornerRadius(dp(this, radiusDp));
+        return g;
+    }
+    /** 柔影：低 elevation＋蓝灰色影（API 28+），影子散而不黑；须视图已有圆角 outline（roundClip 等）才成形。 */
+    void softShadow(View v, float elevDp) {
+        try {
+            if (Build.VERSION.SDK_INT >= 21) v.setElevation(dp(this, elevDp));
+            if (Build.VERSION.SDK_INT >= 28) {
+                v.setOutlineAmbientShadowColor(darkEff() ? Color.argb(90, 0, 0, 0) : Color.argb(46, 58, 84, 120));
+                v.setOutlineSpotShadowColor(darkEff() ? Color.argb(110, 0, 0, 0) : Color.argb(64, 58, 84, 120));
+            }
+        } catch (Throwable ignored) { /* 个别机型阴影色异常时保留默认影，不为柔影冒崩点 */ }
+    }
+    /** Soft 面上的墨色：浅档深蓝墨、深档回白系。 */
+    int softInk() { return darkEff() ? Color.WHITE : Color.rgb(0x14, 0x31, 0x52); }
+    int softInk2() { return darkEff() ? Color.argb(224, 255, 255, 255) : Color.rgb(0x4A, 0x64, 0x84); }
+    /** Q94 搜索胶囊收淡染色：近白雾面、低饱和（用户 19:08 点名悬浮搜索栏不再染成一团蓝）；
+     * 比 glassTintDrawable 更白更厚一档，身后模糊只隐隐透出，圆角由宿主 clip 决定故给大圆角。 */
+    GradientDrawable softSearchTint() {
+        GradientDrawable g;
+        if (darkEff()) {
+            g = new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
+                new int[]{Color.argb(150, 44, 54, 72), Color.argb(138, 34, 42, 58)});
+            g.setStroke(dp(this, 1), Color.argb(70, 255, 255, 255));
+        } else {
+            g = new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
+                new int[]{Color.argb(168, 255, 255, 255), Color.argb(156, 243, 247, 252)});
+            g.setStroke(dp(this, 1), Color.argb(170, 255, 255, 255));
+        }
+        g.setCornerRadius(dp(this, 999));
+        return g;
+    }
+    /** Q94 dock 染色去花：比通用玻璃染色更白更匀，糊色不抢眼（用户 19:08 点名）。 */
+    GradientDrawable dockBarBg() {
+        GradientDrawable g;
+        if (darkEff()) {
+            g = new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
+                new int[]{Color.argb(150, 42, 50, 66), Color.argb(140, 32, 38, 52)});
+            g.setStroke(dp(this, 1), Color.argb(64, 255, 255, 255));
+        } else {
+            g = new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
+                new int[]{Color.argb(178, 255, 255, 255), Color.argb(166, 244, 248, 253)});
+            g.setStroke(dp(this, 1), Color.argb(160, 255, 255, 255));
+        }
+        g.setCornerRadius(dp(this, 26));
+        return g;
+    }
+    /** Q94 提示条柔面：近不透明雾白柔面＋白描边收口，单色系无渐变落差（治旧染色底部渗色），
+     * 微透让身后玻璃糊层隐隐透出；全 App 提示条只此一处出口（showFloatToast）。 */
+    GradientDrawable softToastBg() {
+        GradientDrawable g = new GradientDrawable();
+        if (darkEff()) {
+            g.setColor(Color.argb(242, 32, 40, 54));
+            g.setStroke(dp(this, 1), Color.argb(80, 255, 255, 255));
+        } else {
+            g.setColor(Color.argb(244, 252, 253, 255));
+            g.setStroke(dp(this, 1), Color.argb(190, 255, 255, 255));
+        }
+        g.setCornerRadius(dp(this, 20));
+        return g;
+    }
     // Q73 unified true-glass spec (all floating pieces share this): frozen/live snapshot blur
     // (applyGlass blur13 + saturate1.65, aligned to the tile +/check frost the user approved in Q47)
     // + ONLY a thin tint over it + a fixed light wash + a soft 1dp edge. Tint must stay thin and
@@ -1497,8 +1612,12 @@ public class MainActivity extends Activity {
     boolean bandCapPending = false;
     final Runnable bandCapTask = new Runnable() {
         @Override public void run() {
-            // 滚动活跃期顺延（甩动中不抢主线程重抓，取景钳在条带边缘先垫着）；停稳即抓
-            if (android.os.SystemClock.uptimeMillis() - lastScrollEventMs < 120) {
+            // Q94：甩动期不再无限顺延（旧口径滚动活跃即 180ms 一路推迟，整场甩动条带
+            // 一次不刷，玻璃钳在过期旧帧上发黑发实）；距上次抓图已满 500ms 就照抓——
+            // 只画滚动子树、成本有界，条带新鲜度钉在半秒内，钳边垫帧转瞬即逝。
+            // 500ms 内的活跃滚动仍顺延，不与滚动帧抢主线程（Q98 抖动教训不回退）。
+            long now = android.os.SystemClock.uptimeMillis();
+            if (now - lastScrollEventMs < 120 && now - lastBandCapMs < 500) {
                 mainHandler.postDelayed(this, 180);
                 return;
             }
@@ -1646,8 +1765,9 @@ public class MainActivity extends Activity {
                 canvas.clipRect(0, 0, Math.max(1, getWidth()), Math.max(1, getHeight()));
                 Bitmap band = bandBmp;
                 ScrollView bsv = bandScroll();
-                if ("live".equals(getTag()) && band != null && !band.isRecycled()
-                    && bsv != null && bsv == bandBmpSv) {
+                boolean bandOk = "live".equals(getTag()) && band != null && !band.isRecycled()
+                    && bsv != null && bsv == bandBmpSv;
+                if (bandOk) {
                     // 文档条带取景：本件顶端对应的文档 y = 当前 scrollY + 本件在视口内的纵偏移；
                     // 取景区滑出条带时先钳到条带边缘垫一帧，并排一次条带重抓（活跃期自动顺延）。
                     bsv.getLocationInWindow(sl2);
@@ -1662,6 +1782,9 @@ public class MainActivity extends Activity {
                     canvas.scale(1f / BACKDROP_SCALE, 1f / BACKDROP_SCALE);
                     canvas.drawBitmap(band, 0, 0, backdropPaint);
                 } else {
+                    // Q94 回落链（用户 19:10 点名快速甩动玻璃变黑）：条带不可用/已过期时
+                    // 一律落最近一帧有效背板（屏幕快照），绝不落空帧；屏幕帧也没有时什么
+                    // 都不画，宿主下方的浅透染色兜底显形——染色已按浅透口径收淡，不许发黑。
                     Bitmap bmp = backdropBmp;
                     if (bmp == null || bmp.isRecycled()) { canvas.restore(); return; }
                     // 对位：背板以 BACKDROP_SCALE 降采样（图 px = 根坐标 × scale），绘出时先按
@@ -1772,6 +1895,7 @@ public class MainActivity extends Activity {
                 backdropBmp = Bitmap.createBitmap(bw, bh, Bitmap.Config.ARGB_8888); // 旧图只解引用（Q21）
             }
             Canvas cv = new Canvas(backdropBmp);
+            cv.drawColor(colBg()); // Q94：复用位图先整张垫页底色，玻璃宿主让开的空位不留上一帧残像素
             cv.scale(BACKDROP_SCALE, BACKDROP_SCALE);
             rootView.draw(cv); // 软件 Canvas 渲染整树（玻璃宿主已让开，画的是纯场景）
             stackBlur(backdropBmp, BACKDROP_BLUR_R[Math.max(0, Math.min(2, glassLevel))]);
@@ -3473,8 +3597,10 @@ public class MainActivity extends Activity {
         final LinearLayout bar = new LinearLayout(this);
         bar.setOrientation(LinearLayout.HORIZONTAL);
         bar.setGravity(Gravity.CENTER_VERTICAL);
-        // Q73: thin unified tint over the frozen true-blur layer below (was argb170/160 milky block).
-        bar.setBackground(glassTintDrawable(16, false));
+        // Q94：提示条换 Soft 柔面（用户 19:10 点名旧玻璃染色发灰发脏、底部渗边）——
+        // 近不透明雾白单色面＋白描边收口，底下仍垫身后内容糊层隐隐透出；全 App 提示
+        // 条只经此一处出口，同口径收齐。旧三段渐变染色＋wash 叠层一并摘除（渗边源头）。
+        bar.setBackground(softToastBg());
         if (Build.VERSION.SDK_INT >= 21) bar.setElevation(dp(this, 10));
         bar.setPadding(dp(this, 15), dp(this, 12), dp(this, 15), dp(this, 12));
         TextView txt = tv(this, msg, 14, colText(), false);
@@ -3484,8 +3610,8 @@ public class MainActivity extends Activity {
         if (actionLabel != null && onAction != null) {
             TextView act = tv(this, actionLabel, 12.5f, Color.WHITE, true);
             act.setGravity(Gravity.CENTER);
-            GradientDrawable ab = new GradientDrawable(GradientDrawable.Orientation.LEFT_RIGHT,
-                new int[]{Color.rgb(0x0A, 0x84, 0xFF), Color.rgb(0x5E, 0x5C, 0xE6)});
+            GradientDrawable ab = new GradientDrawable();
+            ab.setColor(accentColor()); // Q94：动作钮回主色实面（旧蓝→紫高饱和渐变收掉，与柔面同语言）
             ab.setCornerRadius(dp(this, 999));
             act.setBackground(ab);
             act.setPadding(dp(this, 14), dp(this, 7), dp(this, 14), dp(this, 7));
@@ -3512,14 +3638,12 @@ public class MainActivity extends Activity {
         lp.leftMargin = dp(this, 16);
         lp.rightMargin = dp(this, 16);
         lp.bottomMargin = dp(this, 106) + navBarH(); // Q26：导航栏避让
-        // Q73: frozen true-blur of the content directly behind the bar + thin tint + light wash,
-        // one smooth rounded clip for body+edge together (no hard bright line). The snapshot is
-        // taken now, at the bar's own position, so the blur always matches what is behind it.
+        // Q73/Q94：身后内容糊层垫底 + Soft 柔面盖面，一道圆角 clip 收齐本体与边缘
+        // （取景口径不变，仍在本条自身位置对位）。Q94 已摘 wash 叠层与三段渐变染色——
+        // 旧实现底部色带渗出柔面圆角之外（用户实拍发脏），渗边源头就在那两层。
         FrameLayout toastWrap = new FrameLayout(this);
-        glassClip(toastWrap, 16, false);
-        toastWrap.addView(glassLayer(toastWrap, 16, false), new FrameLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
-        toastWrap.addView(glassWashView(16, false), new FrameLayout.LayoutParams(
+        glassClip(toastWrap, 20, false);
+        toastWrap.addView(glassLayer(toastWrap, 20, false), new FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         toastWrap.addView(bar, new FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
@@ -4144,14 +4268,13 @@ public class MainActivity extends Activity {
     }
 
     Drawable navPillBg() {
-        // Q73: lens tint slightly stronger than dock tint so the lens still reads, same family.
-        GradientDrawable g = glassTintDrawable(18, false);
-        try {
-            int[] cs = darkEff()
-                ? new int[]{Color.argb(120, 255, 255, 255), Color.argb(108, 245, 248, 252), Color.argb(100, 238, 243, 250)}
-                : new int[]{Color.argb(112, 255, 255, 255), Color.argb(102, 247, 250, 254), Color.argb(96, 240, 245, 251)};
-            g.setColors(cs);
-        } catch (Throwable ignored) {}
+        // Q94：选中指示改 FClash 式整块柔色胶囊托底（用户 19:08 点名一眼可辨）——
+        // 近实柔蓝面＋白描边，压在玻璃糊色之上仍明确成块；旧薄透染色在花底上看不出选中谁。
+        GradientDrawable g = new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
+            darkEff() ? new int[]{Color.rgb(0x37, 0x54, 0x82), Color.rgb(0x2B, 0x45, 0x6B)}
+                      : new int[]{Color.rgb(0xE6, 0xF1, 0xFD), Color.rgb(0xCC, 0xE0, 0xF7)});
+        g.setCornerRadius(dp(this, 20));
+        g.setStroke(dp(this, 1), darkEff() ? Color.argb(70, 255, 255, 255) : Color.argb(190, 255, 255, 255));
         return g;
     }
 
@@ -4177,7 +4300,7 @@ public class MainActivity extends Activity {
         // Q20 根因（主会话 18:31 定案）：此处原先塞过一块 MATCH_PARENT 的 dockBg 背景 View——
         // 裸 View 按 MATCH_PARENT 在 WRAP_CONTENT 父容器里会量到整屏高，把底栏撑成全屏巨卡（0.63 起真机实锤）。
         // 背景一律直接设在 navBar 自己身上，禁止再往底栏里塞 MATCH_PARENT 背景板。
-        navBar.setBackground(floatingBarBg());
+        navBar.setBackground(dockBarBg()); // Q94：dock 专用去花染色（比通用玻璃染色更白更匀）
 
         // liquid glass drop: glass layer (live, shared snapshot) + pill tint on top edge.
         navIndicator = new FrameLayout(this);
@@ -5472,6 +5595,12 @@ public class MainActivity extends Activity {
     }
 
     View cardTile(final Card c, ViewGroup parent, int nCols, final String acctClass, final boolean mineTile, final boolean showScoreDims) {
+        return cardTile(c, parent, nCols, acctClass, mineTile, showScoreDims, false);
+    }
+
+    // Q94 试点：softFace=true 仅首页瓷砖走 Soft 柔面（浅蓝白柔面＋22dp 大圆角＋柔影）；
+    // 其余页面（学生/我的卡片等）一律 softFace=false 不动形制，铺开须用户点头后另起一段。
+    View cardTile(final Card c, ViewGroup parent, int nCols, final String acctClass, final boolean mineTile, final boolean showScoreDims, final boolean softFace) {
         LinearLayout box = new LinearLayout(this);
         box.setOrientation(LinearLayout.VERTICAL);
         box.setClipToOutline(true);
@@ -5485,8 +5614,14 @@ public class MainActivity extends Activity {
         int tileW = availW / nc;
         // Q33：瓷砖圆角随图宽缩放（图宽 4% 量级），且不低于原固定 14dp——只许更圆润不许回退变尖；
         // 顶图 cover 铺满不变（Q24 优先级：铺满第一、圆角第二），四角靠外框同半径裁切、无图占位同半径。
-        float tileR = Math.max(14f, cardRadiusDp(tileW / getResources().getDisplayMetrics().density));
-        box.setBackground(rippleBg(colSurface(), tileR));
+        // Q94：首页柔面圆角下限抬到 22dp（Soft 语言 20–28 档），图区裁切同半径自动跟随。
+        float tileR = Math.max(softFace ? 22f : 14f, cardRadiusDp(tileW / getResources().getDisplayMetrics().density));
+        if (softFace) {
+            box.setBackground(softFaceRipple(tileR));
+            softShadow(box, 6);
+        } else {
+            box.setBackground(rippleBg(colSurface(), tileR));
+        }
         roundClip(box, tileR, this);
         int imgH = Math.max(dp(this, 40), Math.round(tileW / 1.586f));
         FrameLayout art = new FrameLayout(this);
@@ -5982,6 +6117,7 @@ public class MainActivity extends Activity {
     // P2d：整页改单 ScrollView 流，内容从悬浮栏底下滚过；英雄卡与网格同流 10dp 间隔，不再压首排
     View buildHomePage() {
         FrameLayout page = new FrameLayout(this);
+        page.setBackground(softPageBg()); // Q94 试点：首页页底换雾蓝渐变（结构/功能/数据不动，只换视觉层）
 
         homeScroll = new ScrollView(this);
         thinScrollbar(homeScroll);
@@ -6042,7 +6178,7 @@ public class MainActivity extends Activity {
         page.addView(homePullBar, pullLp);
         // Q49/Q91/Q98：全部卡片长列表可拖拽滚动条——轨道顶锚到卡片列表头起算（布局落位后由
         // anchorDragBarToList 钉死，下限状态栏下 8dp），不再自视口顶部起让胶囊贴进状态栏区；
-        // 拇指行程同步锚到列表头（homeList 建好后回填）：拖条滑的只是卡片那一段。
+        // Q94：轨道顶只是外观锚，百分比映射已改全页口径（见 thumbProgress），拖到 0% 即真顶。
         homeDragBar = attachDragBar(page, homeScroll, false, 8, 100);
 
         LinearLayout col = new LinearLayout(this);
@@ -6053,7 +6189,7 @@ public class MainActivity extends Activity {
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
 
         // Q39: .title-row h1 1.45rem/800/.02em
-        TextView homeTitle = tvW(this, "卡盒", 24, Color.rgb(0x1C, 0x1C, 0x1E), 800);
+        TextView homeTitle = tvW(this, "卡盒", 24, colText(), 800); // Q94：走语义主字色（深色档不再黑字黑底）
         homeTitle.setLetterSpacing(0.02f); homeTitle.setLineSpacing(0, 1.15f);
         col.addView(homeTitle);
 
@@ -6062,7 +6198,7 @@ public class MainActivity extends Activity {
         int debit = 0, stopped = 0;
         for (Card c : Store.all) { if (!c.isCredit()) debit++; if ("已停发".equals(c.status)) stopped++; }
 
-        TextView stats = tv(this, Store.all.size() + " 张卡 · " + banks.size() + " 家银行", 12, Color.rgb(0x8E, 0x8E, 0x93), false);
+        TextView stats = tv(this, Store.all.size() + " 张卡 · " + banks.size() + " 家银行", 12, colText2(), false);
         LinearLayout.LayoutParams stlp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         stlp.topMargin = dp(this, 8);
         col.addView(stats, stlp);
@@ -6073,7 +6209,7 @@ public class MainActivity extends Activity {
         LinearLayout.LayoutParams frowLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         frowLp.topMargin = dp(this, 8);
         col.addView(frow, frowLp);
-        homeCount = tv(this, "", 12.5f, Color.rgb(0x8E, 0x8E, 0x93), false);
+        homeCount = tv(this, "", 12.5f, colText2(), false);
         frow.addView(homeCount, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
         // Q31：顶部「筛选」药丸下架——对照混合版 app.js 现行（顶部入口已去掉、只留右下悬浮筛选钮），
         // 已选计数走悬浮钮蓝色角标（updateFilterFabBadge），已选标签栏仍在下方可点删。
@@ -6094,11 +6230,12 @@ public class MainActivity extends Activity {
         LinearLayout hero = new LinearLayout(this);
         homeHero = hero;
         hero.setOrientation(LinearLayout.VERTICAL);
+        // Q94：英雄卡转雾蓝深渐变（旧 #00A3C8 高饱和青尾收掉），圆角 24、柔影蓝灰
         GradientDrawable hg = new GradientDrawable(GradientDrawable.Orientation.TL_BR,
-            new int[]{Color.rgb(0x16, 0x28, 0x3F), Color.rgb(0x0B, 0x5F, 0xA5), Color.rgb(0x00, 0xA3, 0xC8)});
-        hg.setCornerRadius(dp(this, 22));
+            new int[]{Color.rgb(0x24, 0x46, 0x6E), Color.rgb(0x3D, 0x6C, 0xA8), Color.rgb(0x7F, 0xA8, 0xCC)});
+        hg.setCornerRadius(dp(this, 24));
         hero.setBackground(hg);
-        if (Build.VERSION.SDK_INT >= 21) hero.setElevation(dp(this, 10));
+        softShadow(hero, 8);
         hero.setPadding(dp(this, 20), dp(this, 20), dp(this, 20), dp(this, 20));
         LinearLayout.LayoutParams hlp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         hlp.topMargin = dp(this, 10);
@@ -6143,7 +6280,7 @@ public class MainActivity extends Activity {
         // Q10 inline search capsule (mixed header .top/#search): in-flow under the title, pill 999,
         // glass white rgba(255,255,255,.78)+blur20, thin magnifier, clear-X circle appears once typing.
         FrameLayout inlineWrap = new FrameLayout(this);
-        inlineWrap.setBackground(glassPillBg());
+        inlineWrap.setBackground(softSearchTint()); // Q94：内嵌搜索胶囊玻璃收淡（近白低饱和，不再一团蓝）
         if (Build.VERSION.SDK_INT >= 21) inlineWrap.setElevation(dp(this, 6));
         inlineWrap.addView(glassLayer(inlineWrap, 28, true), new FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
@@ -6202,7 +6339,7 @@ public class MainActivity extends Activity {
         // Q10 float search capsule (mixed #floatSearch): fixed top pill, shallow glass + slight blue,
         // thin magnifier, 28dp X circle; only shown mid-page via the search fab, list never moves for it.
         FrameLayout floatWrap = new FrameLayout(this);
-        floatWrap.setBackground(glassFloatBg());
+        floatWrap.setBackground(softSearchTint()); // Q94：悬浮搜索胶囊同口径收淡
         if (Build.VERSION.SDK_INT >= 21) floatWrap.setElevation(dp(this, 14));
         floatWrap.addView(glassLayer(floatWrap, 28, true), new FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
@@ -6485,7 +6622,7 @@ public class MainActivity extends Activity {
         for (int j = 0; j < cols; j++) {
             if (i + j < list.size()) {
                 final Card c = list.get(i + j);
-                View tile = cardTile(c, row);
+                View tile = cardTile(c, row, cols, "", false, true, true); // Q94：首页行走 Soft 柔面通道
                 LinearLayout.LayoutParams tlp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1f);
                 if (j > 0) tlp.leftMargin = rowGap;
                 tile.setLayoutParams(tlp);
@@ -7011,14 +7148,16 @@ public class MainActivity extends Activity {
     }
 
     // Q15 情景横幅：对照 cardapp index.html #wizBanner 与 styles.css .wiz-banner/.wiz-go
-    // 渐变 120deg #0A84FF→#5E5CE6(62%)→#BF5AF2、圆角 18、内边距 13/14、白字主行+副行、白药丸「去选卡」蓝字
+    // 渐变/圆角/内边距/白字主行+副行/白药丸「去选卡」结构不变；Q94 试点把三段高饱和渐变
+    // 换成雾蓝靛低饱和（见下方 bg），圆角 18→22 与首页柔面同语言。
     View wizardBanner() {
         LinearLayout b = new LinearLayout(this);
         b.setOrientation(LinearLayout.HORIZONTAL);
         b.setGravity(Gravity.CENTER_VERTICAL);
+        // Q94：横幅降饱和转雾蓝靛（旧蓝→紫→粉三段高饱和收掉），圆角 18→22 与柔面同语言
         GradientDrawable bg = new GradientDrawable(GradientDrawable.Orientation.TL_BR,
-            new int[]{Color.rgb(0x0A, 0x84, 0xFF), Color.rgb(0x5E, 0x5C, 0xE6), Color.rgb(0xBF, 0x5A, 0xF2)});
-        bg.setCornerRadius(dp(this, 18));
+            new int[]{Color.rgb(0x4E, 0x7F, 0xB8), Color.rgb(0x6E, 0x8F, 0xC4), Color.rgb(0x93, 0xA9, 0xD4)});
+        bg.setCornerRadius(dp(this, 22));
         b.setBackground(bg);
         if (Build.VERSION.SDK_INT >= 21) b.setElevation(dp(this, 6));
         b.setPadding(dp(this, 14), dp(this, 13), dp(this, 14), dp(this, 13));
@@ -7031,7 +7170,7 @@ public class MainActivity extends Activity {
         b.addView(tx, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
         tx.addView(tvW(this, "不知道选哪张？", 15, Color.WHITE, 700));
         tx.addView(tv(this, "情景选卡：留学 · 旅游 · 海淘 · 日常，答几题就给你排好", 12, Color.argb(224, 255, 255, 255), false));
-        TextView go = tvW(this, "去选卡", 13, Color.rgb(0x0A, 0x5C, 0xD6), 700);
+        TextView go = tvW(this, "去选卡", 13, Color.rgb(0x2C, 0x5F, 0x9E), 700); // Q94：随横幅降饱和
         go.setGravity(Gravity.CENTER);
         go.setBackground(roundRect(Color.WHITE, 999, this));
         go.setPadding(dp(this, 16), dp(this, 9), dp(this, 16), dp(this, 9));
@@ -9250,12 +9389,11 @@ public class MainActivity extends Activity {
     }
 
     View buildMinePage() {
-        LinearLayout page = basePage(S("mine_title"));
-        // Q39: .mine-pagetitle 1.7rem/800/-.01em，与通用 .page-title 区分
-        if (page.getChildCount() > 0 && page.getChildAt(0) instanceof TextView) {
-            TextView mt = (TextView) page.getChildAt(0);
-            mt.setTextSize(27 * uiScale); mt.setLetterSpacing(-0.01f);
-        }
+        // Q94：标题头改随内容滚走（用户 19:11 点名同款固定头一并改）——改前 basePage
+        // 固定标题钉在滚动区之上；改后与首页同口径：整页一根 ScrollView，27sp 标题
+        // 作为滚动内容第一行，下滑即沉走。页面根由 LinearLayout 换 FrameLayout 托全屏
+        // ScrollView（与 buildStudentPage 同构）；inner 边距并入原 page 的 14/pageTopPad。
+        FrameLayout page = new FrameLayout(this);
         // Q65：我的卡片按条目渲染（同卡可一类/二类两条并存）；分析仍按去重后的产品算覆盖，不重复计同一张产品
         java.util.List<MineRow> mineRows = new ArrayList<>();
         java.util.List<Card> mineCards = new ArrayList<>();
@@ -9276,11 +9414,18 @@ public class MainActivity extends Activity {
         if (Build.VERSION.SDK_INT >= 23) {
             sv.setOnScrollChangeListener((v, sx, sy, ox, oy) -> { mineScrollSaveY = sy; pageScrollSaveY.put("mine", sy); updateTopFabVisibility(sy); });
         }
+        page.addView(sv, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         LinearLayout inner = new LinearLayout(this);
         inner.setOrientation(LinearLayout.VERTICAL);
-        inner.setPadding(0, dp(this, 10), 0, dockPad());
+        // Q94：原 page 的左右 14 与顶 pageTopPad 随标题入流并入 inner；首行标题与内容留 10dp 呼吸
+        inner.setPadding(dp(this, 14), pageTopPad(), dp(this, 14), dockPad());
         sv.addView(inner, new ScrollView.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
-        page.addView(sv, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
+        // Q39: .mine-pagetitle 1.7rem/800/-.01em，与通用 .page-title 区分（Q94 起在流内）
+        TextView mineTitle = tvW(this, S("mine_title"), 27, colText(), 800);
+        mineTitle.setLetterSpacing(-0.01f); mineTitle.setLineSpacing(0, 1.15f);
+        LinearLayout.LayoutParams mineTitleLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        mineTitleLp.bottomMargin = dp(this, 10);
+        inner.addView(mineTitle, mineTitleLp);
         // P-deck ③：重建后恢复上次滚动位置（换序/展开收起不跳顶）
         if (mineScrollSaveY > 0) sv.post(() -> sv.scrollTo(0, mineScrollSaveY));
         // Q92 整页重排（用户 2026-10-04 15:31 口径，一条阅读顺序）：汇总概览（统计瘦身并入、
@@ -11248,6 +11393,26 @@ public class MainActivity extends Activity {
         }
     }
 
+    // Q94 试点：自有卡编辑窗专用的 Soft 选片漆法（样板弹层口径，不动其它表单的 paintChoiceChip/
+    // paintFormOrgChip 共享漆法）——选中＝浅雾蓝胶囊托底＋深蓝墨字（FClash 式整块托底同语言），
+    // 未选＝半透柔面＋发丝描边；不再整坨高饱和蓝渐变。
+    void softFormChipPaint(TextView t, boolean on) {
+        if (on) {
+            GradientDrawable g = new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
+                darkEff() ? new int[]{Color.rgb(0x37, 0x54, 0x82), Color.rgb(0x2B, 0x45, 0x6B)}
+                          : new int[]{Color.rgb(0xE2, 0xEE, 0xFC), Color.rgb(0xC9, 0xDF, 0xF7)});
+            g.setCornerRadius(dp(this, 999));
+            g.setStroke(dp(this, 1), darkEff() ? Color.argb(70, 255, 255, 255) : Color.argb(170, 255, 255, 255));
+            t.setBackground(g);
+            t.setTextColor(darkEff() ? Color.WHITE : Color.rgb(0x1F, 0x5F, 0xA8));
+            try { t.setTypeface(weightTypeface(this, 700)); } catch (Throwable ignored) {}
+        } else {
+            t.setBackground(softFaceBg(999));
+            t.setTextColor(colText());
+            try { t.setTypeface(weightTypeface(this, 400)); } catch (Throwable ignored) {}
+        }
+    }
+
     // Q8 对照返工：施工前核对混合版 index.html #customDlg 与 styles.css .dlg/.dlg input/.chips/.swatches/
     // .dlg-actions 及 app.js openCustomForm——表单改根层贴底浮卡（左右/底部 12dp、圆角 22、最高 82vh、
     // 遮罩 rgba(0,0,0,.4)、升窗 280ms 上浮淡入，混合版开表单即藏 dock、原生藏整条 navWrap 同 Q32 口径）；
@@ -11287,16 +11452,15 @@ public class MainActivity extends Activity {
 
         LinearLayout card = new LinearLayout(this);
         card.setOrientation(LinearLayout.VERTICAL);
-        GradientDrawable cg = new GradientDrawable();
-        cg.setColor(colSheet()); // Q54 实底口径 + Q72 深色浮层，玻璃退为纯垫底
-        cg.setStroke(dp(this, 1), Color.argb(140, 255, 255, 255));
-        // Q45：仅顶部圆角、底部直角贴屏底（原四角同圆时底部两角露遮罩成黑三角）
-        float formR = dp(this, 22);
+        // Q94 试点样板：窗身换 Soft 弹层柔面（雾白微透＋白描边），顶部圆角 22→26 与柔面同语言；
+        // 底部仍贴屏直角（Q45 口径不回退，防底部两角露遮罩黑三角）。本窗只换视觉层，字段/保存逻辑不动。
+        GradientDrawable cg = softSheetBg();
+        float formR = dp(this, 26);
         cg.setCornerRadii(new float[]{formR, formR, formR, formR, 0, 0, 0, 0});
         card.setBackground(cg);
         if (Build.VERSION.SDK_INT >= 21) {
-            card.setElevation(dp(this, 24));
-            topSheetClip(card, 22, this); // Q45 顶圆底直轮廓
+            softShadow(card, 24);
+            topSheetClip(card, 26, this); // Q45 顶圆底直轮廓（半径随柔面抬到 26）
         }
         card.setOnClickListener(v -> {}); // 窗体吃掉点击，防穿透遮罩误关
 
@@ -11317,7 +11481,7 @@ public class MainActivity extends Activity {
         form.addView(kindRow, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
         final java.util.List<TextView> kindChips = new ArrayList<>();
         final Runnable[] paintKind = new Runnable[1];
-        paintKind[0] = () -> { for (int i = 0; i < kindChips.size(); i++) paintChoiceChip(kindChips.get(i), CARD_KIND_VALS[i].equals(kindSel[0])); };
+        paintKind[0] = () -> { for (int i = 0; i < kindChips.size(); i++) softFormChipPaint(kindChips.get(i), CARD_KIND_VALS[i].equals(kindSel[0])); }; // Q94：本窗选片走 Soft 漆法
         for (int i = 0; i < CARD_KIND_VALS.length; i++) {
             final String kv = CARD_KIND_VALS[i];
             TextView b = formOrgChip(CARD_KIND_LABELS[i]);
@@ -11344,7 +11508,7 @@ public class MainActivity extends Activity {
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
         final java.util.List<TextView> orgChips = new ArrayList<>();
         Runnable paintOrgs = () -> {
-            for (TextView b : orgChips) paintFormOrgChip(b, b.getText().toString().equals(orgSel[0]));
+            for (TextView b : orgChips) softFormChipPaint(b, b.getText().toString().equals(orgSel[0])); // Q94：本窗选片走 Soft 漆法
         };
         for (final String o : CUSTOM_ORGS) {
             TextView b = formOrgChip(o);
@@ -11388,7 +11552,7 @@ public class MainActivity extends Activity {
         final String[] aLabs = {"不标", "一类", "二类"};
         final java.util.List<TextView> acctChips = new ArrayList<>();
         final Runnable[] paintAcct = new Runnable[1];
-        paintAcct[0] = () -> { for (int i = 0; i < acctChips.size(); i++) paintChoiceChip(acctChips.get(i), aVals[i].equals(acctSel[0])); };
+        paintAcct[0] = () -> { for (int i = 0; i < acctChips.size(); i++) softFormChipPaint(acctChips.get(i), aVals[i].equals(acctSel[0])); }; // Q94：本窗选片走 Soft 漆法
         for (int i = 0; i < aVals.length; i++) {
             final String av = aVals[i];
             TextView b = formOrgChip(aLabs[i]);
@@ -11425,12 +11589,12 @@ public class MainActivity extends Activity {
             for (int i = 0; i < swatchInners.size(); i++) {
                 boolean on = i == styleSel[0];
                 GradientDrawable g = customGradient(i);
-                g.setCornerRadius(dp(this, 8));
+                g.setCornerRadius(dp(this, 12)); // Q94：色块圆角 8→12 随柔面语言
                 g.setStroke(dp(this, 2), on ? Color.rgb(0x00, 0x7A, 0xFF) : Color.TRANSPARENT);
                 swatchInners.get(i).setBackground(g);
                 GradientDrawable ring = new GradientDrawable();
                 ring.setColor(on ? Color.argb(64, 0, 122, 255) : Color.TRANSPARENT);
-                ring.setCornerRadius(dp(this, 10));
+                ring.setCornerRadius(dp(this, 14));
                 swatchCells.get(i).setBackground(ring);
             }
         };
@@ -11466,13 +11630,13 @@ public class MainActivity extends Activity {
         final EditText inNote = customInput("可空", draft.note, 60);
         // Q9 NFC 贴卡按钮（对照混合版 index.html #ccNfc：全宽、浅蓝底、蓝字，禁用 emoji 改纯文字细线语言）：
         // 点它起 NFC 读卡，回填组织/银行/备注；无 NFC 或未开启给明确提示，不静默失败。
-        TextView nfcBtn = tv(this, "NFC 贴卡识别（自动填卡组织 / 类型）", 14, Color.rgb(0x00, 0x7A, 0xFF), true);
+        TextView nfcBtn = tv(this, "NFC 贴卡识别（自动填卡组织 / 类型）", 14, Color.rgb(0x2C, 0x5F, 0x9E), true); // Q94：蓝字降饱和随柔面
         nfcBtn.setGravity(Gravity.CENTER);
         nfcBtn.setPadding(0, dp(this, 12), 0, dp(this, 12));
         GradientDrawable nfcBg = new GradientDrawable();
-        nfcBg.setColor(Color.rgb(0xF2, 0xF7, 0xFF));
-        nfcBg.setCornerRadius(dp(this, 12));
-        nfcBg.setStroke(dp(this, 1), Color.rgb(0xCF, 0xE4, 0xFF));
+        nfcBg.setColor(darkEff() ? Color.rgb(0x24, 0x34, 0x4E) : Color.rgb(0xE9, 0xF2, 0xFD)); // Q94：浅雾蓝面
+        nfcBg.setCornerRadius(dp(this, 14));
+        nfcBg.setStroke(dp(this, 1), darkEff() ? Color.argb(70, 255, 255, 255) : Color.rgb(0xC9, 0xDF, 0xFA));
         nfcBtn.setBackground(nfcBg);
         LinearLayout.LayoutParams nfcLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         nfcLp.topMargin = dp(this, 14);
@@ -11877,6 +12041,10 @@ public class MainActivity extends Activity {
         if (id == null) return;
         pendingGlossaryId = id;
         glossaryOpen.add(id);
+        // Q94：真切页不许覆盖层冒充（用户 19:13 点名）——改前：详情还盖在屏上、底栏
+        // 退场，showTab 只换了底下那一页，看着像无 dock 的浮层；改后：先关详情（底栏
+        // 随 closeDetail 恢复），再切到资讯页签（高亮自动跟到资讯），落点照旧 Q99 口径。
+        if (detailCard != null) closeDetail();
         if (!"news".equals(tab)) showTab("news");
         // Q98：资讯页已建好时 showTab 不会重走 buildNewsPage，必须主动重渲染才会展开词条并
         // 触发定位 post；刚建好时渲染已在 build 内跑过，再跑一次无副作用（定位 post 后到者胜）。
@@ -14081,23 +14249,32 @@ public class MainActivity extends Activity {
         fetchNewsUpdate();
         ensureGlossary();
         fetchGlossaryUpdate();
-        LinearLayout page = basePage(S("news_title"));
-        TextView sub = tv(this, "新卡发布、权益调整、停发换卡——公开信息整理，仅供参考", 12.5f, Color.rgb(0x8E, 0x8E, 0x93), false);
-        LinearLayout.LayoutParams subLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        subLp.topMargin = dp(this, 4);
-        page.addView(sub, subLp);
-        newsMeta = tv(this, "", 11.5f, Color.rgb(0x8E, 0x8E, 0x93), false);
-        LinearLayout.LayoutParams mLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        mLp.topMargin = dp(this, 6);
-        page.addView(newsMeta, mLp);
-
+        // Q94：标题头改随内容滚走（用户 19:11 点名旧固定头压内容、残行外露）——与首页/
+        // 学生页同口径整页一根 ScrollView：标题/副标/计数与列表同流排布，下滑即沉走，
+        // 不许再有固定头压住内容。改前：basePage 固定标题在滚动区之外，内容只在下半
+        // 区滑、头永远钉在顶部；改后：整页同流，头随滚离场。
+        FrameLayout page = new FrameLayout(this);
         ScrollView sv = new ScrollView(this);
         noScrollbar(sv); // Q49：资讯仅 6 条，滚动指示从简到近乎无，不挂长条
         sv.setClipToPadding(false);
         newsScroll = sv;
         if (Build.VERSION.SDK_INT >= 23) sv.setOnScrollChangeListener((v, sx, sy, ox, oy) -> { pageScrollSaveY.put("news", sy); updateTopFabVisibility(sy); });
+        page.addView(sv, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         LinearLayout scrollContent = new LinearLayout(this);
         scrollContent.setOrientation(LinearLayout.VERTICAL);
+        scrollContent.setPadding(dp(this, 14), pageTopPad(), dp(this, 14), dockPad());
+        sv.addView(scrollContent, new ScrollView.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        TextView newsTitle = tvW(this, S("news_title"), 24, colText(), 800);
+        newsTitle.setLetterSpacing(0.02f); newsTitle.setLineSpacing(0, 1.15f);
+        scrollContent.addView(newsTitle);
+        TextView sub = tv(this, "新卡发布、权益调整、停发换卡——公开信息整理，仅供参考", 12.5f, colText2(), false);
+        LinearLayout.LayoutParams subLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        subLp.topMargin = dp(this, 4);
+        scrollContent.addView(sub, subLp);
+        newsMeta = tv(this, "", 11.5f, colText2(), false);
+        LinearLayout.LayoutParams mLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        mLp.topMargin = dp(this, 6);
+        scrollContent.addView(newsMeta, mLp);
         newsListBox = new LinearLayout(this);
         newsListBox.setOrientation(LinearLayout.VERTICAL);
         newsListBox.setPadding(0, dp(this, 2), 0, 0);
@@ -14121,10 +14298,7 @@ public class MainActivity extends Activity {
         scrollContent.addView(gHead);
         glossaryBox = new LinearLayout(this);
         glossaryBox.setOrientation(LinearLayout.VERTICAL);
-        glossaryBox.setPadding(0, 0, 0, dockPad());
         scrollContent.addView(glossaryBox);
-        sv.addView(scrollContent);
-        page.addView(sv, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
         renderNews();
         renderGlossary();
         restorePageScroll("news", sv);
