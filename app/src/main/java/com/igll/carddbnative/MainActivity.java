@@ -194,7 +194,7 @@ public class MainActivity extends Activity {
         FrameLayout b = new FrameLayout(this);
         b.setBackground(rippleBg(colSurface(), 999));
         b.setClipToOutline(true);
-        if (Build.VERSION.SDK_INT >= 21) b.setElevation(dp(this, 2));
+        softShadow(b, 2); // Q125 补（按钮黑边扫查）：默认 elevation 影恒黑、下沿/角部发硬，改 Soft 蓝灰柔影（高 2dp 不变）
         View iv;
         if (back) { BackChevronView v = new BackChevronView(this); v.iconColor = iconCol; iv = v; }
         else { CloseIconView v = new CloseIconView(this); v.iconColor = iconCol; iv = v; }
@@ -243,7 +243,7 @@ public class MainActivity extends Activity {
         g.setColor(accentColor());
         g.setCornerRadius(dp(this, 20)); // Q94 定版 token：按钮大圆角向 20dp 档靠拢、柔影低透明
         b.setBackground(new RippleDrawable(ColorStateList.valueOf(Color.argb(36, 255, 255, 255)), g, null));
-        if (Build.VERSION.SDK_INT >= 21) b.setElevation(dp(this, 2));
+        softShadow(b, 2); // Q125 补（按钮黑边扫查）：同 circleIconBtn，默认黑影改 Soft 柔影
         b.setPadding(dp(this, 16), 0, dp(this, 16), 0);
         b.setOnTouchListener((v, e) -> {
             if (e.getAction() == MotionEvent.ACTION_DOWN) pressBounce(v, true);
@@ -269,7 +269,7 @@ public class MainActivity extends Activity {
         g.setCornerRadius(dp(this, 16));
         g.setStroke(Math.max(1, dp(this, 0.6f)), Color.argb(70, 255, 255, 255));
         b.setBackground(new RippleDrawable(ColorStateList.valueOf(Color.argb(36, 255, 255, 255)), g, null));
-        if (Build.VERSION.SDK_INT >= 21) b.setElevation(dp(this, 2));
+        softShadow(b, 2); // Q125 补（按钮黑边扫查）：默认黑影改 Soft 柔影（描边本为白色发丝，不动）
         b.setPadding(dp(this, 16), 0, dp(this, 16), 0);
         b.setOnTouchListener((v, e) -> {
             if (e.getAction() == MotionEvent.ACTION_DOWN) pressBounce(v, true);
@@ -8841,11 +8841,13 @@ public class MainActivity extends Activity {
         int sw = getResources().getDisplayMetrics().widthPixels;
         int cardW = Math.min(sw - dp(this, 24), dp(this, 480)); // Q77：窗放大，不再 368dp 挤成一团
         filterCardW = cardW;
-        int maxH = (int) (getResources().getDisplayMetrics().heightPixels * 0.86); // Q123（件十四）：窗高上限 0.78→0.86 屏高（宽/圆角不动）
+        int screenH237 = getResources().getDisplayMetrics().heightPixels;
+        int maxH = Math.min((int) (screenH237 * 0.86), // Q123（件十四）：窗高上限 0.86 屏高（宽/圆角不动）
+            screenH237 - statusBarH() - dp(this, 16) - dp(this, 84) - navBarH()); // Q125 补（2.37 追加，用户 04:10）：再封一道顶——窗上沿恒在状态栏下 16dp 以南，不许贴顶
         FrameLayout.LayoutParams clp = new FrameLayout.LayoutParams(cardW, ViewGroup.LayoutParams.WRAP_CONTENT);
         clp.gravity = Gravity.CENTER_HORIZONTAL | Gravity.BOTTOM;
         clp.leftMargin = dp(this, 12); clp.rightMargin = dp(this, 12);
-        clp.bottomMargin = dp(this, 100) + navBarH(); // 浮在 dock 之上；Q26 再加导航栏避让
+        clp.bottomMargin = dp(this, 84) + navBarH(); // Q125 补（2.37 追加，用户 04:10）：整体下移 16dp（原 100dp）；dock 顶沿约 navBarH+76dp，仍留约 8dp 浮空，不贴死屏底、窗型维持悬浮卡不改底窗
         card.measure(View.MeasureSpec.makeMeasureSpec(cardW, View.MeasureSpec.EXACTLY),
             View.MeasureSpec.makeMeasureSpec(maxH, View.MeasureSpec.AT_MOST));
         clp.height = card.getMeasuredHeight();
@@ -8875,31 +8877,20 @@ public class MainActivity extends Activity {
             fblp.bottomMargin = dp(this, 14);
             filterBar123.setLayoutParams(fblp);
         }
-        // Q123（件十二补注）：升起改 SpringDriver＋SPRING_SHEET（210/0.86）同驱遮罩淡入
-        // 与窗体升起/缩放——与设置折展、常识浮层同一时序，废 ViewPropertyAnimator
-        // 定时曲线（ANIM_DUR_SHEET_IN 280ms）的干跳；关窗同支弹簧收回（closeFilterSheet）。
-        filterSheetSpring.cancel();
-        filterSheetAnim.x = 0f; filterSheetAnim.v = 0f;
-        sheet.setAlpha(0f);
-        wrap.setAlpha(0f);
-        wrap.setScaleX(0.94f); wrap.setScaleY(0.94f);
-        wrap.setTranslationY(dp(this, 14));
-        final View wrapF123 = wrap;
-        filterSheetSpring.drive(filterSheetAnim, 1f, SPRING_SHEET_K, SPRING_SHEET_Z,
-            x -> {
-                sheet.setAlpha(Math.max(0f, Math.min(1f, x)));
-                wrapF123.setAlpha(Math.max(0f, Math.min(1f, x)));
-                float sc123 = 0.94f + 0.06f * x;
-                wrapF123.setScaleX(sc123); wrapF123.setScaleY(sc123);
-                wrapF123.setTranslationY((1f - x) * dp(this, 14));
-            }, null);
+        // Q123（件十二补注）：升起曾走 SpringDriver＋SPRING_SHEET（210/0.86）同驱
+        // 遮罩淡入与窗体升起/缩放；Q125 补已按用户口径改走 Q74 统一曲线（见下）。
+        // Q125 补（2.37 追加，用户 04:10）：进场改走全 App 统一窗动画口径（Q74
+        // animCardIn：ANIM_ENTER 大减速 280ms、.94 缩放＋上浮 14dp＋淡入；遮罩同
+        // 曲线），废 SPRING_SHEET 弹簧驱动——ζ=0.86 过冲会让缩放/位移回跳，
+        // 真机读作生硬弹跳。chips 落定脉冲（filterChipSpring）不在此列、不动。
+        animShadeIn(sheet);
+        animCardIn(wrap);
     }
 
     LinearLayout filterPanelRef = null;
     int filterCardW = 0; // Q77：筛选窗实际宽，chips 流式排版按此算可用宽
-    // Q123（2.35，件十二补注）：筛选窗升降专用弹簧（SPRING_SHEET 同一时序）＋ chips 选中落定脉冲
-    final SpringDriver filterSheetSpring = new SpringDriver();
-    final Spring1D filterSheetAnim = new Spring1D(0f);
+    // Q123（2.35，件十二补注）：chips 选中落定脉冲弹簧（保留）；筛选窗升降
+    // 已于 Q125 补改走 Q74 统一窗动画（animCardIn/Out），旧 filterSheetSpring 退场删除。
     final SpringDriver filterChipSpring = new SpringDriver();
     String filterChipPulseLabel123 = null; // 刚点过的 chip 标签：重建后给新 chip 一次落定弹簧
 
@@ -8911,21 +8902,12 @@ public class MainActivity extends Activity {
         View card = sheet instanceof ViewGroup && ((ViewGroup) sheet).getChildCount() > 0
             ? ((ViewGroup) sheet).getChildAt(((ViewGroup) sheet).getChildCount() - 1) : null; // Q77b: last child is the unified glass wrap (glass+wash+card)
         if (card != null) {
-            // Q123（件十二补注）：收回同走 SPRING_SHEET 弹簧（可从升起中途接续），落定摘窗
-            card.animate().cancel();
-            final View wrapC123 = card;
-            filterSheetSpring.drive(filterSheetAnim, 0f, SPRING_SHEET_K, SPRING_SHEET_Z,
-                x -> {
-                    float xc = Math.max(0f, Math.min(1f, x));
-                    sheet.setAlpha(xc);
-                    wrapC123.setAlpha(xc);
-                    float sc123 = 0.94f + 0.06f * xc;
-                    wrapC123.setScaleX(sc123); wrapC123.setScaleY(sc123);
-                    wrapC123.setTranslationY((1f - xc) * dp(this, 14));
-                },
-                () -> { closeFilterSheetNow(sheet); restoreChrome(); });
-            // Q98 兜底：弹簧不达则窗滞留屏上且底栏永不恢复；650ms 强制收尾（Now 内部已摘窗、重复跑无害）
-            mainHandler.postDelayed(() -> { if (sheet.getParent() != null) { closeFilterSheetNow(sheet); restoreChrome(); } }, 650);
+            // Q125 补（2.37 追加）：出场同走 Q74 统一口径（animCardOut：ANIM_EXIT
+            // 190ms、缩 .96＋下沉 10dp＋淡出，自带 320ms 兜底收尾防摘窗不达），
+            // 废弹簧收回与原 650ms 兜底；遮罩同曲线淡出（animShadeOut）。
+            animShadeOut(sheet);
+            final View sheetF237 = sheet;
+            animCardOut(card, () -> { closeFilterSheetNow(sheetF237); restoreChrome(); });
         } else {
             closeFilterSheetNow(sheet);
             restoreChrome();
@@ -8935,7 +8917,10 @@ public class MainActivity extends Activity {
     void closeFilterSheetNow() { closeFilterSheetNow(filterSheet); }
 
     void closeFilterSheetNow(View sheet) {
-        filterSheetSpring.cancel(); // Q123（件十二补注）：急摘窗先停弹簧
+        // Q125 补：急摘窗先停窗体动画（旧弹簧已退场，改停 ViewPropertyAnimator）
+        try { View w237 = sheet != null && sheet instanceof ViewGroup && ((ViewGroup) sheet).getChildCount() > 0
+            ? ((ViewGroup) sheet).getChildAt(((ViewGroup) sheet).getChildCount() - 1) : null;
+            if (w237 != null) w237.animate().cancel(); } catch (Throwable ignored) {}
         if (sheet != null && sheet.getParent() != null)
             ((ViewGroup) sheet.getParent()).removeView(sheet);
         if (sheet == filterSheet) filterSheet = null;
@@ -9120,7 +9105,7 @@ public class MainActivity extends Activity {
                 new int[]{Color.rgb(0x0A, 0x84, 0xFF), Color.rgb(0x00, 0x66, 0xE6)});
             g.setCornerRadius(dp(this, 999));
             t.setBackground(g);
-            if (Build.VERSION.SDK_INT >= 21) t.setElevation(dp(this, 2));
+            softShadow(t, 2); // Q125 补（按钮黑边扫查，用户 04:11 截图主犯）：蓝 pill 默认 elevation 黑影在下沿/角部发硬，改 Soft 蓝灰柔影
         } else {
             GradientDrawable g = new GradientDrawable();
             g.setColor(colChipOff());
@@ -10112,7 +10097,8 @@ public class MainActivity extends Activity {
             new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, pillH));
         pillWrap.addView(detailPrimaryBtn, new FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, pillH));
-        if (Build.VERSION.SDK_INT >= 21) pillWrap.setElevation(dp(this, 6));
+        roundClip(pillWrap, 999, this); // Q125 补（按钮黑边扫查）：先给药丸轮廓，elevation 影随钮形走，不再露方形黑角
+        softShadow(pillWrap, 6); // Q125 补：主钮影改 Soft 蓝灰柔影（旧默认黑影 6dp 在钮下沿发硬；钮尺寸/位置/形态不动）
         FrameLayout.LayoutParams pillLp = new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, pillH);
         pillLp.gravity = Gravity.BOTTOM;
         pillLp.leftMargin = dp(this, 18); pillLp.rightMargin = dp(this, 18);
@@ -10144,7 +10130,7 @@ public class MainActivity extends Activity {
         cg.setColor(Color.argb(142, 54, 56, 64));
         cg.setStroke(dp(this, 1), Color.argb(110, 255, 255, 255));
         circle.setBackground(cg);
-        if (Build.VERSION.SDK_INT >= 21) circle.setElevation(dp(this, 5));
+        softShadow(circle, 5); // Q125 补（按钮黑边扫查）：圆钮默认黑影改 Soft 柔影（高 5dp 不变）
         FrameLayout.LayoutParams clp2 = new FrameLayout.LayoutParams(dp(this, 34), dp(this, 34));
         clp2.gravity = Gravity.CENTER;
         glyphFrame.addView(circle, clp2);
@@ -12776,7 +12762,7 @@ public class MainActivity extends Activity {
         cg.setColor(Color.argb(110, 30, 32, 40));
         cg.setStroke(dp(this, 1), Color.argb(110, 255, 255, 255));
         circle.setBackground(cg);
-        if (Build.VERSION.SDK_INT >= 21) circle.setElevation(dp(this, 5));
+        softShadow(circle, 5); // Q125 补（按钮黑边扫查）：圆钮默认黑影改 Soft 柔影（高 5dp 不变）
         FrameLayout.LayoutParams clp2 = new FrameLayout.LayoutParams(dp(this, 34), dp(this, 34));
         clp2.gravity = Gravity.CENTER;
         glyphFrame.addView(circle, clp2);
