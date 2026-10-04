@@ -925,7 +925,7 @@ public class MainActivity extends Activity {
         // Q23：与 Q3 悬浮钮同款玻璃底（glassFabBg + applyGlassFabShadow + live 玻璃层），对照混合版 .qf-top/.qf-btn
         // 同语言：44dp 圆钮、白色 .5 描边、深色细线箭头；玻璃模糊由 glassLayer 垫底。
         fab.setBackground(glassFabBg());
-        fab.addView(glassLayerHw(fab, -1, true), new FrameLayout.LayoutParams(
+        fab.addView(glassLayerHw(fab, -1, true, "topfab"), new FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         // Q23 固定浅白染色托底（盖在模糊层之上、箭头之下）：对照混合版 .qf-top 的 background:rgba(255,255,255,.32)
         // Q53：改用与搜索/筛选钮同一 fabFrostWash() 提亮层，三钮黑底白底同一口径。
@@ -1900,10 +1900,15 @@ public class MainActivity extends Activity {
 
     /** Q108 试点件构造（2.22，底栏＋⋯菜单）；Q109（2.23）经用户真机验收试点后全面
      * 铺开：全部玻璃件改走此构造。与 glassLayer 同路同视觉，仅多打一个硬件标；
-     * 硬件关/退/低版本时 onDraw 自动回落软件路，构造侧无需分叉。 */
-    ImageView glassLayerHw(View host, float radiusDp, boolean live) {
+     * 硬件关/退/低版本时 onDraw 自动回落软件路，构造侧无需分叉。
+     * Q111（2.24）：每件带稳定 key（金丝雀逐件记账的身份，见 HW_PIECE_ORDER 与
+     * GlassBackdropView.hwDrawGate）——key 只作记账标识，不影响任何视觉参数。 */
+    ImageView glassLayerHw(View host, float radiusDp, boolean live, String key) {
         ImageView iv = glassLayer(host, radiusDp, live);
-        if (iv instanceof GlassBackdropView) ((GlassBackdropView) iv).hwPilot = true;
+        if (iv instanceof GlassBackdropView) {
+            ((GlassBackdropView) iv).hwPilot = true;
+            ((GlassBackdropView) iv).hwKey = key;
+        }
         return iv;
     }
 
@@ -2149,10 +2154,46 @@ public class MainActivity extends Activity {
      * 条带无源时采样屏幕快照。两种取景共用同一组「平移→1/scale 放大」对位数学。 */
     class GlassBackdropView extends ImageView {
         boolean hwPilot = false; // Q108 硬件玻璃实验标（2.22 试点两件，Q109 起全件），onDraw 首行分流
+        String hwKey = null;     // Q111 金丝雀记账身份（glassLayerHw 构造时注入，见 HW_PIECE_ORDER）
         final int[] rl2 = new int[2];
         final int[] ml2 = new int[2];
         final int[] sl2 = new int[2];
         GlassBackdropView(Context c) { super(c); }
+
+        /** Q111 金丝雀闸门（本件本帧是否准走硬件路）：已证→准；已退→拒；未证→本进程
+         * 试验位未被申领、且同屏没有更靠前（HW_PIECE_ORDER 顺序）的未证件在场时才准，
+         * 申领瞬间把件名同步落盘（glass_hw_trial）——绘制紧随其后，若原生崩死在本帧，
+         * 试验标记永不被清，下次冷启由 initHwGlassGuard 判定该件单独退软件。附带退化
+         * 守卫：未挂载或宽高 ≤2 的件（首帧未落位/动画近零缩放）一律走软件兜底，不拿
+         * 退化尺寸去碰 drawRenderNode。Java 级判定全程不抛。 */
+        boolean hwDrawGate() {
+            String k = hwKey;
+            if (k == null || !isAttachedToWindow() || getWidth() <= 2 || getHeight() <= 2) return false;
+            if (hwProven.contains(k)) return true;
+            if (hwDeadPieces.contains(k)) return false;
+            if (hwTrialClaimedBy != null) return k.equals(hwTrialClaimedBy);
+            int myIdx = hwOrderIdx(k);
+            if (myIdx < 0) return false;
+            for (ImageView iv2 : glassViews) {
+                if (iv2 == this || !(iv2 instanceof GlassBackdropView)) continue;
+                String k2 = ((GlassBackdropView) iv2).hwKey;
+                if (k2 == null || k2.equals(k)) continue;
+                int i2 = hwOrderIdx(k2);
+                if (i2 >= 0 && i2 < myIdx && !hwProven.contains(k2) && !hwDeadPieces.contains(k2)
+                    && iv2.isAttachedToWindow() && iv2.isShown()) return false; // 让更靠前的未证件先试
+            }
+            hwTrialClaimedBy = k;
+            hwArmTrial(k); // 必须赶在 drawRenderNode 之前 commit 落盘（原生崩 Java 记不上账）
+            return true;
+        }
+
+        /** 本帧 drawRenderNode 已成功返回：该件入证（写已证集合同步落盘并清试验标记）。 */
+        void hwDrawProven() {
+            String k = hwKey;
+            if (k == null || hwProven.contains(k)) return;
+            hwProven.add(k);
+            hwPersistPieces();
+        }
         @Override protected void onDraw(Canvas canvas) {
             // 抓图进行中自排除（否则背板画进背板自引用，同 LIQUID-GLASS-NOTES 红线）；
             // 玻璃被关停/背板未就绪时什么都不画，宿主下方薄染色兜底直接显形，绝不白屏。
@@ -2166,14 +2207,16 @@ public class MainActivity extends Activity {
                 canvas.clipRect(0, 0, Math.max(1, getWidth()), Math.max(1, getHeight()));
                 // Q108 硬件试点分流：节点与本层同一组对位数学（平移→1/scale 放大），
                 // 只是取景源换成 RenderNode（模糊＋饱和在录制期由节点 RenderEffect 承担）。
-                // 首帧成功画完即写 stable——原生崩若发生在本行之内，stable 永不落盘，
-                // 下次冷启由 initHwGlassGuard 识别并自退，本层此后恒走软件路。
+                // Q111 改逐件取证：准入由 hwDrawGate（已证/金丝雀试验位/退化守卫）判定，
+                // 首帧成功返回即本件入证并写全局 stable——原生崩若发生在本行之内两样都
+                // 不落盘，未清的试验标记由下次冷启 initHwGlassGuard 判该件单独退软件。
                 if (hwPilot && hwGlassEnabled && !hwGlassDead && hwNodeValid && hwNode != null
-                    && Build.VERSION.SDK_INT >= 31) {
+                    && Build.VERSION.SDK_INT >= 31 && hwDrawGate()) {
                     canvas.translate(-(ml2[0] - rl2[0]), -(ml2[1] - rl2[1]));
                     canvas.scale(1f / HW_BACKDROP_SCALE, 1f / HW_BACKDROP_SCALE);
                     canvas.drawRenderNode(hwNode);
                     canvas.restore();
+                    hwDrawProven(); // Q111：首帧成功返回即入证（崩在本行之内则永不执行，试验标记留作铁证）
                     markHwStable();
                     return;
                 }
@@ -2247,6 +2290,11 @@ public class MainActivity extends Activity {
     // 时间戳 glass_hw_note（设置行可查），全程回落软件链——「崩一次、重开即愈」。
     // 手动开关「硬件玻璃（实验）」（glass_hw_exp，默认开）随时可关：硬件件 onDraw 逐帧
     // 查开关，关掉下一帧即回软件路（即时生效）；自动退回后重新打开＝清 dead 再试一轮。
+    // Q111（2.24）事故修订：2.23 真机进主页首帧必崩且重开不愈——全局 stable 被先进场
+    // 的已证/无害件先行写下，后崩的件永远被信任。护栏改逐件金丝雀记账（见下方
+    // HW_PIECE_ORDER 起的新账本）：试验标记判死单件、全局双标记只作最后防线；另补
+    // 录制期 backdropCapturing 自排除（与宿主同级并列的窗玻璃层在根视图录制时不再
+    // 漏画，杜绝把节点画进节点自身录制画布的自引用形态）。
     static final float HW_BACKDROP_SCALE = 0.5f; // 节点录制缩放（软件链 0.20；硬件路取 0.5 换细腻度，仍非全分辨率）
     boolean hwGlassEnabled = false;   // 本进程硬件通道可用（启动护栏判定结果）
     boolean hwGlassDead = false;      // 已自动退回（或本进程判定不可用）
@@ -2260,31 +2308,142 @@ public class MainActivity extends Activity {
     long hwLastRecordMs = 0;
     boolean hwRecording = false;
 
+    // ---------- Q111 金丝雀逐件记账（2.24，事故修复：2.23 进主页必崩且重开不愈） ----------
+    // 事故机制（代码坐实）：旧护栏只有一颗全局 stable——任一件首帧 drawRenderNode
+    // 成功即 markHwStable 写入，此后哪件崩都因 stable 已落盘而被冷启护栏永久信任，
+    // 「进主页必崩、重开照崩」。改逐件记账：prefs 三件套——已证集 glass_hw_proven
+    // （CSV）、已退集 glass_hw_deadpieces（CSV）、在试标记 glass_hw_trial（单件 key）。
+    // dock＋moremenu 是 2.22 真机实证的两件，首次装载新账时直接播种入证。
+    // 规则：每冷启最多放一件未证件试硬件（HW_PIECE_ORDER 定序，同屏多件在场时靠前
+    // 者先试）；该件首帧绘制前申领试验位并 commit 试验标记，绘制成功返回即入证清
+    // 标记；若进程死在该帧，标记残留下次冷启被判「该件崩」→ 单独进已退集走软件链，
+    // 换下一件继续试，全程不再出现全 App 必崩。全局 armed/stable 与实验开关保留为
+    // 最后防线（仅当崩点不在任何在试件绘制内——如录制本身——才由全局口径整体自退）。
+    static final String[] HW_PIECE_ORDER = {
+        "dock", "moremenu", "inlinesearch", "searchfab", "filterfab", "floatsearch",
+        "topfab", "toast", "filterwin", "wizard", "detail", "detailpill", "cardmenu",
+        "binwin", "customform", "customdetail", "acctpicker", "colorpicker",
+        "delconfirm", "updatewin", "simkeep", "subfollow", "footprint", "extsearch"
+    };
+    static final String[] HW_PIECE_NAME_ZH = {
+        "底栏", "设置菜单", "内嵌搜索胶囊", "搜索钮", "筛选钮", "悬浮搜索胶囊",
+        "回顶钮", "悬浮提示条", "筛选窗", "情景选卡窗", "详情窗", "详情主钮", "长按菜单",
+        "BIN 查询窗", "自定义卡表单", "自定义卡详情", "账户分类选择窗", "占位配色选择窗",
+        "删除确认窗", "数据更新窗", "保号表单", "订阅表单", "足迹表单", "扩展搜卡窗"
+    };
+    static final String[] HW_PIECE_NAME_EN = {
+        "Dock", "Settings menu", "Inline search", "Search button", "Filter button", "Floating search",
+        "Top button", "Toast bar", "Filter sheet", "Wizard sheet", "Detail sheet", "Detail action", "Card menu",
+        "BIN lookup", "Custom card form", "Custom card detail", "Account class picker", "Color picker",
+        "Delete confirm", "Data update sheet", "SIM keep form", "Subscription form", "Footprint form", "Extended search"
+    };
+    final java.util.Set<String> hwProven = new java.util.HashSet<>();
+    final java.util.Set<String> hwDeadPieces = new java.util.HashSet<>();
+    String hwTrialClaimedBy = null;   // 本进程试验位已被哪件申领（每冷启至多一件）
+    boolean hwPiecesLoaded = false;
+
+    int hwOrderIdx(String k) {
+        if (k == null) return -1;
+        for (int i = 0; i < HW_PIECE_ORDER.length; i++) if (HW_PIECE_ORDER[i].equals(k)) return i;
+        return -1;
+    }
+    String hwPieceName(String k) {
+        int i = hwOrderIdx(k);
+        if (i < 0) return k == null ? "" : k;
+        return isEn() ? HW_PIECE_NAME_EN[i] : HW_PIECE_NAME_ZH[i];
+    }
+    /** 待验证下一件：定序里第一个既未证也未退的件（设置行副文案展示）。 */
+    String hwNextCandidate() {
+        for (String k : HW_PIECE_ORDER) if (!hwProven.contains(k) && !hwDeadPieces.contains(k)) return k;
+        return null;
+    }
+    static String hwJoinCsv(java.util.Set<String> s) {
+        // 按 HW_PIECE_ORDER 定序拼 CSV（落盘稳定可读；定序外的 key 不会出现，构造点全在册）
+        StringBuilder sb = new StringBuilder();
+        for (String k : HW_PIECE_ORDER) if (s.contains(k)) { if (sb.length() > 0) sb.append(','); sb.append(k); }
+        return sb.toString();
+    }
+    /** 新账装载（只跑一次）：已证/已退集读盘；已证集缺失＝首次启用新账，播种 2.22 两件。 */
+    void loadHwPieces() {
+        if (hwPiecesLoaded) return;
+        hwPiecesLoaded = true;
+        try {
+            if (prefs == null) return;
+            if (!prefs.contains("glass_hw_proven")) {
+                hwProven.add("dock"); hwProven.add("moremenu"); // 2.22 用户真机实证没崩且质感获认
+                prefs.edit().putString("glass_hw_proven", hwJoinCsv(hwProven)).apply();
+            } else {
+                String csv = prefs.getString("glass_hw_proven", "");
+                if (csv != null) for (String k : csv.split(",")) if (!k.trim().isEmpty()) hwProven.add(k.trim());
+            }
+            String dead = prefs.getString("glass_hw_deadpieces", "");
+            if (dead != null) for (String k : dead.split(",")) if (!k.trim().isEmpty()) hwDeadPieces.add(k.trim());
+        } catch (Throwable ignored) {}
+    }
+    /** 试验位落盘：绘制前申领（commit）——崩在本帧即留证，下次冷启据此判该件退软件。 */
+    void hwArmTrial(String k) {
+        try { if (prefs != null) prefs.edit().putString("glass_hw_trial", k).commit(); } catch (Throwable ignored) {}
+    }
+    /** 已证/已退集落盘并清在试标记（入证与判死共用，commit 同步）。 */
+    void hwPersistPieces() {
+        try {
+            if (prefs == null) return;
+            prefs.edit()
+                .putString("glass_hw_proven", hwJoinCsv(hwProven))
+                .putString("glass_hw_deadpieces", hwJoinCsv(hwDeadPieces))
+                .putString("glass_hw_trial", "")
+                .commit();
+        } catch (Throwable ignored) {}
+    }
+
     /** 冷启护栏（onCreate 读完玻璃 prefs 后调用，先于任何页面构建）：
      * 上一会话 armed 而无 stable ＝判定硬件路原生崩，永久关闭本实验（直到用户手动
      * 在设置里重新打开再试），并落时间戳留痕。本函数不写 armed——武装推迟到首帧
      * 录制前一刻（recordHwBackdrop 懒写），把「开了 App 没碰玻璃就被杀」的误判窗压到
-     * 约一帧。API<31 无硬件路，实验恒关。 */
+     * 约一帧。API<31 无硬件路，实验恒关。
+     * Q111（2.24）起判定顺序改为：逐件试验标记判死在前（单件退软件、全局不牵连），
+     * 本全局双标记退为最后防线，仅当试验标记干净时才按 armed&&!stable 整体自退。 */
     void initHwGlassGuard() {
         hwGlassEnabled = false;
         try { hwGlassNote = prefs == null ? "" : prefs.getString("glass_hw_note", ""); } catch (Throwable ignored) { hwGlassNote = ""; }
         if (Build.VERSION.SDK_INT < 31 || prefs == null) { hwGlassDead = true; return; }
         try {
+            loadHwPieces(); // Q111：逐件账本先行装载（首次新账播种 2.22 实证两件）
             hwGlassDead = prefs.getBoolean("glass_hw_dead", false);
             boolean exp = prefs.getBoolean("glass_hw_exp", true); // 2.22 实验载体：默认开
             if (hwGlassDead || !exp) return;
-            boolean armed = prefs.getBoolean("glass_hw_armed", false);
-            boolean stable = prefs.getBoolean("glass_hw_stable", false);
-            if (armed && !stable) {
-                hwGlassDead = true;
-                hwJustRetreated = true;
-                hwGlassNote = new java.text.SimpleDateFormat("yyyy-MM-dd HH:mm", java.util.Locale.US).format(new java.util.Date());
-                prefs.edit().putBoolean("glass_hw_dead", true)
-                    .putBoolean("glass_hw_exp", false)
-                    .putBoolean("glass_hw_armed", false)
-                    .putString("glass_hw_note", hwGlassNote)
-                    .commit(); // 同步落盘：退回决定不许丢
-                return;
+            // Q111 逐件判死（先于全局兜底）：上次进程残留在试标记且该件未入证＝进程死在
+            // 该件首帧硬件绘制内——只判该件退软件（留时间戳、换下一件），全局不牵连。
+            boolean trialResolved = false;
+            String trial = prefs.getString("glass_hw_trial", "");
+            if (trial != null && !trial.isEmpty()) {
+                trialResolved = true;
+                if (hwProven.contains(trial)) {
+                    try { prefs.edit().putString("glass_hw_trial", "").commit(); } catch (Throwable ignored) {}
+                } else {
+                    hwDeadPieces.add(trial);
+                    hwGlassNote = new java.text.SimpleDateFormat("yyyy-MM-dd HH:mm", java.util.Locale.US).format(new java.util.Date());
+                    try { prefs.edit().putString("glass_hw_note", hwGlassNote).commit(); } catch (Throwable ignored) {}
+                    hwPersistPieces(); // 已退集落盘＋清在试标记（同步）
+                }
+            }
+            // 全局最后防线（原 Q108 双标记）：仅当崩点不在任何在试件绘制内（试验标记
+            // 干净却 armed 无 stable，如崩在录制本身）才整体自退——逐件账在场时不许
+            // 再出现「一件成功全盘信任、一件崩全盘陪葬」的旧毒。
+            if (!trialResolved) {
+                boolean armed = prefs.getBoolean("glass_hw_armed", false);
+                boolean stable = prefs.getBoolean("glass_hw_stable", false);
+                if (armed && !stable) {
+                    hwGlassDead = true;
+                    hwJustRetreated = true;
+                    hwGlassNote = new java.text.SimpleDateFormat("yyyy-MM-dd HH:mm", java.util.Locale.US).format(new java.util.Date());
+                    prefs.edit().putBoolean("glass_hw_dead", true)
+                        .putBoolean("glass_hw_exp", false)
+                        .putBoolean("glass_hw_armed", false)
+                        .putString("glass_hw_note", hwGlassNote)
+                        .commit(); // 同步落盘：退回决定不许丢
+                    return;
+                }
             }
             hwGlassEnabled = true;
         } catch (Throwable ignored) { hwGlassEnabled = false; }
@@ -2338,6 +2497,13 @@ public class MainActivity extends Activity {
         }
         java.util.Map<View, Integer> saved = new java.util.HashMap<>();
         hwRecording = true;
+        // Q111（2.24，坐实形态）：录制期置 backdropCapturing——根视图录制画布遍历全树时
+        // 全部 GlassBackdropView 一律自排除。旧路只按 glassHosts 藏宿主，而窗玻璃层与宿主
+        // 卡在 wrap 里同级并列（详情/情景/BIN/表单/选色等窗），宿主藏了玻璃层本体不藏，
+        // 录制中它照样 onDraw 并对正在录制的同一个 hwNode 执行 drawRenderNode＝把节点
+        // 画进节点自己的录制画布（自引用，原生层高危）。软件路 captureBackdrop 早有此标，
+        // 硬件录制漏置，本版补齐；录后再由各件对已录完的节点正常消费，不影响同帧跟随。
+        backdropCapturing = true;
         boolean wasValid = hwNodeValid;
         try {
             for (ImageView iv : new java.util.ArrayList<>(glassViews)) {
@@ -2366,6 +2532,7 @@ public class MainActivity extends Activity {
             for (java.util.Map.Entry<View, Integer> e : saved.entrySet()) {
                 try { e.getKey().setVisibility(e.getValue()); } catch (Throwable ignored) {}
             }
+            backdropCapturing = false; // Q111：与置位成对恢复（录制互斥标 hwRecording 同段）
             hwRecording = false;
         }
     }
@@ -2391,6 +2558,20 @@ public class MainActivity extends Activity {
     }
 
     /** 设置行副文案：退回留痕（时间戳）在此可查。 */
+    /** Q111 逐件账面状态一行（设置实验行副文案尾巴）：已验证 N/24 · 已退回软件 M · 待验证下一件。 */
+    String hwPieceStatus() {
+        try {
+            loadHwPieces();
+            int total = HW_PIECE_ORDER.length;
+            String next = hwNextCandidate();
+            if (isEn()) return " · HW-verified " + hwProven.size() + "/" + total
+                + (hwDeadPieces.isEmpty() ? "" : " · software-reverted " + hwDeadPieces.size())
+                + (next == null ? "" : " · next trial: " + hwPieceName(next));
+            return " · 硬件已验证 " + hwProven.size() + "/" + total
+                + (hwDeadPieces.isEmpty() ? "" : " · 已退回软件 " + hwDeadPieces.size())
+                + (next == null ? "" : " · 待验证下一件：" + hwPieceName(next));
+        } catch (Throwable t) { return ""; }
+    }
     String hwGlassDesc() {
         if (Build.VERSION.SDK_INT < 31) return isEn() ? "Needs Android 12+ for the hardware path" : "需 Android 12 以上才有硬件通道";
         if (glassDisabled) return isEn() ? "Glass is off — turn Glass Effect on first" : "玻璃效果已关闭，先打开上面的玻璃效果";
@@ -2398,10 +2579,10 @@ public class MainActivity extends Activity {
             return isEn() ? "Crashed last time — auto-reverted to safe glass (" + hwGlassNote + "). Turn on to retry"
                           : "上次开启后闪退，已自动退回安全玻璃（" + hwGlassNote + "），重新打开可再试";
         }
-        if (hwGlassEnabled) return isEn() ? "Beta: all glass uses system real-time blur. May crash; reverts automatically on relaunch"
-                                         : "实验中：全部玻璃件走系统硬件实时模糊，可能闪退，闪退后重开自动退回";
-        return isEn() ? "Off — all glass uses the safe software blur"
-                      : "已关闭，全部玻璃走安全软件磨砂";
+        if (hwGlassEnabled) return (isEn() ? "Beta: all glass uses system real-time blur. May crash; reverts automatically on relaunch"
+                                         : "实验中：全部玻璃件走系统硬件实时模糊，可能闪退，闪退后重开自动退回") + hwPieceStatus();
+        return (isEn() ? "Off — all glass uses the safe software blur"
+                      : "已关闭，全部玻璃走安全软件磨砂") + hwPieceStatus();
     }
 
     /** 手写盒式模糊（三遍滑动窗均值近似高斯，边缘钳制取样）；直接在像素数组上原地进行。 */
@@ -4373,7 +4554,7 @@ public class MainActivity extends Activity {
         // 旧实现底部色带渗出柔面圆角之外（用户实拍发脏），渗边源头就在那两层。
         FrameLayout toastWrap = new FrameLayout(this);
         glassClip(toastWrap, 20, false);
-        toastWrap.addView(glassLayerHw(toastWrap, 20, false), new FrameLayout.LayoutParams(
+        toastWrap.addView(glassLayerHw(toastWrap, 20, false, "toast"), new FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         toastWrap.addView(bar, new FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
@@ -4597,7 +4778,7 @@ public class MainActivity extends Activity {
         clp.leftMargin = dp(this, 12); clp.rightMargin = dp(this, 12);
         clp.bottomMargin = dp(this, 10) + navBarH(); // Q92：浮起并避手势条，不顶到屏幕底
         FrameLayout wrap = new FrameLayout(this);
-        View glass = glassLayerHw(cardBox, 22, false);
+        View glass = glassLayerHw(cardBox, 22, false, "acctpicker");
         roundClip(glass, 22, this);
         wrap.addView(glass, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, pickerH));
         wrap.addView(cardBox, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, pickerH));
@@ -4741,7 +4922,7 @@ public class MainActivity extends Activity {
         clp2.leftMargin = dp(this, 12); clp2.rightMargin = dp(this, 12);
         clp2.bottomMargin = dp(this, 10) + navBarH();
         FrameLayout wrap = new FrameLayout(this);
-        View glass = glassLayerHw(cardBox, 22, false);
+        View glass = glassLayerHw(cardBox, 22, false, "colorpicker");
         roundClip(glass, 22, this);
         wrap.addView(glass, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, phH));
         wrap.addView(cardBox, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, phH));
@@ -5126,7 +5307,7 @@ public class MainActivity extends Activity {
             navLabels.put(key, label);
             navRow.addView(item, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
         }
-        navWrap.addView(glassLayerHw(navWrap, 26, true), new FrameLayout.LayoutParams( // Q108 试点①底栏（live）
+        navWrap.addView(glassLayerHw(navWrap, 26, true, "dock"), new FrameLayout.LayoutParams( // Q108 试点①底栏（live）
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         navWrap.addView(navBar, new FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
@@ -5881,7 +6062,7 @@ public class MainActivity extends Activity {
         fab.setClipToPadding(false);
         int n0 = activeFilterCount();
         fab.setBackground(glassFabBg());
-        fab.addView(glassLayerHw(fab, -1, true), new FrameLayout.LayoutParams(
+        fab.addView(glassLayerHw(fab, -1, true, "filterfab"), new FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         fab.addView(fabFrostWash(), new FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
@@ -5923,7 +6104,7 @@ public class MainActivity extends Activity {
     View buildSearchFab() {
         FrameLayout fab = new FrameLayout(this);
         fab.setBackground(glassFabBg());
-        fab.addView(glassLayerHw(fab, -1, true), new FrameLayout.LayoutParams(
+        fab.addView(glassLayerHw(fab, -1, true, "searchfab"), new FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         fab.addView(fabFrostWash(), new FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
@@ -6911,7 +7092,7 @@ public class MainActivity extends Activity {
         final FrameLayout popWrap = new FrameLayout(this);
         glassClip(popWrap, 28, false);
         if (Build.VERSION.SDK_INT >= 21) popWrap.setElevation(dp(this, 24));
-        popWrap.addView(glassLayerHw(popWrap, 28, false), new FrameLayout.LayoutParams(
+        popWrap.addView(glassLayerHw(popWrap, 28, false, "cardmenu"), new FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         View popFace = new View(this);
         popFace.setBackground(glassWindowTint(28, false));
@@ -7253,7 +7434,7 @@ public class MainActivity extends Activity {
         FrameLayout inlineWrap = new FrameLayout(this);
         inlineWrap.setBackground(softSearchTint()); // Q94：内嵌搜索胶囊玻璃收淡（近白低饱和，不再一团蓝）
         if (Build.VERSION.SDK_INT >= 21) inlineWrap.setElevation(dp(this, 6));
-        inlineWrap.addView(glassLayerHw(inlineWrap, 28, true), new FrameLayout.LayoutParams(
+        inlineWrap.addView(glassLayerHw(inlineWrap, 28, true, "inlinesearch"), new FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         LinearLayout inlineRow = new LinearLayout(this);
         inlineRow.setOrientation(LinearLayout.HORIZONTAL);
@@ -7313,7 +7494,7 @@ public class MainActivity extends Activity {
         FrameLayout floatWrap = new FrameLayout(this);
         floatWrap.setBackground(softSearchTint()); // Q94：悬浮搜索胶囊同口径收淡
         if (Build.VERSION.SDK_INT >= 21) floatWrap.setElevation(dp(this, 14));
-        floatWrap.addView(glassLayerHw(floatWrap, 28, true), new FrameLayout.LayoutParams(
+        floatWrap.addView(glassLayerHw(floatWrap, 28, true, "floatsearch"), new FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         LinearLayout floatRow = new LinearLayout(this);
         floatRow.setOrientation(LinearLayout.HORIZONTAL);
@@ -7839,7 +8020,7 @@ public class MainActivity extends Activity {
         FrameLayout wrap = new FrameLayout(this);
         glassClip(wrap, 24, false);
         if (Build.VERSION.SDK_INT >= 21) wrap.setElevation(dp(this, 24));
-        wrap.addView(glassLayerHw(card, 24, false), new FrameLayout.LayoutParams(
+        wrap.addView(glassLayerHw(card, 24, false, "filterwin"), new FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         View wash = glassWashView(24, false);
         glassClip(wash, 24, false);
@@ -8442,7 +8623,7 @@ public class MainActivity extends Activity {
         clp.height = card.getMeasuredHeight();
         // Q11：贴底窗下垫冻结模糊层——玻璃层向下多延 26dp，让顶圆角对齐窗体、底圆角沉到屏外
         FrameLayout wizGlassWrap = new FrameLayout(this);
-        View wizGlass = glassLayerHw(card, 26, false);
+        View wizGlass = glassLayerHw(card, 26, false, "wizard");
         topSheetClip(wizGlass, 26, this); // Q54：玻璃轮廓与窗体同（顶圆底直），不得在窗外露面发雾
         wizGlassWrap.addView(wizGlass, new FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, clp.height + dp(this, 26)));
@@ -9003,7 +9184,7 @@ public class MainActivity extends Activity {
         // 窗外由 wrap 裁掉，窗底两角只剩直角白窗贴齐屏底，不露玻璃/遮罩黑三角
         FrameLayout.LayoutParams detailGlassLp = new FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, sheetH + dp(this, 20));
-        View detailGlass = glassLayerHw(sheetCard, 20, false);
+        View detailGlass = glassLayerHw(sheetCard, 20, false, "detail");
         topSheetClip(detailGlass, 20, this); // Q54：玻璃轮廓与窗体同（顶圆底直），不得在窗外露面发雾
         wrap.addView(detailGlass, detailGlassLp);
         wrap.addView(sheetCard, new FrameLayout.LayoutParams(
@@ -9014,7 +9195,7 @@ public class MainActivity extends Activity {
         // （不用 WRAP_CONTENT+MATCH_PARENT 玻璃的模糊测量链），钮下贴安全距避手势条。
         FrameLayout pillWrap = new FrameLayout(this);
         int pillH = dp(this, 50);
-        pillWrap.addView(glassLayerHw(detailPrimaryBtn, 999, false),
+        pillWrap.addView(glassLayerHw(detailPrimaryBtn, 999, false, "detailpill"),
             new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, pillH));
         pillWrap.addView(glassWashView(999, false),
             new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, pillH));
@@ -11269,7 +11450,7 @@ public class MainActivity extends Activity {
         clp.gravity = Gravity.BOTTOM;
         clp.leftMargin = dp(this, 12); clp.rightMargin = dp(this, 12); clp.bottomMargin = 0;
         FrameLayout wrap = new FrameLayout(this);
-        View glass = glassLayerHw(card, 22, false);
+        View glass = glassLayerHw(card, 22, false, "delconfirm");
         topSheetClip(glass, 22, this); // Q54：玻璃轮廓与窗体同，不得在窗外露面
         wrap.addView(glass, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         wrap.addView(card, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
@@ -11372,7 +11553,7 @@ public class MainActivity extends Activity {
         // Q45：同详情窗——冻结玻璃层高出窗体 20dp，底圆角沉到窗外由 wrap 裁掉，窗底直角贴屏底
         FrameLayout.LayoutParams customDetailGlassLp = new FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, sheetH + dp(this, 20));
-        View customDetailGlass = glassLayerHw(sheetCard, 20, false);
+        View customDetailGlass = glassLayerHw(sheetCard, 20, false, "customdetail");
         topSheetClip(customDetailGlass, 20, this); // Q54：玻璃轮廓与窗体同（顶圆底直），不得在窗外露面发雾
         wrap.addView(customDetailGlass, customDetailGlassLp);
         wrap.addView(sheetCard, new FrameLayout.LayoutParams(
@@ -12399,7 +12580,7 @@ public class MainActivity extends Activity {
         // Q45：玻璃与窗体同装贴底容器，玻璃高出 22dp、底圆角沉出容器被裁，与窗体同升同降；
         // closeBinQuery 取最后一层即此容器，动画口径不变；Q43 结果变高时由 resizeBinSheetToFit 跟随重定高
         FrameLayout binWrap = new FrameLayout(this);
-        View binGlass = glassLayerHw(card, 22, false);
+        View binGlass = glassLayerHw(card, 22, false, "binwin");
         topSheetClip(binGlass, 22, this); // Q54：玻璃轮廓与窗体同（顶圆底直），不得在窗外露面发雾
         binWrap.addView(binGlass, new FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, clp.height + dp(this, 22)));
@@ -12947,7 +13128,7 @@ public class MainActivity extends Activity {
         // Q45：玻璃与窗体同装贴底容器，玻璃高出 22dp、底圆角沉出容器被裁，与窗体同升同降；
         // closeCustomForm 取最后一层即此容器，动画口径不变
         FrameLayout formWrap = new FrameLayout(this);
-        View formGlass = glassLayerHw(card, 22, false);
+        View formGlass = glassLayerHw(card, 22, false, "customform");
         topSheetClip(formGlass, 22, this); // Q54：玻璃轮廓与窗体同（顶圆底直），不得在窗外露面发雾
         formWrap.addView(formGlass, new FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, clp.height + dp(this, 22))); // Q11 冻结玻璃垫底
@@ -13066,7 +13247,7 @@ public class MainActivity extends Activity {
         TextView ob=tv(this,okTxt,15,Color.WHITE,true); ob.setGravity(Gravity.CENTER); ob.setBackground(rippleBg(Color.rgb(0x0A,0x5C,0xD6),14));
         LinearLayout.LayoutParams olp=new LinearLayout.LayoutParams(0,dp(this,48),1f); olp.leftMargin=dp(this,10); btns.addView(ob,olp);
         FrameLayout.LayoutParams clp=new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,ViewGroup.LayoutParams.WRAP_CONTENT); clp.gravity=Gravity.BOTTOM; clp.leftMargin=dp(this,12); clp.rightMargin=dp(this,12);
-        FrameLayout wrap=new FrameLayout(this); View glass=glassLayerHw(card,22,false); topSheetClip(glass,22,this);
+        FrameLayout wrap=new FrameLayout(this); View glass=glassLayerHw(card,22,false, "updatewin"); topSheetClip(glass,22,this);
         wrap.addView(glass,new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,ViewGroup.LayoutParams.MATCH_PARENT));
         wrap.addView(card,new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,ViewGroup.LayoutParams.MATCH_PARENT));
         sheet.addView(wrap,clp);
@@ -14223,7 +14404,7 @@ public class MainActivity extends Activity {
         // Q92：三表单窗改浮起——底部留 10dp+手势区安全距不再被手势条压，玻璃同高全圆
         clp.gravity = Gravity.BOTTOM; clp.leftMargin = dp(this, 12); clp.rightMargin = dp(this, 12); clp.bottomMargin = dp(this, 10) + navBarH();
         FrameLayout wrap = new FrameLayout(this);
-        View glass = glassLayerHw(card, 22, false); roundClip(glass, 22, this);
+        View glass = glassLayerHw(card, 22, false, "simkeep"); roundClip(glass, 22, this);
         wrap.addView(glass, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, clp.height));
         wrap.addView(card, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         sheet.addView(wrap, clp);
@@ -14558,7 +14739,7 @@ public class MainActivity extends Activity {
         // Q92：三表单窗改浮起——底部留 10dp+手势区安全距不再被手势条压，玻璃同高全圆
         clp.gravity = Gravity.BOTTOM; clp.leftMargin = dp(this, 12); clp.rightMargin = dp(this, 12); clp.bottomMargin = dp(this, 10) + navBarH();
         FrameLayout wrap = new FrameLayout(this);
-        View glass = glassLayerHw(card, 22, false); roundClip(glass, 22, this);
+        View glass = glassLayerHw(card, 22, false, "subfollow"); roundClip(glass, 22, this);
         wrap.addView(glass, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, clp.height));
         wrap.addView(card, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         sheet.addView(wrap, clp);
@@ -14898,7 +15079,7 @@ public class MainActivity extends Activity {
         // Q92：三表单窗改浮起——底部留 10dp+手势区安全距不再被手势条压，玻璃同高全圆
         clp.gravity = Gravity.BOTTOM; clp.leftMargin = dp(this, 12); clp.rightMargin = dp(this, 12); clp.bottomMargin = dp(this, 10) + navBarH();
         FrameLayout wrap = new FrameLayout(this);
-        View glass = glassLayerHw(card, 22, false); roundClip(glass, 22, this);
+        View glass = glassLayerHw(card, 22, false, "footprint"); roundClip(glass, 22, this);
         wrap.addView(glass, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, clp.height));
         wrap.addView(card, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         sheet.addView(wrap, clp);
@@ -15242,7 +15423,7 @@ public class MainActivity extends Activity {
         clp.gravity = Gravity.BOTTOM;
         clp.leftMargin = dp(this, 12); clp.rightMargin = dp(this, 12); clp.bottomMargin = dp(this, 10) + navBarH();
         FrameLayout wrap = new FrameLayout(this);
-        View glass = glassLayerHw(card, 22, false);
+        View glass = glassLayerHw(card, 22, false, "extsearch");
         roundClip(glass, 22, this);
         wrap.addView(glass, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, clp.height));
         wrap.addView(card, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
@@ -16318,7 +16499,7 @@ public class MainActivity extends Activity {
         final FrameLayout cardWrap = new FrameLayout(this);
         glassClip(cardWrap, 16 + 16, false); // 外框圆角与内卡同心：16+外扩量
         cardWrap.setElevation(dp(this, 18));
-        cardWrap.addView(glassLayerHw(cardWrap, 32, false), new FrameLayout.LayoutParams( // Q108 试点②⋯菜单（frozen）
+        cardWrap.addView(glassLayerHw(cardWrap, 32, false, "moremenu"), new FrameLayout.LayoutParams( // Q108 试点②⋯菜单（frozen）
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         // Q106（2.20，用户 21:54 点名双层）：删「玻璃外框＋内嵌白板」——card 不再自带
         // glassWindowTint(16) 近实底内缩 16dp，改由窗级染色以半径 32 铺满整个 cardWrap
@@ -16467,7 +16648,9 @@ public class MainActivity extends Activity {
                 hwArmWritten = false;   // 重新武装：下一帧录制前重写 armed/stable
                 hwStableMarked = false;
                 hwJustRetreated = false;
-                try { prefs.edit().putBoolean("glass_hw_exp", true).putBoolean("glass_hw_dead", false).putString("glass_hw_note", "").apply(); } catch (Throwable ignored) {}
+                hwDeadPieces.clear();      // Q111：手动重开＝已退件也再给一次机会（已证件保留）
+                hwTrialClaimedBy = null;   // 本进程试验位释放，下一帧重新按序申领
+                try { prefs.edit().putBoolean("glass_hw_exp", true).putBoolean("glass_hw_dead", false).putString("glass_hw_note", "").putString("glass_hw_trial", "").putString("glass_hw_deadpieces", "").apply(); } catch (Throwable ignored) {}
                 hwGlassEnabled = Build.VERSION.SDK_INT >= 31 && !glassDisabled;
             } else {
                 hwGlassEnabled = false;
