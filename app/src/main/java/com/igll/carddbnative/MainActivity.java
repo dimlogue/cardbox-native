@@ -1007,7 +1007,7 @@ public class MainActivity extends Activity {
     static final java.util.Map<String, String[]> STR = new java.util.HashMap<>();
     static {
         STR.put("nav_home", new String[]{"全部卡片","All Cards"});
-        STR.put("nav_student", new String[]{"学生推荐","Student Picks"});
+        STR.put("nav_student", new String[]{"学生推荐","Students"}); // Q106（2.20）：底栏短词口径 All Cards/Students/My Cards/News/Settings
         STR.put("nav_mine", new String[]{"我的卡片","My Cards"});
         STR.put("nav_news", new String[]{"资讯","News"});
         STR.put("nav_settings", new String[]{"设置","Settings"});
@@ -1061,7 +1061,7 @@ public class MainActivity extends Activity {
         STR.put("close", new String[]{"关闭","Close"});
         STR.put("back", new String[]{"返回","Back"});
         STR.put("home_title", new String[]{"卡盒","CardBox"});
-        STR.put("student_title", new String[]{"学生推荐","Student Picks"});
+        STR.put("student_title", new String[]{"学生推荐","Students"});
         STR.put("mine_title", new String[]{"我的卡片","My Cards"});
         STR.put("news_title", new String[]{"资讯","News"});
         STR.put("all_cards", new String[]{"全部卡片","All Cards"});
@@ -1072,6 +1072,293 @@ public class MainActivity extends Activity {
         STR.put("add_card", new String[]{"添加到我的卡片","Add to My Cards"});
         STR.put("theme_color", new String[]{"主题色","Theme Color"});
     }
+    // Q106（2.20）英文全量扫：纯展示串英文表（精确整串匹配、仅 EN 模式在 tvW 出口生效；
+    // tv/toast/chip 同走此出口）。红线：与数据匹配的逻辑串一律不入表——评分维度名与短标签
+    // （数据字段名）、地区→币种映射值、组织/状态匹配值、NFC 发卡行名表、正则式、情景选项
+    // 内部键 o[0] 全部原样；卡名/银行名/点评/规格值等卡片数据本身是中文资料，不翻。
+    static boolean EN_MODE = false;
+    static final java.util.Map<String, String> EN_TXT = new java.util.HashMap<>();
+    static {
+        // 通用钮/动作
+        EN_TXT.put("取消", "Cancel"); EN_TXT.put("保存", "Save"); EN_TXT.put("删除", "Delete");
+        EN_TXT.put("关闭", "Close"); EN_TXT.put("返回", "Back"); EN_TXT.put("完成", "Done");
+        EN_TXT.put("编辑", "Edit"); EN_TXT.put("查询", "Search"); EN_TXT.put("已保存", "Saved");
+        EN_TXT.put("已删除", "Deleted"); EN_TXT.put("撤销", "Undo"); EN_TXT.put("修改", "Edit");
+        EN_TXT.put("去更新", "Update"); EN_TXT.put("知道了", "Got It"); EN_TXT.put("先不加", "Not Now");
+        EN_TXT.put("收起 ‹", "Collapse ‹"); EN_TXT.put("展开 ›", "Expand ›");
+        EN_TXT.put("点开收起", "Tap to Collapse"); EN_TXT.put("点开展开", "Tap to Expand");
+        // 顶层页/分区
+        EN_TXT.put("卡盒", "CardBox"); EN_TXT.put("全部卡片", "All Cards"); EN_TXT.put("学生推荐", "Students");
+        EN_TXT.put("我的卡片", "My Cards"); EN_TXT.put("资讯", "News"); EN_TXT.put("设置", "Settings");
+        EN_TXT.put("情景选卡", "Scenario Picker"); EN_TXT.put("欢迎页", "Welcome"); EN_TXT.put("关于卡盒", "About CardBox");
+        EN_TXT.put("工具", "Tools"); EN_TXT.put("常识", "Card Basics"); EN_TXT.put("卡片常识", "Card Basics");
+        EN_TXT.put("扩展卡库", "Extended Library"); EN_TXT.put("在线搜卡 · 扩展卡库", "Online Search · Extended Library");
+        EN_TXT.put("刷新索引", "Refresh Index"); EN_TXT.put("发卡行官网 ›", "Issuer Website ›");
+        EN_TXT.put("查看卡片常识 ›", "Card Basics ›"); EN_TXT.put("查看原文 ›", "View Original ›");
+        EN_TXT.put("自定义卡片", "Custom Cards"); EN_TXT.put("自定义卡片 / 在线查卡 ›", "Custom Cards / Online Lookup ›");
+        EN_TXT.put("＋ 添加卡片", "+ Add Card"); EN_TXT.put("+ 添加保号卡", "+ Add SIM Card");
+        EN_TXT.put("+ 添加订阅", "+ Add Subscription"); EN_TXT.put("+ 添加一条", "+ Add Entry");
+        // 首页英雄卡/工具/空态
+        EN_TXT.put("卡库总览", "Library Overview"); EN_TXT.put("张卡", "cards"); EN_TXT.put("新卡", "New");
+        EN_TXT.put("不知道选哪张？", "Not Sure Which Card?");
+        EN_TXT.put("情景选卡：留学 · 旅游 · 海淘 · 日常，答几题就给你排好", "Scenario Picker: study, travel, shopping, daily — answer a few questions");
+        EN_TXT.put("去选卡", "Pick a Card");
+        EN_TXT.put("没有符合条件的卡\n换个筛选条件或清空筛选试试", "No cards match\nTry different filters or clear them");
+        EN_TXT.put("下拉检查更新", "Pull to Check Updates"); EN_TXT.put("↑ 松开检查更新", "↑ Release to Check");
+        EN_TXT.put("↓ 下拉检查更新", "↓ Pull to Check Updates"); EN_TXT.put("正在检查数据更新…", "Checking for data updates…");
+        EN_TXT.put("已清空筛选", "Filters Cleared"); EN_TXT.put("已恢复筛选", "Filters Restored");
+        EN_TXT.put("页面打开失败，已回到首页", "Couldn't open that page — back to Home");
+        EN_TXT.put("全部", "All"); EN_TXT.put("列表", "List"); EN_TXT.put("2 列", "2 Columns"); EN_TXT.put("3 列", "3 Columns");
+        EN_TXT.put("评分状态", "Score Status"); EN_TXT.put("已评分", "Scored"); EN_TXT.put("未评分", "Unscored");
+        EN_TXT.put("只看这些评分（可多选）", "Only these scores (multi-select)");
+        EN_TXT.put("分项分随数据更新下发，当前卡库暂无可选维度", "Dimension scores ship with data updates; none available yet");
+        EN_TXT.put("评分由高到低", "Score: High to Low"); EN_TXT.put("评分由低到高", "Score: Low to High");
+        EN_TXT.put("名称", "Name"); EN_TXT.put("银行", "Bank"); EN_TXT.put("待评分", "Unscored");
+        EN_TXT.put("总分待评分", "Not Scored Yet"); EN_TXT.put("已添加", "Added"); EN_TXT.put("已加入", "Added"); EN_TXT.put("加入", "Add");
+        // 卡面/详情展示标签（组织名是 orgLabel 的展示映射，非数据值）
+        EN_TXT.put("银联", "UnionPay"); EN_TXT.put("万事达", "Mastercard");
+        EN_TXT.put("万事达-网联", "Mastercard (NUCC)"); EN_TXT.put("运通-人民币", "Amex (CNY)");
+        EN_TXT.put("借记卡", "Debit Card"); EN_TXT.put("信用卡", "Credit Card");
+        EN_TXT.put("电话卡", "SIM Card"); EN_TXT.put("其他卡", "Other Cards"); EN_TXT.put("银行卡", "Bank Card");
+        EN_TXT.put("预付卡", "Prepaid"); EN_TXT.put("类型未知", "Unknown Type");
+        EN_TXT.put("在发", "Issued"); EN_TXT.put("已停发", "Discontinued");
+        EN_TXT.put("一类", "Class I"); EN_TXT.put("二类", "Class II");
+        EN_TXT.put("全功能账户", "Full-Feature Account"); EN_TXT.put("不标", "No Label");
+        EN_TXT.put("加入后不显示类别标签", "No class label after adding");
+        EN_TXT.put("功能受限，限额以银行规则为准", "Limited features; limits follow issuer rules");
+        EN_TXT.put("一类是全功能账户，存款取现转账消费不限额；二类功能受限，日累计转出等限额以发卡行现行规则为准。不标就不显示标签。",
+            "Class I is a full-feature account (deposits, withdrawals, transfers, spending unlimited). Class II is limited; daily limits follow the issuer's current rules. No label = nothing shown.");
+        EN_TXT.put("发行情况", "Issuance"); EN_TXT.put("币种支持", "Currencies"); EN_TXT.put("支持 3DS", "3DS Support");
+        EN_TXT.put("境外ATM取现手续费", "Overseas ATM Fee"); EN_TXT.put("支持 Apple Pay", "Apple Pay Supported");
+        EN_TXT.put("无货币转换费", "No FX Fee"); EN_TXT.put("无转换费", "No FX Fee"); EN_TXT.put("可网付", "Online Payments");
+        EN_TXT.put("免年费", "No Annual Fee"); EN_TXT.put("多币种", "Multi-Currency"); EN_TXT.put("无", "None");
+        EN_TXT.put("有", "Yes"); EN_TXT.put("支持", "Supported"); EN_TXT.put("不支持", "Not Supported");
+        EN_TXT.put("其他", "Other"); EN_TXT.put("仅限", "Only"); EN_TXT.put("更通用", "More Widely Accepted");
+        EN_TXT.put("留学", "Study Abroad"); EN_TXT.put("留学专属卡", "Student Card");
+        EN_TXT.put("境外取现免发卡行手续费", "No issuer fee for overseas ATM withdrawals");
+        EN_TXT.put("境外取现前几笔免费", "First few overseas ATM withdrawals free");
+        EN_TXT.put("无小额账户管理费", "No small-account management fee");
+        EN_TXT.put("好办理", "Easy to Apply"); EN_TXT.put("钻石 / 无限级", "Diamond / Infinite");
+        EN_TXT.put("白金级", "Platinum"); EN_TXT.put("金卡级", "Gold"); EN_TXT.put("普卡", "Classic");
+        // 我的卡片/仪表盘
+        EN_TXT.put("境外能力", "Overseas Readiness"); EN_TXT.put("3DS 验证", "3DS Verification");
+        EN_TXT.put("境外 ATM 免发卡行费", "Overseas ATM, No Issuer Fee"); EN_TXT.put("最通用", "Most Universal");
+        EN_TXT.put("组织覆盖", "Network Coverage"); EN_TXT.put("组织全覆盖了", "All networks covered");
+        EN_TXT.put("最高档次", "Highest Tier"); EN_TXT.put("卡包比较齐整了", "Your wallet is well rounded");
+        EN_TXT.put("主力框架有了，再补短板就行", "Core cards in place — just fill the gaps");
+        EN_TXT.put("还在起步阶段，先把主力卡配齐", "Just starting — build your core set first");
+        EN_TXT.put("按卡库资料粗算，仅供参考", "Rough estimate from library data, for reference only");
+        EN_TXT.put("还没有加入的卡片，在卡片详情里点「加入我的卡片」就会出现在这里。", "No cards yet. Open a card and tap \"Add to My Cards\" and it will show up here.");
+        EN_TXT.put("还没有自定义卡片，点右下角 ＋ 添加。", "No custom cards yet. Tap + at bottom right to add one.");
+        EN_TXT.put("长按色带可拖动排序", "Long-press a color band to drag and reorder");
+        EN_TXT.put("顺序已保存", "Order Saved"); EN_TXT.put("删除这张自定义卡？", "Delete this custom card?");
+        EN_TXT.put("已删除这张自定义卡", "Custom card deleted"); EN_TXT.put("移除这张", "Remove This Card");
+        EN_TXT.put("我的标记", "My Label"); EN_TXT.put("未标", "Unlabeled"); EN_TXT.put("已取消标记", "Label removed");
+        EN_TXT.put("持卡总览", "Holdings Overview"); EN_TXT.put("还款日历：", "Repayment Calendar:");
+        EN_TXT.put("在卡片编辑里填还款日后，这里按日历列出。", "Add a repayment day in card editing and it will be listed here by date.");
+        EN_TXT.put("持有卡", "Cards Held"); EN_TXT.put("先添加卡片", "Add a card first");
+        EN_TXT.put("堆叠", "Stacked"); EN_TXT.put("平放", "Flat"); EN_TXT.put("收起堆叠", "Collapse Stack"); EN_TXT.put("展开堆叠", "Expand Stack");
+        EN_TXT.put("按银行分组", "Group by Bank"); EN_TXT.put("密度", "Density"); EN_TXT.put("展柜", "Showcase");
+        EN_TXT.put("还没有自己的卡片。\n去全部卡片添加几张，或在我的卡片里加自定义卡，再回来开展柜。", "No cards of your own yet.\nAdd some from All Cards, or add a custom card in My Cards, then come back to the showcase.");
+        // 情景选卡（场景/题目/选项标签均为展示串；选项内部键 o[0]、地区→币种映射不动）
+        EN_TXT.put("为你挑的卡", "Picked for You"); EN_TXT.put("换个场景重新选", "Start Over with Another Scenario");
+        EN_TXT.put("场景", "Scenario"); EN_TXT.put("已选", "Selected");
+        EN_TXT.put("打算拿卡做什么？选个场景往下答，每答完一题上面都会留一条，随时看清走到哪一步。", "What will you use the card for? Pick a scenario and answer a few questions — each answer stays on top so you can track your progress.");
+        EN_TXT.put("出国留学", "Study Abroad"); EN_TXT.put("交学费、生活费、境外刷卡", "Tuition, living costs, overseas spending");
+        EN_TXT.put("出境旅游", "Travel Abroad"); EN_TXT.put("境外刷卡、取现、安全", "Overseas spending, ATM access, security");
+        EN_TXT.put("海淘网购", "Cross-Border Shopping"); EN_TXT.put("外网下单、绑卡支付", "Order overseas, pay by card");
+        EN_TXT.put("日常使用", "Everyday Use"); EN_TXT.put("学生、上班族的主力卡", "Main card for students and workers");
+        EN_TXT.put("去哪个国家 / 地区留学？", "Where will you study?");
+        EN_TXT.put("美国 / 加拿大", "US / Canada"); EN_TXT.put("英国", "UK"); EN_TXT.put("欧洲", "Europe");
+        EN_TXT.put("日本", "Japan"); EN_TXT.put("澳洲 / 新西兰", "Australia / New Zealand"); EN_TXT.put("其他地区", "Other Regions");
+        EN_TXT.put("主要拿这张卡干什么？", "What will you mainly use it for?");
+        EN_TXT.put("交学费、房租等大额支出", "Big payments: tuition, rent");
+        EN_TXT.put("日常吃饭购物", "Daily meals and shopping"); EN_TXT.put("都用，它是主力卡", "Everything — it's my main card");
+        EN_TXT.put("主要去哪儿玩？", "Where are you headed?");
+        EN_TXT.put("东南亚", "Southeast Asia"); EN_TXT.put("港澳台", "HK / Macao / Taiwan"); EN_TXT.put("美洲", "The Americas");
+        EN_TXT.put("最在意哪一点？", "What matters most?");
+        EN_TXT.put("刷卡别被收货币转换费", "No currency conversion fees");
+        EN_TXT.put("境外取现方便便宜", "Cheap, easy overseas ATM access");
+        EN_TXT.put("用卡安全、防盗刷", "Security and fraud protection");
+        EN_TXT.put("常买哪个地区的店？", "Which region's stores do you buy from?");
+        EN_TXT.put("美国", "United States"); EN_TXT.put("哪儿的都有", "All over the place");
+        EN_TXT.put("习惯怎么付？", "How do you usually pay?");
+        EN_TXT.put("直接刷卡付", "Pay by card directly"); EN_TXT.put("绑 Apple Pay / 钱包付", "Apple Pay / wallet");
+        EN_TXT.put("你目前是？", "Which describes you?"); EN_TXT.put("学生", "Student"); EN_TXT.put("上班族", "Working Professional");
+        EN_TXT.put("主要用途是？", "Main use?");
+        EN_TXT.put("网购、外卖、线上支付", "Online shopping, food delivery, online payments");
+        EN_TXT.put("线下吃饭购物", "In-person dining and shopping");
+        EN_TXT.put("能省则省，免年费优先", "Save where possible — no annual fee first");
+        EN_TXT.put("想要什么档次的卡？", "What tier do you want?");
+        EN_TXT.put("都行，合适最重要", "Any — fit matters most"); EN_TXT.put("入门就行，好办好用", "Entry level, easy to get and use");
+        EN_TXT.put("有点档次的，金卡 / 白金级", "Something nicer: Gold / Platinum");
+        EN_TXT.put("高端有实力的，白金、钻石、无限级", "Premium: Platinum, Diamond, Infinite");
+        EN_TXT.put("想要借记卡还是信用卡？", "Debit or credit?");
+        EN_TXT.put("都行，好用优先", "Either — usability first");
+        EN_TXT.put("地区", "Region"); EN_TXT.put("用途", "Use"); EN_TXT.put("在意", "Priority");
+        EN_TXT.put("支付", "Payment"); EN_TXT.put("身份", "Status"); EN_TXT.put("档次", "Tier"); EN_TXT.put("卡种", "Card Type");
+        // 学生区
+        EN_TXT.put("为什么推荐这些卡", "Why These Cards"); EN_TXT.put("推荐理由：", "Why: ");
+        EN_TXT.put("推荐理由按卡库资料整理，仅供参考", "Reasons compiled from library data, for reference only");
+        EN_TXT.put("点卡进详情看完整推荐理由", "Open a card for the full reasoning");
+        EN_TXT.put("第一次办卡", "First Card"); EN_TXT.put("留学生", "Students Abroad"); EN_TXT.put("海淘党", "Cross-Border Shoppers");
+        EN_TXT.put("日常党", "Everyday Users"); EN_TXT.put("二次元", "ACG Fans"); EN_TXT.put("AI 工具党", "AI Tool Users");
+        // 资讯/常识
+        EN_TXT.put("暂时还没有资讯\n过段时间再来看看", "No news yet\nCheck back later");
+        EN_TXT.put("暂时还没有常识词条\n过段时间再来看看", "No basics entries yet\nCheck back later");
+        EN_TXT.put("新卡发布、权益调整、停发换卡——公开信息整理，仅供参考", "New cards, benefit changes, discontinuations — compiled from public sources, for reference only");
+        EN_TXT.put("账户分类、支付验证与费用等常见概念的简短说明", "Short explainers on account classes, payment verification, fees and more");
+        EN_TXT.put("具体规则以发卡行与卡组织现行说明为准。", "Always follow the issuer's and network's current rules.");
+        EN_TXT.put("暂无原文链接", "No source link"); EN_TXT.put("来源：", "Source: ");
+        // 工具页：活动/保号/订阅/足迹
+        EN_TXT.put("活动追踪", "Activity Tracker"); EN_TXT.put("新增活动", "New Activity"); EN_TXT.put("新增活动", "New Activity");
+        EN_TXT.put("开卡任务 / 刷满次数 / 消费达标，纯本机记录。", "Sign-up tasks, swipe targets and spending goals — stored on this device only.");
+        EN_TXT.put("还没有活动\n点下方新增一条开卡任务或消费达标。", "No activities yet\nAdd a sign-up task or spending goal below.");
+        EN_TXT.put("活动名，如：开卡礼", "Activity name, e.g. sign-up gift"); EN_TXT.put("卡名（可空）", "Card name (optional)");
+        EN_TXT.put("目标次数/金额，如：3", "Target count/amount, e.g. 3"); EN_TXT.put("请填写活动名", "Please enter an activity name");
+        EN_TXT.put("完成打勾", "Mark Done"); EN_TXT.put("取消完成", "Unmark Done");
+        EN_TXT.put("保号管家", "SIM Keeper"); EN_TXT.put("到期提醒", "Expiry Reminder"); EN_TXT.put("未设日期", "No Date Set");
+        EN_TXT.put("点「已保号」会按周期自动顺延下次日期；号码与费用只存本机。", "Tapping \"Kept\" rolls the next date forward by the cycle. Numbers and fees stay on this device.");
+        EN_TXT.put("已保号 · 顺延", "Kept · Rolled Forward"); EN_TXT.put("添加保号卡", "Add SIM Card"); EN_TXT.put("编辑保号卡", "Edit SIM Card");
+        EN_TXT.put("手机号码", "Phone Number"); EN_TXT.put("国家 / 地区", "Country / Region");
+        EN_TXT.put("下次保号日期（yyyy-MM-dd）", "Next keep-alive date (yyyy-MM-dd)"); EN_TXT.put("保号动作", "Keep-Alive Action");
+        EN_TXT.put("费用（可空）", "Fee (optional)"); EN_TXT.put("周期（天）", "Cycle (days)");
+        EN_TXT.put("请至少填号码或运营商", "Enter at least a number or carrier"); EN_TXT.put("已添加保号卡", "SIM card added");
+        EN_TXT.put("删除这张保号卡", "Delete This SIM Card"); EN_TXT.put("日期请用 yyyy-MM-dd", "Use yyyy-MM-dd for dates");
+        EN_TXT.put("充值", "Top Up"); EN_TXT.put("拨打", "Call"); EN_TXT.put("登录App", "Open the App");
+        EN_TXT.put("当天", "Same Day"); EN_TXT.put("未添加", "Not Added"); EN_TXT.put("未记录", "Not Recorded"); EN_TXT.put("未登记", "Not Registered");
+        EN_TXT.put("订阅跟随", "Subscriptions"); EN_TXT.put("订阅", "Subscription"); EN_TXT.put("添加订阅", "Add Subscription"); EN_TXT.put("编辑订阅", "Edit Subscription");
+        EN_TXT.put("还没有订阅", "No subscriptions yet"); EN_TXT.put("还没有订阅\n点上方添加，填名称、金额、周期和下次扣款日。", "No subscriptions yet\nAdd one above with name, amount, cycle and next charge date.");
+        EN_TXT.put("订阅名称*", "Subscription Name*"); EN_TXT.put("金额（可空）", "Amount (optional)");
+        EN_TXT.put("扣款周期", "Billing Cycle"); EN_TXT.put("自定义周期（天，选自定义时用）", "Custom cycle (days, when Custom is chosen)");
+        EN_TXT.put("下次扣款日期（yyyy-MM-dd）", "Next charge date (yyyy-MM-dd)"); EN_TXT.put("续费方式", "Renewal Method");
+        EN_TXT.put("自动续费", "Auto-Renew"); EN_TXT.put("手动续费", "Manual Renew");
+        EN_TXT.put("请填订阅名称", "Please enter a subscription name"); EN_TXT.put("已添加订阅", "Subscription added");
+        EN_TXT.put("删除这项订阅", "Delete This Subscription"); EN_TXT.put("今天扣款", "Charged Today");
+        EN_TXT.put("已扣款 · 顺延", "Charged · Rolled Forward"); EN_TXT.put("已续费 · 顺延", "Renewed · Rolled Forward");
+        EN_TXT.put("点「顺延」会按周期推进下次扣款日；订阅信息只存本机。", "Tapping \"Roll Forward\" advances the next charge date by the cycle. Subscription data stays on this device.");
+        EN_TXT.put("每月", "Monthly"); EN_TXT.put("每周", "Weekly"); EN_TXT.put("每季", "Quarterly"); EN_TXT.put("每年", "Yearly");
+        EN_TXT.put("备注（可空）", "Note (optional)"); EN_TXT.put("待定", "TBD");
+        EN_TXT.put("玩卡足迹", "Card Journey"); EN_TXT.put("添加足迹", "Add Entry"); EN_TXT.put("编辑足迹", "Edit Entry");
+        EN_TXT.put("还没有足迹", "No entries yet"); EN_TXT.put("还没有足迹\n点上方添加，记下第一次申请、开卡或提额。", "No entries yet\nAdd one above — your first application, approval or limit raise.");
+        EN_TXT.put("当前筛选下没有记录\n换个类型或结果看看。", "Nothing under this filter\nTry another type or outcome.");
+        EN_TXT.put("记录申请、开卡、提额这些持卡事件，只存本机，不抓银行数据", "Log applications, approvals and limit raises. Stored on-device only; no bank data is fetched.");
+        EN_TXT.put("按类型", "By Type"); EN_TXT.put("按结果", "By Outcome"); EN_TXT.put("点此编辑", "Tap to Edit");
+        EN_TXT.put("事件类型", "Event Type"); EN_TXT.put("结果", "Outcome"); EN_TXT.put("日期（yyyy-MM-dd）", "Date (yyyy-MM-dd)");
+        EN_TXT.put("申请", "Applied"); EN_TXT.put("开卡", "Approved"); EN_TXT.put("提额", "Limit Raise"); EN_TXT.put("提临额", "Temporary Raise");
+        EN_TXT.put("成功", "Success"); EN_TXT.put("拒绝", "Rejected");
+        EN_TXT.put("请填卡片名称", "Please enter a card name"); EN_TXT.put("已添加足迹", "Entry added"); EN_TXT.put("删除这条足迹", "Delete This Entry");
+        // 设置页长尾（分区标题/行标题走 STR 或本表；玻璃参数文案只译字面，参数本身未动）
+        EN_TXT.put("高刷新率", "High Refresh Rate"); EN_TXT.put("把刷新率拉到屏幕最高档（耗电略增）", "Push refresh rate to the screen maximum (slightly more battery)");
+        EN_TXT.put("玻璃效果", "Glass Effect");
+        EN_TXT.put("已自动停用（异常后回落半透，不影响使用），打开可重试", "Auto-disabled after an error (fell back to translucent). Turn on to retry");
+        EN_TXT.put("已关闭，玻璃件使用静态半透染色", "Off — glass parts use a static translucent tint");
+        EN_TXT.put("已开启，底栏与弹窗按身后内容实时磨砂", "On — dock and popups frost what's behind them in real time");
+        EN_TXT.put("启动时自动检测更新", "Check for Updates at Launch");
+        EN_TXT.put("开启只检测并提示，不自动应用；关闭则仅手动检查", "Only checks and notifies, never auto-applies; off = manual checks only");
+        EN_TXT.put("最近一次崩溃记录", "Latest Crash Log"); EN_TXT.put("复制记录", "Copy Log"); EN_TXT.put("清除记录", "Clear Log");
+        EN_TXT.put("崩溃记录已复制", "Crash log copied"); EN_TXT.put("崩溃记录已清除", "Crash log cleared"); EN_TXT.put("复制失败", "Copy failed");
+        EN_TXT.put("迁移进度", "Migration Progress"); EN_TXT.put("透明程度", "Transparency");
+        EN_TXT.put("模糊、饱和、染色与提亮成套调节，默认毛玻璃", "Blur, saturation, tint and lift adjust as a set; frosted by default");
+        EN_TXT.put("玻璃效果已关闭，开启后可调", "Glass is off — turn it on to adjust");
+        EN_TXT.put("薄透", "Sheer"); EN_TXT.put("毛玻璃", "Frosted");
+        EN_TXT.put("只改选中态、开关、链接与强调色，不改卡面颜色", "Only selection states, switches, links and accents — card faces untouched");
+        EN_TXT.put("自选卡面配色", "Custom Placeholder Colors");
+        EN_TXT.put("开启后在无图卡详情里逐张换颜色；关闭用自动配色", "When on, recolor image-less cards one by one in details; off uses auto colors");
+        EN_TXT.put("卡面颜色", "Placeholder Color"); EN_TXT.put("卡面颜色已保存", "Placeholder color saved");
+        EN_TXT.put("当前跟随系统自动配色", "Currently following auto colors");
+        EN_TXT.put("跟随系统（清掉自选）", "Follow System (clear custom)"); EN_TXT.put("已回到系统配色", "Back to system colors");
+        EN_TXT.put("先在设置开启自选卡面配色", "Enable custom placeholder colors in Settings first");
+        EN_TXT.put("先在设置打开自选卡面配色", "Enable custom placeholder colors in Settings first");
+        EN_TXT.put("先导入一个字体文件再用自定义", "Import a font file before using Custom");
+        EN_TXT.put("导入字体文件", "Import Font File"); EN_TXT.put("删除自定义字体", "Delete Custom Font");
+        EN_TXT.put("删掉后回到默认字体 ›", "Delete to return to the default font ›");
+        EN_TXT.put("选择 .ttf / .otf 字体文件 ›", "Choose a .ttf / .otf font file ›");
+        EN_TXT.put("正在导入字体…", "Importing font…"); EN_TXT.put("已取消导入字体", "Font import cancelled");
+        EN_TXT.put("这个字体文件读不了，已回退软件字体", "Couldn't read that font file — reverted to the software font");
+        EN_TXT.put("导入失败，已回退软件字体", "Import failed — reverted to the software font");
+        EN_TXT.put("只支持 .ttf / .otf 字体文件，已取消导入", "Only .ttf / .otf fonts are supported — import cancelled");
+        EN_TXT.put("读不到这个文件，已回退软件字体", "Couldn't read that file — reverted to the software font");
+        EN_TXT.put("字体文件太大了（上限 20MB），没有导入", "Font file too large (20MB max) — not imported");
+        EN_TXT.put("这个文件是空的，已回退软件字体", "That file is empty — reverted to the software font");
+        EN_TXT.put("自定义字体已删除，已回退软件字体", "Custom font deleted — reverted to the software font");
+        EN_TXT.put("打不开文件选择器", "Couldn't open the file picker");
+        EN_TXT.put("版本信息", "Version Info"); EN_TXT.put("应用简介", "About This App");
+        EN_TXT.put("数据来源与参考来源", "Data & References"); EN_TXT.put("版本与更新日志", "Version & Changelog");
+        EN_TXT.put("查看更新日志 ›", "View Changelog ›"); EN_TXT.put("查看更新日志", "Changelog");
+        EN_TXT.put("收起日志", "Collapse Log"); EN_TXT.put("更新日志读取失败", "Couldn't read the changelog");
+        EN_TXT.put("支持作者", "Support the Author"); EN_TXT.put("请作者喝杯咖啡", "Buy the Author a Coffee");
+        EN_TXT.put("如果卡盒对你有用，欢迎赞助支持开发～", "If CardBox helps you, consider supporting its development.");
+        EN_TXT.put("收款码加载失败", "Couldn't load the payment code");
+        EN_TXT.put("保存二维码到相册", "Save QR Code to Album"); EN_TXT.put("赞助二维码已保存到相册", "QR code saved to album");
+        EN_TXT.put("没有相册写入权限，二维码未保存", "No album write permission — QR code not saved");
+        EN_TXT.put("应用版本", "App Version"); EN_TXT.put("数据版本", "Data Version");
+        // 详情/加卡/表单/BIN/NFC
+        EN_TXT.put("查看详情", "View Details"); EN_TXT.put("添加到我的卡片", "Add to My Cards");
+        EN_TXT.put("从我的卡片移除", "Remove from My Cards"); EN_TXT.put("加入我的卡片", "Add to My Cards");
+        EN_TXT.put("已加入我的卡片", "Added to My Cards"); EN_TXT.put("这张卡已经在我的卡片里了", "This card is already in My Cards");
+        EN_TXT.put("已加入我的卡片，可在详情里标一类/二类", "Added — label it Class I / II in details");
+        EN_TXT.put("卡片信息", "Card Info"); EN_TXT.put("卡片名称", "Card Name"); EN_TXT.put("发卡银行", "Issuing Bank");
+        EN_TXT.put("运营商", "Carrier"); EN_TXT.put("卡组织", "Card Network"); EN_TXT.put("发行方", "Issuer");
+        EN_TXT.put("账户类别", "Account Class"); EN_TXT.put("备注", "Note"); EN_TXT.put("信用额度", "Credit Limit");
+        EN_TXT.put("账单日", "Statement Day"); EN_TXT.put("还款日", "Repayment Day"); EN_TXT.put("卡号", "Card Number");
+        EN_TXT.put("隐藏", "Hide"); EN_TXT.put("卡号只存本机，离开本页自动隐藏。", "Card numbers stay on this device and hide automatically when you leave this page.");
+        EN_TXT.put("在卡库里搜这家银行", "Search the Library for This Bank"); EN_TXT.put("删除这张卡", "Delete This Card");
+        EN_TXT.put("未填发卡行", "No issuing bank"); EN_TXT.put("未填运营商", "No carrier"); EN_TXT.put("未填发行方", "No issuer");
+        EN_TXT.put("添加自定义卡片", "Add Custom Card"); EN_TXT.put("编辑自定义卡片", "Edit Custom Card");
+        EN_TXT.put("卡片名称*", "Card Name*"); EN_TXT.put("账户类别（可不选）", "Account Class (optional)");
+        EN_TXT.put("卡面样式", "Card Face Style"); EN_TXT.put("可空", "Optional");
+        EN_TXT.put("NFC 贴卡识别（自动填卡组织 / 类型）", "NFC Tap-to-Read (auto-fills network / type)");
+        EN_TXT.put("完整卡号（可空，只存本机）", "Full card number (optional, on-device only)");
+        EN_TXT.put("信用额度（元，可空）", "Credit limit (CNY, optional)");
+        EN_TXT.put("账单日 / 还款日（几号，可空）", "Statement / repayment day (optional)");
+        EN_TXT.put("请填写卡片名称", "Please enter a card name"); EN_TXT.put("保存失败，请稍后再试", "Save failed — try again later");
+        EN_TXT.put("在线查询卡信息", "Online Card Lookup");
+        EN_TXT.put("输入银行卡号前 6–8 位，在线查询卡组织、发卡行等信息，可一键加入我的卡片。", "Enter the first 6–8 digits of a card number to look up its network and issuer online. One tap adds it to My Cards.");
+        EN_TXT.put("请输入 6–8 位数字 BIN", "Enter a 6–8 digit BIN"); EN_TXT.put("查询中…", "Looking up…");
+        EN_TXT.put("查不到这个 BIN 的信息，换个试试。", "No info for this BIN — try another.");
+        EN_TXT.put("类型", "Type"); EN_TXT.put("品牌", "Brand"); EN_TXT.put("是否预付", "Prepaid"); EN_TXT.put("发卡行", "Issuing Bank");
+        EN_TXT.put("发卡行城市", "Issuer City"); EN_TXT.put("发卡行网址", "Issuer Website"); EN_TXT.put("发卡行电话", "Issuer Phone");
+        EN_TXT.put("国家", "Country"); EN_TXT.put("是", "Yes"); EN_TXT.put("否", "No"); EN_TXT.put("未知组织", "Unknown Network");
+        EN_TXT.put("这台手机没有 NFC 功能", "This phone has no NFC");
+        EN_TXT.put("NFC 还没打开，去系统设置打开后再试", "NFC is off — enable it in system settings and try again");
+        EN_TXT.put("NFC 启动失败", "NFC failed to start");
+        EN_TXT.put("把银行卡贴到手机背面 NFC 区域…", "Hold the card against the NFC area on the back of your phone…");
+        EN_TXT.put("超时没等到卡，识别已取消", "Timed out waiting for a card — recognition cancelled");
+        EN_TXT.put("没读到芯片卡，把卡贴紧手机背面再试", "No chip card read — hold it firmly against the back and try again");
+        EN_TXT.put("读卡失败，把卡贴紧 NFC 区域再试", "Read failed — hold the card against the NFC area and try again");
+        EN_TXT.put("读到了卡，但没找到银行卡应用", "Card read, but no banking app found on it");
+        EN_TXT.put("卡库里有这张卡", "This card is in the library");
+        // 扩展搜卡/更新/欢迎
+        EN_TXT.put("搜冷门卡、地方银行与合作社卡。扩展索引只存文字、随数据更新增补，加入后只存本机；无图卡先用占位面，规格空缺会如实标注。",
+            "Search obscure cards, local banks and cooperatives. The extended index is text-only and grows with data updates; added cards stay on-device. Image-less cards use a placeholder face and missing specs are marked honestly.");
+        EN_TXT.put("扩展卡库暂时拉不到（两条线路都没通），检查网络后点下方「刷新索引」再试。", "The extended library is unreachable (both routes failed). Check your network and tap \"Refresh Index\" below.");
+        EN_TXT.put("扩展索引暂时拉不到 · 本地核心库 ", "Extended index unreachable · Local core library ");
+        EN_TXT.put("扩展卡库暂无内容", "The extended library is empty");
+        EN_TXT.put("正在拉取扩展卡库…", "Fetching the extended library…");
+        EN_TXT.put("正在拉取扩展索引… 已缓存 ", "Fetching extended index… Cached ");
+        EN_TXT.put("检查更新失败，请检查网络", "Update check failed — check your network");
+        EN_TXT.put("检查失败，请稍后再试", "Check failed — try again later");
+        EN_TXT.put("有新数据", "New Data Available"); EN_TXT.put("更新数据", "Update Data");
+        EN_TXT.put("确定要更新数据吗？更新会覆盖当前卡库数据；你自己添加的卡片和收藏不会被改动，重复的卡会被合并删除。",
+            "Update data now? This overwrites the current library data. Your own cards and favorites won't be touched; duplicates are merged and removed.");
+        EN_TXT.put("正在更新数据…", "Updating data…");
+        EN_TXT.put("你好", "Hello"); EN_TXT.put("卡盒已经准备好了，慢慢挑你的卡。", "CardBox is ready. Take your time picking your cards.");
+        EN_TXT.put("开始使用", "Get Started"); EN_TXT.put("轻触任意处进入", "Tap anywhere to enter");
+        EN_TXT.put("堆叠试玩", "Try Stacked"); EN_TXT.put("平放试玩", "Try Flat");
+        EN_TXT.put("↑ 回到顶部", "↑ Back to Top"); EN_TXT.put("打不开这个链接", "Couldn't open that link");
+        EN_TXT.put("发短信", "Send SMS"); EN_TXT.put("已顺延到 ", "Rolled forward to ");
+        EN_TXT.put("数据更新", "Data Update");
+        EN_TXT.put("填上金额后这里会折算每月约花多少 · 只存本机、不做记账流水", "Add amounts and this will estimate your monthly spend. On-device only — not a ledger.");
+        EN_TXT.put("我的卡片页的纯卡面展示（堆叠 / 平放自由画布）", "Pure card-face showcase on My Cards (stacked / flat free canvas)");
+        EN_TXT.put("电话卡 / eSIM 保号到期管理，关掉后入口不出现", "SIM / eSIM keep-alive expiry manager; the entry hides when off");
+        EN_TXT.put("订阅扣款日与金额跟随，关掉后入口不出现", "Track subscription charge dates and amounts; the entry hides when off");
+        EN_TXT.put("申请 / 开卡 / 提额等持卡事件时间线，关掉后入口不出现", "Timeline of applications, approvals and limit raises; the entry hides when off");
+        EN_TXT.put("我的卡片页的额度汇总与还款日历", "Limit summary and repayment calendar on My Cards");
+        EN_TXT.put("开卡任务与刷卡达标登记，关掉后入口不出现", "Sign-up tasks and spending-goal tracking; the entry hides when off");
+    }
+    // Q106：分数文案（中文 %.1f分 / 英文纯数字，调用方自带 Score 前缀）
+    String fmtScore(double v) { return String.format(java.util.Locale.US, isEn() ? "%.1f" : "%.1f分", v); }
     String S(String key) {
         String[] v = STR.get(key);
         if (v == null) return key;
@@ -1089,6 +1376,7 @@ public class MainActivity extends Activity {
             appLangPref = prefs == null ? "system" : prefs.getString("app_lang", "system");
             if (!"zh".equals(appLangPref) && !"en".equals(appLangPref)) appLangPref = "system";
         } catch (Throwable ignored) { appLangPref = "system"; }
+        EN_MODE = isEn(); // Q106：与 isEn() 同口径（显式 en，或跟随系统且系统为英文）
     }
     void refreshNavLabels() {
         try {
@@ -2486,6 +2774,8 @@ public class MainActivity extends Activity {
     // Q42：输入框/系统按钮等不走 tv() 的文字控件统一挂当前无衬线，禁衬线落点
     void applyUiFont(TextView t, int weight) { try { t.setTypeface(weightTypeface(t.getContext(), weight)); } catch (Throwable ignored) {} }
     static TextView tvW(Context c, String s, float sp, int color, int weight) {
+        // Q106（2.20）：EN 模式下纯展示串走 EN_TXT 精确替换（数据值不在表中、原样直出）
+        if (EN_MODE && s != null) { String t = EN_TXT.get(s); if (t != null) s = t; }
         TextView t = new TextView(c);
         t.setText(s); t.setTextSize(sp * uiScale); t.setTextColor(color);
         t.setTypeface(weightTypeface(c, weight));
@@ -3917,7 +4207,7 @@ public class MainActivity extends Activity {
         saveMineEntries();
         pages.remove("mine");
         if (uiRefresh != null) uiRefresh.run();
-        showFloatToast("已加入我的卡片：" + c.name);
+        showFloatToast((isEn() ? "Added to My Cards: " : "已加入我的卡片：") + c.name);
     }
 
     void removeMineEntriesForCard(final Card c, final Runnable uiRefresh) {
@@ -3932,7 +4222,7 @@ public class MainActivity extends Activity {
         saveMineEntries();
         pages.remove("mine");
         if (uiRefresh != null) uiRefresh.run();
-        showFloatToast("已从我的卡片移除：" + c.name, "撤销", () -> {
+        showFloatToast((isEn() ? "Removed from My Cards: " : "已从我的卡片移除：") + c.name, "撤销", () -> {
             for (int i = 0; i < snap.size(); i++) {
                 int at = Math.min(snapIdx.get(i), mineEntries.size());
                 mineEntries.add(at, snap.get(i));
@@ -3940,7 +4230,7 @@ public class MainActivity extends Activity {
             saveMineEntries();
             pages.remove("mine");
             if (uiRefresh != null) uiRefresh.run();
-            showFloatToast("已恢复：" + c.name);
+            showFloatToast((isEn() ? "Restored: " : "已恢复：") + c.name);
         });
     }
 
@@ -4540,7 +4830,7 @@ public class MainActivity extends Activity {
         // which carry z-index 1 and only change text color/weight when .on). The old elevation 2dp raised the
         // pill above the row and painted over the selected cell's icon+label - the "empty light block" bug.
         if (Build.VERSION.SDK_INT >= 21) navIndicator.setElevation(0f);
-        FrameLayout.LayoutParams indLp = new FrameLayout.LayoutParams(dp(this, 60), dp(this, 52));
+        FrameLayout.LayoutParams indLp = new FrameLayout.LayoutParams(dp(this, 56), dp(this, 48)); // Q106：占位尺寸贴近 layoutNavIndicator 实测口径，冷启首帧不跳形
         navBar.addView(navIndicator, indLp);
 
         navRow = new LinearLayout(this);
@@ -4569,7 +4859,7 @@ public class MainActivity extends Activity {
             label.setGravity(Gravity.CENTER);
             LinearLayout.LayoutParams llp = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-            llp.topMargin = dp(this, 2);
+            llp.topMargin = dp(this, 3); // Q106（2.20）：图标与文字间距 2→3dp，基线不再贴死图标
             item.addView(label, llp);
             // Q38 (FClash-style lens, mechanism re-implemented by hand): press starts the lens gliding,
             // lifting the finger commits the page switch on spring settle - never mid-flight.
@@ -4757,19 +5047,22 @@ public class MainActivity extends Activity {
             return;
         }
         navIndicatorRetry = 0;
-        // 药丸尺寸随所选页签实测：宽=页签宽-4dp；纵向按视觉块（19:37 定点①）——
-        // 罩住图标+文字整块、以块中心为心、高度随块走，仅受栏高约束不再钳矮一截；
-        // 量不到视觉块时回落旧口径（整格中心＋40–52dp 钳高，Q99 防探出 dock）。
-        int w = Math.max(dp(this, 40), it.getWidth() - dp(this, 4));
+        // 药丸尺寸随所选页签实测：纵向按视觉块（19:37 定点①）——罩住图标+文字整块、
+        // 以块中心为心、高度随块走，仅受栏高约束不再钳矮一截；量不到视觉块时回落整格中心。
+        // Q106（2.20，用户 22:01 点名胶囊贴身过紧、上下留白不匀）：只动比例件——宽由
+        // 格宽−4dp 改 −12dp（左右各 6dp 呼吸），高由视觉块＋10dp 改 ＋14dp（上下各 7dp），
+        // 栏内上限由栏高−6dp 收为 −10dp（胶囊与栏身上下至少留 5dp 空）；玻璃、落位插值、
+        // 弹簧/拖动跟随一律未动。
+        int w = Math.max(dp(this, 40), it.getWidth() - dp(this, 12));
         float[] blk = navVisualBlockY(it);
         float cy; int h;
         if (blk != null) {
             cy = (blk[0] + blk[1]) / 2f;
-            int maxH = navBar.getHeight() > 0 ? navBar.getHeight() - dp(this, 6) : dp(this, 58);
-            h = Math.max(dp(this, 40), Math.min(maxH, Math.round(blk[1] - blk[0]) + dp(this, 10)));
+            int maxH = navBar.getHeight() > 0 ? navBar.getHeight() - dp(this, 10) : dp(this, 58);
+            h = Math.max(dp(this, 40), Math.min(maxH, Math.round(blk[1] - blk[0]) + dp(this, 14)));
         } else {
             cy = navItemCenterY(it);
-            h = Math.max(dp(this, 40), Math.min(dp(this, 52), it.getHeight() - dp(this, 4)));
+            h = Math.max(dp(this, 40), Math.min(dp(this, 52), it.getHeight() - dp(this, 8)));
         }
         FrameLayout.LayoutParams lp = (FrameLayout.LayoutParams) navIndicator.getLayoutParams();
         int wantTop = Math.round(cy - h / 2f);
@@ -5917,7 +6210,11 @@ public class MainActivity extends Activity {
                 btnSheenTop = sheenTop; btnSheenBot = sheenBot;
             }
             cv.drawCircle(cx, cy, r, sheen);
-            sheen.setShader(null);
+            // Q106（2.20）黑钮根因：2.19 零分配把画笔提为字段后，此处又 setShader(null)——
+            // 坐标缓存命中时不再重建 shader，btnSheen 退回 Paint 默认不透明黑（0xFF000000），
+            // 第二帧起整圆被黑填盖住磨砂与染色，只剩描边与字形（用户 21:57 实拍纯黑圆）。
+            // 旧实现每帧新建 Paint 并带 shader 画完即弃；btnSheen 专用于此，保留 shader
+            // 不泄漏到别处，与 Q47 定版像素一致。切勿再在此处置空。
             cv.restore();
             // 1dp 细描边（白色半透，玻璃边缘口径）
             p.setStyle(Paint.Style.STROKE);
@@ -6105,10 +6402,10 @@ public class MainActivity extends Activity {
         List<String> selDims = showScoreDims ? selectedScoreDimsOrdered() : new ArrayList<>();
         if (showScoreDims && !selDims.isEmpty()) {
             // Q67：选了维度后总分退居其次（灰胶囊），分项分在下方单独成流展示。
-            chips.addView(chip(c.hasScore ? String.format(java.util.Locale.US, "总分 %.1f", c.score) : "总分待评分",
+            chips.addView(chip(c.hasScore ? (isEn() ? "Score " : "总分 ") + String.format(java.util.Locale.US, "%.1f", c.score) : "总分待评分",
                 Color.rgb(0xEE, 0xF0, 0xF3), Color.rgb(0x63, 0x63, 0x66), chipSp));
         } else {
-            chips.addView(chip(String.format(java.util.Locale.US, "%.1f分", c.score), accentSoftBg(), accentColor(), chipSp));
+            chips.addView(chip(fmtScore(c.score), accentSoftBg(), accentColor(), chipSp));
         }
         chips.addView(chip("已停发".equals(c.status) ? "已停发" : "在发",
             "已停发".equals(c.status) ? Color.rgb(0xF3, 0xE8, 0xE8) : Color.rgb(0xE6, 0xF6, 0xEC),
@@ -6343,15 +6640,12 @@ public class MainActivity extends Activity {
         rootView.addView(clone, clp);
         cardMenuClone = clone;
 
-        // 贴卡小菜单（对照 .card-pop：宽 224、内边距 6、圆角 16、白色半透、深柔影）
+        // 贴卡小菜单（对照 .card-pop：宽 224、内边距 6；Q106（2.20）单层化后圆角与面归 popWrap）
         LinearLayout pop = new LinearLayout(this);
         pop.setOrientation(LinearLayout.VERTICAL);
-        GradientDrawable pbg = new GradientDrawable();
-        pbg.setColor(Color.argb(172, 255, 255, 255)); // Q29：198→172 减薄，冻结模糊的彩色透进来
-        pbg.setCornerRadius(dp(this, 16));
-        pbg.setStroke(dp(this, 1), Color.argb(150, 255, 255, 255)); // Q94 铺开：黑边扫除——深灰描边改白色发丝边
-        pop.setBackground(pbg);
-        if (Build.VERSION.SDK_INT >= 21) pop.setElevation(dp(this, 24));
+        // Q106（2.20，用户点名双层）：pop 不再自带 argb(172) 半透明白板＋白描边——面与
+        // 阴影移到外层 popWrap（glassLayer＋glassWindowTint(28) 唯一面、elevation 24），
+        // pop 只作透明内容架内缩 cmPad，不再「框里套板」（与 ⋯ 菜单同一口径）。
         pop.setPadding(dp(this, 6), dp(this, 6), dp(this, 6), dp(this, 6));
         pop.setClickable(true);
 
@@ -6381,15 +6675,11 @@ public class MainActivity extends Activity {
         // 定位：优先贴在卡下方 8dp，放不下改上方；左右夹在屏内 12dp（对照 openCardMenu 的 W=224 定位）
         int popW = dp(this, 224);
         // Q11：菜单入树前先备好冻结模糊层（快照含轻暗遮罩之下的页面，与 backdrop-filter 叠序一致）
-        // Q104（2.18）：玻璃原与 pop 严丝合缝，pop elevation 24 的阴影带/圆角外露生肉（与 ⋯ 菜单
-        // 右沿同病）。玻璃外扩 12dp 盖住含阴影占位，圆角按 16+12 同心；pop 本体落位不动，采样在
-        // onDraw 按玻璃件实测坐标算，外扩区对位天然成立。
+        // Q106（2.20）单层化：玻璃不再作 pop 的兄弟外框——popWrap 一件合一：glassLayer(28)
+        // 糊层＋glassWindowTint(28) 染色面铺满整 wrap 作唯一面，pop 透明内缩 cmPad 只放行，
+        // 阴影归 wrap elevation 24（落位几何与 Q104 外扩占位等值，右沿不露生肉）；关闭两路
+        // removeViewNow 对 cardMenuGlass=null 已核安全（形参判空）。
         final int cmPad = dp(this, 12);
-        final ImageView menuGlass = glassLayer(pop, 28, false);
-        cardMenuGlass = menuGlass;
-        FrameLayout.LayoutParams plp = new FrameLayout.LayoutParams(popW, ViewGroup.LayoutParams.WRAP_CONTENT);
-        rootView.addView(pop, plp);
-        cardMenuPop = pop;
         pop.measure(View.MeasureSpec.makeMeasureSpec(popW, View.MeasureSpec.AT_MOST),
             View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED));
         int popH = pop.getMeasuredHeight();
@@ -6397,15 +6687,29 @@ public class MainActivity extends Activity {
         int pl = Math.max(dp(this, 12), Math.min(rootW - popW - dp(this, 12), left + w / 2 - popW / 2));
         boolean below = top + h + dp(this, 8) + popH <= rootH - dp(this, 12);
         int pt = below ? top + h + dp(this, 8) : Math.max(dp(this, 12), top - dp(this, 8) - popH);
-        plp.leftMargin = pl; plp.topMargin = pt;
-        pop.setLayoutParams(plp);
-        FrameLayout.LayoutParams mglp = new FrameLayout.LayoutParams(popW + cmPad * 2, popH + cmPad * 2);
-        mglp.leftMargin = Math.max(0, pl - cmPad); mglp.topMargin = Math.max(0, pt - cmPad);
-        rootView.addView(menuGlass, Math.max(0, rootView.indexOfChild(pop)), mglp);
-        pop.setPivotX(Math.max(0, Math.min(popW, left + w / 2 - pl)));
-        pop.setPivotY(below ? 0 : popH);
-        pop.setAlpha(0f); pop.setScaleX(0.94f); pop.setScaleY(0.94f);
-        pop.animate().alpha(1f).scaleX(1f).scaleY(1f)
+        final FrameLayout popWrap = new FrameLayout(this);
+        glassClip(popWrap, 28, false);
+        if (Build.VERSION.SDK_INT >= 21) popWrap.setElevation(dp(this, 24));
+        popWrap.addView(glassLayer(popWrap, 28, false), new FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        View popFace = new View(this);
+        popFace.setBackground(glassWindowTint(28, false));
+        popFace.setClickable(false);
+        popFace.setFocusable(false);
+        popWrap.addView(popFace, new FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        FrameLayout.LayoutParams popInWrap = new FrameLayout.LayoutParams(popW, popH);
+        popInWrap.leftMargin = cmPad; popInWrap.topMargin = cmPad;
+        popWrap.addView(pop, popInWrap);
+        FrameLayout.LayoutParams wlp = new FrameLayout.LayoutParams(popW + cmPad * 2, popH + cmPad * 2);
+        wlp.leftMargin = Math.max(0, pl - cmPad); wlp.topMargin = Math.max(0, pt - cmPad);
+        rootView.addView(popWrap, wlp);
+        cardMenuPop = popWrap;
+        cardMenuGlass = null;
+        popWrap.setPivotX(Math.max(0, Math.min(popW + cmPad * 2, left + w / 2 - Math.max(0, pl - cmPad))));
+        popWrap.setPivotY(below ? cmPad : cmPad + popH);
+        popWrap.setAlpha(0f); popWrap.setScaleX(0.94f); popWrap.setScaleY(0.94f);
+        popWrap.animate().alpha(1f).scaleX(1f).scaleY(1f)
             .setDuration(ANIM_DUR_CARDMENU_IN).setInterpolator(ANIM_ENTER).start();
 
         // 菜单出现时底栏让开，不挡靠近底部的卡（对照 setDockVisible(false)）
@@ -6643,7 +6947,7 @@ public class MainActivity extends Activity {
         int debit = 0, stopped = 0;
         for (Card c : Store.all) { if (!c.isCredit()) debit++; if ("已停发".equals(c.status)) stopped++; }
 
-        TextView stats = tv(this, Store.all.size() + " 张卡 · " + banks.size() + " 家银行", 12, colText2(), false);
+        TextView stats = tv(this, isEn() ? Store.all.size() + " cards · " + banks.size() + " banks" : Store.all.size() + " 张卡 · " + banks.size() + " 家银行", 12, colText2(), false);
         LinearLayout.LayoutParams stlp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         stlp.topMargin = dp(this, 8);
         col.addView(stats, stlp);
@@ -6703,7 +7007,7 @@ public class MainActivity extends Activity {
         hero.addView(bigRow);
         java.util.Set<String> orgs = new java.util.HashSet<>();
         for (Card c : Store.all) if (c.org != null && !c.org.isEmpty()) orgs.add(c.org);
-        hero.addView(tv(this, banks.size() + " 家银行 · " + orgs.size() + " 大卡组织", 13, Color.argb(224, 255, 255, 255), false));
+        hero.addView(tv(this, isEn() ? banks.size() + " banks · " + orgs.size() + " networks" : banks.size() + " 家银行 · " + orgs.size() + " 大卡组织", 13, Color.argb(224, 255, 255, 255), false));
         LinearLayout tiles = new LinearLayout(this);
         tiles.setOrientation(LinearLayout.HORIZONTAL);
         LinearLayout.LayoutParams tlp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
@@ -7879,10 +8183,12 @@ public class MainActivity extends Activity {
     // +贴底大圆角窗（顶圆角 26、max-height 88vh、柔影），底层页面留在后面，关窗回到原页原位。
     void showWizardPage() {
         hideChrome(); // Q12
-        // P4：窗已在场时是步骤切换（新内容横向滑入），否则是首次打开（整窗升起）
-        boolean stepSwitch = wizardSheet != null && wizardSheet.getParent() != null;
-        if (wizardSheet != null && wizardSheet.getParent() != null)
+        // Q106（2.20）：窗已在场 = 步骤切换，走 stepWizardContent 原地换内容，不再整窗摘除重建；
+        // 结构对不上（异常）才回落旧整窗重建，点选不许无反应。
+        if (wizardSheet != null && wizardSheet.getParent() != null) {
+            if (stepWizardContent()) { lastWizStepShown = wizStep; return; }
             ((ViewGroup) wizardSheet.getParent()).removeView(wizardSheet);
+        }
         final FrameLayout sheet = new FrameLayout(this);
         View shade = new View(this);
         shade.setBackgroundColor(Color.argb(117, 15, 20, 40));
@@ -7898,8 +8204,13 @@ public class MainActivity extends Activity {
             topSheetClip(card, 26, this); // Q45 顶圆底直轮廓
         }
         card.setOnClickListener(v -> {}); // 窗体本体吃掉点击，防穿透到遮罩误关（同筛选窗）
-        card.addView(buildWizardPage(), new LinearLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        // Q106（2.20）：内容装进 stage（FrameLayout）——步骤切换时新旧两页在 stage 内
+        // 叠放交叉过渡，窗体/遮罩/玻璃层原地不动（见 stepWizardContent）。
+        FrameLayout wizStage = new FrameLayout(this);
+        wizStage.addView(buildWizardPage(), new FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        card.addView(wizStage, new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         int sw = getResources().getDisplayMetrics().widthPixels;
         int maxH = (int) (getResources().getDisplayMetrics().heightPixels * 0.88);
         FrameLayout.LayoutParams clp = new FrameLayout.LayoutParams(
@@ -7921,25 +8232,73 @@ public class MainActivity extends Activity {
         wizardSheet = sheet;
         // P4：首次打开走遮罩淡入+窗从下方 42dp 上浮（260ms，混合版 wizUp 口径）；步骤切换只让
         // 新内容横向轻滑淡入——前进从右侧、后退从左侧，220ms 减速，窗体高度与遮罩保持不动。
-        if (stepSwitch) {
-            sheet.setAlpha(1f);
-            float dx = dp(this, wizStep >= lastWizStepShown ? 28 : -28);
-            // Q97：步进不再对整卡做 alpha 淡入——alpha<1 会把整卡（含标题文字）提升为
-            // 离屏硬件层纹理，用户机出现结果首行卡名被纵向压扁重印的叠字（16:47 实拍；
-            // 审计确认标题为单 TextView 单次绘制、tv() 无描边无假粗）。只保留横向轻滑，
-            // 文字在最终合成面直绘一次。首次开窗的遮罩淡入不受影响。
-            card.setAlpha(1f);
-            card.setTranslationX(dx);
-            card.animate().translationX(0f)
-                .setDuration(ANIM_DUR_FADE).setInterpolator(ANIM_ENTER).start();
-        } else {
-            sheet.setAlpha(0f);
-            sheet.animate().alpha(1f).setDuration(ANIM_DUR_SHADE_IN).setInterpolator(ANIM_ENTER).start();
-            card.setTranslationY(dp(this, 42));
-            card.animate().translationY(0f)
-                .setDuration(ANIM_DUR_SHEET_IN).setInterpolator(ANIM_ENTER).start();
-        }
+        // 首次打开：遮罩淡入 + 窗从下方 42dp 上浮（260ms，混合版 wizUp 口径，与 Q97/Q102 不冲突）。
+        // 步骤切换不在此重建整窗（旧实现每步整套摘除重建：窗高无补间硬跳、旧页瞬间消失、
+        // 玻璃层整套重抓——用户 22:00 点名闪烁跳帧），改走 stepWizardContent 原地过渡。
+        sheet.setAlpha(0f);
+        sheet.animate().alpha(1f).setDuration(ANIM_DUR_SHADE_IN).setInterpolator(ANIM_ENTER).start();
+        card.setTranslationY(dp(this, 42));
+        card.animate().translationY(0f)
+            .setDuration(ANIM_DUR_SHEET_IN).setInterpolator(ANIM_ENTER).start();
         lastWizStepShown = wizStep;
+    }
+
+    // Q106（2.20，用户 22:00 点名步骤过渡难看）：旧毛病坐实——每步把整窗（遮罩＋窗体＋
+    // 玻璃层）整套摘除重建，窗高在新旧内容之间无补间硬跳，旧页瞬间消失只剩新页横滑，
+    // 玻璃层整套重抓，观感是闪烁＋跳帧。新做法（只动向导窗内部，页间过渡未碰）：窗体、
+    // 遮罩、玻璃层原地不动，只在 stage 内换页——旧页 160ms 淡出＋反向轻移 12dp、新页
+    // 200ms 淡入＋同向轻移入场（前进右入/后退左入，与全 App 页间口径一致的淡入＋横移）；
+    // 窗高按新内容同口径量高后用 ValueAnimator 240ms 补间跟随（玻璃层同高＋26dp 跟随），
+    // 尺寸变化不再突兀。alpha 只施于 stage 内内容页，不施于窗面/玻璃（Q97 的整卡离屏
+    // 叠字教训不重蹈：窗级染色面与玻璃层全程 alpha=1 直绘）。
+    boolean stepWizardContent() {
+        final FrameLayout sheet = (FrameLayout) wizardSheet;
+        if (sheet == null || sheet.getChildCount() < 2) return false;
+        final FrameLayout wrap = (FrameLayout) sheet.getChildAt(1);
+        if (wrap.getChildCount() < 2) return false;
+        final LinearLayout card = (LinearLayout) wrap.getChildAt(1);
+        if (card.getChildCount() < 1 || !(card.getChildAt(0) instanceof FrameLayout)) return false;
+        final FrameLayout stage = (FrameLayout) card.getChildAt(0);
+        final View oldContent = stage.getChildCount() > 0 ? stage.getChildAt(stage.getChildCount() - 1) : null;
+        final View newContent = buildWizardPage();
+        stage.addView(newContent, new FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        boolean fwd = wizStep >= lastWizStepShown;
+        newContent.setAlpha(0f);
+        newContent.setTranslationX(dp(this, fwd ? 18 : -18));
+        newContent.animate().alpha(1f).translationX(0f)
+            .setDuration(200).setInterpolator(ANIM_ENTER).start();
+        if (oldContent != null && oldContent != newContent) {
+            oldContent.animate().alpha(0f).translationX(dp(this, fwd ? -12 : 12))
+                .setDuration(160).setInterpolator(ANIM_EXIT)
+                .withEndAction(() -> { if (oldContent.getParent() == stage) stage.removeView(oldContent); })
+                .start();
+            sheet.postDelayed(() -> { if (oldContent.getParent() == stage) stage.removeView(oldContent); }, 450);
+        }
+        // 窗高补间：新内容按首次开窗同口径量高（宽 EXACTLY 屏宽、高 AT_MOST 88vh），
+        // wrap 与玻璃层（＋26dp 沉底量）同帧跟高，动画完窗体几何与新开一窗完全一致。
+        int sw = getResources().getDisplayMetrics().widthPixels;
+        int maxH = (int) (getResources().getDisplayMetrics().heightPixels * 0.88);
+        newContent.measure(View.MeasureSpec.makeMeasureSpec(sw, View.MeasureSpec.EXACTLY),
+            View.MeasureSpec.makeMeasureSpec(maxH, View.MeasureSpec.AT_MOST));
+        final int fromH = wrap.getHeight();
+        final int toH = newContent.getMeasuredHeight();
+        if (fromH > 0 && toH > 0 && Math.abs(toH - fromH) > 1) {
+            final View glass = wrap.getChildAt(0);
+            final int pad26 = dp(this, 26);
+            android.animation.ValueAnimator va = android.animation.ValueAnimator.ofInt(fromH, toH);
+            va.setDuration(240);
+            va.setInterpolator(ANIM_ENTER);
+            va.addUpdateListener(a -> {
+                int h = (Integer) a.getAnimatedValue();
+                FrameLayout.LayoutParams wlp = (FrameLayout.LayoutParams) wrap.getLayoutParams();
+                if (wlp.height != h) { wlp.height = h; wrap.setLayoutParams(wlp); }
+                FrameLayout.LayoutParams glp2 = (FrameLayout.LayoutParams) glass.getLayoutParams();
+                if (glp2.height != h + pad26) { glp2.height = h + pad26; glass.setLayoutParams(glp2); }
+            });
+            va.start();
+        }
+        return true;
     }
 
     WizSc wizScenario() {
@@ -8085,6 +8444,7 @@ public class MainActivity extends Activity {
             page.addView(sub, subLp);
             // Q14：场景改混合版 .sc-grid 2×2 网格卡（.wz-scene：纵列、SF 细线图标禁用 emoji、
             // 名称 1rem+描述 .74rem、内边距 15/14、圆角 18、1dp 淡描边、按压回弹），废横排整行+› 箭头
+            java.util.List<LinearLayout> sceneTiles = new java.util.ArrayList<>();
             for (int i = 0; i < WIZ_SCENARIOS.length; i += 2) {
                 LinearLayout gridRow = new LinearLayout(this);
                 gridRow.setOrientation(LinearLayout.HORIZONTAL);
@@ -8120,6 +8480,26 @@ public class MainActivity extends Activity {
                     tile.addView(dsc, dsLp);
                     tile.setOnClickListener(v -> { haptic(); wizSc = s.id; wizStep = 1; showWizardPage(); });
                     gridRow.addView(tile);
+                    sceneTiles.add(tile);
+                }
+            }
+            // Q106（2.20，用户 21:59 点名）：四格严格等尺寸——旧写法各格 WRAP_CONTENT 按
+            // 各自描述折行数自适应量高（两行描述的格更高），同排两格、上下两排全不等高，
+            // 边框也随之看着粗细/圆角不一。改：四格建完后按列宽（页宽减左右 18dp 页边距
+            // 与 10dp 格间距）逐个实测，取最大高钉给全部四格；宽度由 weight 均分本就等宽，
+            // 背景（rippleBg 白面 18dp）与 roundClip(18) 四格同一份构造、同一道边。
+            {
+                int colW = (getResources().getDisplayMetrics().widthPixels - dp(this, 36) - dp(this, 10)) / 2;
+                int maxTileH = 0;
+                for (LinearLayout t : sceneTiles) {
+                    t.measure(View.MeasureSpec.makeMeasureSpec(colW, View.MeasureSpec.EXACTLY),
+                        View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED));
+                    maxTileH = Math.max(maxTileH, t.getMeasuredHeight());
+                }
+                if (maxTileH > 0) for (LinearLayout t : sceneTiles) {
+                    LinearLayout.LayoutParams lp = (LinearLayout.LayoutParams) t.getLayoutParams();
+                    lp.height = maxTileH;
+                    t.setLayoutParams(lp);
                 }
             }
             return col;
@@ -8134,7 +8514,7 @@ public class MainActivity extends Activity {
             LinearLayout.LayoutParams qhLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
             qhLp.topMargin = dp(this, 14);
             page.addView(qHead, qhLp);
-            TextView tag = tv(this, "第 " + wizStep + " 题 · 共 " + qs.size() + " 题", 11, Color.rgb(0x0A, 0x5C, 0xD6), true);
+            TextView tag = tv(this, isEn() ? "Question " + wizStep + " of " + qs.size() : "第 " + wizStep + " 题 · 共 " + qs.size() + " 题", 11, Color.rgb(0x0A, 0x5C, 0xD6), true);
             tag.setBackground(roundRect(Color.rgb(0xE8, 0xF1, 0xFD), 999, this));
             tag.setPadding(dp(this, 8), dp(this, 3), dp(this, 8), dp(this, 3));
             LinearLayout tagWrap = new LinearLayout(this);
@@ -8183,7 +8563,7 @@ public class MainActivity extends Activity {
         }
         if (list.size() > 6) list = new ArrayList<>(list.subList(0, 6));
 
-        TextView sub = tv(this, "从 " + pool.size() + " 张在发卡里按「" + sc.name + "」排的，点卡看详情，＋ 是加入我的卡片。", 12.5f, colText2(), false);
+        TextView sub = tv(this, isEn() ? "Ranked from " + pool.size() + " issued cards for this scenario. Tap a card for details; + adds it to My Cards." : "从 " + pool.size() + " 张在发卡里按「" + sc.name + "」排的，点卡看详情，＋ 是加入我的卡片。", 12.5f, colText2(), false);
         LinearLayout.LayoutParams subLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         subLp.topMargin = dp(this, 12);
         page.addView(sub, subLp);
@@ -8299,7 +8679,7 @@ public class MainActivity extends Activity {
         else if (c.score >= 8) { scoreBg = Color.rgb(0xE7, 0xF0, 0xFE); scoreFg = Color.rgb(0x0A, 0x5C, 0xD6); }
         else if (c.score >= 6) { scoreBg = Color.rgb(0xFD, 0xF1, 0xE0); scoreFg = Color.rgb(0xB2, 0x5B, 0x09); }
         else { scoreBg = Color.rgb(0xEE, 0xF0, 0xF3); scoreFg = Color.rgb(0x8E, 0x8E, 0x93); }
-        TextView score = tv(this, c.hasScore ? String.format(java.util.Locale.US, "%.1f分", c.score) : "待评分",
+        TextView score = tv(this, c.hasScore ? fmtScore(c.score) : "待评分",
             11, scoreFg, true);
         score.setBackground(roundRect(scoreBg, 999, this));
         score.setPadding(dp(this, 9), dp(this, 4), dp(this, 9), dp(this, 4));
@@ -8687,7 +9067,7 @@ public class MainActivity extends Activity {
                 haptic();
                 setMineEntryClass(tgt, v);
                 paint[0].run();
-                showFloatToast(v.isEmpty() ? "已取消标记" : "已标为" + v);
+                showFloatToast(v.isEmpty() ? "已取消标记" : (isEn() ? "Labeled " : "已标为") + v);
             });
             LinearLayout.LayoutParams blp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
             if (i > 0) blp.leftMargin = dp(this, 6);
@@ -8868,7 +9248,7 @@ public class MainActivity extends Activity {
         bodyInner.addView(name);
         // 状态直接取记录自身（与规格同源 specs 外的 status 字段），不二次加工
         String metaTxt = c.bank + " \u00B7 " + orgLabel(c.org) + " \u00B7 " + c.status
-            + " \u00B7 " + (c.hasScore ? String.format(java.util.Locale.US, "%.1f\u5206", c.score) : "\u5F85\u8BC4\u5206");
+            + " \u00B7 " + (c.hasScore ? fmtScore(c.score) : "\u5F85\u8BC4\u5206");
         // Q39: .p-sub .88rem 次级行
         TextView meta = tv(this, metaTxt, 13.5f, colText3(), false); bodyLH(meta);
         LinearLayout.LayoutParams mep = new LinearLayout.LayoutParams(
@@ -8997,7 +9377,7 @@ public class MainActivity extends Activity {
         chips.add(chip(c.isCredit() ? "信用卡" : "借记卡", chipBg, colText(), 12f));
         if (c.status != null && !c.status.isEmpty()) chips.add(chip(c.status, chipBg, colText(), 12f));
         if (c.bank != null && !c.bank.isEmpty()) chips.add(chip(c.bank, chipBg, colText(), 12f));
-        if (c.hasScore) chips.add(chip("评分 " + String.format(java.util.Locale.US, "%.1f", c.score), accentColor(), Color.WHITE, 12f));
+        if (c.hasScore) chips.add(chip((isEn() ? "Score " : "评分 ") + String.format(java.util.Locale.US, "%.1f", c.score), accentColor(), Color.WHITE, 12f));
         for (String[] f : FEATS) if (featMatch(c, f[0])) chips.add(chip(f[1], chipBg, colText(), 12f));
         if (c.studentPick) chips.add(chip("学生推荐", accentColor(), Color.WHITE, 12f));
         // Q91：宽度按文字实测（Paint 量 12sp 粗体实宽），旧版「字数×0.68」把中文宽度估小、
@@ -9210,8 +9590,8 @@ public class MainActivity extends Activity {
         LinearLayout left = new LinearLayout(this);
         left.setOrientation(LinearLayout.VERTICAL);
         hero.addView(left, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
-        left.addView(tv(this, stu.size() + " 张精选卡", 26, colText(), true));
-        TextView sub = tv(this, "学生精选 · 覆盖 " + banks.size() + " 家银行", 12, colText2(), false);
+        left.addView(tv(this, isEn() ? stu.size() + " Picks" : stu.size() + " 张精选卡", 26, colText(), true));
+        TextView sub = tv(this, isEn() ? "Student Picks · " + banks.size() + " banks" : "学生精选 · 覆盖 " + banks.size() + " 家银行", 12, colText2(), false);
         LinearLayout.LayoutParams subLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         subLp.topMargin = dp(this, 4);
         left.addView(sub, subLp);
@@ -9223,8 +9603,11 @@ public class MainActivity extends Activity {
         stats.addView(stuStatLine(Color.rgb(0xFF, 0x9F, 0x0A), "支持 3DS", n3ds));
 
         // 「挑卡只看三件事」条（对照 .stu-quote，数字按当前精选与全库动态生成）
-        TextView quote = tv(this, "挑卡只看三件事：别交年费、境外别被收转换费、网购能过 3DS。这 "
-            + stu.size() + " 张就是按这个标准从 " + Store.all.size() + " 张里筛出来的。",
+        TextView quote = tv(this, isEn()
+            ? "Three things matter: no annual fee, no FX conversion fee overseas, and 3DS for online shopping. These "
+                + stu.size() + " picks were filtered from all " + Store.all.size() + " cards by exactly that standard."
+            : "挑卡只看三件事：别交年费、境外别被收转换费、网购能过 3DS。这 "
+                + stu.size() + " 张就是按这个标准从 " + Store.all.size() + " 张里筛出来的。",
             12.5f, Color.rgb(0x3A, 0x3A, 0x3C), false);
         quote.setBackground(roundRect(Color.rgb(0xE8, 0xF1, 0xFD), 12, this));
         quote.setPadding(dp(this, 12), dp(this, 10), dp(this, 12), dp(this, 10));
@@ -9307,7 +9690,7 @@ public class MainActivity extends Activity {
             nm.setMaxLines(2);
             tx.addView(nm);
             tx.addView(tv(this, c.bank + " · " + (c.isCredit() ? "信用卡" : "借记卡"), 11, colText2(), false));
-            TextView sc = tv(this, c.score > 0 ? String.format(java.util.Locale.US, "%.1f分", c.score) : "新卡",
+            TextView sc = tv(this, c.score > 0 ? fmtScore(c.score) : "新卡",
                 11, Color.rgb(0x0A, 0x5C, 0xD6), true);
             sc.setBackground(roundRect(Color.rgb(0xE8, 0xF1, 0xFD), 999, this));
             sc.setPadding(dp(this, 8), dp(this, 3), dp(this, 8), dp(this, 3));
@@ -9499,7 +9882,7 @@ public class MainActivity extends Activity {
         r2lp.topMargin = dp(this, 10);
         hero.addView(row1, r1lp);
         hero.addView(row2, r2lp);
-        row1.addView(mineHeroTile(String.valueOf(owned.size()), " 张卡", "我的卡包 · " + verdict, null, false), mineTileLp(1.25f, true));
+        row1.addView(mineHeroTile(String.valueOf(owned.size()), isEn() ? " cards" : " 张卡", isEn() ? "My Wallet · " + EN_TXT.getOrDefault(verdict, verdict) : "我的卡包 · " + verdict, null, false), mineTileLp(1.25f, true));
         row1.addView(mineHeroTile(TIER_NAMES[topTier], null, "最高档次", null, true), mineTileLp(1f, false));
         row2.addView(mineHeroTile(hasOrgs.size() + " / " + ORG_LIST.length, null, "组织覆盖",
             hasOrgs.isEmpty() ? null : joinCn(hasOrgs), false), mineTileLp(1.25f, true));
@@ -9553,7 +9936,7 @@ public class MainActivity extends Activity {
             brow.setOnClickListener(v -> openDetail(bestF));
         }
         if (!gaps.isEmpty()) {
-            TextView g = tv(this, "短板：" + gaps.get(0), 13, Color.rgb(0xB2, 0x6A, 0x00), false);
+            TextView g = tv(this, isEn() ? "Gap: " + EN_TXT.getOrDefault(gaps.get(0), gaps.get(0)) : "短板：" + gaps.get(0), 13, Color.rgb(0xB2, 0x6A, 0x00), false);
             g.setBackground(roundRect(Color.rgb(0xFF, 0xF8, 0xEC), 10, this));
             g.setPadding(dp(this, 12), dp(this, 10), dp(this, 12), dp(this, 10));
             g.setLineSpacing(0, 1.5f);
@@ -9748,9 +10131,9 @@ public class MainActivity extends Activity {
         for (Object[] a : all) { long lim = (Long) a[1]; if (lim > 0) { cards++; plainSum += lim; String bk = ((String) a[0]).trim(); Long cur = perBank.get(bk); if (cur == null || lim > cur) perBank.put(bk, lim); } int dd = (Integer) a[2]; if (dd >= 1 && dd <= 31) dues.add(new String[]{(String) a[3], String.valueOf(dd)}); }
         long sharedTotal = 0; for (Long v : perBank.values()) sharedTotal += v;
         long total = shared ? sharedTotal : plainSum;
-        box.addView(tvW(this, "持卡总览 · " + Math.max(cards, 0) + " 张有额度", 14.5f, colText(), 700));
-        box.addView(tv(this, "总额度 ¥" + fmtMoney(total) + (shared ? "（同行共用取最高）" : "（逐张相加）"), 13, colText2(), false));
-        TextView tog = tv(this, shared ? "口径：同行取最高 · 点此切换" : "口径：逐张相加 · 点此切换", 12.5f, accentColor(), true);
+        box.addView(tvW(this, isEn() ? "Holdings · " + Math.max(cards, 0) + " cards with limits" : "持卡总览 · " + Math.max(cards, 0) + " 张有额度", 14.5f, colText(), 700));
+        box.addView(tv(this, isEn() ? "Total limit ¥" + fmtMoney(total) + (shared ? " (same bank: highest counts)" : " (summed per card)") : "总额度 ¥" + fmtMoney(total) + (shared ? "（同行共用取最高）" : "（逐张相加）"), 13, colText2(), false));
+        TextView tog = tv(this, isEn() ? (shared ? "Basis: same-bank highest · Tap to switch" : "Basis: sum per card · Tap to switch") : (shared ? "口径：同行取最高 · 点此切换" : "口径：逐张相加 · 点此切换"), 12.5f, accentColor(), true);
         tog.setOnClickListener(v -> { haptic(); try { prefs.edit().putBoolean("limit_shared_bank", !shared).commit(); } catch (Throwable ignored) {} refreshMineKeepScroll(); });
         box.addView(tog);
         if (!dues.isEmpty()) {
@@ -9842,7 +10225,7 @@ public class MainActivity extends Activity {
         stats.addView(mineStatCell(owned.isEmpty() ? "—" : TIER_NAMES[topTier], "最高档次"), new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
         stats.addView(mineStatCell(orgHas + " / " + ORG_LIST.length, "组织覆盖"), new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
         stats.addView(mineStatCell(nNoFtf + " 张", "无转换费"), new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
-        TextView vd = tv(this, "我的卡包 · " + verdict, 12, colText2(), false);
+        TextView vd = tv(this, isEn() ? "My Wallet · " + EN_TXT.getOrDefault(verdict, verdict) : "我的卡包 · " + verdict, 12, colText2(), false);
         LinearLayout.LayoutParams vdlp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         vdlp.topMargin = dp(this, 8);
         box.addView(vd, vdlp);
@@ -10648,7 +11031,7 @@ public class MainActivity extends Activity {
                 customCards.add(at, c);
                 saveCustomCards();
                 refreshMineKeepScroll();
-                showFloatToast("已恢复「" + c.name + "」");
+                showFloatToast(isEn() ? "Restored \"" + c.name + "\"" : "已恢复「" + c.name + "」");
             });
         });
         LinearLayout.LayoutParams dbLp = new LinearLayout.LayoutParams(0, dp(this, 48), 1f);
@@ -10943,7 +11326,7 @@ public class MainActivity extends Activity {
                 c.acctClass = v;
                 saveCustomCards();
                 tPaint[0].run();
-                showFloatToast(v.isEmpty() ? "已取消标记" : "已标为" + v);
+                showFloatToast(v.isEmpty() ? "已取消标记" : (isEn() ? "Labeled " : "已标为") + v);
                 closeCustomDetailNow();
                 openCustomDetail(c);
             });
@@ -11695,7 +12078,7 @@ public class MainActivity extends Activity {
         StringBuilder meta = new StringBuilder();
         meta.append(c.name == null ? "" : c.name);
         meta.append(" · ").append(c.bank == null ? "" : c.bank).append(" · ").append(orgLabel(c.org));
-        if (c.hasScore) meta.append(" · ").append(String.format(java.util.Locale.US, "%.1f分", c.score));
+        if (c.hasScore) meta.append(" · ").append(fmtScore(c.score));
         if (ftf != null && ftf.length() > 0) meta.append(" · 转换费 ").append(ftf);
         TextView mv = tv(this, meta.toString(), 12, Color.rgb(0x5A, 0x6B, 0x8A), false);
         mv.setSingleLine(false);
@@ -11733,7 +12116,7 @@ public class MainActivity extends Activity {
         if (Build.VERSION.SDK_INT >= 21) { card.setElevation(dp(this, 24)); topSheetClip(card, 22, this); } // Q45 顶圆底直轮廓
         card.setOnClickListener(v -> {});
         card.setPadding(dp(this, 18), dp(this, 18), dp(this, 18), dp(this, 16)); // Q104：底部去 navBarH 空腔（dock 已藏、手势条区双算成白块），窗高贴合内容
-        final EditText inBin = customInput("输入卡号前 6–8 位", "", 8);
+        final EditText inBin = customInput(isEn() ? "First 6–8 digits of the card number" : "输入卡号前 6–8 位", "", 8);
         inBin.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
         final LinearLayout resultBox = new LinearLayout(this);
         resultBox.setOrientation(LinearLayout.VERTICAL);
@@ -12306,7 +12689,7 @@ public class MainActivity extends Activity {
                 if (!isBankKind(kindSel[0])) c.org = "";
                 customCards.add(c);
                 customOpen = true;
-                showFloatToast("已添加「" + name + "」");
+                showFloatToast(isEn() ? "Added \"" + name + "\"" : "已添加「" + name + "」");
             } else {
                 edit.name = name;
                 edit.bank = inBank.getText().toString().trim();
@@ -12317,7 +12700,7 @@ public class MainActivity extends Activity {
                 edit.kind = normCardKind(kindSel[0]);
                 { EditText _p = (EditText) form.getTag(); EditText _l = (EditText) form.findViewWithTag("q79lim"); EditText _b = (EditText) form.findViewWithTag("q79bill"); EditText _d = (EditText) form.findViewWithTag("q79due"); boolean bk2 = isBankKind(kindSel[0]); edit.pan = bk2 && _p != null ? _p.getText().toString().replaceAll("[^0-9]", "") : ""; edit.limitYuan = bk2 && _l != null ? parseYuan(_l.getText().toString()) : 0; edit.billDay = bk2 && _b != null ? parseDay(_b.getText().toString()) : 0; edit.dueDay = bk2 && _d != null ? parseDay(_d.getText().toString()) : 0; }
                 if (!isBankKind(kindSel[0])) edit.org = "";
-                showFloatToast("已保存「" + name + "」");
+                showFloatToast(isEn() ? "Saved \"" + name + "\"" : "已保存「" + name + "」");
             }
             saveCustomCards();
             closeCustomForm();
@@ -14587,7 +14970,7 @@ public class MainActivity extends Activity {
         LinearLayout.LayoutParams hintLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         hintLp.topMargin = dp(this, 6);
         card.addView(hint, hintLp);
-        final EditText inQ = customInput("输入卡名 / 银行，如：村镇银行", "", 30);
+        final EditText inQ = customInput(isEn() ? "Card name / bank, e.g. a rural bank" : "输入卡名 / 银行，如：村镇银行", "", 30);
         // customInput 自带 topMargin 6，在窗内再补一行距
         LinearLayout.LayoutParams inLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         inLp.topMargin = dp(this, 6);
@@ -15709,11 +16092,18 @@ public class MainActivity extends Activity {
         cardWrap.setElevation(dp(this, 18));
         cardWrap.addView(glassLayer(cardWrap, 32, false), new FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
-        cardWrap.addView(glassWashView(32, false), new FrameLayout.LayoutParams(
+        // Q106（2.20，用户 21:54 点名双层）：删「玻璃外框＋内嵌白板」——card 不再自带
+        // glassWindowTint(16) 近实底内缩 16dp，改由窗级染色以半径 32 铺满整个 cardWrap
+        // 作唯一面（糊层与染色同界，与情景窗 Q103 同口径），wash 层一并摘除，边缘只剩
+        // 染色面自带的那一道白色发丝描边；card 退为透明内容架，行落位/内边距分毫不动。
+        View menuFace = new View(this);
+        menuFace.setBackground(glassWindowTint(32, false));
+        menuFace.setClickable(false);
+        menuFace.setFocusable(false);
+        cardWrap.addView(menuFace, new FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         final LinearLayout card = new LinearLayout(this);
         card.setOrientation(LinearLayout.VERTICAL);
-        card.setBackground(glassWindowTint(16, false)); // Q103：菜单窗单独走窗级实一档玻璃（原薄透档能看清背后开关轮廓显脏）；贴身玻璃不动
         card.setPadding(dp(this, 6), dp(this, 6), dp(this, 6), dp(this, 6));
         card.addView(moreMenuRow("scene", "情景选卡", () -> openWizard()));
         // Q103（2.17）去重：⋯ 菜单不再放「更新日志」——与关于页「版本与更新日志 → 查看
@@ -15847,9 +16237,11 @@ public class MainActivity extends Activity {
 
         sectionHead(page, S("sec_data"));
         int pendVer = prefs == null ? -1 : prefs.getInt("pending_update_version", -1); if (pendVer <= Store.dataVersion) pendVer = -1; else if (pendingUpdateVer > Store.dataVersion) pendVer = pendingUpdateVer;
-        String updSub = pendVer > 0 ? ("v" + Store.dataVersion + " · " + Store.all.size() + " 张卡 · 有新版 v" + pendVer + " 可更新 ›") : ("v" + Store.dataVersion + " · " + Store.all.size() + " 张卡 · 点此直接检查更新 ›");
+        String updSub = pendVer > 0
+            ? (isEn() ? "v" + Store.dataVersion + " · " + Store.all.size() + " cards · New v" + pendVer + " available ›" : "v" + Store.dataVersion + " · " + Store.all.size() + " 张卡 · 有新版 v" + pendVer + " 可更新 ›")
+            : (isEn() ? "v" + Store.dataVersion + " · " + Store.all.size() + " cards · Tap to check for updates ›" : "v" + Store.dataVersion + " · " + Store.all.size() + " 张卡 · 点此直接检查更新 ›");
         View updRow = settingRow("数据更新", updSub);
-        if (pendVer > 0) { try { TextView ut = (TextView)((ViewGroup)updRow).getChildAt(0); android.text.SpannableStringBuilder ssb = new android.text.SpannableStringBuilder("数据更新  ●"); ssb.setSpan(new android.text.style.ForegroundColorSpan(Color.rgb(0xE0,0x31,0x31)), 5, 6, android.text.Spannable.SPAN_EXCLUSIVE_EXCLUSIVE); ssb.setSpan(new android.text.style.RelativeSizeSpan(0.7f), 5, 6, android.text.Spannable.SPAN_EXCLUSIVE_EXCLUSIVE); ut.setText(ssb); } catch(Throwable ignored){} }
+        if (pendVer > 0) { try { TextView ut = (TextView)((ViewGroup)updRow).getChildAt(0); String base = isEn() ? "Data Update  ●" : "数据更新  ●"; int dot = base.indexOf('●'); android.text.SpannableStringBuilder ssb = new android.text.SpannableStringBuilder(base); ssb.setSpan(new android.text.style.ForegroundColorSpan(Color.rgb(0xE0,0x31,0x31)), dot, dot + 1, android.text.Spannable.SPAN_EXCLUSIVE_EXCLUSIVE); ssb.setSpan(new android.text.style.RelativeSizeSpan(0.7f), dot, dot + 1, android.text.Spannable.SPAN_EXCLUSIVE_EXCLUSIVE); ut.setText(ssb); } catch(Throwable ignored){} }
         final int pendFinal = pendVer;
         updRow.setOnClickListener(v -> { haptic(); if (pendFinal > 0 && pendingUpdateJson != null) showUpdateConfirm(); else { showFloatToast("正在检查数据更新…"); checkDataUpdate(true); } });
         page.addView(updRow);
@@ -16339,7 +16731,7 @@ public class MainActivity extends Activity {
         });
         addHair(panel);
         segInner(panel, S("language"), new String[][]{{"system",S("lang_system")},{"zh",S("lang_zh")},{"en",S("lang_en")}}, appLangPref, v -> {
-            appLangPref = v; if (prefs != null) prefs.edit().putString("app_lang", v).apply(); haptic(); refreshNavLabels(); rebuildPages();
+            appLangPref = v; if (prefs != null) prefs.edit().putString("app_lang", v).apply(); EN_MODE = isEn(); haptic(); refreshNavLabels(); rebuildPages();
         });
         addHair(panel);
         themeColorInner(panel);
@@ -16365,7 +16757,7 @@ public class MainActivity extends Activity {
             fontMode = v; prefs.edit().putString("font_mode", v).apply(); haptic(); rebuildPages();
         });
         View fontImpRow = settingInner("导入字体文件", hasCustomFont(this)
-            ? ("已导入：" + (customFontName == null || customFontName.length() == 0 ? "自定义字体" : customFontName) + " · 点此更换 ›")
+            ? (isEn() ? "Imported: " + (customFontName == null || customFontName.length() == 0 ? "Custom Font" : customFontName) + " · Tap to change ›" : "已导入：" + (customFontName == null || customFontName.length() == 0 ? "自定义字体" : customFontName) + " · 点此更换 ›")
             : "选择 .ttf / .otf 字体文件 ›");
         fontImpRow.setOnClickListener(v -> { haptic(); openFontPicker(); });
         panel.addView(fontImpRow);
