@@ -592,6 +592,13 @@ public class MainActivity extends Activity {
         Paint thumbPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
         Paint bubblePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
         Paint bubbleText = new Paint(Paint.ANTI_ALIAS_FLAG);
+        // Q99：onDraw 零分配——描边/芯层画笔与矩形复用（旧实现每帧 new 3 Paint + 4 RectF，
+        // 滚动期 invalidate 连发时是主线程的稳定小热点）；grabOff 记抓握点与拇指中心差。
+        final Paint barBgP = new Paint(Paint.ANTI_ALIAS_FLAG);
+        final Paint barBdP = new Paint(Paint.ANTI_ALIAS_FLAG);
+        final Paint barCoreP = new Paint(Paint.ANTI_ALIAS_FLAG);
+        final RectF barRect = new RectF();
+        float grabOff = 0f;
         // Q91：淡出落定即 GONE，不许半透明残段挂在右缘（真机首页右上两截断胶囊）
         Runnable hideTask = () -> { if (!dragging && !persistent) { shown = false; animate().alpha(0f).setDuration(300).withEndAction(() -> { if (!shown && !dragging && !persistent) setVisibility(GONE); }).start(); } };
         DragBarView(Context c, ScrollView sv, boolean pers) {
@@ -638,37 +645,49 @@ public class MainActivity extends Activity {
             super.onDraw(cv);
             if (target == null || getHeight() <= 0 || !scrollableEnough()) return;
             float th = thumbH();
-            int max = maxScroll();
-            // Q91：行程自锚点（卡片列表头）起算，不再把标题/英雄卡那段滚动摊进拇指行程——与日志页「整页即列表」同口径
-            int start = Math.min(rangeStartPx(), max);
-            float p = max > start ? Math.max(0f, Math.min(1f, (float) (target.getScrollY() - start) / (float) (max - start))) : 0f;
-            float top = p * (getHeight() - th);
+            float top = thumbTopFor(th);
             // Q76：玻璃胶囊条——8–10dp 可抓宽度、清晰明亮，拖时 10dp、滚动显形期 9dp、常显 8dp
             float w = dp(getContext(), dragging ? 10 : 8.5f);
             float right = getWidth() - dp(getContext(), 4);
             float left = right - w;
             float rad = w / 2f;
-            Paint bg = new Paint(Paint.ANTI_ALIAS_FLAG);
-            bg.setStyle(Paint.Style.FILL);
-            bg.setColor(Color.argb(dragging ? 235 : 210, 255, 255, 255));
-            cv.drawRoundRect(new RectF(left, top, right, top + th), rad, rad, bg);
-            Paint bd = new Paint(Paint.ANTI_ALIAS_FLAG);
-            bd.setStyle(Paint.Style.STROKE);
-            bd.setStrokeWidth(dp(getContext(), 1));
-            bd.setColor(Color.argb(150, 255, 255, 255));
-            cv.drawRoundRect(new RectF(left + dp(getContext(), .5f), top + dp(getContext(), .5f), right - dp(getContext(), .5f), top + th - dp(getContext(), .5f)), rad, rad, bd);
-            Paint core = new Paint(Paint.ANTI_ALIAS_FLAG);
-            core.setStyle(Paint.Style.FILL);
-            core.setColor(Color.argb(dragging ? 120 : 80, 10, 92, 214));
-            cv.drawRoundRect(new RectF(left + dp(getContext(), 2), top + dp(getContext(), 2), right - dp(getContext(), 2), top + th - dp(getContext(), 2)), Math.max(1, rad - dp(getContext(), 2)), Math.max(1, rad - dp(getContext(), 2)), core);
+            barBgP.setStyle(Paint.Style.FILL);
+            barBgP.setColor(Color.argb(dragging ? 235 : 210, 255, 255, 255));
+            barRect.set(left, top, right, top + th);
+            cv.drawRoundRect(barRect, rad, rad, barBgP);
+            float half = dp(getContext(), .5f);
+            barBdP.setStyle(Paint.Style.STROKE);
+            barBdP.setStrokeWidth(dp(getContext(), 1));
+            barBdP.setColor(Color.argb(150, 255, 255, 255));
+            barRect.set(left + half, top + half, right - half, top + th - half);
+            cv.drawRoundRect(barRect, rad, rad, barBdP);
+            float inset2 = dp(getContext(), 2);
+            barCoreP.setStyle(Paint.Style.FILL);
+            barCoreP.setColor(Color.argb(dragging ? 120 : 80, 10, 92, 214));
+            barRect.set(left + inset2, top + inset2, right - inset2, top + th - inset2);
+            cv.drawRoundRect(barRect, Math.max(1, rad - inset2), Math.max(1, rad - inset2), barCoreP);
             if (dragging) {
-                String txt = Math.round(p * 100) + "%";
+                // Q99：气泡纵向中心对拇指中心（by 公式不变）；横向靠 widen 后的视图宽完整
+                // 落在视图内（见 attachDragBar）。旧 32dp 视图宽下 bx = 28−10−10−46 = −38dp，
+                // 气泡被父级 clipChildren 裁到只剩右缘约 8dp 一条，看着像贴错位。
+                String txt = Math.round(thumbProgress() * 100) + "%";
                 float bw = dp(getContext(), 46), bh = dp(getContext(), 26);
                 float bx = right - w - dp(getContext(), 10) - bw;
                 float by = top + th / 2f - bh / 2f;
-                cv.drawRoundRect(new RectF(bx, by, bx + bw, by + bh), dp(getContext(), 10), dp(getContext(), 10), bubblePaint);
+                by = Math.max(0f, Math.min(by, getHeight() - bh));
+                barRect.set(bx, by, bx + bw, by + bh);
+                cv.drawRoundRect(barRect, dp(getContext(), 10), dp(getContext(), 10), bubblePaint);
                 cv.drawText(txt, bx + bw / 2f, by + bh / 2f + dp(getContext(), 4.5f), bubbleText);
             }
+        }
+        // Q99：进度/拇指顶抽成共用口径（onDraw 与触摸命中同一套数学，不再各算一份）
+        float thumbProgress() {
+            int max = maxScroll();
+            int start = Math.min(rangeStartPx(), max);
+            return max > start ? Math.max(0f, Math.min(1f, (float) (target.getScrollY() - start) / (float) (max - start))) : 0f;
+        }
+        float thumbTopFor(float th) {
+            return thumbProgress() * (getHeight() - th);
         }
         void jumpTo(float y) {
             int max = maxScroll(); if (max <= 0) return;
@@ -684,19 +703,31 @@ public class MainActivity extends Activity {
             // Q49：非拖动态且已淡出时不拦截右缘点击（瓷砖/＋钮优先），条显形期内才可抓
             if (!persistent && !shown && !dragging) return false;
             switch (e.getActionMasked()) {
-                case MotionEvent.ACTION_DOWN:
+                case MotionEvent.ACTION_DOWN: {
+                    // Q99：只许抓拇指本体——右缘 34dp 条带内且纵向落在拇指 ±10dp 宽容带才接管；
+                    // 其余一律放行给下层列表（旧实现整条 32dp×全高 DOWN 即接管+jumpTo，手指从
+                    // 右缘起滑时内容被 jumpTo 拽住、指尖滑出视图顶后 r 钳 0 钉在锚点顶端，
+                    // 就是用户 18:41 的「划到滑动条那一带卡住、绕开又能滑」）。
+                    if (e.getX() < getWidth() - dp(getContext(), 34)) return false;
+                    float th = thumbH();
+                    float top = thumbTopFor(th);
+                    float slop = dp(getContext(), 10);
+                    if (e.getY() < top - slop || e.getY() > top + th + slop) return false;
                     dragging = true;
+                    grabOff = e.getY() - (top + th / 2f); // 按下不跳位：拇指中心跟手指走
                     getParent().requestDisallowInterceptTouchEvent(true);
                     mainHandler.removeCallbacks(hideTask);
                     if (!shown) { shown = true; setVisibility(VISIBLE); animate().cancel(); animate().alpha(1f).setDuration(120).start(); }
-                    jumpTo(e.getY());
+                    jumpTo(e.getY() - grabOff);
                     invalidate();
                     return true;
+                }
                 case MotionEvent.ACTION_MOVE:
-                    if (dragging) { jumpTo(e.getY()); return true; }
+                    if (dragging) { jumpTo(e.getY() - grabOff); return true; }
                     return false;
                 case MotionEvent.ACTION_UP:
                 case MotionEvent.ACTION_CANCEL:
+                    if (!dragging) return false;
                     dragging = false;
                     getParent().requestDisallowInterceptTouchEvent(false);
                     if (!persistent) { mainHandler.removeCallbacks(hideTask); mainHandler.postDelayed(hideTask, 1100); }
@@ -710,7 +741,10 @@ public class MainActivity extends Activity {
     DragBarView attachDragBar(FrameLayout host, ScrollView sv, boolean persistent, int topDp, int bottomDp) {
         sv.setVerticalScrollBarEnabled(false);
         DragBarView bar = new DragBarView(this, sv, persistent);
-        FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(dp(this, 32), ViewGroup.LayoutParams.MATCH_PARENT);
+        // Q99：视图宽 90dp（右缘 32dp 是轨道/命中区，多出的是给百分比气泡的绘制余量——
+        // 气泡 46dp 宽向左展开，旧 32dp 宽下 bx=−38dp 被父级裁掉大半）；命中已在
+        // onTouchEvent 内按 x 收紧到右缘条带+拇指本体，加宽不扩大拦截面。
+        FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(dp(this, 90), ViewGroup.LayoutParams.MATCH_PARENT);
         lp.gravity = Gravity.RIGHT | Gravity.TOP;
         lp.topMargin = dp(this, topDp);
         lp.bottomMargin = dp(this, bottomDp) + navBarH(); // Q49/Q26：轨道下止于 dock 上沿，绝不探进手势小白条区
@@ -757,8 +791,15 @@ public class MainActivity extends Activity {
     // Q5 回顶钮时机：滑动中藏起，停稳 650ms 后才淡入；滚深门槛 480dp（对照混合版 qfScrolling/qfTop）
     int topFabLastY = 0;
     Runnable topFabShowTask = null;
+    // Q99：滚动回调零分配——待显任务复用同一 Runnable（旧实现每个滚动事件 new 一个）
+    final Runnable topFabShowRunner = new Runnable() {
+        @Override public void run() {
+            if (topFab != null && topFabLastY > dp(MainActivity.this, 480)) showTopFab();
+        }
+    };
     void cancelTopFabShow() {
         if (topFabShowTask != null) { mainHandler.removeCallbacks(topFabShowTask); topFabShowTask = null; }
+        mainHandler.removeCallbacks(topFabShowRunner);
     }
     void showTopFab() {
         if (topFab == null || topFabShown) return;
@@ -786,11 +827,7 @@ public class MainActivity extends Activity {
         // 还在滑动：先藏，停稳 650ms 后由定时器按最新位置决定是否淡入
         hideTopFab();
         cancelTopFabShow();
-        topFabShowTask = () -> {
-            topFabShowTask = null;
-            if (topFab != null && topFabLastY > dp(this, 480)) showTopFab();
-        };
-        mainHandler.postDelayed(topFabShowTask, 650);
+        mainHandler.postDelayed(topFabShowRunner, 650);
     }
     void syncTopFab() {
         // Q5：回顶钮只在全部卡片/学生/我的卡片三个列表页出现（对照混合版 syncQuickFab 的 tab 口径）；
@@ -1442,13 +1479,116 @@ public class MainActivity extends Activity {
             }
         };
 
+    // ---------- Q99 文档条带背板（live 玻璃同帧跟随） ----------
+    // Q98 的「滚动冻结＋停稳 650ms 重抓」手感是停一秒才变（用户 18:31 点名）。Q99 改：
+    // live 玻璃（dock/悬浮钮/胶囊）不再采样屏幕快照，改采样当前长滚动页的「文档条带」——
+    // 以当前 scrollY 为中心、上下各半屏高的一段内容，降采样糊化成一张共享位图；滚动
+    // 本质是内容平移，玻璃件 onDraw 时按当前 scrollY 取位图对应文档行，同帧对位、无
+    // 需逐帧重抓重糊。条带只在结构性变化（切页/开关窗/数据重渲染/尺寸变）与取景区
+    // 滑出条带时重抓（滚动活跃期顺延到停稳，靠既有 650ms 防抖落定）。frozen 玻璃
+    // （底表/弹层，身后场景静止）仍走屏幕快照 backdropBmp，两路在 GlassBackdropView
+    // .onDraw 按 tag 分流。整条 dock 同一张条带同一帧取景——Q98 左半旧帧/右半新帧
+    // 的竖缝（两帧屏幕快照拼接感）从根上消失。
+    Bitmap bandBmp = null;
+    ScrollView bandBmpSv = null;   // 条带所属滚动页（切页即作废）
+    // bandDocTopPx 复用 Q41 字段（条带顶端在文档坐标中的 y，全分辨率 px）
+    int bandFullH = 0;             // 条带覆盖的文档高度（全分辨率 px）= bandBmp.height / SCALE
+    long lastBandCapMs = 0;
+    boolean bandCapPending = false;
+    final Runnable bandCapTask = new Runnable() {
+        @Override public void run() {
+            // 滚动活跃期顺延（甩动中不抢主线程重抓，取景钳在条带边缘先垫着）；停稳即抓
+            if (android.os.SystemClock.uptimeMillis() - lastScrollEventMs < 120) {
+                mainHandler.postDelayed(this, 180);
+                return;
+            }
+            bandCapPending = false;
+            captureBand();
+        }
+    };
+
+    void scheduleBandCapture() {
+        if (bandCapPending || glassDisabled) return;
+        bandCapPending = true;
+        mainHandler.postDelayed(bandCapTask, 180);
+    }
+
+    /** 抓当前长滚动页的文档条带并糊化（只画滚动子树，比整根抓图轻；结构性时刻调用）。 */
+    void captureBand() {
+        if (backdropCapturing || glassDisabled || helloOpen || rootView == null) return;
+        ScrollView sv = bandScroll();
+        if (sv == null || sv.getChildCount() == 0) { bandBmp = null; bandBmpSv = null; return; }
+        View inner = sv.getChildAt(0);
+        int contentH = inner.getHeight(), viewH = sv.getHeight(), viewW = inner.getWidth();
+        if (contentH <= 0 || viewH <= 0 || viewW <= 0) return;
+        long nowMs = android.os.SystemClock.uptimeMillis();
+        int margin = viewH / 2;
+        int bandH = Math.min(contentH, viewH + 2 * margin);
+        int docTop = sv.getScrollY() - margin;
+        docTop = Math.max(0, Math.min(docTop, Math.max(0, contentH - bandH)));
+        int bw = Math.max(1, Math.round(viewW * BACKDROP_SCALE));
+        int bh = Math.max(1, Math.round(bandH * BACKDROP_SCALE));
+        backdropCapturing = true; // 抓图期间玻璃件自排除（同屏幕背板口径）
+        try {
+            if (bandBmp == null || bandBmp.isRecycled() || bandBmp.getWidth() != bw || bandBmp.getHeight() != bh) {
+                bandBmp = Bitmap.createBitmap(bw, bh, Bitmap.Config.ARGB_8888); // 旧图只解引用（Q21）
+            }
+            Canvas cv = new Canvas(bandBmp);
+            cv.drawColor(colBg()); // 内容透明区（玻璃宿主自排除留下的空位）以页底色垫齐
+            cv.scale(BACKDROP_SCALE, BACKDROP_SCALE);
+            cv.translate(-inner.getLeft(), -(docTop + inner.getTop()));
+            inner.draw(cv);
+            stackBlur(bandBmp, BACKDROP_BLUR_R[Math.max(0, Math.min(2, glassLevel))]);
+            updateBackdropPaint();
+            bandBmpSv = sv;
+            bandDocTopPx = docTop;
+            bandFullH = bandH;
+            lastBandCapMs = nowMs;
+            backdropFailStreak = 0;
+            noteGlassSuccess();
+        } catch (Throwable t) {
+            noteBackdropFailure();
+        } finally {
+            backdropCapturing = false;
+        }
+        try {
+            for (ImageView iv : new java.util.ArrayList<>(glassViews)) {
+                if (iv instanceof GlassBackdropView && "live".equals(iv.getTag())) iv.invalidate();
+            }
+        } catch (Throwable ignored) {}
+    }
+
+    /** 滚动事件里调用：live 玻璃逐帧按新 scrollY 重采样（仅 invalidate，onDraw 内只做位图平移）。 */
+    void invalidateLiveGlass() {
+        if (glassDisabled || glassViews.isEmpty()) return;
+        if (glassViews.size() > 400) pruneGlass();
+        for (ImageView iv : glassViews) {
+            if (iv instanceof GlassBackdropView && "live".equals(iv.getTag()) && iv.isShown()) iv.invalidate();
+        }
+    }
+
+    boolean anyFrozenGlassShown() {
+        for (ImageView iv : glassViews) {
+            if (iv instanceof GlassBackdropView && !"live".equals(iv.getTag()) && iv.isAttachedToWindow() && iv.isShown()) return true;
+        }
+        return false;
+    }
+
     /** Q98：preDraw 抓图入口——滚动活跃期（末次滚动事件 200ms 内）稳定冻结背板：
      * 滚动全程不抓图（旧链每 50ms 在主线程整树重绘＋三遍模糊，既与滚动帧抢主线程
      * 造成下拉抽搐，背板又以 20fps 阶梯换帧在玻璃件下跳）；停稳满 200ms 后 preDraw
      * 自然恢复跟随，且既有 650ms 停稳防抖会强制重抓一帧对齐。强制抓图（切页/开关窗/
      * 设置变更）走 captureBackdrop() 直调，不受冻结影响。 */
     void captureBackdropTick() {
+        if (helloOpen) return; // Q99：你好页入场动画全程冻结背板采样，不与飞入抢主线程
         if (android.os.SystemClock.uptimeMillis() - lastScrollEventMs < 200) return;
+        // Q99：屏上只有 live 玻璃且文档条带有效时，屏幕快照不必逐帧重抓——live 玻璃走
+        // 条带按 scrollY 同帧取景；重抓整根只剩抢主线程。有 frozen 玻璃（底表/弹层）
+        // 或无长滚动页（条带无源）时照旧抓屏幕背板；条带失效则顺手补抓条带。
+        if (!anyFrozenGlassShown() && bandScroll() != null) {
+            if (bandBmp == null || bandBmpSv != bandScroll()) scheduleBandCapture();
+            return;
+        }
         captureBackdrop();
     }
 
@@ -1482,29 +1622,54 @@ public class MainActivity extends Activity {
             }
         } catch (Throwable ignored) {}
         backdropBmp = null; // 只解引用交系统回收（Q21 纪律，不 recycle）
+        bandBmp = null; bandBmpSv = null; // Q99：条带背板同步作废
     }
 
-    /** 背板玻璃层：自身不持位图，onDraw 只把共享软件背板按屏幕位对位绘出。 */
+    /** 背板玻璃层：自身不持位图，onDraw 只把共享背板按位置对位绘出。
+     * Q99：live 件采样文档条带（按当前 scrollY 取文档行，同帧跟随）；frozen 件与
+     * 条带无源时采样屏幕快照。两种取景共用同一组「平移→1/scale 放大」对位数学。 */
     class GlassBackdropView extends ImageView {
+        final int[] rl2 = new int[2];
+        final int[] ml2 = new int[2];
+        final int[] sl2 = new int[2];
         GlassBackdropView(Context c) { super(c); }
         @Override protected void onDraw(Canvas canvas) {
             // 抓图进行中自排除（否则背板画进背板自引用，同 LIQUID-GLASS-NOTES 红线）；
             // 玻璃被关停/背板未就绪时什么都不画，宿主下方薄染色兜底直接显形，绝不白屏。
             if (backdropCapturing || glassDisabled || rootView == null) return;
-            Bitmap bmp = backdropBmp;
-            if (bmp == null || bmp.isRecycled()) return;
             try {
-                int[] rl = new int[2]; rootView.getLocationInWindow(rl);
-                int[] ml = new int[2]; getLocationInWindow(ml);
+                rootView.getLocationInWindow(rl2);
+                getLocationInWindow(ml2);
                 canvas.save();
                 // Q92 硬兜底：先把画布裁到本层自身 bounds——无论宿主布局如何异常，
                 // 玻璃取样层物理上不可能画出自身矩形之外（防再次全屏糊层事故）。
                 canvas.clipRect(0, 0, Math.max(1, getWidth()), Math.max(1, getHeight()));
-                // 对位：背板以 BACKDROP_SCALE 降采样（图 px = 根坐标 × scale），绘出时先按
-                // 本层在根坐标中的位置平移、再 1/scale 放大回全分辨率，与身后实景 1:1。
-                canvas.translate(-(ml[0] - rl[0]), -(ml[1] - rl[1]));
-                canvas.scale(1f / BACKDROP_SCALE, 1f / BACKDROP_SCALE);
-                canvas.drawBitmap(bmp, 0, 0, backdropPaint);
+                Bitmap band = bandBmp;
+                ScrollView bsv = bandScroll();
+                if ("live".equals(getTag()) && band != null && !band.isRecycled()
+                    && bsv != null && bsv == bandBmpSv) {
+                    // 文档条带取景：本件顶端对应的文档 y = 当前 scrollY + 本件在视口内的纵偏移；
+                    // 取景区滑出条带时先钳到条带边缘垫一帧，并排一次条带重抓（活跃期自动顺延）。
+                    bsv.getLocationInWindow(sl2);
+                    float docX = (ml2[0] - sl2[0]) + bsv.getScrollX();
+                    float docY = bsv.getScrollY() + (ml2[1] - sl2[1]);
+                    float sampleX = docX;
+                    float sampleY = docY - bandDocTopPx;
+                    float maxSY = Math.max(0f, bandFullH - getHeight());
+                    float clampedY = Math.max(0f, Math.min(sampleY, maxSY));
+                    if (clampedY != sampleY) scheduleBandCapture();
+                    canvas.translate(-sampleX, -clampedY);
+                    canvas.scale(1f / BACKDROP_SCALE, 1f / BACKDROP_SCALE);
+                    canvas.drawBitmap(band, 0, 0, backdropPaint);
+                } else {
+                    Bitmap bmp = backdropBmp;
+                    if (bmp == null || bmp.isRecycled()) { canvas.restore(); return; }
+                    // 对位：背板以 BACKDROP_SCALE 降采样（图 px = 根坐标 × scale），绘出时先按
+                    // 本层在根坐标中的位置平移、再 1/scale 放大回全分辨率，与身后实景 1:1。
+                    canvas.translate(-(ml2[0] - rl2[0]), -(ml2[1] - rl2[1]));
+                    canvas.scale(1f / BACKDROP_SCALE, 1f / BACKDROP_SCALE);
+                    canvas.drawBitmap(bmp, 0, 0, backdropPaint);
+                }
                 canvas.restore();
             } catch (Throwable t) { /* Q98：单件单帧绘制异常只跳过本帧，不再一击拖死全 App 玻璃 */ }
         }
@@ -1578,7 +1743,7 @@ public class MainActivity extends Activity {
      * disableGlassNow；成功即清零计数，瞬时异常下一帧自愈。
      */
     void captureBackdrop() {
-        if (backdropCapturing || glassDisabled || rootView == null) return;
+        if (backdropCapturing || glassDisabled || helloOpen || rootView == null) return; // Q99：helloOpen 时采样冻结（captureBand 同闸）
         if (rootView.getWidth() <= 0 || rootView.getHeight() <= 0) return;
         long nowMs = android.os.SystemClock.uptimeMillis();
         if (nowMs - backdropLastCapMs < BACKDROP_MIN_INTERVAL_MS) return;
@@ -1759,6 +1924,7 @@ public class MainActivity extends Activity {
         glassTabSwitchMs = android.os.SystemClock.uptimeMillis();
         try { mainHandler.removeCallbacks(glassRefreshTask); } catch (Throwable ignored) {}
         glassBand = null; bandSv = null; bandRecalibPending = false; // 旧页条带作废，滚动跟随自然停摆
+        bandBmp = null; bandBmpSv = null; // Q99：文档条带同步作废，新页由 refreshLiveGlass 重抓
         for (ImageView iv : new java.util.ArrayList<>(glassViews)) {
             if (!"live".equals(iv.getTag())) continue;
             if (iv instanceof GlassBackdropView) continue; // Q90：背板层下一帧即新页实景，无旧帧可清、更不许清
@@ -1776,6 +1942,7 @@ public class MainActivity extends Activity {
         if (glassDisabled || rootView == null || rootView.getWidth() <= 0) return;
         backdropLastCapMs = 0;
         captureBackdrop();
+        captureBand(); // Q99：结构性时刻条带同步重抓（切页/开关窗/停稳/重渲染）
     }
 
     void scheduleGlassRefresh() {
@@ -2242,6 +2409,48 @@ public class MainActivity extends Activity {
             return null;
         }
 
+        // Q99：按显示尺寸解码——先探边界算采样率，解码结果落在目标宽最近的一档（2 的幂），
+        // 缓存键带尺寸桶，不同列数瓷砖各取所需；详情大图/展柜仍走 get() 全量解码。
+        static Bitmap getSized(Context c, String path, int targetW) {
+            if (path == null || path.isEmpty() || targetW <= 0) return get(c, path);
+            int bucket = Math.max(64, (targetW + 63) / 64 * 64);
+            String key = path + "@" + bucket;
+            Bitmap hit = cache.get(key);
+            if (hit != null) return hit;
+            Bitmap b = null;
+            try { b = decodeSized(c.getAssets().open(path), c, path, bucket); }
+            catch (Exception e) { /* 内置没有走 OTA 文件兜底 */ }
+            if (b == null) {
+                try {
+                    File f = new File(new File(c.getFilesDir(), "ota-images"), new File(path).getName());
+                    if (f.exists()) b = decodeSized(new FileInputStream(f), c, path, bucket);
+                    else fetchRemote(c.getApplicationContext(), path, f);
+                } catch (Exception e) { /* 拿不到图就占位，不崩 */ }
+            }
+            if (b != null) { cache.put(key, b); return b; }
+            return null;
+        }
+
+        static Bitmap decodeSized(InputStream probe, Context c, String path, int bucket) {
+            Bitmap b = null;
+            try {
+                BitmapFactory.Options bo = new BitmapFactory.Options();
+                bo.inJustDecodeBounds = true;
+                BitmapFactory.decodeStream(probe, null, bo);
+                try { probe.close(); } catch (Exception ignored) {}
+                int ss = 1;
+                if (bo.outWidth > 0) { while (ss < 16 && bo.outWidth / (ss * 2) >= bucket) ss *= 2; }
+                BitmapFactory.Options op = new BitmapFactory.Options();
+                op.inSampleSize = ss;
+                InputStream in2;
+                try { in2 = c.getAssets().open(path); }
+                catch (Exception e) { in2 = new FileInputStream(new File(new File(c.getFilesDir(), "ota-images"), new File(path).getName())); }
+                b = BitmapFactory.decodeStream(in2, null, op);
+                try { in2.close(); } catch (Exception ignored) {}
+            } catch (Exception e) { /* 解码失败回落占位 */ }
+            return insetFaceCrop(b);
+        }
+
         static void fetchRemote(final Context ctx, final String path, final File dest) {
             synchronized (fetching) { if (!fetching.add(path)) return; }
             new Thread(() -> {
@@ -2435,7 +2644,9 @@ public class MainActivity extends Activity {
         if (sv == null) return;
         // Q98：常识深链待落点（openGlossaryTerm 刚点名词条）时不许保位恢复把页面抢回旧位置/顶部，
         // 跳转定位（renderGlossary 内的 post）优先，落点由它独占。
-        if ("news".equals(key) && pendingGlossaryId != null) return;
+        // Q99：落点完成后 900ms 守卫窗内同样不许抢（防关窗/切页回调迟到把已落位的页面拽走）。
+        if ("news".equals(key) && (pendingGlossaryId != null
+            || android.os.SystemClock.uptimeMillis() < glossaryLandGuardUntil)) return;
         final int y = savedPageScrollY(key, sv);
         if (y > 0) sv.post(() -> sv.scrollTo(0, y));
     }
@@ -3191,7 +3402,7 @@ public class MainActivity extends Activity {
         applyAppearanceChrome(); // Q72：先套色再显页，切深色不闪白
         // Q29：滚动只重置停稳计时、滚动中零截图（scheduleGlassRefresh 内 650ms 防抖，见其注释）
         // Q41：滚动期条带平移跟随（只 Canvas 绘制、不重采样，与停稳计时互不干扰）
-        root.getViewTreeObserver().addOnScrollChangedListener(() -> { lastScrollEventMs = android.os.SystemClock.uptimeMillis(); scheduleGlassRefresh(); followBandScroll(); }); // Q98 打点供背板滚动冻结判定
+        root.getViewTreeObserver().addOnScrollChangedListener(() -> { lastScrollEventMs = android.os.SystemClock.uptimeMillis(); scheduleGlassRefresh(); followBandScroll(); invalidateLiveGlass(); }); // Q98 打点供背板滚动冻结判定；Q99 live 玻璃同帧重采样
 
         showTab("home");
         if (prefs == null || prefs.getBoolean("auto_check_update", true)) checkDataUpdate(false); // Q62: auto only detects
@@ -4105,8 +4316,16 @@ public class MainActivity extends Activity {
         int w = Math.max(dp(this, 40), Math.round(slot - dp(this, 6)));
         View sample = navItems.get("home");
         int h = sample != null && sample.getHeight() > 0 ? sample.getHeight() - dp(this, 4) : dp(this, 52);
+        h = Math.max(dp(this, 40), Math.min(dp(this, 52), h)); // Q99：药丸限高，防探出 dock
         FrameLayout.LayoutParams lp = (FrameLayout.LayoutParams) navIndicator.getLayoutParams();
-        if (lp.width != w || lp.height != h) { lp.width = w; lp.height = h; lp.topMargin = dp(this, 10); navIndicator.setLayoutParams(lp); }
+        // Q99：药丸纵向居中收进栏内（旧 topMargin 10dp 靠顶，用户实拍探出 dock 上沿）；
+        // 横向仍由 placeNavIndicator 的 translationX 驱动，gravity 只管纵向居中。
+        if (lp.width != w || lp.height != h || lp.topMargin != 0
+            || lp.gravity != (Gravity.LEFT | Gravity.CENTER_VERTICAL)) {
+            lp.width = w; lp.height = h; lp.topMargin = 0;
+            lp.gravity = Gravity.LEFT | Gravity.CENTER_VERTICAL;
+            navIndicator.setLayoutParams(lp);
+        }
         navIndicator.setPivotX(w / 2f); navIndicator.setPivotY(h / 2f); // stretch around the drop's centre
         if (snap) navPos = idx;
         placeNavIndicator(0f);
@@ -4495,7 +4714,9 @@ public class MainActivity extends Activity {
     // Q7 ④：我的卡片页右下圆形 ＋（照混合版 .fab：56dp、右 20dp、底 108dp+inset、蓝底白 ＋、与 dock 同层浮空）；
     // 仅在 mine 页且浮窗（筛选/选卡/详情/向导/关于/长按菜单）不在场时出现，浮窗退场归 Q12 同步。
     void syncAddFab() {
-        boolean want = "mine".equals(tab) && !isChromeCovered(); // Q12
+        // Q99：右下悬浮＋钮在我的卡片页会压住「境外能力」进度行（用户 18:39 实拍），
+        // 改收进布局流——页尾常驻「添加卡片」行（buildMinePage 内），悬浮钮退场。
+        boolean want = false;
         if (!want) {
             if (addFab != null && addFab.getParent() != null) ((ViewGroup) addFab.getParent()).removeView(addFab);
             addFab = null;
@@ -5275,7 +5496,7 @@ public class MainActivity extends Activity {
         iv.setScaleType(ImageView.ScaleType.CENTER_CROP); // cover：铺满不留白、等比不拉伸
         iv.setBackground(placeholderGradFor(c.id, 0, this));
         art.addView(iv, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
-        Bitmap b = Img.get(this, c.image);
+        Bitmap b = Img.getSized(this, c.image, tileW); // Q99：卡图按瓷砖实际显示宽一次解码缓存，不再原图逐帧缩放
         if (b != null) { iv.setImageBitmap(b); if (darkEff()) iv.setAlpha(0.90f); } else { iv.setImageBitmap(null); addOrgBadge(art, c.org, 1f, placeholderDarkFor(c.id)); }
 
         LinearLayout body = new LinearLayout(this);
@@ -8970,12 +9191,12 @@ public class MainActivity extends Activity {
         card.setOrientation(LinearLayout.VERTICAL);
         card.setBackground(rippleBg(colSurface(), 20)); // Q94 token：卡面圆角向 20dp 档
         card.setClipToOutline(true);
-        card.setPadding(dp(this, 10), dp(this, 10), dp(this, 10), dp(this, 10));
+        card.setPadding(dp(this, 10), dp(this, 14), dp(this, 10), dp(this, 10));
         LinearLayout.LayoutParams clp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        clp.topMargin = dp(this, 16);
+        clp.topMargin = dp(this, 20); // Q99：与上方网格拉开（旧 16dp 叠感重，标题像被压）
         card.setLayoutParams(clp);
         TextView hd = tvW(this, "工具", 15, colText(), 700);
-        hd.setPadding(dp(this, 4), 0, 0, dp(this, 6));
+        hd.setPadding(dp(this, 4), 0, 0, dp(this, 8));
         card.addView(hd);
         for (int i = 0; i < cells.size(); i += 4) {
             LinearLayout rowL = new LinearLayout(this);
@@ -9110,10 +9331,25 @@ public class MainActivity extends Activity {
         inner.addView(customSec);
         if (pendingScrollCustom) {
             pendingScrollCustom = false;
-            final View csf = customSec;
-            sv.post(() -> sv.smoothScrollTo(0, Math.max(0, csf.getTop() - dp(this, 8))));
+            // Q99：与常识深链同一落点口径——布局落定后窗口坐标实测，目标落在视口顶沿下
+            // 8dp（旧 csf.getTop() 累加在重建未布局完时测偏，会跳过头或不到位）。
+            scrollTargetBelowFixedHead(sv, customSec, 8, null);
         }
         if (!mineRows.isEmpty()) inner.addView(buildMineAnalysis(mineCards, false));
+        // Q99：添加卡片收进布局流（代原悬浮＋钮，不再压境外能力进度行）：页尾整行入口
+        LinearLayout addRow = new LinearLayout(this);
+        addRow.setOrientation(LinearLayout.HORIZONTAL);
+        addRow.setGravity(Gravity.CENTER_VERTICAL);
+        addRow.setBackground(rippleBg(colSurface(), 20));
+        addRow.setPadding(dp(this, 16), dp(this, 15), dp(this, 16), dp(this, 15));
+        LinearLayout.LayoutParams alp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        alp.topMargin = dp(this, 16);
+        inner.addView(addRow, alp);
+        TextView addT = tvW(this, "＋ 添加卡片", 14.5f, Color.rgb(0x0A, 0x5C, 0xD6), 600);
+        addRow.addView(addT, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+        TextView addSub = tv(this, "自定义卡片 / 在线查卡 ›", 12, colText2(), false);
+        addRow.addView(addSub);
+        addRow.setOnClickListener(v -> { haptic(); openAddSheet(); });
         return page;
     }
 
@@ -11524,6 +11760,39 @@ public class MainActivity extends Activity {
     LinearLayout glossaryBox = null;
     TextView glossaryMeta = null;
     String pendingGlossaryId = null;
+    long glossaryLandGuardUntil = 0; // Q99：常识深链落点守卫窗（落点后 900ms 内资讯保位不许抢位）
+
+    /** Q99：把 target 滚到滚动视口顶沿下 gapDp 处（视口之上即固定头，天然让位）。
+     * 等下一轮全局布局落定后按窗口坐标实测位移再 smoothScrollBy——不吃未布局完的
+     * getTop 累加（测小滚过头是旧落点把首卡顶进固定头下的根因）。 */
+    void scrollTargetBelowFixedHead(final ScrollView sv, final View target, final int gapDp, final Runnable done) {
+        if (sv == null || target == null) { if (done != null) done.run(); return; }
+        final boolean[] fired = { false };
+        final android.view.ViewTreeObserver.OnGlobalLayoutListener[] self = new android.view.ViewTreeObserver.OnGlobalLayoutListener[1];
+        self[0] = new android.view.ViewTreeObserver.OnGlobalLayoutListener() {
+            @Override public void onGlobalLayout() {
+                if (fired[0]) return;
+                fired[0] = true;
+                try { target.getViewTreeObserver().removeOnGlobalLayoutListener(self[0]); } catch (Throwable ignored) {}
+                try {
+                    int[] svLoc = new int[2]; sv.getLocationInWindow(svLoc);
+                    int[] tgLoc = new int[2]; target.getLocationInWindow(tgLoc);
+                    int delta = (tgLoc[1] - svLoc[1]) - dp(MainActivity.this, gapDp);
+                    if (delta != 0) sv.smoothScrollBy(0, delta);
+                } catch (Throwable ignored) {}
+                if (done != null) done.run();
+            }
+        };
+        try { target.getViewTreeObserver().addOnGlobalLayoutListener(self[0]); }
+        catch (Throwable ignored) { if (done != null) done.run(); return; }
+        // 兜底：目标在布局前被重渲染摘除时观察者永不触发，done（如清深链标记）仍须落闸
+        sv.postDelayed(() -> {
+            if (fired[0]) return;
+            fired[0] = true;
+            try { target.getViewTreeObserver().removeOnGlobalLayoutListener(self[0]); } catch (Throwable ignored) {}
+            if (done != null) done.run();
+        }, 600);
+    }
 
     List<NewsItem> parseNews(String json) {
         try {
@@ -11681,14 +11950,14 @@ public class MainActivity extends Activity {
         }
         if (jumpView != null && newsScroll != null) {
             final View target = jumpView;
-            newsScroll.post(() -> {
-                try {
-                    int y = 0;
-                    View cur = target;
-                    while (cur != null && cur != newsScroll.getChildAt(0)) { y += cur.getTop(); cur = (View) cur.getParent(); }
-                    newsScroll.smoothScrollTo(0, Math.max(0, y - dp(MainActivity.this, 12)));
-                } catch (Throwable ignored) {}
-                pendingGlossaryId = null; // 清除放 post 内执行：showTab 尾段的保位守卫要靠它拦下抢位（Q98）
+            // Q99：落点改窗口坐标实测——目标卡顶部落在滚动视口顶沿下 10dp（固定头
+            // 「资讯+副标+共N条」在视口之上，天然让位、整卡露出）。旧 getTop 链累加在
+            // 页面刚重建/未布局完时测得偏小、滚过头把第一张卡顶进固定头下面（用户
+            // 18:36 红圈）；且落点后 900ms 内资讯页保位恢复不许抢位（防关窗回调迟到
+            // 把页面拽回旧位置）。pendingGlossaryId 的清除随落点一并走（Q98 口径）。
+            scrollTargetBelowFixedHead(newsScroll, target, 10, () -> {
+                glossaryLandGuardUntil = android.os.SystemClock.uptimeMillis() + 900;
+                pendingGlossaryId = null;
             });
         } else if (jumpId != null) {
             pendingGlossaryId = null; // Q98：词条不在当前词表（远端已换版）时清标记，免资讯页保位被永久跳过
@@ -14448,6 +14717,9 @@ public class MainActivity extends Activity {
         // 飞入：每张自四周带位移与缩小飞入，错峰错开，单张缓出（ANIM_ENTER）飞入；落定后笑脸与文案依次淡入。
         // Q98 调速（用户 17:08 点名太快没看清）：旧单张 ANIM_DUR_SHEET_IN(280ms)+错峰 120ms，五张
         // 约 0.76s 一闪而过；新单张 560ms、错峰 210ms，末张落定约 1.4s，文案尾序毕总时长约 2.0s。
+        // Q99 再调（用户 18:31 点名堆叠式仍小快且卡）：单张 780ms、错峰 300ms，末张落定约 2.0s，
+        // 文案尾序错开 110ms 一级，整场约 2.75s；飞入期卡片走硬件层直绘（落定即撤），
+        // 且背板采样全程冻结（captureBackdrop/captureBand 的 helloOpen 闸），不与动画抢主线程。
         root.post(() -> {
             float w = Math.max(stage.getWidth(), dp(this, 320));
             float[] dx = {-w * 0.7f, w * 0.7f, -w * 0.55f, w * 0.55f, 0f};
@@ -14460,17 +14732,19 @@ public class MainActivity extends Activity {
                 c.setTranslationY(dy[i]);
                 c.setScaleX(0.82f); c.setScaleY(0.82f);
                 c.setAlpha(0f);
+                c.setLayerType(View.LAYER_TYPE_HARDWARE, null);
                 c.animate().translationX(0f).translationY(baseTy).rotation(baseRot)
                     .scaleX(1f).scaleY(1f).alpha(1f)
-                    .setStartDelay(i * 210L).setDuration(560).setInterpolator(ANIM_ENTER).start();
+                    .setStartDelay(i * 300L).setDuration(780).setInterpolator(ANIM_ENTER)
+                    .withEndAction(() -> c.setLayerType(View.LAYER_TYPE_NONE, null)).start();
             }
-            long tail = (n - 1) * 210L + 560L;
+            long tail = (n - 1) * 300L + 780L;
             if (face[0] != null) face[0].animate().alpha(1f).setStartDelay(tail).setDuration(ANIM_DUR_FADE).setInterpolator(ANIM_ENTER).start();
-            hi.animate().alpha(1f).translationY(0f).setStartDelay(tail + 90).setDuration(ANIM_DUR_FADE).setInterpolator(ANIM_ENTER).start();
-            sub.animate().alpha(1f).translationY(0f).setStartDelay(tail + 180).setDuration(ANIM_DUR_FADE).setInterpolator(ANIM_ENTER).start();
-            trial.animate().alpha(1f).setStartDelay(tail + 270).setDuration(ANIM_DUR_FADE).setInterpolator(ANIM_ENTER).start();
-            go.animate().alpha(1f).translationY(0f).setStartDelay(tail + 360).setDuration(ANIM_DUR_FADE).setInterpolator(ANIM_ENTER).start();
-            hint.animate().alpha(1f).setStartDelay(tail + 450).setDuration(ANIM_DUR_FADE).setInterpolator(ANIM_ENTER).start();
+            hi.animate().alpha(1f).translationY(0f).setStartDelay(tail + 110).setDuration(ANIM_DUR_FADE).setInterpolator(ANIM_ENTER).start();
+            sub.animate().alpha(1f).translationY(0f).setStartDelay(tail + 220).setDuration(ANIM_DUR_FADE).setInterpolator(ANIM_ENTER).start();
+            trial.animate().alpha(1f).setStartDelay(tail + 330).setDuration(ANIM_DUR_FADE).setInterpolator(ANIM_ENTER).start();
+            go.animate().alpha(1f).translationY(0f).setStartDelay(tail + 440).setDuration(ANIM_DUR_FADE).setInterpolator(ANIM_ENTER).start();
+            hint.animate().alpha(1f).setStartDelay(tail + 550).setDuration(ANIM_DUR_FADE).setInterpolator(ANIM_ENTER).start();
         });
         return root;
     }
