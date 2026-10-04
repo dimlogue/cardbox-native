@@ -6062,9 +6062,13 @@ public class MainActivity extends Activity {
             int end = Math.min(rows, next[0] + 4);
             for (int r = next[0]; r < end; r++) addCardRowAt(container, list, r, insertAt);
             next[0] = end;
-            if (next[0] < rows) container.post(step[0]);
+            // Q95 热修（2.07）：续搭不许投给 container 自身——首页容器会被欢迎页/覆盖层摘除，
+            // View.post 在未 attach 时会 park 进该视图的 RunQueue，等重挂瞬间才集中 flush，
+            // 与切页淡入、玻璃背板重录挤在同一帧（清数据首启点「开始使用」闪退的 virgin 独有链路）。
+            // 改投主线程 Handler：页面在不在场都按帧推进，欢迎页停留期间即可搭完。
+            if (next[0] < rows) mainHandler.post(step[0]);
         };
-        container.post(step[0]);
+        mainHandler.post(step[0]);
     }
 
     void addCardRowAt(LinearLayout container, List<Card> list, int rowIdx, int[] insertAt) {
@@ -14019,12 +14023,21 @@ public class MainActivity extends Activity {
         content.removeAllViews();
         helloView = buildHelloPage();
         content.addView(helloView);
+        // Q95 热修（2.07）：首启时首页首次渲染原本从未在欢迎页停留期间跑过——触发它的
+        // refreshHome 投在被 removeAllViews 摘掉的首页视图上（View.post 未 attach 即 park），
+        // 点「开始使用」重挂瞬间才连同分帧续搭一起开跑，213 张图同步解码与切页淡入、底栏
+        // 玻璃背板重 attach 重录同帧相撞（清数据首启必崩、存量用户从不走此链）。
+        // 改为欢迎页一落定就在停留期间把首页渲染完（续搭已改投 mainHandler，见
+        // addCardRowsChunked），点开始后 showTab 只剩签名短路的纯换页，与日常切页同路。
+        mainHandler.post(() -> { if (helloOpen && homeRenderSig == null) refreshHome(); });
     }
 
     void closeHello() {
         if (helloClosing || !helloOpen) return;
         helloClosing = true;
-        try { prefs.edit().putBoolean("hello_done", true).putBoolean("welcomed", true).apply(); } catch (Throwable ignored) {}
+        // Q95 热修（2.07）：封印必须同步落盘——原 apply() 异步写，若进程在 flush 前死，
+        // hello_done 丢失，第二次打开又撞进欢迎页（深底被用户看作「黑屏」）再崩成循环。
+        try { prefs.edit().putBoolean("hello_done", true).putBoolean("welcomed", true).commit(); } catch (Throwable ignored) {}
         final View gone = helloView;
         // 单次落定：淡出动画 endAction 与 postDelayed 兜底两条路只许一条真正收尾，
         // 防动画被取消时两边各跑一次 showTab（欢迎收尾是全 App 唯一从动画回调切页的路径，收口在此一处）
