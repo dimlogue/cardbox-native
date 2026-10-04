@@ -2539,6 +2539,14 @@ public class MainActivity extends Activity {
             } catch (Throwable t) { return b; }
         }
 
+        static File remoteCacheDir(Context c) {
+            // OTA 图片按数据版本分目录：同名图片内容更新时，新版本会落到新目录，
+            // 不会让 filesDir 里按文件名留存的旧图永久顶住新图。旧目录只是下载缓存，
+            // 不含收藏、自定义卡等用户数据，未命中时按需重新下载。
+            int v = Store.dataVersion;
+            return new File(new File(c.getFilesDir(), "ota-images"), "v" + Math.max(0, v));
+        }
+
         static Bitmap get(Context c, String path) {
             if (path == null || path.isEmpty()) return null;
             Bitmap hit = cache.get(path);
@@ -2549,7 +2557,7 @@ public class MainActivity extends Activity {
             } catch (Exception e) { /* 内置没有（OTA 新卡图）走远程兜底 */ }
             // OTA 新卡的图不在安装包里：先读已缓存的远程图，没有就后台拉一次（数据仓 images/ 同步自 publish-data）
             try {
-                File f = new File(new File(c.getFilesDir(), "ota-images"), new File(path).getName());
+                File f = new File(remoteCacheDir(c), new File(path).getName());
                 if (f.exists()) {
                     Bitmap b = decode(new FileInputStream(f));
                     if (b != null) { cache.put(path, b); return b; }
@@ -2572,7 +2580,7 @@ public class MainActivity extends Activity {
             catch (Exception e) { /* 内置没有走 OTA 文件兜底 */ }
             if (b == null) {
                 try {
-                    File f = new File(new File(c.getFilesDir(), "ota-images"), new File(path).getName());
+                    File f = new File(remoteCacheDir(c), new File(path).getName());
                     if (f.exists()) b = decodeSized(new FileInputStream(f), c, path, bucket);
                     else fetchRemote(c.getApplicationContext(), path, f);
                 } catch (Exception e) { /* 拿不到图就占位，不崩 */ }
@@ -2594,7 +2602,7 @@ public class MainActivity extends Activity {
                 op.inSampleSize = ss;
                 InputStream in2;
                 try { in2 = c.getAssets().open(path); }
-                catch (Exception e) { in2 = new FileInputStream(new File(new File(c.getFilesDir(), "ota-images"), new File(path).getName())); }
+                catch (Exception e) { in2 = new FileInputStream(new File(remoteCacheDir(c), new File(path).getName())); }
                 b = BitmapFactory.decodeStream(in2, null, op);
                 try { in2.close(); } catch (Exception ignored) {}
             } catch (Exception e) { /* 解码失败回落占位 */ }
@@ -2606,7 +2614,7 @@ public class MainActivity extends Activity {
             new Thread(() -> {
                 try {
                     String name = new File(path).getName();
-                    HttpURLConnection conn = (HttpURLConnection) new URL("https://cdn.jsdelivr.net/gh/dimlogue/cardbox-data@main/images/" + name).openConnection();
+                    HttpURLConnection conn = (HttpURLConnection) new URL("https://cdn.jsdelivr.net/gh/dimlogue/cardbox-data@main/images/" + name + "?v=" + Math.max(0, Store.dataVersion)).openConnection();
                     conn.setConnectTimeout(8000); conn.setReadTimeout(8000);
                     if (conn.getResponseCode() == 200) {
                         dest.getParentFile().mkdirs();
