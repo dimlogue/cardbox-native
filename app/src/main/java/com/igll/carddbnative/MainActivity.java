@@ -233,7 +233,7 @@ public class MainActivity extends Activity {
         GradientDrawable g = new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
             new int[]{accentColor(), accentColor()});
         g.setColor(accentColor());
-        g.setCornerRadius(dp(this, 14));
+        g.setCornerRadius(dp(this, 20)); // Q94 定版 token：按钮大圆角向 20dp 档靠拢、柔影低透明
         b.setBackground(new RippleDrawable(ColorStateList.valueOf(Color.argb(36, 255, 255, 255)), g, null));
         if (Build.VERSION.SDK_INT >= 21) b.setElevation(dp(this, 2));
         b.setPadding(dp(this, 16), 0, dp(this, 16), 0);
@@ -250,7 +250,7 @@ public class MainActivity extends Activity {
         TextView b = tv(this, label, 15, colText(), false);
         b.setGravity(Gravity.CENTER);
         b.setSingleLine(true);
-        b.setBackground(rippleBg(colChipOff(), 14));
+        b.setBackground(rippleBg(colChipOff(), 20));
         b.setPadding(dp(this, 16), 0, dp(this, 16), 0);
         b.setOnTouchListener((v, e) -> {
             if (e.getAction() == MotionEvent.ACTION_DOWN) pressBounce(v, true);
@@ -8578,7 +8578,7 @@ public class MainActivity extends Activity {
     View buildMineSummaryCard(List<MineRow> rows, List<Card> owned) {
         LinearLayout box = new LinearLayout(this);
         box.setOrientation(LinearLayout.VERTICAL);
-        box.setBackground(rippleBg(colSurface(), 16));
+        box.setBackground(rippleBg(colSurface(), 20)); // Q94 token：卡面圆角向 20dp 档
         box.setClipToOutline(true);
         box.setPadding(dp(this, 14), dp(this, 12), dp(this, 14), dp(this, 12));
         LinearLayout.LayoutParams bp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
@@ -8682,7 +8682,7 @@ public class MainActivity extends Activity {
         if (cells.isEmpty()) return new View(this);
         LinearLayout card = new LinearLayout(this);
         card.setOrientation(LinearLayout.VERTICAL);
-        card.setBackground(rippleBg(colSurface(), 16));
+        card.setBackground(rippleBg(colSurface(), 20)); // Q94 token：卡面圆角向 20dp 档
         card.setClipToOutline(true);
         card.setPadding(dp(this, 10), dp(this, 10), dp(this, 10), dp(this, 10));
         LinearLayout.LayoutParams clp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
@@ -9292,11 +9292,10 @@ public class MainActivity extends Activity {
         } catch (Throwable ignored) { tile.setTranslationY(0); refreshMineKeepScroll(); }
     }
 
-    Button customActBtn(String label, boolean disabled, View.OnClickListener onClick) {
-        Button b = new Button(this);
-        b.setText(label); b.setTextSize(11f); b.setAllCaps(false);
-        b.setMinWidth(0); b.setMinHeight(0);
-        b.setPadding(dp(this, 8), dp(this, 3), dp(this, 8), dp(this, 3));
+    TextView customActBtn(String label, boolean disabled, View.OnClickListener onClick) {
+        TextView b = tv(this, label, 11, Color.WHITE, false); // Q92: TextView 化，去原生 Button 边距/阴影
+        b.setGravity(Gravity.CENTER);
+        b.setPadding(dp(this, 10), dp(this, 5), dp(this, 10), dp(this, 5));
         b.setTextColor(disabled ? Color.argb(140, 255, 255, 255) : Color.WHITE);
         b.setBackground(roundRect(Color.argb(disabled ? 30 : 48, 255, 255, 255), 999, this));
         b.setEnabled(!disabled);
@@ -9844,7 +9843,7 @@ public class MainActivity extends Activity {
             GradientDrawable g = new GradientDrawable();
             // Q92：输入框走语义色——未聚焦柔色填充无硬描边，聚焦回浮层色 + 主色细描边，深色自适应
             g.setColor(foc ? colSurface() : colChipOff());
-            g.setCornerRadius(dp(this, 12));
+            g.setCornerRadius(dp(this, 16)); // Q94 token：输入大圆角
             g.setStroke(dp(this, 1), foc ? accentColor() : Color.TRANSPARENT);
             e.setBackground(g);
         };
@@ -10456,7 +10455,7 @@ public class MainActivity extends Activity {
         inBin.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
         final LinearLayout resultBox = new LinearLayout(this);
         resultBox.setOrientation(LinearLayout.VERTICAL);
-        final Button addBtn = new Button(this);
+        final TextView addBtn = softPrimaryBtn("加入我的卡片");
         card.addView(tv(this, "在线查询卡信息", 17, Color.rgb(0x1C, 0x1C, 0x1E), true));
         TextView hint = tv(this, "输入银行卡号前 6–8 位，在线查询卡组织、发卡行等信息，可一键加入我的卡片。", 12.5f, Color.rgb(0x8E, 0x8E, 0x93), false);
         LinearLayout.LayoutParams hintLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
@@ -10468,13 +10467,7 @@ public class MainActivity extends Activity {
         formLp.topMargin = dp(this, 12);
         card.addView(formRow, formLp);
         formRow.addView(inBin, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
-        Button go = new Button(this);
-        go.setText("查询"); go.setTextSize(15); go.setAllCaps(false); go.setTextColor(Color.WHITE);
-        try { go.setTypeface(weightTypeface(this, 700)); } catch (Throwable ignored) {}
-        GradientDrawable goBg = new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
-            new int[]{Color.rgb(0x0A, 0x84, 0xFF), Color.rgb(0x00, 0x66, 0xE6)});
-        goBg.setCornerRadius(dp(this, 12));
-        go.setBackground(goBg);
+        TextView go = softPrimaryBtn("查询");
         LinearLayout.LayoutParams goLp = new LinearLayout.LayoutParams(dp(this, 84), dp(this, 48));
         goLp.leftMargin = dp(this, 10);
         // customInput 自带 topMargin 6，与查询钮对齐需把输入框的边距在行内归零
@@ -10493,18 +10486,9 @@ public class MainActivity extends Activity {
         LinearLayout.LayoutParams actLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         actLp.topMargin = dp(this, 14);
         card.addView(acts, actLp);
-        Button closeBtn = new Button(this);
-        closeBtn.setText("关闭"); closeBtn.setTextSize(15); closeBtn.setAllCaps(false);
-        try { closeBtn.setTypeface(weightTypeface(this, 600)); } catch (Throwable ignored) {}
-        closeBtn.setBackground(roundRect(Color.rgb(0xF2, 0xF3, 0xF7), 14, this));
+        TextView closeBtn = softGhostBtn("关闭");
         closeBtn.setOnClickListener(v -> { haptic(); closeBinQuery(); });
         acts.addView(closeBtn, new LinearLayout.LayoutParams(0, dp(this, 48), 1f));
-        addBtn.setText("加入我的卡片"); addBtn.setTextSize(15); addBtn.setAllCaps(false); addBtn.setTextColor(Color.WHITE);
-        try { addBtn.setTypeface(weightTypeface(this, 700)); } catch (Throwable ignored) {}
-        GradientDrawable addBg = new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
-            new int[]{Color.rgb(0x0A, 0x84, 0xFF), Color.rgb(0x00, 0x66, 0xE6)});
-        addBg.setCornerRadius(dp(this, 14));
-        addBtn.setBackground(addBg);
         LinearLayout.LayoutParams addLp = new LinearLayout.LayoutParams(0, dp(this, 48), 1.4f);
         addLp.leftMargin = dp(this, 10);
         addBtn.setVisibility(View.GONE);
@@ -10596,7 +10580,7 @@ public class MainActivity extends Activity {
     // ①binlist 剩余字段全展示（prepaid 有才显、bank.city/url/phone 有才显，空跳行不编造）；
     // ②国家英文原名+括号简体中文（alpha2 经 Locale）；③本地命中（BIN 前缀→行名+组织）加可点行；
     // 失败只显查不到、不假装查到；一键加入沿 addBinToMine（name=银行+组织(BIN)、note=type·brand·国家英文名）。
-    void lookupBinOnline(final String bin, final LinearLayout resultBox, final Button addBtn) {
+    void lookupBinOnline(final String bin, final LinearLayout resultBox, final TextView addBtn) {
         if (bin == null || !bin.matches("[0-9]{6,8}")) { showFloatToast("请输入 6–8 位数字 BIN"); return; }
         resultBox.removeAllViews();
         resultBox.addView(tv(this, "查询中…", 13.5f, Color.rgb(0x8E, 0x8E, 0x93), false));
@@ -11007,19 +10991,11 @@ public class MainActivity extends Activity {
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         actLp.topMargin = dp(this, 16);
         form.addView(acts, actLp);
-        Button cancel = new Button(this);
-        cancel.setText("取消"); cancel.setTextSize(15); cancel.setAllCaps(false);
-        cancel.setBackground(roundRect(Color.rgb(0xF2, 0xF3, 0xF7), 14, this));
+        TextView cancel = softGhostBtn("取消");
+        cancel.setText("取消");
         cancel.setOnClickListener(v -> { haptic(); closeCustomForm(); });
         acts.addView(cancel, new LinearLayout.LayoutParams(0, dp(this, 48), 1f));
-        Button save = new Button(this);
-        save.setText("保存"); save.setTextSize(15); save.setAllCaps(false);
-        save.setTextColor(Color.WHITE);
-        try { save.setTypeface(save.getTypeface(), android.graphics.Typeface.BOLD); } catch (Throwable ignored) {}
-        GradientDrawable saveBg = new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
-            new int[]{Color.rgb(0x0A, 0x84, 0xFF), Color.rgb(0x00, 0x66, 0xE6)}); // .primary-btn 蓝渐变
-        saveBg.setCornerRadius(dp(this, 14));
-        save.setBackground(saveBg);
+        TextView save = softPrimaryBtn("保存");
         LinearLayout.LayoutParams saveLp = new LinearLayout.LayoutParams(0, dp(this, 48), 2f);
         saveLp.leftMargin = dp(this, 10);
         acts.addView(save, saveLp);
@@ -11728,18 +11704,37 @@ public class MainActivity extends Activity {
         fitExtResultHeight(); // Q92：结果区随内容自适应，少结果不再撑出大半屏空白
     }
 
-    /** Q92：量结果内容实高，结果滚动区高度 = min(实高, 0.52 屏高)；重建后回顶。 */
+    /** Q92：量结果内容实高，结果滚动区高度 = min(实高, 0.52 屏高)，并同步收窗体与玻璃层高（窗高随内容自适应）；重建后回顶。 */
     void fitExtResultHeight() {
         if (extResScroll == null || extResultBox == null) return;
-        int cap = (int) (getResources().getDisplayMetrics().heightPixels * 0.52);
-        int w = extResScroll.getWidth();
-        if (w <= 0) w = getResources().getDisplayMetrics().widthPixels - dp(this, 60);
-        extResultBox.measure(View.MeasureSpec.makeMeasureSpec(Math.max(1, w), View.MeasureSpec.EXACTLY),
-            View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED));
-        int h = Math.min(extResultBox.getMeasuredHeight(), cap);
-        ViewGroup.LayoutParams lp = extResScroll.getLayoutParams();
-        if (lp != null && lp.height != h) { lp.height = h; extResScroll.setLayoutParams(lp); }
-        extResScroll.scrollTo(0, 0);
+        try {
+            int cap = (int) (getResources().getDisplayMetrics().heightPixels * 0.52);
+            int w = extResScroll.getWidth();
+            if (w <= 0) w = getResources().getDisplayMetrics().widthPixels - dp(this, 60);
+            extResultBox.measure(View.MeasureSpec.makeMeasureSpec(Math.max(1, w), View.MeasureSpec.EXACTLY),
+                View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED));
+            int h = Math.min(extResultBox.getMeasuredHeight(), cap);
+            ViewGroup.LayoutParams lp = extResScroll.getLayoutParams();
+            if (lp != null && lp.height != h) { lp.height = h; extResScroll.setLayoutParams(lp); }
+            extResScroll.scrollTo(0, 0);
+            // 窗体同步：按内容重测 card，连带 wrap 与玻璃层同高，避免底部空带
+            View cardV = (View) extResScroll.getParent();
+            if (cardV != null && cardV.getParent() instanceof ViewGroup) {
+                ViewGroup wrapG = (ViewGroup) cardV.getParent();
+                int maxCardH = (int) (getResources().getDisplayMetrics().heightPixels * 0.86);
+                cardV.measure(View.MeasureSpec.makeMeasureSpec(
+                        getResources().getDisplayMetrics().widthPixels - dp(this, 24), View.MeasureSpec.EXACTLY),
+                    View.MeasureSpec.makeMeasureSpec(maxCardH, View.MeasureSpec.AT_MOST));
+                int nh = Math.min(cardV.getMeasuredHeight(), maxCardH);
+                ViewGroup.LayoutParams wlp = wrapG.getLayoutParams();
+                if (wlp != null && wlp.height != nh) { wlp.height = nh; wrapG.setLayoutParams(wlp); }
+                if (wrapG.getChildCount() > 0) {
+                    View glassV = wrapG.getChildAt(0);
+                    ViewGroup.LayoutParams glp = glassV.getLayoutParams();
+                    if (glp != null && glp.height != nh) { glp.height = nh; glassV.setLayoutParams(glp); }
+                }
+            }
+        } catch (Throwable ignored) {}
     }
 
     // ---------- Q78 展柜（纯卡面展示：堆叠 / 平放自由画布） ----------
@@ -13822,15 +13817,7 @@ public class MainActivity extends Activity {
             sponsor.addView(ph, qlp);
         }
 
-        Button save = new Button(this);
-        save.setText("保存二维码到相册"); save.setTextSize(14); save.setAllCaps(false);
-        save.setTextColor(Color.WHITE);
-        GradientDrawable sbg = new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
-            new int[]{Color.argb(235, 0x0A, 0x84, 0xFF), Color.argb(235, 0x00, 0x66, 0xE6)});
-        sbg.setCornerRadius(dp(this, 14));
-        sbg.setStroke(dp(this, 1), Color.argb(90, 255, 255, 255));
-        save.setBackground(sbg);
-        if (Build.VERSION.SDK_INT >= 21) save.setElevation(dp(this, 4));
+        TextView save = softPrimaryBtn("保存二维码到相册");
         save.setOnClickListener(v -> { haptic(); saveSponsorQr(); });
         sponsor.addView(save, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(this, 46)));
 
@@ -14207,15 +14194,8 @@ public class MainActivity extends Activity {
             tx.addView(d);
         }
 
-        Button go = new Button(this);
-        go.setText("开始使用");
+        TextView go = softPrimaryBtn("开始使用");
         go.setTextSize(15.5f);
-        go.setAllCaps(false);
-        go.setTextColor(Color.WHITE);
-        GradientDrawable gb = new GradientDrawable(GradientDrawable.Orientation.LEFT_RIGHT,
-            new int[]{Color.rgb(0x0A, 0x84, 0xFF), Color.rgb(0x5E, 0x5C, 0xE6)});
-        gb.setCornerRadius(dp(this, 16));
-        go.setBackground(gb);
         LinearLayout.LayoutParams glp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(this, 52));
         glp.topMargin = dp(this, 26);
         page.addView(go, glp);
@@ -14653,10 +14633,7 @@ public class MainActivity extends Activity {
             LinearLayout.LayoutParams bpl = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
             bpl.topMargin = dp(this, 10);
             crashBtns.setLayoutParams(bpl);
-            Button copyBtn = new Button(this);
-            copyBtn.setText("复制记录"); copyBtn.setTextSize(12.5f); copyBtn.setAllCaps(false);
-            copyBtn.setBackground(roundRect(Color.rgb(0x0A, 0x5C, 0xD6), 9, this));
-            copyBtn.setTextColor(Color.WHITE);
+            TextView copyBtn = softMiniBtn("复制记录", true);
             copyBtn.setOnClickListener(v -> {
                 haptic();
                 try {
@@ -14666,9 +14643,7 @@ public class MainActivity extends Activity {
                 } catch (Throwable ignored) { showFloatToast("复制失败"); }
             });
             crashBtns.addView(copyBtn, new LinearLayout.LayoutParams(0, dp(this, 38), 1f));
-            Button clearBtn = new Button(this);
-            clearBtn.setText("清除记录"); clearBtn.setTextSize(12.5f); clearBtn.setAllCaps(false);
-            clearBtn.setBackground(roundRect(Color.rgb(0xEE, 0xF1, 0xF6), 9, this));
+            TextView clearBtn = softMiniBtn("清除记录", false);
             clearBtn.setOnClickListener(v -> { haptic(); clearCrashLog(); rebuildPages(); showFloatToast("崩溃记录已清除"); });
             LinearLayout.LayoutParams clrLp = new LinearLayout.LayoutParams(0, dp(this, 38), 1f);
             clrLp.leftMargin = dp(this, 10);
