@@ -318,7 +318,7 @@ public class MainActivity extends Activity {
             bubblePaint.setStyle(Paint.Style.FILL);
             bubblePaint.setColor(Color.argb(224, 28, 32, 44));
             bubbleText.setColor(Color.WHITE);
-            bubbleText.setTextSize(dp(c, 11));
+            bubbleText.setTextSize(dp(c, 12.5f));
             bubbleText.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
             bubbleText.setTextAlign(Paint.Align.CENTER);
             sv.getViewTreeObserver().addOnScrollChangedListener(() -> {
@@ -355,17 +355,31 @@ public class MainActivity extends Activity {
             int max = maxScroll();
             float p = max > 0 ? (float) target.getScrollY() / (float) max : 0f;
             float top = p * (getHeight() - th);
-            float w = dp(getContext(), dragging ? 7 : 5);
-            float right = getWidth() - dp(getContext(), 3);
-            thumbPaint.setColor(Color.argb(dragging ? 140 : 92, 20, 30, 60));
-            cv.drawRoundRect(new RectF(right - w, top, right, top + th), dp(getContext(), 3), dp(getContext(), 3), thumbPaint);
+            // Q76：玻璃胶囊条——8–10dp 可抓宽度、清晰明亮，拖时 10dp、滚动显形期 9dp、常显 8dp
+            float w = dp(getContext(), dragging ? 10 : 8.5f);
+            float right = getWidth() - dp(getContext(), 4);
+            float left = right - w;
+            float rad = w / 2f;
+            Paint bg = new Paint(Paint.ANTI_ALIAS_FLAG);
+            bg.setStyle(Paint.Style.FILL);
+            bg.setColor(Color.argb(dragging ? 235 : 210, 255, 255, 255));
+            cv.drawRoundRect(new RectF(left, top, right, top + th), rad, rad, bg);
+            Paint bd = new Paint(Paint.ANTI_ALIAS_FLAG);
+            bd.setStyle(Paint.Style.STROKE);
+            bd.setStrokeWidth(dp(getContext(), 1));
+            bd.setColor(Color.argb(150, 255, 255, 255));
+            cv.drawRoundRect(new RectF(left + dp(getContext(), .5f), top + dp(getContext(), .5f), right - dp(getContext(), .5f), top + th - dp(getContext(), .5f)), rad, rad, bd);
+            Paint core = new Paint(Paint.ANTI_ALIAS_FLAG);
+            core.setStyle(Paint.Style.FILL);
+            core.setColor(Color.argb(dragging ? 120 : 80, 10, 92, 214));
+            cv.drawRoundRect(new RectF(left + dp(getContext(), 2), top + dp(getContext(), 2), right - dp(getContext(), 2), top + th - dp(getContext(), 2)), Math.max(1, rad - dp(getContext(), 2)), Math.max(1, rad - dp(getContext(), 2)), core);
             if (dragging) {
                 String txt = Math.round(p * 100) + "%";
-                float bw = dp(getContext(), 40), bh = dp(getContext(), 22);
-                float bx = right - w - dp(getContext(), 8) - bw;
+                float bw = dp(getContext(), 46), bh = dp(getContext(), 26);
+                float bx = right - w - dp(getContext(), 10) - bw;
                 float by = top + th / 2f - bh / 2f;
-                cv.drawRoundRect(new RectF(bx, by, bx + bw, by + bh), dp(getContext(), 8), dp(getContext(), 8), bubblePaint);
-                cv.drawText(txt, bx + bw / 2f, by + bh / 2f + dp(getContext(), 4), bubbleText);
+                cv.drawRoundRect(new RectF(bx, by, bx + bw, by + bh), dp(getContext(), 10), dp(getContext(), 10), bubblePaint);
+                cv.drawText(txt, bx + bw / 2f, by + bh / 2f + dp(getContext(), 4.5f), bubbleText);
             }
         }
         void jumpTo(float y) {
@@ -407,7 +421,7 @@ public class MainActivity extends Activity {
     DragBarView attachDragBar(FrameLayout host, ScrollView sv, boolean persistent, int topDp, int bottomDp) {
         sv.setVerticalScrollBarEnabled(false);
         DragBarView bar = new DragBarView(this, sv, persistent);
-        FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(dp(this, 22), ViewGroup.LayoutParams.MATCH_PARENT);
+        FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(dp(this, 32), ViewGroup.LayoutParams.MATCH_PARENT);
         lp.gravity = Gravity.RIGHT | Gravity.TOP;
         lp.topMargin = dp(this, topDp);
         lp.bottomMargin = dp(this, bottomDp) + navBarH(); // Q49/Q26：轨道下止于 dock 上沿，绝不探进手势小白条区
