@@ -10150,7 +10150,7 @@ public class MainActivity extends Activity {
         LinearLayout col = new LinearLayout(this); col.setOrientation(LinearLayout.VERTICAL);
         col.setPadding(dp(this, 14), 0, dp(this, 14), dockPad());
         ov.addView(col);
-        col.addView(pageBackHead("活动追踪", () -> { haptic(); ((ViewGroup) content).removeView(ov); restoreChrome(); }), new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        col.addView(pageBackHead("活动追踪", () -> { haptic(); closeOwnActs(); }), new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
         col.addView(slimSub("开卡任务 / 刷满次数 / 消费达标，纯本机记录。"));
         ScrollView sv = new ScrollView(this); LinearLayout list = new LinearLayout(this); list.setOrientation(LinearLayout.VERTICAL); sv.addView(list); col.addView(sv, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
         if (ownActs.isEmpty()) list.addView(emptyState("还没有活动\n点下方新增一条开卡任务或消费达标。"));
@@ -10175,7 +10175,14 @@ public class MainActivity extends Activity {
         hideChrome(); content.addView(ov); ownActsOverlay = ov;
     }
     FrameLayout ownActsOverlay = null;
-    void openOwnActsRefresh(FrameLayout old) { try { if (old != null) ((ViewGroup) content).removeView(old); } catch (Throwable ignored) {} openOwnActs(); }
+    /** Q107：活动追踪统一收口——屏上箭头与系统返回共用；旧实现只箭头内联 removeView，
+     * ownActsOverlay 从不清空、且 onBackPressed 链无此页，系统返回直接落 super→finish 退桌面。 */
+    void closeOwnActs() {
+        FrameLayout ov = ownActsOverlay; ownActsOverlay = null;
+        if (ov != null && ov.getParent() instanceof ViewGroup) ((ViewGroup) ov.getParent()).removeView(ov);
+        restoreChrome();
+    }
+    void openOwnActsRefresh(FrameLayout old) { try { if (old != null) ((ViewGroup) content).removeView(old); if (ownActsOverlay == old) ownActsOverlay = null; } catch (Throwable ignored) {} openOwnActs(); }
     void openOwnActForm(final FrameLayout parentOv) {
         // minimal inline form appended as sheet-like card at bottom of overlay
         LinearLayout f = new LinearLayout(this); f.setOrientation(LinearLayout.VERTICAL); f.setBackground(roundRect(colSheet(), 16, this)); f.setPadding(dp(this,16),dp(this,14),dp(this,16),dp(this,14));
@@ -16794,6 +16801,7 @@ public class MainActivity extends Activity {
         if (simkeepFormSheet != null) { closeSimKeepForm(); return; }
         if (simkeepView != null) { closeSimKeep(); return; }
         if (showcaseView != null) { closeShowcase(); return; }
+        if (ownActsOverlay != null) { closeOwnActs(); return; } // Q107：活动追踪漏挂返回链的同病点名修
         if (moreMenuOverlay != null) { closeMoreMenu(); return; }
         if (floatSearchOpen) { closeFloatSearch(); return; }
         if (cardMenuPop != null) { closeCardMenu(); return; }
