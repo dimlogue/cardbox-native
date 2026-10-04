@@ -1,0 +1,177 @@
+diff --git a/AndroidManifest.xml b/AndroidManifest.xml
+index 5150dcf..da495d4 100644
+--- a/AndroidManifest.xml
++++ b/AndroidManifest.xml
+@@ -1,8 +1,8 @@
+ <?xml version="1.0" encoding="utf-8"?>
+ <manifest xmlns:android="http://schemas.android.com/apk/res/android"
+     package="com.igll.carddbnative"
+-    android:versionCode="223"
+-    android:versionName="2.23-native">
++    android:versionCode="224"
++    android:versionName="2.24-native">
+     <uses-permission android:name="android.permission.INTERNET" />
+     <uses-permission android:name="android.permission.VIBRATE" />
+     <uses-permission android:name="android.permission.NFC" />
+diff --git a/app/src/main/java/com/igll/carddbnative/MainActivity.java b/app/src/main/java/com/igll/carddbnative/MainActivity.java
+index 2094013..569b99c 100644
+--- a/app/src/main/java/com/igll/carddbnative/MainActivity.java
++++ b/app/src/main/java/com/igll/carddbnative/MainActivity.java
+@@ -991,6 +991,8 @@ public class MainActivity extends Activity {
+     String darkModePref = "system";
+     String themeColorKey = "blue";
+     static final String[][] THEME_OPTS = {{"blue","蓝"},{"teal","青绿"},{"violet","紫"},{"green","翠绿"},{"orange","橙"}};
++    // Q110（2.24）：主题色英文名（key 与 THEME_OPTS 同序；数据键仍走 THEME_OPTS[i][0]，此处纯展示）
++    static final String[] THEME_NAME_EN = {"Blue","Teal","Purple","Jade","Orange"};
+     void loadAppearancePrefs() {
+         try {
+             darkModePref = prefs == null ? "system" : prefs.getString("dark_mode", "system");
+@@ -1014,7 +1016,7 @@ public class MainActivity extends Activity {
+         STR.put("doubt", new String[]{"存疑","Unverified"});
+         STR.put("settings_title", new String[]{"设置","Settings"});
+         STR.put("language", new String[]{"语言","Language"});
+-        STR.put("lang_system", new String[]{"跟随系统","Follow System"});
++        STR.put("lang_system", new String[]{"跟随系统","System"}); // Q110（2.24）：英文短词，与 dark_system 同口径（旧 "Follow System" 在等分钮里折两行突出）
+         STR.put("lang_zh", new String[]{"简体中文","简体中文"});
+         STR.put("lang_en", new String[]{"English","English"});
+         STR.put("lang_hint", new String[]{"切换立即生效，不用重启","Applies instantly, no restart needed"});
+@@ -1028,9 +1030,9 @@ public class MainActivity extends Activity {
+         STR.put("dark_system", new String[]{"跟随系统","System"});
+         STR.put("dark_light", new String[]{"浅色","Light"});
+         STR.put("dark_dark", new String[]{"深色","Dark"});
+-        STR.put("card_color", new String[]{"卡面配色","Placeholder Color"});
+-        STR.put("card_color_light", new String[]{"浅色柔光","Light Soft"});
+-        STR.put("card_color_dark", new String[]{"深色沉稳","Dark Calm"});
++        STR.put("card_color", new String[]{"卡面配色","Card Face Colors"}); // Q110（2.24）：英文润色（旧 "Placeholder Color" 不成话），待用户终审可否决
++        STR.put("card_color_light", new String[]{"浅色柔光","Soft Light"});
++        STR.put("card_color_dark", new String[]{"深色沉稳","Deep Calm"});
+         STR.put("font", new String[]{"字体","Font"});
+         STR.put("font_builtin", new String[]{"默认","Default"}); // Q104（2.18）：字体三档真选择——默认=内置 Noto Sans SC（Q42 字体栈原样）
+         STR.put("font_system", new String[]{"本机字体","System Font"});
+@@ -1286,6 +1288,19 @@ public class MainActivity extends Activity {
+         EN_TXT.put("打不开文件选择器", "Couldn't open the file picker");
+         EN_TXT.put("版本信息", "Version Info"); EN_TXT.put("应用简介", "About This App");
+         EN_TXT.put("数据来源与参考来源", "Data & References"); EN_TXT.put("版本与更新日志", "Version & Changelog");
++        // Q110（2.24）：关于页「数据来源」整段正式英译（旧版仅标题译、正文留中文，用户 22:18 点名）
++        EN_TXT.put("银行借记卡资料库：收录国内主要银行发行的借记卡，支持按卡组织、发卡行、特点筛选，数据内置、离线可用。你也可以收藏「我的卡片」，或添加自定义卡片。",
++            "A database of debit cards from China's major banks. Filter by card network, issuer and features; everything is built in and works offline. You can also save cards to My Cards or add your own custom cards.");
++        EN_TXT.put("数据来源为各银行公开资料整理，部分字段标注「待核实」，仅供参考，不构成办卡建议。",
++            "Compiled from public materials published by each bank. Some fields are marked \"Unverified\". For reference only — this is not advice on applying for any card.");
++        EN_TXT.put("· 各银行官网公开的产品页、收费标准与权益说明（卡面、费率与权益以发卡行最新公布为准）",
++            "· Product pages, fee schedules and benefit terms from each bank's official site (card designs, fees and benefits follow the issuer's latest publications)");
++        EN_TXT.put("· 银联、Visa、Mastercard、American Express、JCB 等卡组织公开资料",
++            "· Public materials from UnionPay, Visa, Mastercard, American Express, JCB and other card networks");
++        EN_TXT.put("· 卡盒数据仓（cards.json）随版本经 OTA 更新，更新前会先提示、经确认才应用",
++            "· The CardBox data set (cards.json), delivered by over-the-air updates — you are always asked before an update is applied");
++        EN_TXT.put("· 版式与字段结构研读参考：公开卡片资料站与开源卡包类应用（仅研读结构与口径，代码全部手写，未抄录）",
++            "· Layout and field structure studied from public card databases and open-source card-wallet apps (structure and conventions only; all code here is hand-written, nothing copied)");
+         EN_TXT.put("查看更新日志 ›", "View Changelog ›"); EN_TXT.put("查看更新日志", "Changelog");
+         EN_TXT.put("收起日志", "Collapse Log"); EN_TXT.put("更新日志读取失败", "Couldn't read the changelog");
+         EN_TXT.put("支持作者", "Support the Author"); EN_TXT.put("请作者喝杯咖啡", "Buy the Author a Coffee");
+@@ -13121,6 +13136,12 @@ public class MainActivity extends Activity {
+     // Q66 卡片常识：资讯页下半组词条，数据源与资讯同走 assets 种子 + prefs 缓存 + OTA 双线（glossary.json），不写死在代码
+     static class GlossaryItem {
+         String id, term, aka, category, body;
++        // Q110（2.24）：英文双语字段（种子 glossary.json 的 *_en；OTA 旧版数据无此字段时为空、显示回落中文）
++        String termEn, akaEn, categoryEn, bodyEn;
++        String dTerm() { return EN_MODE && termEn != null && !termEn.isEmpty() ? termEn : (term == null ? "" : term); }
++        String dAka() { return EN_MODE && akaEn != null && !akaEn.isEmpty() ? akaEn : (aka == null ? "" : aka); }
++        String dCategory() { return EN_MODE && categoryEn != null && !categoryEn.isEmpty() ? categoryEn : (category == null ? "" : category); }
++        String dBody() { return EN_MODE && bodyEn != null && !bodyEn.isEmpty() ? bodyEn : (body == null ? "" : body); }
+     }
+     List<GlossaryItem> glossaryItems = null;
+     java.util.Set<String> glossaryOpen = new java.util.HashSet<>();
+@@ -13191,6 +13212,9 @@ public class MainActivity extends Activity {
+                 g.id = o.optString("id"); g.term = o.optString("term");
+                 g.aka = o.optString("aka"); g.category = o.optString("category");
+                 g.body = o.optString("body");
++                // Q110：双语字段（旧版/远端数据缺字段时为空串，显示层回落中文）
++                g.termEn = o.optString("term_en"); g.akaEn = o.optString("aka_en");
++                g.categoryEn = o.optString("category_en"); g.bodyEn = o.optString("body_en");
+                 if (g.id == null || g.id.isEmpty() || g.term == null || g.term.isEmpty()) continue;
+                 out.add(g);
+             }
+@@ -15659,7 +15683,7 @@ public class MainActivity extends Activity {
+         htlp.leftMargin = dp(this, 14);
+         hero.addView(heroTx, htlp);
+         heroTx.addView(tv(this, "卡盒", 19, colText(), true));
+-        TextView ver = tv(this, "版本 " + appVersion(), 12.5f, colText2(), false);
++        TextView ver = tv(this, isEn() ? "Version " + appVersion() : "版本 " + appVersion(), 12.5f, colText2(), false); // Q110：关于页版本行英文
+         LinearLayout.LayoutParams vlp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+         vlp.topMargin = dp(this, 2);
+         heroTx.addView(ver, vlp);
+@@ -16617,7 +16641,7 @@ public class MainActivity extends Activity {
+                 dotWrap.addView(ringV, new FrameLayout.LayoutParams(dp(this, 38), dp(this, 38), Gravity.CENTER));
+             }
+             cell.addView(dotWrap, new LinearLayout.LayoutParams(dp(this, 38), dp(this, 38)));
+-            TextView nm = tv(this, THEME_OPTS[i][1], 11, on ? accentColor() : colText2(), on);
++            TextView nm = tv(this, isEn() ? THEME_NAME_EN[i] : THEME_OPTS[i][1], 11, on ? accentColor() : colText2(), on); // Q110：英文色名
+             nm.setGravity(Gravity.CENTER);
+             LinearLayout.LayoutParams nlp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+             nlp.topMargin = dp(this, 3);
+@@ -16652,6 +16676,7 @@ public class MainActivity extends Activity {
+             t.setGravity(Gravity.CENTER);
+             // Q94 铺开：选中改浅雾蓝胶囊＋强调色字（试点选片同语言），废原整坨实心蓝
+             t.setBackground(on ? softCapsuleBg(9) : roundRect(colChipOff(), 9, this));
++            t.setSingleLine(true); t.setMaxLines(1); t.setEllipsize(android.text.TextUtils.TruncateAt.END); // Q110：分段钮单行钉死，等分行内不许折行突出（用户 22:17 点名）
+             t.setPadding(dp(this, 4), dp(this, 8), dp(this, 4), dp(this, 8));
+             LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+             lp.rightMargin = dp(this, 8);
+@@ -16705,6 +16730,7 @@ public class MainActivity extends Activity {
+             t.setGravity(Gravity.CENTER);
+             // Q94 铺开：同 segRow 浅雾蓝胶囊选中态
+             t.setBackground(on ? softCapsuleBg(9) : roundRect(colChipOff(), 9, this));
++            t.setSingleLine(true); t.setMaxLines(1); t.setEllipsize(android.text.TextUtils.TruncateAt.END); // Q110：分段钮单行钉死，等分行内不许折行突出（用户 22:17 点名）
+             t.setPadding(dp(this, 4), dp(this, 8), dp(this, 4), dp(this, 8));
+             LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+             lp.rightMargin = dp(this, 8);
+@@ -16800,6 +16826,7 @@ public class MainActivity extends Activity {
+             TextView t = tv(this, o[1], 12.5f, on ? accentColor() : colText(), on);
+             t.setGravity(Gravity.CENTER);
+             t.setBackground(on ? softCapsuleBg(9) : roundRect(colChipOff(), 9, this));
++            t.setSingleLine(true); t.setMaxLines(1); t.setEllipsize(android.text.TextUtils.TruncateAt.END); // Q110：分段钮单行钉死，等分行内不许折行突出（用户 22:17 点名）
+             t.setPadding(dp(this, 4), dp(this, 8), dp(this, 4), dp(this, 8));
+             LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+             lp.rightMargin = dp(this, 8);
+@@ -16873,7 +16900,7 @@ public class MainActivity extends Activity {
+                 dotWrap.addView(ringV, new FrameLayout.LayoutParams(dp(this, 38), dp(this, 38), Gravity.CENTER));
+             }
+             cell.addView(dotWrap, new LinearLayout.LayoutParams(dp(this, 38), dp(this, 38)));
+-            TextView nm = tv(this, THEME_OPTS[i][1], 11, on ? accentColor() : colText2(), on);
++            TextView nm = tv(this, isEn() ? THEME_NAME_EN[i] : THEME_OPTS[i][1], 11, on ? accentColor() : colText2(), on); // Q110：英文色名
+             nm.setGravity(Gravity.CENTER);
+             LinearLayout.LayoutParams nlp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+             nlp.topMargin = dp(this, 3);
+@@ -16924,7 +16951,7 @@ public class MainActivity extends Activity {
+         LinearLayout hcol = new LinearLayout(this);
+         hcol.setOrientation(LinearLayout.VERTICAL);
+         hcol.addView(tv(this, S("sec_features"), 14, colText(), true));
+-        final TextView sumTv = tv(this, "6 项 · 已开 " + featureOnCount() + " 项", 11.5f, colText2(), false);
++        final TextView sumTv = tv(this, isEn() ? "6 items · " + featureOnCount() + " on" : "6 项 · 已开 " + featureOnCount() + " 项", 11.5f, colText2(), false); // Q110：英文计数行
+         LinearLayout.LayoutParams sumLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+         sumLp.topMargin = dp(this, 2);
+         sumTv.setLayoutParams(sumLp);
+@@ -16937,7 +16964,7 @@ public class MainActivity extends Activity {
+         final LinearLayout body = new LinearLayout(this);
+         body.setOrientation(LinearLayout.VERTICAL);
+         body.setVisibility(open[0] ? View.VISIBLE : View.GONE);
+-        final Runnable refreshSummary = () -> sumTv.setText("6 项 · 已开 " + featureOnCount() + " 项");
++        final Runnable refreshSummary = () -> sumTv.setText(isEn() ? "6 items · " + featureOnCount() + " on" : "6 项 · 已开 " + featureOnCount() + " 项");
+         String[][] feats = {
+             {"展柜", "我的卡片页的纯卡面展示（堆叠 / 平放自由画布）", "showcase_enabled"},
+             {"保号管家", "电话卡 / eSIM 保号到期管理，关掉后入口不出现", "simkeep_enabled"},
+diff --git a/build.sh b/build.sh
+index d4e1138..e0f596e 100644
+--- a/build.sh
++++ b/build.sh
+@@ -3,8 +3,8 @@
+ set -e
+ cd "$(dirname "$0")"
+ 
+-VER_CODE=223
+-VER_NAME="2.23-native"
++VER_CODE=224
++VER_NAME="2.24-native"
+ PKG="com.igll.carddbnative"
+ 
+ SDK=~/workspace/android-sdk

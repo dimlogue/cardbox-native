@@ -991,6 +991,8 @@ public class MainActivity extends Activity {
     String darkModePref = "system";
     String themeColorKey = "blue";
     static final String[][] THEME_OPTS = {{"blue","蓝"},{"teal","青绿"},{"violet","紫"},{"green","翠绿"},{"orange","橙"}};
+    // Q114（2.27）：主题色英文名（key 与 THEME_OPTS 同序；数据键仍走 THEME_OPTS[i][0]，此处纯展示）
+    static final String[] THEME_NAME_EN = {"Blue","Teal","Purple","Jade","Orange"};
     void loadAppearancePrefs() {
         try {
             darkModePref = prefs == null ? "system" : prefs.getString("dark_mode", "system");
@@ -1014,7 +1016,7 @@ public class MainActivity extends Activity {
         STR.put("doubt", new String[]{"存疑","Unverified"});
         STR.put("settings_title", new String[]{"设置","Settings"});
         STR.put("language", new String[]{"语言","Language"});
-        STR.put("lang_system", new String[]{"跟随系统","Follow System"});
+        STR.put("lang_system", new String[]{"跟随系统","System"}); // Q114（2.27）：英文短词，与 dark_system 同口径（旧 "Follow System" 在等分钮里折两行突出）
         STR.put("lang_zh", new String[]{"简体中文","简体中文"});
         STR.put("lang_en", new String[]{"English","English"});
         STR.put("lang_hint", new String[]{"切换立即生效，不用重启","Applies instantly, no restart needed"});
@@ -1028,9 +1030,9 @@ public class MainActivity extends Activity {
         STR.put("dark_system", new String[]{"跟随系统","System"});
         STR.put("dark_light", new String[]{"浅色","Light"});
         STR.put("dark_dark", new String[]{"深色","Dark"});
-        STR.put("card_color", new String[]{"卡面配色","Placeholder Color"});
-        STR.put("card_color_light", new String[]{"浅色柔光","Light Soft"});
-        STR.put("card_color_dark", new String[]{"深色沉稳","Dark Calm"});
+        STR.put("card_color", new String[]{"卡面配色","Card Face Colors"}); // Q114（2.27）：英文润色（旧 "Placeholder Color" 不成话），待用户终审可否决
+        STR.put("card_color_light", new String[]{"浅色柔光","Soft Light"});
+        STR.put("card_color_dark", new String[]{"深色沉稳","Deep Calm"});
         STR.put("font", new String[]{"字体","Font"});
         STR.put("font_builtin", new String[]{"默认","Default"}); // Q104（2.18）：字体三档真选择——默认=内置 Noto Sans SC（Q42 字体栈原样）
         STR.put("font_system", new String[]{"本机字体","System Font"});
@@ -1286,6 +1288,20 @@ public class MainActivity extends Activity {
         EN_TXT.put("打不开文件选择器", "Couldn't open the file picker");
         EN_TXT.put("版本信息", "Version Info"); EN_TXT.put("应用简介", "About This App");
         EN_TXT.put("数据来源与参考来源", "Data & References"); EN_TXT.put("版本与更新日志", "Version & Changelog");
+        // Q114（2.27）：关于页应用简介与「数据来源」整段正式英译（旧版仅标题译、正文留中文，用户 22:18 点名）
+        EN_TXT.put("银行借记卡资料库：收录国内主要银行发行的借记卡，支持按卡组织、发卡行、特点筛选，数据内置、离线可用。你也可以收藏「我的卡片」，或添加自定义卡片。",
+            "A database of debit cards from China's major banks. Filter by card network, issuer and features; everything is built in and works offline. You can also save cards to My Cards or add your own custom cards.");
+        EN_TXT.put("数据来源为各银行公开资料整理，部分字段标注「待核实」，仅供参考，不构成办卡建议。",
+            "Compiled from public materials published by each bank. Some fields are marked \"Unverified\". For reference only — this is not advice on applying for any card.");
+        EN_TXT.put("· 各银行官网公开的产品页、收费标准与权益说明（卡面、费率与权益以发卡行最新公布为准）",
+            "· Product pages, fee schedules and benefit terms from each bank's official site (card designs, fees and benefits follow the issuer's latest publications)");
+        EN_TXT.put("· 银联、Visa、Mastercard、American Express、JCB 等卡组织公开资料",
+            "· Public materials from UnionPay, Visa, Mastercard, American Express, JCB and other card networks");
+        EN_TXT.put("· 卡盒数据仓（cards.json）随版本经 OTA 更新，更新前会先提示、经确认才应用",
+            "· The CardBox data set (cards.json), delivered by over-the-air updates — you are always asked before an update is applied");
+        EN_TXT.put("· 版式与字段结构研读参考：公开卡片资料站与开源卡包类应用（仅研读结构与口径，代码全部手写，未抄录）",
+            "· Layout and field structure studied from public card databases and open-source card-wallet apps (structure and conventions only; all code here is hand-written, nothing copied)");
+        EN_TXT.put("标准", "Standard"); // Q114：玻璃档位 segRow 中键（与 ui_standard 同值，纯展示）
         EN_TXT.put("查看更新日志 ›", "View Changelog ›"); EN_TXT.put("查看更新日志", "Changelog");
         EN_TXT.put("收起日志", "Collapse Log"); EN_TXT.put("更新日志读取失败", "Couldn't read the changelog");
         EN_TXT.put("支持作者", "Support the Author"); EN_TXT.put("请作者喝杯咖啡", "Buy the Author a Coffee");
@@ -4376,6 +4392,42 @@ public class MainActivity extends Activity {
         return k;
     }
 
+    // Q114（2.27）：英文瓷砖标签缩略表——瓷砖窄且标签行两行封顶，英文长译（如 "Online Payments"）
+    // 单行必溢出；在 buildFeatFlow/buildDetailChips 直取短标签，不再经 EN_TXT 长译出口。
+    static String featLabelEn(String k) {
+        switch (k) {
+            case "3ds": return "3DS";
+            case "online": return "Online Pay";
+            case "noftf": return "No FX Fee";
+            case "autofx": return "Auto FX";
+            case "applepay": return "Apple Pay";
+            default: return featLabel(k);
+        }
+    }
+
+    // Q114：评分维度短名英文表（与 scoreDimShort 同口径逐条对译，瓷砖维度 chip 用）
+    static String scoreDimShortEn(String dim) {
+        if (dim == null) return "";
+        switch (dim) {
+            case "3DS 支持": return "3DS";
+            case "网付支持": return "Online Pay";
+            case "年费与免年费条件": return "Annual Fee";
+            case "境外与线上支付能力": return "Payments";
+            case "积分与返现价值": return "Rewards";
+            case "货币转换费": return "FX Fee";
+            case "自动购汇": return "Auto FX";
+            case "优惠政策": return "Offers";
+            case "冻结比例": return "Freeze";
+            case "免息期与取现成本": return "Grace & Cash";
+            case "收费情况": return "Fees";
+            case "收费与其他持有成本": return "Costs";
+            case "境外 ATM 取现费": return "ATM Fee";
+            case "多币种账户/原币支付覆盖": return "Multi-Currency";
+            case "卡组织等级自带权益": return "Network Perks";
+            default: return scoreDimShort(dim);
+        }
+    }
+
     int activeFilterCount() {
         int n = filterFeats.size();
         if (filterType != null) n++;
@@ -5530,7 +5582,9 @@ public class MainActivity extends Activity {
         // 格宽−4dp 改 −12dp（左右各 6dp 呼吸），高由视觉块＋10dp 改 ＋14dp（上下各 7dp），
         // 栏内上限由栏高−6dp 收为 −10dp（胶囊与栏身上下至少留 5dp 空）；玻璃、落位插值、
         // 弹簧/拖动跟随一律未动。
-        int w = Math.max(dp(this, 40), it.getWidth() - dp(this, 12));
+        // Q114（2.27，用户 22:18 仍点名贴身）：只动宽度一档——宽由格宽−12dp 放宽为 −4dp
+        // （左右各多 4dp），最小宽 40→44dp；高度、中心、上下限沿 Q106 不动。
+        int w = Math.max(dp(this, 44), it.getWidth() - dp(this, 4));
         float[] blk = navVisualBlockY(it);
         float cy; int h;
         if (blk != null) {
@@ -6152,11 +6206,16 @@ public class MainActivity extends Activity {
         // 角标：对照混合版 .qf-badge（#007AFF 蓝、右上 -4 外探、min 18×18、字 .68rem）
         TextView badge = tv(this, "", 10, Color.WHITE, true);
         badge.setGravity(Gravity.CENTER);
+        // Q114（2.27）：角标数字被切根因＝18dp 定死方框装不下粗体字形度量（真机图 268400「1」缺角）；
+        // 改自适应盒：最小 18×18、横向留 5dp 内距，数字完整居中、永不裁切。
+        badge.setSingleLine(true); badge.setMaxLines(1);
+        badge.setMinWidth(dp(this, 18)); badge.setMinHeight(dp(this, 18));
+        badge.setPadding(dp(this, 5), 0, dp(this, 5), 0);
         GradientDrawable bbg = new GradientDrawable();
         bbg.setShape(GradientDrawable.OVAL);
         bbg.setColor(Color.rgb(0x00, 0x7A, 0xFF));
         badge.setBackground(bbg);
-        FrameLayout.LayoutParams blp = new FrameLayout.LayoutParams(dp(this, 18), dp(this, 18));
+        FrameLayout.LayoutParams blp = new FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         blp.gravity = Gravity.END | Gravity.TOP;
         blp.topMargin = -dp(this, 4);
         blp.rightMargin = -dp(this, 4);
@@ -7233,7 +7292,7 @@ public class MainActivity extends Activity {
     // gap 4dp 流式换行、容器最高两行——.feats max-height 38px 口径，溢出截断不撑高瓷砖）
     View buildFeatFlow(Card c, int availPx, int nc) {
         List<String> labels = new ArrayList<>();
-        for (String[] f : FEATS) if (featMatch(c, f[0])) labels.add(f[1]);
+        for (String[] f : FEATS) if (featMatch(c, f[0])) labels.add(EN_MODE ? featLabelEn(f[0]) : f[1]); // Q114：英文走缩略表
         if (labels.isEmpty()) return null;
         float sp = nc >= 4 ? 7.5f : nc == 3 ? 8f : 9.5f;
         LinearLayout wrap = new LinearLayout(this);
@@ -7256,6 +7315,7 @@ public class MainActivity extends Activity {
                 rowW = 0; rows++;
             }
             TextView t = chip(label, Color.rgb(0xF0, 0xF7, 0xFF), Color.rgb(0x2F, 0x6F, 0xD0), sp);
+            t.setSingleLine(true); t.setMaxLines(1); t.setEllipsize(android.text.TextUtils.TruncateAt.END); if (availPx > 0) t.setMaxWidth(availPx); // Q114：单枚标签不许撑出瓷砖
             if (nc >= 4) t.setPadding(dp(this, 4), dp(this, 2), dp(this, 4), dp(this, 2)); // Q75：与宽度测算同档收紧
             LinearLayout.LayoutParams clp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
             if (rowW > 0) clp.leftMargin = gap;
@@ -7280,7 +7340,7 @@ public class MainActivity extends Activity {
         int rowW = 0, rows = 0;
         for (String dim : dims) {
             Double v = c.scoreDim(dim);
-            String label = scoreDimShort(dim) + " " + (v == null ? "—" : formatDimScore(v));
+            String label = (EN_MODE ? scoreDimShortEn(dim) : scoreDimShort(dim)) + " " + (v == null ? "—" : formatDimScore(v)); // Q114
             int w = (int) Math.ceil(mp.measureText(label)) + dp(this, nc >= 4 ? 9 : 13);
             if (row == null || (rowW > 0 && rowW + gap + w > availPx)) {
                 if (rows >= maxRows) break;
@@ -7295,6 +7355,7 @@ public class MainActivity extends Activity {
             TextView t = v == null
                 ? chip(label, Color.rgb(0xEE, 0xF0, 0xF3), Color.rgb(0x8E, 0x8E, 0x93), sp)
                 : chip(label, Color.rgb(0xE8, 0xF1, 0xFD), Color.rgb(0x0A, 0x5C, 0xD6), sp);
+            t.setSingleLine(true); t.setMaxLines(1); t.setEllipsize(android.text.TextUtils.TruncateAt.END); if (availPx > 0) t.setMaxWidth(availPx); // Q114：单枚标签不许撑出瓷砖
             if (nc >= 4) t.setPadding(dp(this, 4), dp(this, 2), dp(this, 4), dp(this, 2)); // Q75 同上
             LinearLayout.LayoutParams clp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
             if (rowW > 0) clp.leftMargin = gap;
@@ -9810,7 +9871,7 @@ public class MainActivity extends Activity {
                 row.setGravity(Gravity.TOP);
                 row.setPadding(0, dp(this, 8), 0, dp(this, 8));
                 specBox.addView(row);
-                TextView kt = tv(this, rows.get(i)[0], 12.5f, colText3(), false);
+                TextView kt = tv(this, isEn() ? specKeyEn(rows.get(i)[0]) : rows.get(i)[0], 12.5f, colText3(), false); // Q114：英文显示名，原始键仅作数据匹配不动
                 row.addView(kt, new LinearLayout.LayoutParams(dp(this, 108), ViewGroup.LayoutParams.WRAP_CONTENT));
                 TextView vt = tv(this, rows.get(i)[1], 12.5f, colText(), false);
                 vt.setGravity(Gravity.END);
@@ -9856,7 +9917,7 @@ public class MainActivity extends Activity {
         if (c.status != null && !c.status.isEmpty()) chips.add(chip(c.status, chipBg, colText(), 12f));
         if (c.bank != null && !c.bank.isEmpty()) chips.add(chip(c.bank, chipBg, colText(), 12f));
         if (c.hasScore) chips.add(chip((isEn() ? "Score " : "评分 ") + String.format(java.util.Locale.US, "%.1f", c.score), accentColor(), Color.WHITE, 12f));
-        for (String[] f : FEATS) if (featMatch(c, f[0])) chips.add(chip(f[1], chipBg, colText(), 12f));
+        for (String[] f : FEATS) if (featMatch(c, f[0])) chips.add(chip(EN_MODE ? featLabelEn(f[0]) : f[1], chipBg, colText(), 12f)); // Q114：英文缩略表，与瓷砖同口径
         if (c.studentPick) chips.add(chip("学生推荐", accentColor(), Color.WHITE, 12f));
         // Q91：宽度按文字实测（Paint 量 12sp 粗体实宽），旧版「字数×0.68」把中文宽度估小、
         // 行内总宽溢出后后面的胶囊被横向 LinearLayout 挤成一字宽、文字竖排成条（真机「评分 9.8」竖条）。
@@ -9932,6 +9993,24 @@ public class MainActivity extends Activity {
         if (detailCard != null && detailScroll != null && c.id != null && c.id.equals(detailCard.id)) {
             updateDetailPrimary(c);
             refreshDetailPlaceholderBody(c);
+        }
+    }
+
+    // Q114（2.27）：规格键英文显示名——仅显示侧翻译，不入 EN_TXT：规格键同为 specs 数据字段名，
+    // 匹配/回读口径按 Q106 红线原样不动；未知键（远端新字段）原样直出。
+    static String specKeyEn(String k) {
+        if (k == null) return "";
+        switch (k) {
+            case "卡组织": return "Network";
+            case "发卡行": return "Issuer";
+            case "卡种": return "Card Type";
+            case "年费": return "Annual Fee";
+            case "货币转换费（FTF）": return "FX Fee (FTF)";
+            case "网付": return "Online Pay";
+            case "自动购汇": return "Auto FX";
+            case "境外ATM": return "Overseas ATM";
+            case "状态": return "Status";
+            default: return k;
         }
     }
 
@@ -13378,6 +13457,12 @@ public class MainActivity extends Activity {
     // Q66 卡片常识：资讯页下半组词条，数据源与资讯同走 assets 种子 + prefs 缓存 + OTA 双线（glossary.json），不写死在代码
     static class GlossaryItem {
         String id, term, aka, category, body;
+        // Q114（2.27）：英文双语字段（种子 glossary.json 的 *_en；OTA 旧版数据无此字段时为空、显示回落中文）
+        String termEn, akaEn, categoryEn, bodyEn;
+        String dTerm() { return EN_MODE && termEn != null && !termEn.isEmpty() ? termEn : (term == null ? "" : term); }
+        String dAka() { return EN_MODE && akaEn != null && !akaEn.isEmpty() ? akaEn : (aka == null ? "" : aka); }
+        String dCategory() { return EN_MODE && categoryEn != null && !categoryEn.isEmpty() ? categoryEn : (category == null ? "" : category); }
+        String dBody() { return EN_MODE && bodyEn != null && !bodyEn.isEmpty() ? bodyEn : (body == null ? "" : body); }
     }
     List<GlossaryItem> glossaryItems = null;
     java.util.Set<String> glossaryOpen = new java.util.HashSet<>();
@@ -13448,6 +13533,9 @@ public class MainActivity extends Activity {
                 g.id = o.optString("id"); g.term = o.optString("term");
                 g.aka = o.optString("aka"); g.category = o.optString("category");
                 g.body = o.optString("body");
+                // Q114：双语字段（旧版/远端数据缺字段时为空串，显示层回落中文）
+                g.termEn = o.optString("term_en"); g.akaEn = o.optString("aka_en");
+                g.categoryEn = o.optString("category_en"); g.bodyEn = o.optString("body_en");
                 if (g.id == null || g.id.isEmpty() || g.term == null || g.term.isEmpty()) continue;
                 out.add(g);
             }
@@ -13519,7 +13607,7 @@ public class MainActivity extends Activity {
             glossaryBox.addView(emptyState("暂时还没有常识词条\n过段时间再来看看"));
             return;
         }
-        if (glossaryMeta != null) glossaryMeta.setText("共 " + glossaryItems.size() + " 条 · 概念说明，仅供参考");
+        if (glossaryMeta != null) glossaryMeta.setText(isEn() ? glossaryItems.size() + " entries · Concepts, for reference only" : "共 " + glossaryItems.size() + " 条 · 概念说明，仅供参考"); // Q114
         String jumpId = pendingGlossaryId;
         View jumpView = null;
         for (final GlossaryItem g : glossaryItems) {
@@ -13537,7 +13625,8 @@ public class MainActivity extends Activity {
             meta.setOrientation(LinearLayout.HORIZONTAL);
             meta.setGravity(Gravity.CENTER_VERTICAL);
             card.addView(meta);
-            String cat = g.category == null || g.category.isEmpty() ? "常识" : g.category;
+            String rawCat = g.dCategory(); // Q114：按界面语言取词条（英文缺字段回落中文）
+            String cat = rawCat.isEmpty() ? (isEn() ? "Basics" : "常识") : rawCat;
             TextView cg = tv(this, cat, 10.5f, Color.rgb(0x0A, 0x5C, 0xD6), true);
             cg.setBackground(roundRect(Color.rgb(0xE8, 0xF1, 0xFD), 999, this));
             cg.setPadding(dp(this, 8), dp(this, 3), dp(this, 8), dp(this, 3));
@@ -13546,25 +13635,27 @@ public class MainActivity extends Activity {
             arrow.setGravity(Gravity.RIGHT);
             meta.addView(arrow, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
 
-            TextView ttl = tv(this, g.term == null ? "" : g.term, 15, colText(), true);
+            TextView ttl = tv(this, g.dTerm(), 15, colText(), true);
             LinearLayout.LayoutParams ttlp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
             ttlp.topMargin = dp(this, 7);
             card.addView(ttl, ttlp);
-            if (g.aka != null && !g.aka.isEmpty()) {
-                TextView aka = tv(this, g.aka, 12, colText2(), false);
+            String akaTxt = g.dAka();
+            if (!akaTxt.isEmpty()) {
+                TextView aka = tv(this, akaTxt, 12, colText2(), false);
                 LinearLayout.LayoutParams akp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
                 akp.topMargin = dp(this, 2);
                 card.addView(aka, akp);
             }
-            if (g.body != null && !g.body.isEmpty()) {
-                TextView bd = tv(this, g.body, 13, inkBody(), false);
+            String bodyTxt = g.dBody();
+            if (!bodyTxt.isEmpty()) {
+                TextView bd = tv(this, bodyTxt, 13, inkBody(), false);
                 bd.setLineSpacing(dp(this, 2), 1f);
                 LinearLayout.LayoutParams bdp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
                 bdp.topMargin = dp(this, 6);
                 card.addView(bd, bdp);
                 if (!open) { bd.setMaxLines(2); bd.setEllipsize(android.text.TextUtils.TruncateAt.END); }
                 else {
-                    TextView note = tv(this, "具体规则以发卡行与卡组织现行说明为准。", 11.5f, colText2(), false);
+                    TextView note = tv(this, isEn() ? "Exact rules follow the issuer's and card network's current terms." : "具体规则以发卡行与卡组织现行说明为准。", 11.5f, colText2(), false); // Q114
                     LinearLayout.LayoutParams nlp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
                     nlp.topMargin = dp(this, 8);
                     card.addView(note, nlp);
@@ -15916,7 +16007,7 @@ public class MainActivity extends Activity {
         htlp.leftMargin = dp(this, 14);
         hero.addView(heroTx, htlp);
         heroTx.addView(tv(this, "卡盒", 19, colText(), true));
-        TextView ver = tv(this, "版本 " + appVersion(), 12.5f, colText2(), false);
+        TextView ver = tv(this, isEn() ? "Version " + appVersion() : "版本 " + appVersion(), 12.5f, colText2(), false); // Q114：关于页版本行英文
         LinearLayout.LayoutParams vlp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         vlp.topMargin = dp(this, 2);
         heroTx.addView(ver, vlp);
@@ -16876,7 +16967,7 @@ public class MainActivity extends Activity {
                 dotWrap.addView(ringV, new FrameLayout.LayoutParams(dp(this, 38), dp(this, 38), Gravity.CENTER));
             }
             cell.addView(dotWrap, new LinearLayout.LayoutParams(dp(this, 38), dp(this, 38)));
-            TextView nm = tv(this, THEME_OPTS[i][1], 11, on ? accentColor() : colText2(), on);
+            TextView nm = tv(this, isEn() ? THEME_NAME_EN[i] : THEME_OPTS[i][1], 11, on ? accentColor() : colText2(), on); // Q114：英文色名
             nm.setGravity(Gravity.CENTER);
             LinearLayout.LayoutParams nlp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
             nlp.topMargin = dp(this, 3);
@@ -16911,6 +17002,7 @@ public class MainActivity extends Activity {
             t.setGravity(Gravity.CENTER);
             // Q94 铺开：选中改浅雾蓝胶囊＋强调色字（试点选片同语言），废原整坨实心蓝
             t.setBackground(on ? softCapsuleBg(9) : roundRect(colChipOff(), 9, this));
+            t.setSingleLine(true); t.setMaxLines(1); t.setEllipsize(android.text.TextUtils.TruncateAt.END); // Q114：分段钮单行钉死，等分行内不许折行突出（用户 22:17 点名）
             t.setPadding(dp(this, 4), dp(this, 8), dp(this, 4), dp(this, 8));
             LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
             lp.rightMargin = dp(this, 8);
@@ -16964,6 +17056,7 @@ public class MainActivity extends Activity {
             t.setGravity(Gravity.CENTER);
             // Q94 铺开：同 segRow 浅雾蓝胶囊选中态
             t.setBackground(on ? softCapsuleBg(9) : roundRect(colChipOff(), 9, this));
+            t.setSingleLine(true); t.setMaxLines(1); t.setEllipsize(android.text.TextUtils.TruncateAt.END); // Q114：分段钮单行钉死，等分行内不许折行突出（用户 22:17 点名）
             t.setPadding(dp(this, 4), dp(this, 8), dp(this, 4), dp(this, 8));
             LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
             lp.rightMargin = dp(this, 8);
@@ -17059,6 +17152,7 @@ public class MainActivity extends Activity {
             TextView t = tv(this, o[1], 12.5f, on ? accentColor() : colText(), on);
             t.setGravity(Gravity.CENTER);
             t.setBackground(on ? softCapsuleBg(9) : roundRect(colChipOff(), 9, this));
+            t.setSingleLine(true); t.setMaxLines(1); t.setEllipsize(android.text.TextUtils.TruncateAt.END); // Q114：分段钮单行钉死，等分行内不许折行突出（用户 22:17 点名）
             t.setPadding(dp(this, 4), dp(this, 8), dp(this, 4), dp(this, 8));
             LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
             lp.rightMargin = dp(this, 8);
@@ -17132,7 +17226,7 @@ public class MainActivity extends Activity {
                 dotWrap.addView(ringV, new FrameLayout.LayoutParams(dp(this, 38), dp(this, 38), Gravity.CENTER));
             }
             cell.addView(dotWrap, new LinearLayout.LayoutParams(dp(this, 38), dp(this, 38)));
-            TextView nm = tv(this, THEME_OPTS[i][1], 11, on ? accentColor() : colText2(), on);
+            TextView nm = tv(this, isEn() ? THEME_NAME_EN[i] : THEME_OPTS[i][1], 11, on ? accentColor() : colText2(), on); // Q114：英文色名
             nm.setGravity(Gravity.CENTER);
             LinearLayout.LayoutParams nlp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
             nlp.topMargin = dp(this, 3);
@@ -17183,7 +17277,7 @@ public class MainActivity extends Activity {
         LinearLayout hcol = new LinearLayout(this);
         hcol.setOrientation(LinearLayout.VERTICAL);
         hcol.addView(tv(this, S("sec_features"), 14, colText(), true));
-        final TextView sumTv = tv(this, "6 项 · 已开 " + featureOnCount() + " 项", 11.5f, colText2(), false);
+        final TextView sumTv = tv(this, isEn() ? "6 items · " + featureOnCount() + " on" : "6 项 · 已开 " + featureOnCount() + " 项", 11.5f, colText2(), false); // Q114：英文计数行
         LinearLayout.LayoutParams sumLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         sumLp.topMargin = dp(this, 2);
         sumTv.setLayoutParams(sumLp);
@@ -17196,7 +17290,7 @@ public class MainActivity extends Activity {
         final LinearLayout body = new LinearLayout(this);
         body.setOrientation(LinearLayout.VERTICAL);
         body.setVisibility(open[0] ? View.VISIBLE : View.GONE);
-        final Runnable refreshSummary = () -> sumTv.setText("6 项 · 已开 " + featureOnCount() + " 项");
+        final Runnable refreshSummary = () -> sumTv.setText(isEn() ? "6 items · " + featureOnCount() + " on" : "6 项 · 已开 " + featureOnCount() + " 项");
         String[][] feats = {
             {"展柜", "我的卡片页的纯卡面展示（堆叠 / 平放自由画布）", "showcase_enabled"},
             {"保号管家", "电话卡 / eSIM 保号到期管理，关掉后入口不出现", "simkeep_enabled"},
