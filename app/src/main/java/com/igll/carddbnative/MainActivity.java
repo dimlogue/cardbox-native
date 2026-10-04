@@ -5463,7 +5463,7 @@ public class MainActivity extends Activity {
         filterSheet = null;
         if (sheet.getParent() == null) { restoreChrome(); return; }
         View card = sheet instanceof ViewGroup && ((ViewGroup) sheet).getChildCount() > 0
-            ? ((ViewGroup) sheet).getChildAt(((ViewGroup) sheet).getChildCount() - 1) : null; // Q11：玻璃层在窗下，窗体是最后一层
+            ? ((ViewGroup) sheet).getChildAt(((ViewGroup) sheet).getChildCount() - 1) : null; // Q77b: last child is the unified glass wrap (glass+wash+card)
         if (card != null) {
             card.animate().alpha(0f).scaleX(0.96f).scaleY(0.96f).translationY(dp(this, 10))
                 .setDuration(ANIM_DUR_SHEET_OUT).setInterpolator(ANIM_EXIT)
