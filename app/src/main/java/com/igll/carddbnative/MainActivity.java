@@ -10537,6 +10537,7 @@ public class MainActivity extends Activity {
         ctrlRow.setOrientation(LinearLayout.HORIZONTAL);
         ctrlRow.setGravity(Gravity.CENTER_VERTICAL);
         ctrl.addView(ctrlRow, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        final java.util.List<View> bgDots = new ArrayList<>();
         for (int i = 0; i < SHOWCASE_BGS.length; i++) {
             final int bi = i;
             View dot = new View(this);
@@ -10553,16 +10554,16 @@ public class MainActivity extends Activity {
                 if (prefs != null) prefs.edit().putInt("showcase_bg", bi).apply();
                 overlay.setBackgroundColor(SHOWCASE_BGS[bi]);
                 if (showcaseTitleTv != null) showcaseTitleTv.setTextColor(showcaseOnBg());
-                for (int k = 0; k < ctrlRow.getChildCount() - 1; k++) {
-                    View dv = ctrlRow.getChildAt(k);
+                for (int k = 0; k < bgDots.size(); k++) {
                     GradientDrawable nd = new GradientDrawable();
                     nd.setShape(GradientDrawable.OVAL);
                     nd.setColor(SHOWCASE_BGS[k]);
                     nd.setStroke(dp(this, k == bi ? 2 : 1), k == bi ? accentColor() : Color.argb(90, 128, 128, 140));
-                    dv.setBackground(nd);
+                    bgDots.get(k).setBackground(nd);
                 }
                 updateShowcaseChips();
             });
+            bgDots.add(dot);
             ctrlRow.addView(dot);
         }
         View sp = new View(this);
