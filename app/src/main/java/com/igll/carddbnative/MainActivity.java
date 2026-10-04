@@ -201,7 +201,7 @@ public class MainActivity extends Activity {
     // 原生等价：navWrap（dock）+searchFab/filterFab/addFab/topFab 同退同回；关窗恢复走 sync* 的
     // ANIM_ENTER 淡入缩放（P4-fix 曲线），dock 本身 180ms 淡入，不再各处散写 navWrap VISIBLE。
     boolean isChromeCovered() {
-        return welcomeOpen || changelogOpen || wizardOpen || aboutOpen
+        return welcomeOpen || helloOpen || changelogOpen || wizardOpen || aboutOpen
             || filterSheet != null || detailCard != null || cardMenuPop != null
             || customFormSheet != null || customDetailSheet != null || binSheet != null || addSheetView != null
             || extSheet != null || showcaseView != null || simkeepView != null || simkeepFormSheet != null
@@ -1108,7 +1108,7 @@ public class MainActivity extends Activity {
         // Q21 ③：底栏拖动/弹簧进行中不做整屏抓图——capture 是全树 draw，正是滑动发卡与 MOVE 被饿死的主因之一；落稳后防抖任务会补上最终帧。
         if (navDragging || navSpringRunning) return;
         if (cardMenuPop != null || filterSheet != null || wizardOpen || aboutOpen
-            || detailCard != null || welcomeOpen || changelogOpen) return;
+            || detailCard != null || welcomeOpen || helloOpen || changelogOpen) return;
         captureGlassSnapshot();
         rebuildBand(); // Q41：停稳/切页帧顺带生成条带，滚动期靠它平移跟随（失败自动回落静态帧）
         for (ImageView iv : new java.util.ArrayList<>(glassViews)) {
@@ -2025,6 +2025,11 @@ public class MainActivity extends Activity {
     // 欢迎页 / 更新日志（Phase 4b，对照 app.js showWelcome/renderChangelog）
     boolean welcomeOpen = false;
     boolean changelogOpen = false;
+    // Q80 欢迎收尾「你好」页：仅首启走完欢迎页后出现一次，深底彩卡飞入叠摞+极简笑脸，点任意处淡入主界面。
+    boolean helloOpen = false;
+    boolean helloClosing = false;
+    View helloView = null;
+    boolean helloFlat = false;
     ScrollView changelogScroll = null;
     boolean settingsLogOpen = false;
     ScrollView settingsLogScroll = null;
@@ -12197,10 +12202,228 @@ public class MainActivity extends Activity {
     }
 
     void closeWelcome() {
+        boolean firstHello = !prefs.getBoolean("hello_done", false);
         prefs.edit().putBoolean("welcomed", true).apply();
         welcomeOpen = false;
+        if (firstHello) { showHello(); return; } // Q80：首启收尾只此一次，设置重开欢迎页不再过「你好」
         if (navWrap != null) navWrap.setVisibility(View.VISIBLE); // Q32
         showTab(tab);
+    }
+
+    // ---------- Q80 「你好」收尾页 ----------
+    // 仅首次启动走完欢迎页最后一页出现一次（hello_done 落盘后永不再现），日常启动不构建此视图、不拖冷启动。
+    // 动效学 Tiny Cards 节奏自写：深底上五张彩色卡面自四周飞入依次叠成一摞，顶卡极简笑脸收束；
+    // 全程只动 View 绘制层（translation/scale/alpha/rotation），不抓图不采样，时长走 Q74 的 ANIM_ENTER/SHEET_IN 口径。
+    static class HelloFaceView extends View {
+        final Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);
+        HelloFaceView(Context c) {
+            super(c);
+            p.setStyle(Paint.Style.STROKE);
+            p.setStrokeCap(Paint.Cap.ROUND);
+            p.setColor(Color.WHITE);
+        }
+        @Override protected void onDraw(Canvas cv) {
+            super.onDraw(cv);
+            float w = getWidth(), h = getHeight();
+            float cx = w / 2f, cy = h / 2f, r = Math.min(w, h) * 0.34f;
+            p.setStrokeWidth(Math.max(2f, w * 0.055f));
+            cv.drawCircle(cx, cy, r, p);
+            float er = Math.max(1.6f, w * 0.028f);
+            Paint f = new Paint(Paint.ANTI_ALIAS_FLAG);
+            f.setStyle(Paint.Style.FILL); f.setColor(Color.WHITE);
+            cv.drawCircle(cx - r * 0.38f, cy - r * 0.18f, er, f);
+            cv.drawCircle(cx + r * 0.38f, cy - r * 0.18f, er, f);
+            android.graphics.RectF arc = new android.graphics.RectF(cx - r * 0.48f, cy - r * 0.05f, cx + r * 0.48f, cy + r * 0.62f);
+            cv.drawArc(arc, 25f, 130f, false, p);
+        }
+    }
+
+    void showHello() {
+        helloOpen = true;
+        helloClosing = false;
+        helloFlat = false;
+        if (navWrap != null) navWrap.setVisibility(View.GONE); // Q32
+        content.removeAllViews();
+        helloView = buildHelloPage();
+        content.addView(helloView);
+    }
+
+    void closeHello() {
+        if (helloClosing || !helloOpen) return;
+        helloClosing = true;
+        try { prefs.edit().putBoolean("hello_done", true).apply(); } catch (Throwable ignored) {}
+        final View gone = helloView;
+        Runnable finish = () -> {
+            helloOpen = false;
+            helloClosing = false;
+            helloView = null;
+            if (navWrap != null) navWrap.setVisibility(View.VISIBLE); // Q32
+            showTab(tab);
+        };
+        if (gone != null) {
+            gone.animate().cancel();
+            gone.animate().alpha(0f).setDuration(ANIM_DUR_SHEET_OUT).setInterpolator(ANIM_EXIT)
+                .withEndAction(finish).start();
+            gone.postDelayed(() -> { if (helloClosing) finish.run(); }, ANIM_DUR_SHEET_OUT + 120);
+        } else finish.run();
+    }
+
+    View buildHelloPage() {
+        final FrameLayout root = new FrameLayout(this);
+        root.setBackgroundColor(Color.rgb(0x10, 0x14, 0x20));
+        root.setClickable(true);
+
+        LinearLayout col = new LinearLayout(this);
+        col.setOrientation(LinearLayout.VERTICAL);
+        col.setGravity(Gravity.CENTER_HORIZONTAL);
+        FrameLayout.LayoutParams colp = new FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT);
+        root.addView(col, colp);
+        col.setPadding(dp(this, 28), statusBarH() + dp(this, 30), dp(this, 28), dp(this, 22) + navBarH());
+
+        final FrameLayout stage = new FrameLayout(this);
+        col.addView(stage, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(this, 252)));
+
+        // 五张彩卡（自家渐变为示意卡面，不带文字信息层，同 Q78 展柜纯卡面口径）
+        final int[][] cols = {
+            {0x2E7CF6, 0x174A8B}, {0x8E6BE8, 0x3D2A7A}, {0x16A085, 0x0A4A3A},
+            {0xE8833A, 0x8A3D12}, {0xE84E6B, 0x7A1F38}
+        };
+        final int n = cols.length;
+        final View[] cards = new View[n];
+        final HelloFaceView[] face = new HelloFaceView[1];
+        for (int i = 0; i < n; i++) {
+            FrameLayout card = new FrameLayout(this);
+            GradientDrawable g = new GradientDrawable(GradientDrawable.Orientation.TL_BR,
+                new int[]{Color.rgb(Color.red(cols[i][0]), Color.green(cols[i][0]), Color.blue(cols[i][0])),
+                          Color.rgb(Color.red(cols[i][1]), Color.green(cols[i][1]), Color.blue(cols[i][1]))});
+            g.setCornerRadius(dp(this, 14));
+            g.setStroke(dp(this, 1), Color.argb(70, 255, 255, 255));
+            card.setBackground(g);
+            if (Build.VERSION.SDK_INT >= 21) card.setElevation(dp(this, 6));
+            FrameLayout.LayoutParams cp = new FrameLayout.LayoutParams(dp(this, 196), dp(this, 124));
+            cp.gravity = Gravity.CENTER;
+            card.setLayoutParams(cp);
+            // 叠摞位：逐张上移错开，只露顶带成摞（同 Q78 堆叠口径）
+            card.setTranslationY(dp(this, (n - 1 - i) * 13));
+            card.setRotation((i - (n - 1) / 2f) * 2.2f);
+            stage.addView(card);
+            cards[i] = card;
+            if (i == n - 1) {
+                HelloFaceView fv = new HelloFaceView(this);
+                fv.setAlpha(0f);
+                FrameLayout.LayoutParams fp = new FrameLayout.LayoutParams(dp(this, 52), dp(this, 52));
+                fp.gravity = Gravity.CENTER;
+                card.addView(fv, fp);
+                face[0] = fv;
+            }
+        }
+
+        TextView hi = tvW(this, "你好", 46, Color.WHITE, 800);
+        hi.setGravity(Gravity.CENTER);
+        hi.setLetterSpacing(0.04f);
+        hi.setAlpha(0f);
+        hi.setTranslationY(dp(this, 10));
+        LinearLayout.LayoutParams hip = new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        hip.topMargin = dp(this, 10);
+        col.addView(hi, hip);
+
+        TextView sub = tv(this, "卡盒已经准备好了，慢慢挑你的卡。", 14, Color.argb(170, 255, 255, 255), false);
+        sub.setGravity(Gravity.CENTER);
+        sub.setAlpha(0f);
+        sub.setTranslationY(dp(this, 10));
+        LinearLayout.LayoutParams sup = new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        sup.topMargin = dp(this, 8);
+        col.addView(sub, sup);
+
+        // 试玩：堆叠/平放两式切换（样品卡面，守 Q74 淡入轻移；真正展柜在「我的卡片」里用自有卡）
+        LinearLayout trial = new LinearLayout(this);
+        trial.setOrientation(LinearLayout.HORIZONTAL);
+        trial.setGravity(Gravity.CENTER);
+        trial.setAlpha(0f);
+        LinearLayout.LayoutParams trp = new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        trp.topMargin = dp(this, 20);
+        col.addView(trial, trp);
+        final TextView stackChip = tvW(this, "堆叠试玩", 13, Color.WHITE, 600);
+        stackChip.setGravity(Gravity.CENTER);
+        stackChip.setPadding(dp(this, 16), dp(this, 8), dp(this, 16), dp(this, 8));
+        trial.addView(stackChip, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        final TextView flatChip = tvW(this, "平放试玩", 13, Color.argb(170, 255, 255, 255), 600);
+        flatChip.setGravity(Gravity.CENTER);
+        flatChip.setPadding(dp(this, 16), dp(this, 8), dp(this, 16), dp(this, 8));
+        LinearLayout.LayoutParams flp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        flp.leftMargin = dp(this, 10);
+        trial.addView(flatChip, flp);
+        final Runnable styleTrial = () -> {
+            stackChip.setBackground(roundRect(helloFlat ? Color.argb(36, 255, 255, 255) : Color.argb(64, 255, 255, 255), 999, this));
+            flatChip.setBackground(roundRect(helloFlat ? Color.argb(64, 255, 255, 255) : Color.argb(36, 255, 255, 255), 999, this));
+            stackChip.setTextColor(helloFlat ? Color.argb(170, 255, 255, 255) : Color.WHITE);
+            flatChip.setTextColor(helloFlat ? Color.WHITE : Color.argb(170, 255, 255, 255));
+        };
+        styleTrial.run();
+        final Runnable spread = () -> {
+            for (int i = 0; i < n; i++) {
+                float tx = helloFlat ? dp(this, (i % 3 - 1) * 108) : 0f;
+                float ty = helloFlat ? dp(this, (i / 3) * 108 - 40) : dp(this, (n - 1 - i) * 13);
+                float rot = helloFlat ? (i - 2) * 3f : (i - (n - 1) / 2f) * 2.2f;
+                float sc = helloFlat ? 0.62f : 1f;
+                cards[i].animate().translationX(tx).translationY(ty).rotation(rot).scaleX(sc).scaleY(sc)
+                    .setDuration(ANIM_DUR_FADE).setInterpolator(ANIM_ENTER).start();
+            }
+        };
+        stackChip.setOnClickListener(v -> { haptic(); if (helloFlat) { helloFlat = false; styleTrial.run(); spread.run(); } });
+        flatChip.setOnClickListener(v -> { haptic(); if (!helloFlat) { helloFlat = true; styleTrial.run(); spread.run(); } });
+
+        TextView go = tvW(this, "开始使用", 15.5f, Color.rgb(0x10, 0x14, 0x20), 700);
+        go.setGravity(Gravity.CENTER);
+        go.setBackground(roundRect(Color.WHITE, 16, this));
+        go.setPadding(dp(this, 28), dp(this, 14), dp(this, 28), dp(this, 14));
+        go.setAlpha(0f);
+        go.setTranslationY(dp(this, 10));
+        LinearLayout.LayoutParams gop = new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        gop.topMargin = dp(this, 24);
+        col.addView(go, gop);
+        go.setOnClickListener(v -> { haptic(); closeHello(); });
+
+        TextView hint = tv(this, "轻触任意处进入", 11.5f, Color.argb(120, 255, 255, 255), false);
+        hint.setGravity(Gravity.CENTER);
+        hint.setAlpha(0f);
+        LinearLayout.LayoutParams hnp = new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        hnp.topMargin = dp(this, 12);
+        col.addView(hint, hnp);
+
+        root.setOnClickListener(v -> closeHello());
+        // 飞入：每张自四周带位移与缩小飞入，120ms 错峰，单张 ANIM_DUR_SHEET_IN 走 ANIM_ENTER；落定后笑脸与文案依次淡入。
+        root.post(() -> {
+            float w = Math.max(stage.getWidth(), dp(this, 320));
+            float[] dx = {-w * 0.7f, w * 0.7f, -w * 0.55f, w * 0.55f, 0f};
+            float[] dy = {-dp(this, 150), -dp(this, 120), dp(this, 150), dp(this, 120), -dp(this, 190)};
+            for (int i = 0; i < n; i++) {
+                final View c = cards[i];
+                final float baseTy = c.getTranslationY();
+                final float baseRot = c.getRotation();
+                c.setTranslationX(dx[i]);
+                c.setTranslationY(dy[i]);
+                c.setScaleX(0.82f); c.setScaleY(0.82f);
+                c.setAlpha(0f);
+                c.animate().translationX(0f).translationY(baseTy).rotation(baseRot)
+                    .scaleX(1f).scaleY(1f).alpha(1f)
+                    .setStartDelay(i * 120L).setDuration(ANIM_DUR_SHEET_IN).setInterpolator(ANIM_ENTER).start();
+            }
+            long tail = (n - 1) * 120L + ANIM_DUR_SHEET_IN;
+            if (face[0] != null) face[0].animate().alpha(1f).setStartDelay(tail).setDuration(ANIM_DUR_FADE).setInterpolator(ANIM_ENTER).start();
+            hi.animate().alpha(1f).translationY(0f).setStartDelay(tail + 60).setDuration(ANIM_DUR_FADE).setInterpolator(ANIM_ENTER).start();
+            sub.animate().alpha(1f).translationY(0f).setStartDelay(tail + 120).setDuration(ANIM_DUR_FADE).setInterpolator(ANIM_ENTER).start();
+            trial.animate().alpha(1f).setStartDelay(tail + 180).setDuration(ANIM_DUR_FADE).setInterpolator(ANIM_ENTER).start();
+            go.animate().alpha(1f).translationY(0f).setStartDelay(tail + 240).setDuration(ANIM_DUR_FADE).setInterpolator(ANIM_ENTER).start();
+            hint.animate().alpha(1f).setStartDelay(tail + 300).setDuration(ANIM_DUR_FADE).setInterpolator(ANIM_ENTER).start();
+        });
+        return root;
     }
 
     View buildWelcomePage() {
@@ -12926,6 +13149,7 @@ public class MainActivity extends Activity {
         if (floatSearchOpen) { closeFloatSearch(); return; }
         if (cardMenuPop != null) { closeCardMenu(); return; }
         if (aboutOpen) { closeAbout(); return; }
+        if (helloOpen) { closeHello(); return; }
         if (welcomeOpen) { closeWelcome(); return; }
         if (changelogOpen) { closeChangelog(); return; }
         if (settingsLogOpen && "settings".equals(tab)) { settingsLogOpen = false; rebuildPages(); return; }
