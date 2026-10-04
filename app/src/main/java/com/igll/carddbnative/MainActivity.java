@@ -1116,7 +1116,10 @@ public class MainActivity extends Activity {
                 int[] rl = new int[2]; rootView.getLocationInWindow(rl);
                 int[] ml = new int[2]; getLocationInWindow(ml);
                 canvas.save();
-                canvas.translate(-(ml[0] - rl[0]) * BACKDROP_SCALE, -(ml[1] - rl[1]) * BACKDROP_SCALE);
+                // 对位：节点以 BACKDROP_SCALE 录制（节点 px = 根坐标 × scale），绘出时先按
+                // 本层在根坐标中的位置平移、再 1/scale 放大回全分辨率，内容比例才与身后实景 1:1。
+                canvas.translate(-(ml[0] - rl[0]), -(ml[1] - rl[1]));
+                canvas.scale(1f / BACKDROP_SCALE, 1f / BACKDROP_SCALE);
                 canvas.drawRenderNode(backdropNode);
                 canvas.restore();
             } catch (Throwable t) { noteGlassFailure(); }
