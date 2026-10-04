@@ -12202,7 +12202,7 @@ public class MainActivity extends Activity {
     }
 
     void closeWelcome() {
-        boolean firstHello = !prefs.getBoolean("hello_done", false);
+        boolean firstHello = !prefs.getBoolean("welcomed", false) && !prefs.getBoolean("hello_done", false);
         prefs.edit().putBoolean("welcomed", true).apply();
         welcomeOpen = false;
         if (firstHello) { showHello(); return; } // Q80：首启收尾只此一次，设置重开欢迎页不再过「你好」
