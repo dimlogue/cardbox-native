@@ -204,7 +204,7 @@ public class MainActivity extends Activity {
         return welcomeOpen || changelogOpen || wizardOpen || aboutOpen
             || filterSheet != null || detailCard != null || cardMenuPop != null
             || customFormSheet != null || customDetailSheet != null || binSheet != null || addSheetView != null
-            || extSheet != null
+            || extSheet != null || showcaseView != null
             || placeholderPickerView != null
             || delConfirmSheet != null || updateTipSheet != null || updateConfirmSheet != null;
     }
@@ -1633,6 +1633,20 @@ public class MainActivity extends Activity {
     LinearLayout extResultBox = null;
     TextView extMeta = null;
     EditText extInput = null;
+    // Q78 展柜：我的卡片纯卡面展示（堆叠/平放自由画布），只用自有卡（收藏条目+自定义卡），
+    // 模块自成一块：数据键统一 showcase_ 前缀，入口登记在设置「功能启用」与我的卡片页，关掉不占位。
+    View showcaseView = null;
+    boolean showcaseClosing = false;
+    FrameLayout showcaseBody = null;
+    FrameLayout showcaseWorld = null;
+    TextView showcaseTitleTv = null;
+    org.json.JSONObject showcasePosJson = null;
+    Runnable showcaseDriftTask = null;
+    float showcaseDriftVx = 0.35f, showcaseDriftVy = 0.22f;
+    long showcaseLastTouchMs = 0;
+    boolean showcaseDragging = false;
+    TextView showcaseStackChip = null, showcaseCanvasChip = null, showcaseGroupChip = null;
+    View showcaseDensityRow = null;
     boolean suppressNextChromeRestore = false; // Q12: chain open (menu->detail, addSheet->form) skips one restore to avoid dock flicker
     View addSheetView = null; // Q12: 添加卡片底表，浮窗退场名单内
     String lastBin = null, lastBinScheme = null, lastBinType = null, lastBinBrand = null, lastBinBank = null, lastBinCountry = null;
@@ -3305,6 +3319,7 @@ public class MainActivity extends Activity {
         // otherwise the keyboard is orphaned on the next tab.
         if (floatSearchOpen) closeFloatSearch(); else blurSearchBoxes();
         dismissCardMenu();
+        closeShowcaseNow(); // Q78：切页先摘展柜浮层，引用与漂移任务不许残留到新页
         dismissMoreMenuNow(); // Q58：切页前菜单即刻退场，不许残留到新页
         clearLiveGlassForTabSwitch(); // Q63：切页瞬间清 live 玻璃旧帧，不许旧页文字在新页玻璃面糊出残影
         tab = key;
@@ -7606,6 +7621,15 @@ public class MainActivity extends Activity {
         page.addView(sv, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
         // P-deck ③：重建后恢复上次滚动位置（换序/展开收起不跳顶）
         if (mineScrollSaveY > 0) sv.post(() -> sv.scrollTo(0, mineScrollSaveY));
+        // Q78 展柜入口（设置「功能启用」关掉时整行不出现、不占位）
+        if (prefs == null || prefs.getBoolean("showcase_enabled", true)) {
+            final int ownedN = mineRows.size() + customCards.size();
+            View scEntry = settingRow("展柜", ownedN > 0
+                ? ("只看卡面 · " + ownedN + " 张自有卡，堆叠或平放展示 ›")
+                : "只看卡面展示，先添加几张自己的卡 ›");
+            scEntry.setOnClickListener(v -> { haptic(); openShowcase(); });
+            inner.addView(scEntry);
+        }
         // Q22 页级构成对照混合版：自定义区在前（index.html #customSec 先于 #grid），其后卡包分析，再「我的卡片」折叠条+瓷砖
         inner.addView(buildCustomSection());
         if (!mineRows.isEmpty()) inner.addView(buildMineAnalysis(mineCards));
@@ -10374,6 +10398,481 @@ public class MainActivity extends Activity {
         }
     }
 
+    // ---------- Q78 展柜（纯卡面展示：堆叠 / 平放自由画布） ----------
+    // 数据源只用自有卡：收藏条目（mineEntries，同卡一类/二类各一条）+ 自定义卡；真实卡面图优先，
+    // 无图走 Q70 占位面（placeholderGradFor + OrgBadgeView 按 org 画标），卡面本身不带任何文字信息层。
+    // 构图参照 Apple Pay 卡包与 Mi Pay 集卡的叠压观感、卡链 canvas 的自由画布，只学构图、自写实现。
+    static class ShowcaseItem {
+        String key, bank;
+        Card card; CustomCard custom;
+        ShowcaseItem(String k, String b, Card c, CustomCard cc) { key = k; bank = b == null ? "" : b; card = c; custom = cc; }
+    }
+    static final int[] SHOWCASE_BGS = {
+        Color.rgb(0xF2, 0xF3, 0xF7), Color.rgb(0xFF, 0xFF, 0xFF), Color.rgb(0xE8, 0xF1, 0xFD),
+        Color.rgb(0xF6, 0xEF, 0xE6), Color.rgb(0x16, 0x28, 0x3F), Color.rgb(0x10, 0x10, 0x14)
+    };
+    java.util.List<ShowcaseItem> showcaseItems() {
+        java.util.List<ShowcaseItem> out = new ArrayList<>();
+        if (mineEntries != null) for (MineEntry e : mineEntries) {
+            Card c = Store.byId.get(e.cardId);
+            if (c != null) out.add(new ShowcaseItem("lib:" + e.key, c.bank, c, null));
+        }
+        if (customCards != null) for (CustomCard cc : customCards)
+            out.add(new ShowcaseItem("cc:" + cc.id, cc.bank, null, cc));
+        return out;
+    }
+    String showcaseOrgCode(ShowcaseItem it) {
+        if (it.card != null) return it.card.org == null ? "" : it.card.org;
+        if (it.custom == null || it.custom.org == null) return "";
+        String o = it.custom.org.trim();
+        if ("Visa".equals(o)) return "visa";
+        if ("万事达".equals(o)) return "mastercard";
+        if ("美国运通".equals(o)) return "amex-cn";
+        if ("银联".equals(o)) return "unionpay";
+        if ("JCB".equals(o)) return "jcb";
+        return "";
+    }
+    int showcaseBgIdx() {
+        int i = prefs == null ? 0 : prefs.getInt("showcase_bg", 0);
+        return (i >= 0 && i < SHOWCASE_BGS.length) ? i : 0;
+    }
+    boolean showcaseDarkBg() { return showcaseBgIdx() >= 4; }
+    int showcaseOnBg() { return showcaseDarkBg() ? Color.WHITE : Color.rgb(0x1C, 0x1C, 0x1E); }
+    int showcaseOnBg2() { return showcaseDarkBg() ? Color.argb(170, 255, 255, 255) : Color.rgb(0x8E, 0x8E, 0x93); }
+
+    View buildShowcaseFace(final ShowcaseItem it, final int wPx) {
+        FrameLayout face = new FrameLayout(this);
+        float wDp = wPx / getResources().getDisplayMetrics().density;
+        float r = cardRadiusDp(wDp);
+        roundClip(face, r, this);
+        if (Build.VERSION.SDK_INT >= 21) face.setElevation(dp(this, 6));
+        if (it.card != null) {
+            face.setBackground(placeholderGradFor(it.card.id, r, this));
+            ImageView iv = new ImageView(this);
+            iv.setScaleType(ImageView.ScaleType.CENTER_CROP);
+            Bitmap b = Img.get(this, it.card.image);
+            if (b != null) { iv.setImageBitmap(b); if (darkEff()) iv.setAlpha(0.92f); }
+            face.addView(iv, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+            if (b == null) addOrgBadge(face, it.card.org, 1.2f);
+        } else {
+            face.setBackground(customGradient(it.custom.style));
+            addOrgBadge(face, showcaseOrgCode(it), 1.2f);
+        }
+        face.setTag(it.key);
+        return face;
+    }
+
+    void updateShowcaseChips() {
+        String mode = prefs == null ? "stack" : prefs.getString("showcase_mode", "stack");
+        boolean canvas = "canvas".equals(mode);
+        if (showcaseStackChip != null) {
+            showcaseStackChip.setBackground(roundRect(!canvas ? accentColor() : (showcaseDarkBg() ? Color.argb(70, 255, 255, 255) : Color.rgb(0xE9, 0xEC, 0xF2)), 999, this));
+            showcaseStackChip.setTextColor(!canvas ? Color.WHITE : showcaseOnBg());
+        }
+        if (showcaseCanvasChip != null) {
+            showcaseCanvasChip.setBackground(roundRect(canvas ? accentColor() : (showcaseDarkBg() ? Color.argb(70, 255, 255, 255) : Color.rgb(0xE9, 0xEC, 0xF2)), 999, this));
+            showcaseCanvasChip.setTextColor(canvas ? Color.WHITE : showcaseOnBg());
+        }
+        boolean grp = prefs != null && prefs.getBoolean("showcase_bank_group", false);
+        if (showcaseGroupChip != null) {
+            showcaseGroupChip.setBackground(roundRect(grp ? accentColor() : (showcaseDarkBg() ? Color.argb(70, 255, 255, 255) : Color.rgb(0xE9, 0xEC, 0xF2)), 999, this));
+            showcaseGroupChip.setTextColor(grp ? Color.WHITE : showcaseOnBg());
+        }
+        if (showcaseDensityRow != null) showcaseDensityRow.setVisibility(canvas ? View.VISIBLE : View.GONE);
+    }
+
+    void openShowcase() {
+        if (showcaseView != null) return;
+        captureCurrentPageScroll();
+        hideChrome();
+        showcaseClosing = false;
+        try { showcasePosJson = new org.json.JSONObject(prefs == null ? "{}" : prefs.getString("showcase_positions", "{}")); }
+        catch (Throwable t) { showcasePosJson = new org.json.JSONObject(); }
+        final FrameLayout overlay = new FrameLayout(this);
+        overlay.setBackgroundColor(SHOWCASE_BGS[showcaseBgIdx()]);
+        LinearLayout col = new LinearLayout(this);
+        col.setOrientation(LinearLayout.VERTICAL);
+        overlay.addView(col, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        // 头部：标题 + 模式切换 + 关闭（细线自绘，禁用 emoji）
+        LinearLayout head = new LinearLayout(this);
+        head.setOrientation(LinearLayout.HORIZONTAL);
+        head.setGravity(Gravity.CENTER_VERTICAL);
+        head.setPadding(dp(this, 16), pageTopPad(), dp(this, 12), dp(this, 8));
+        col.addView(head, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        showcaseTitleTv = tvW(this, "展柜", 20, showcaseOnBg(), 800);
+        head.addView(showcaseTitleTv, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+        showcaseStackChip = tv(this, "堆叠", 13, showcaseOnBg(), true);
+        showcaseStackChip.setGravity(Gravity.CENTER);
+        showcaseStackChip.setPadding(dp(this, 14), dp(this, 7), dp(this, 14), dp(this, 7));
+        showcaseStackChip.setOnClickListener(v -> { haptic(); if (prefs != null) prefs.edit().putString("showcase_mode", "stack").apply(); updateShowcaseChips(); buildShowcaseBody(true); });
+        head.addView(showcaseStackChip);
+        showcaseCanvasChip = tv(this, "平放", 13, showcaseOnBg(), true);
+        showcaseCanvasChip.setGravity(Gravity.CENTER);
+        showcaseCanvasChip.setPadding(dp(this, 14), dp(this, 7), dp(this, 14), dp(this, 7));
+        LinearLayout.LayoutParams ccLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        ccLp.leftMargin = dp(this, 8);
+        showcaseCanvasChip.setLayoutParams(ccLp);
+        showcaseCanvasChip.setOnClickListener(v -> { haptic(); if (prefs != null) prefs.edit().putString("showcase_mode", "canvas").apply(); updateShowcaseChips(); buildShowcaseBody(true); });
+        head.addView(showcaseCanvasChip);
+        FrameLayout closeBtn = new FrameLayout(this);
+        closeBtn.setBackground(roundRect(showcaseDarkBg() ? Color.argb(70, 255, 255, 255) : Color.argb(220, 255, 255, 255), 999, this));
+        CloseIconView civ = new CloseIconView(this);
+        civ.iconColor = showcaseOnBg();
+        closeBtn.addView(civ, new FrameLayout.LayoutParams(dp(this, 18), dp(this, 18), Gravity.CENTER));
+        LinearLayout.LayoutParams cbLp = new LinearLayout.LayoutParams(dp(this, 36), dp(this, 36));
+        cbLp.leftMargin = dp(this, 10);
+        closeBtn.setLayoutParams(cbLp);
+        closeBtn.setOnClickListener(v -> { haptic(); closeShowcase(); });
+        head.addView(closeBtn);
+        // 主体
+        showcaseBody = new FrameLayout(this);
+        showcaseBody.setClipChildren(true);
+        col.addView(showcaseBody, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
+        // 底部控制：背景色点 + 按银行分组 + 平放密度（只在平放显示）
+        LinearLayout ctrl = new LinearLayout(this);
+        ctrl.setOrientation(LinearLayout.VERTICAL);
+        ctrl.setPadding(dp(this, 16), dp(this, 8), dp(this, 16), dp(this, 12) + navBarH());
+        col.addView(ctrl, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        LinearLayout ctrlRow = new LinearLayout(this);
+        ctrlRow.setOrientation(LinearLayout.HORIZONTAL);
+        ctrlRow.setGravity(Gravity.CENTER_VERTICAL);
+        ctrl.addView(ctrlRow, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        for (int i = 0; i < SHOWCASE_BGS.length; i++) {
+            final int bi = i;
+            View dot = new View(this);
+            GradientDrawable dg = new GradientDrawable();
+            dg.setShape(GradientDrawable.OVAL);
+            dg.setColor(SHOWCASE_BGS[i]);
+            dg.setStroke(dp(this, bi == showcaseBgIdx() ? 2 : 1), bi == showcaseBgIdx() ? accentColor() : Color.argb(90, 128, 128, 140));
+            dot.setBackground(dg);
+            LinearLayout.LayoutParams dLp = new LinearLayout.LayoutParams(dp(this, 26), dp(this, 26));
+            if (i > 0) dLp.leftMargin = dp(this, 8);
+            dot.setLayoutParams(dLp);
+            dot.setOnClickListener(v -> {
+                haptic();
+                if (prefs != null) prefs.edit().putInt("showcase_bg", bi).apply();
+                overlay.setBackgroundColor(SHOWCASE_BGS[bi]);
+                if (showcaseTitleTv != null) showcaseTitleTv.setTextColor(showcaseOnBg());
+                for (int k = 0; k < ctrlRow.getChildCount() - 1; k++) {
+                    View dv = ctrlRow.getChildAt(k);
+                    GradientDrawable nd = new GradientDrawable();
+                    nd.setShape(GradientDrawable.OVAL);
+                    nd.setColor(SHOWCASE_BGS[k]);
+                    nd.setStroke(dp(this, k == bi ? 2 : 1), k == bi ? accentColor() : Color.argb(90, 128, 128, 140));
+                    dv.setBackground(nd);
+                }
+                updateShowcaseChips();
+            });
+            ctrlRow.addView(dot);
+        }
+        View sp = new View(this);
+        ctrlRow.addView(sp, new LinearLayout.LayoutParams(0, 1, 1f));
+        showcaseGroupChip = tv(this, "按银行分组", 12.5f, showcaseOnBg(), true);
+        showcaseGroupChip.setGravity(Gravity.CENTER);
+        showcaseGroupChip.setPadding(dp(this, 12), dp(this, 7), dp(this, 12), dp(this, 7));
+        showcaseGroupChip.setOnClickListener(v -> {
+            haptic();
+            boolean g = prefs != null && prefs.getBoolean("showcase_bank_group", false);
+            if (prefs != null) prefs.edit().putBoolean("showcase_bank_group", !g).apply();
+            updateShowcaseChips(); buildShowcaseBody(true);
+        });
+        ctrlRow.addView(showcaseGroupChip);
+        showcaseDensityRow = new LinearLayout(this);
+        ((LinearLayout) showcaseDensityRow).setOrientation(LinearLayout.HORIZONTAL);
+        ((LinearLayout) showcaseDensityRow).setGravity(Gravity.CENTER_VERTICAL);
+        LinearLayout.LayoutParams drLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        drLp.topMargin = dp(this, 10);
+        showcaseDensityRow.setLayoutParams(drLp);
+        ctrl.addView(showcaseDensityRow);
+        TextView dLab = tv(this, "密度", 12.5f, showcaseOnBg2(), true);
+        ((LinearLayout) showcaseDensityRow).addView(dLab);
+        android.widget.SeekBar seek = new android.widget.SeekBar(this);
+        seek.setMax(70);
+        float dens0 = prefs == null ? 1f : prefs.getFloat("showcase_density", 1f);
+        seek.setProgress(Math.max(0, Math.min(70, Math.round((dens0 - 0.6f) * 100))));
+        seek.setOnSeekBarChangeListener(new android.widget.SeekBar.OnSeekBarChangeListener() {
+            public void onProgressChanged(android.widget.SeekBar sb, int pr, boolean fromUser) {}
+            public void onStartTrackingTouch(android.widget.SeekBar sb) {}
+            public void onStopTrackingTouch(android.widget.SeekBar sb) {
+                float d = 0.6f + sb.getProgress() / 100f;
+                if (prefs != null) prefs.edit().putFloat("showcase_density", d).apply();
+                buildShowcaseBody(false);
+            }
+        });
+        LinearLayout.LayoutParams skLp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+        skLp.leftMargin = dp(this, 10);
+        ((LinearLayout) showcaseDensityRow).addView(seek, skLp);
+        updateShowcaseChips();
+        content.addView(overlay, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        showcaseView = overlay;
+        buildShowcaseBody(false);
+        overlay.setAlpha(0f);
+        overlay.animate().alpha(1f).setDuration(ANIM_DUR_FADE).setInterpolator(ANIM_ENTER).start();
+    }
+
+    void closeShowcaseNow() {
+        stopShowcaseDrift();
+        View v = showcaseView;
+        showcaseView = null; showcaseBody = null; showcaseWorld = null;
+        showcaseStackChip = null; showcaseCanvasChip = null; showcaseGroupChip = null; showcaseDensityRow = null; showcaseTitleTv = null;
+        showcaseClosing = false;
+        if (v != null && v.getParent() != null) ((ViewGroup) v.getParent()).removeView(v);
+    }
+
+    void closeShowcase() {
+        final View v = showcaseView;
+        if (v == null || showcaseClosing) return;
+        showcaseClosing = true;
+        stopShowcaseDrift();
+        v.animate().alpha(0f).setDuration(ANIM_DUR_SHEET_OUT).setInterpolator(ANIM_EXIT)
+            .withEndAction(() -> { closeShowcaseNow(); restoreChrome(); }).start();
+    }
+
+    void stopShowcaseDrift() {
+        if (showcaseDriftTask != null && mainHandler != null) mainHandler.removeCallbacks(showcaseDriftTask);
+        showcaseDriftTask = null;
+    }
+
+    void startShowcaseDrift() {
+        stopShowcaseDrift();
+        showcaseDriftTask = new Runnable() {
+            public void run() {
+                if (showcaseView == null || showcaseWorld == null || showcaseClosing) return;
+                if (!showcaseDragging && System.currentTimeMillis() - showcaseLastTouchMs > 3000) {
+                    float nx = showcaseWorld.getTranslationX() + showcaseDriftVx;
+                    float ny = showcaseWorld.getTranslationY() + showcaseDriftVy;
+                    if (nx > dp(MainActivity.this, 80)) showcaseDriftVx = -Math.abs(showcaseDriftVx);
+                    if (nx < -dp(MainActivity.this, 80)) showcaseDriftVx = Math.abs(showcaseDriftVx);
+                    if (ny > dp(MainActivity.this, 50)) showcaseDriftVy = -Math.abs(showcaseDriftVy);
+                    if (ny < -dp(MainActivity.this, 50)) showcaseDriftVy = Math.abs(showcaseDriftVy);
+                    showcaseWorld.setTranslationX(nx);
+                    showcaseWorld.setTranslationY(ny);
+                }
+                if (mainHandler != null) mainHandler.postDelayed(this, 50);
+            }
+        };
+        if (mainHandler != null) mainHandler.postDelayed(showcaseDriftTask, 3000);
+    }
+
+    void buildShowcaseBody(boolean animate) {
+        if (showcaseBody == null) return;
+        stopShowcaseDrift();
+        showcaseWorld = null;
+        showcaseBody.removeAllViews();
+        java.util.List<ShowcaseItem> items = showcaseItems();
+        if (items.isEmpty()) {
+            TextView em = tv(this, "还没有自己的卡片。\n去全部卡片添加几张，或在我的卡片里加自定义卡，再回来开展柜。", 13.5f, showcaseOnBg2(), false);
+            em.setGravity(Gravity.CENTER);
+            em.setLineSpacing(dp(this, 3), 1f);
+            showcaseBody.addView(em, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+            return;
+        }
+        String mode = prefs == null ? "stack" : prefs.getString("showcase_mode", "stack");
+        if ("canvas".equals(mode)) buildShowcaseCanvas(items); else buildShowcaseStack(items);
+        if (animate) {
+            showcaseBody.setAlpha(0f);
+            showcaseBody.setTranslationX(dp(this, 14));
+            showcaseBody.animate().alpha(1f).translationX(0f).setDuration(ANIM_DUR_FADE).setInterpolator(ANIM_ENTER).start();
+        }
+    }
+
+    void buildShowcaseStack(java.util.List<ShowcaseItem> items) {
+        ScrollView sv = new ScrollView(this);
+        thinScrollbar(sv);
+        sv.setClipToPadding(false);
+        LinearLayout col = new LinearLayout(this);
+        col.setOrientation(LinearLayout.VERTICAL);
+        col.setPadding(dp(this, 16), dp(this, 6), dp(this, 16), dp(this, 28));
+        sv.addView(col, new ScrollView.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        showcaseBody.addView(sv, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        boolean grp = prefs != null && prefs.getBoolean("showcase_bank_group", false);
+        final boolean expanded = prefs != null && prefs.getBoolean("showcase_stack_open", false);
+        // 展开/收起一颗小钮（堆叠只露顶带，展开近全卡）
+        TextView tog = tv(this, expanded ? "收起堆叠" : "展开堆叠", 12.5f, showcaseOnBg(), true);
+        tog.setGravity(Gravity.CENTER);
+        tog.setBackground(roundRect(showcaseDarkBg() ? Color.argb(70, 255, 255, 255) : Color.rgb(0xE9, 0xEC, 0xF2), 999, this));
+        tog.setPadding(dp(this, 12), dp(this, 7), dp(this, 12), dp(this, 7));
+        LinearLayout togRow = new LinearLayout(this);
+        togRow.setGravity(Gravity.RIGHT);
+        togRow.addView(tog, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        col.addView(togRow, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        tog.setOnClickListener(v -> { haptic(); if (prefs != null) prefs.edit().putBoolean("showcase_stack_open", !expanded).apply(); buildShowcaseBody(true); });
+        // 分组：按银行聚成多摞（银行名只作组标题，卡面本身仍零文字）；不分组则一摞到底
+        java.util.LinkedHashMap<String, java.util.List<ShowcaseItem>> groups = new java.util.LinkedHashMap<>();
+        for (ShowcaseItem it : items) {
+            String k = grp ? (it.bank == null || it.bank.isEmpty() ? "其他" : it.bank) : "";
+            java.util.List<ShowcaseItem> g = groups.get(k);
+            if (g == null) { g = new ArrayList<>(); groups.put(k, g); }
+            g.add(it);
+        }
+        int screenW = getResources().getDisplayMetrics().widthPixels;
+        int faceW = screenW - dp(this, 32);
+        int faceH = Math.round(faceW / 1.586f);
+        int strip = expanded ? Math.round(faceH * 0.88f) : dp(this, 52);
+        for (java.util.Map.Entry<String, java.util.List<ShowcaseItem>> e : groups.entrySet()) {
+            if (grp) {
+                TextView gl = tv(this, e.getKey() + " · " + e.getValue().size() + " 张", 13, showcaseOnBg2(), true);
+                LinearLayout.LayoutParams glp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+                glp.topMargin = dp(this, 16); glp.bottomMargin = dp(this, 8);
+                gl.setLayoutParams(glp);
+                col.addView(gl);
+            }
+            final FrameLayout stack = new FrameLayout(this);
+            stack.setClipChildren(false);
+            int stackH = faceH + (e.getValue().size() - 1) * strip;
+            LinearLayout.LayoutParams stLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, stackH);
+            stLp.topMargin = dp(this, 8);
+            stack.setLayoutParams(stLp);
+            col.addView(stack);
+            for (int i = 0; i < e.getValue().size(); i++) {
+                final View face = buildShowcaseFace(e.getValue().get(i), faceW);
+                FrameLayout.LayoutParams flp = new FrameLayout.LayoutParams(faceW, faceH);
+                flp.gravity = Gravity.TOP | Gravity.CENTER_HORIZONTAL;
+                flp.topMargin = i * strip;
+                face.setLayoutParams(flp);
+                stack.addView(face);
+                face.setOnClickListener(v -> {
+                    haptic();
+                    stack.bringChildToFront(v);
+                    v.animate().cancel();
+                    v.setScaleX(1.03f); v.setScaleY(1.03f);
+                    v.animate().scaleX(1f).scaleY(1f).setDuration(ANIM_DUR_FADE).setInterpolator(ANIM_ENTER).start();
+                });
+            }
+        }
+    }
+
+    void buildShowcaseCanvas(java.util.List<ShowcaseItem> items) {
+        final FrameLayout clip = new FrameLayout(this);
+        clip.setClipChildren(true);
+        showcaseBody.addView(clip, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        final FrameLayout world = new FrameLayout(this);
+        world.setClipChildren(false);
+        clip.addView(world, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        showcaseWorld = world;
+        float dens = prefs == null ? 1f : prefs.getFloat("showcase_density", 1f);
+        final int faceW = Math.round(dp(this, 190) * Math.max(0.6f, Math.min(1.3f, dens)));
+        final int faceH = Math.round(faceW / 1.586f);
+        final boolean grp = prefs != null && prefs.getBoolean("showcase_bank_group", false);
+        final java.util.List<View> faces = new ArrayList<>();
+        for (final ShowcaseItem it : items) {
+            final View face = buildShowcaseFace(it, faceW);
+            face.setLayoutParams(new FrameLayout.LayoutParams(faceW, faceH));
+            world.addView(face);
+            faces.add(face);
+            face.setOnTouchListener(new View.OnTouchListener() {
+                float downRawX, downRawY; int startL, startT; boolean moved;
+                public boolean onTouch(View v, MotionEvent ev) {
+                    showcaseLastTouchMs = System.currentTimeMillis();
+                    FrameLayout.LayoutParams lp = (FrameLayout.LayoutParams) v.getLayoutParams();
+                    switch (ev.getActionMasked()) {
+                        case MotionEvent.ACTION_DOWN:
+                            moved = false; showcaseDragging = true;
+                            downRawX = ev.getRawX(); downRawY = ev.getRawY();
+                            startL = lp.leftMargin; startT = lp.topMargin;
+                            if (v.getParent() instanceof ViewGroup) ((ViewGroup) v.getParent()).bringChildToFront(v);
+                            return true;
+                        case MotionEvent.ACTION_MOVE: {
+                            float sc = Math.max(0.3f, world.getScaleX());
+                            int nx = startL + Math.round((ev.getRawX() - downRawX) / sc);
+                            int ny = startT + Math.round((ev.getRawY() - downRawY) / sc);
+                            if (Math.abs(ev.getRawX() - downRawX) + Math.abs(ev.getRawY() - downRawY) > dp(MainActivity.this, 4)) moved = true;
+                            int pw = world.getWidth() > 0 ? world.getWidth() : getResources().getDisplayMetrics().widthPixels;
+                            int ph = world.getHeight() > 0 ? world.getHeight() : getResources().getDisplayMetrics().heightPixels;
+                            lp.leftMargin = Math.max(-faceW / 2, Math.min(nx, pw - faceW / 2));
+                            lp.topMargin = Math.max(-faceH / 2, Math.min(ny, ph - faceH / 2));
+                            v.setLayoutParams(lp);
+                            return true;
+                        }
+                        case MotionEvent.ACTION_UP:
+                        case MotionEvent.ACTION_CANCEL:
+                            showcaseDragging = false;
+                            showcaseLastTouchMs = System.currentTimeMillis();
+                            if (!moved) {
+                                haptic();
+                                v.animate().cancel();
+                                v.setScaleX(1.04f); v.setScaleY(1.04f);
+                                v.animate().scaleX(1f).scaleY(1f).setDuration(ANIM_DUR_FADE).setInterpolator(ANIM_ENTER).start();
+                            } else if (showcasePosJson != null) {
+                                try {
+                                    showcasePosJson.put(it.key, lp.leftMargin + "," + lp.topMargin);
+                                    if (prefs != null) prefs.edit().putString("showcase_positions", showcasePosJson.toString()).apply();
+                                } catch (Throwable ignored) {}
+                            }
+                            return true;
+                    }
+                    return true;
+                }
+            });
+        }
+        // 空白处：拖动平移整画布 + 双指缩放（只动绘制层，不触发排版）
+        final android.view.ScaleGestureDetector sgd = new android.view.ScaleGestureDetector(this,
+            new android.view.ScaleGestureDetector.SimpleOnScaleGestureListener() {
+                @Override public boolean onScale(android.view.ScaleGestureDetector d) {
+                    float s = Math.max(0.5f, Math.min(2.2f, world.getScaleX() * d.getScaleFactor()));
+                    world.setPivotX(d.getFocusX()); world.setPivotY(d.getFocusY());
+                    world.setScaleX(s); world.setScaleY(s);
+                    return true;
+                }
+            });
+        world.setOnTouchListener(new View.OnTouchListener() {
+            float downRawX, downRawY, startTx, startTy;
+            public boolean onTouch(View v, MotionEvent ev) {
+                showcaseLastTouchMs = System.currentTimeMillis();
+                sgd.onTouchEvent(ev);
+                if (ev.getPointerCount() > 1) return true;
+                switch (ev.getActionMasked()) {
+                    case MotionEvent.ACTION_DOWN:
+                        downRawX = ev.getRawX(); downRawY = ev.getRawY();
+                        startTx = v.getTranslationX(); startTy = v.getTranslationY();
+                        return true;
+                    case MotionEvent.ACTION_MOVE:
+                        v.setTranslationX(startTx + (ev.getRawX() - downRawX));
+                        v.setTranslationY(startTy + (ev.getRawY() - downRawY));
+                        return true;
+                }
+                return true;
+            }
+        });
+        // 首次排布：有本机记忆位置用记忆；分组时按银行成团簇排（不覆盖记忆，关掉分组回到记忆位）
+        clip.post(() -> {
+            int aw = clip.getWidth(), ah = clip.getHeight();
+            if (aw <= 0 || ah <= 0) return;
+            java.util.HashMap<String, Integer> bankIdx = new java.util.HashMap<>();
+            java.util.HashMap<String, Integer> bankCnt = new java.util.HashMap<>();
+            for (int i = 0; i < faces.size(); i++) {
+                View f = faces.get(i);
+                ShowcaseItem it = items.get(i);
+                FrameLayout.LayoutParams lp = (FrameLayout.LayoutParams) f.getLayoutParams();
+                int x, y;
+                String saved = (showcasePosJson == null || grp) ? null : showcasePosJson.optString(it.key, null);
+                if (saved != null && saved.contains(",")) {
+                    try {
+                        String[] parts = saved.split(",");
+                        x = Integer.parseInt(parts[0].trim()); y = Integer.parseInt(parts[1].trim());
+                    } catch (Throwable t) { x = -1; y = -1; }
+                    if (x < -faceW / 2 || y < -faceH / 2) { x = -1; y = -1; }
+                } else if (grp) {
+                    Integer bi = bankIdx.get(it.bank);
+                    if (bi == null) { bi = bankIdx.size(); bankIdx.put(it.bank, bi); }
+                    Integer bc = bankCnt.get(it.bank);
+                    int k = bc == null ? 0 : bc; bankCnt.put(it.bank, k + 1);
+                    int colI = bi % 2, rowI = bi / 2;
+                    x = colI * (aw / 2) + dp(MainActivity.this, 12) + (k % 2) * dp(MainActivity.this, 24);
+                    y = rowI * dp(MainActivity.this, 190) + dp(MainActivity.this, 14) + k * dp(MainActivity.this, 34);
+                } else {
+                    x = Math.round(((i * 47) % 100) / 100f * Math.max(0, aw - faceW));
+                    y = Math.round(((i * 29 + 13) % 100) / 100f * Math.max(0, ah - faceH));
+                }
+                lp.leftMargin = Math.max(-faceW / 2, Math.min(x, Math.max(-faceW / 2, aw - faceW / 2)));
+                lp.topMargin = Math.max(-faceH / 2, Math.min(y, Math.max(-faceH / 2, ah - faceH / 2)));
+                f.setLayoutParams(lp);
+            }
+        });
+        showcaseLastTouchMs = System.currentTimeMillis();
+        startShowcaseDrift();
+    }
+
     void openExtendedSearch() {
         closeExtendedSearchNow();
         extQuery = "";
@@ -11504,6 +12003,12 @@ public class MainActivity extends Activity {
         wizEntry.setOnClickListener(v -> { haptic(); openWizard(); });
         page.addView(wizEntry);
 
+        // 功能启用区（2026-10-04 06:33 钉版）：可选模块逐项登记在此，关掉入口与界面彻底不出现、不占位
+        sectionHead(page, "功能启用");
+        switchRow(page, "展柜", "我的卡片页的纯卡面展示（堆叠 / 平放自由画布）", prefs == null || prefs.getBoolean("showcase_enabled", true), on -> {
+            if (prefs != null) prefs.edit().putBoolean("showcase_enabled", on).apply(); haptic(); rebuildPages();
+        });
+
         // Q72 外观分区：深色模式/主题色/卡面配色三件事各管各、互不染指（卡面配色只管无图占位底色）
         sectionHead(page, "外观");
         segRow(page, "深色模式", new String[][]{{"system","跟随系统"},{"light","浅色"},{"dark","深色"}}, darkModePref, v -> {
@@ -11797,6 +12302,7 @@ public class MainActivity extends Activity {
     @Override
     public void onBackPressed() {
         if (acctPickerView != null) { closeAcctClassPicker(); return; }
+        if (showcaseView != null) { closeShowcase(); return; }
         if (moreMenuOverlay != null) { closeMoreMenu(); return; }
         if (floatSearchOpen) { closeFloatSearch(); return; }
         if (cardMenuPop != null) { closeCardMenu(); return; }
