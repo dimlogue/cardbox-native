@@ -2399,6 +2399,7 @@ public class MainActivity extends Activity {
         groupBank = prefs.getBoolean("group_bank", false);
         try { bankOpen = new HashSet<>(prefs.getStringSet("bank_open", new HashSet<String>())); } catch (Exception e) { bankOpen = new HashSet<>(); }
         loadCustomCards();
+        loadOwnActs();
         loadMineOrder();
         loadMineEntries();
         Store.load(this);
@@ -7660,6 +7661,75 @@ public class MainActivity extends Activity {
         }
     }
 
+
+    // Q79 credit overview: totals with shared-bank max rule + due calendar (local only)
+    View buildCreditOverview(java.util.List<MineRow> rows) {
+        LinearLayout box = new LinearLayout(this); box.setOrientation(LinearLayout.VERTICAL);
+        box.setBackground(rippleBg(colSurface(), 14)); box.setPadding(dp(this,14),dp(this,12),dp(this,14),dp(this,12));
+        LinearLayout.LayoutParams bp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT); bp.topMargin = dp(this,10); box.setLayoutParams(bp);
+        boolean shared = prefs == null || prefs.getBoolean("limit_shared_bank", true);
+        java.util.Map<String, Long> perBank = new java.util.HashMap<>();
+        java.util.List<String[]> dues = new java.util.ArrayList<>();
+        int cards = 0; long plainSum = 0;
+        java.util.List<Object[]> all = new java.util.ArrayList<>();
+        if (rows != null) for (MineRow r : rows) { String bn = r.card == null ? "" : (r.card.bank == null ? "" : r.card.bank); all.add(new Object[]{bn, r.entry.limitYuan, r.entry.dueDay, r.card == null ? "" : r.card.name}); }
+        for (CustomCard c : customCards) if (isBankKind(c.kind)) all.add(new Object[]{c.bank == null ? "" : c.bank, c.limitYuan, c.dueDay, c.name == null ? "" : c.name});
+        for (Object[] a : all) { long lim = (Long) a[1]; if (lim > 0) { cards++; plainSum += lim; String bk = ((String) a[0]).trim(); Long cur = perBank.get(bk); if (cur == null || lim > cur) perBank.put(bk, lim); } int dd = (Integer) a[2]; if (dd >= 1 && dd <= 31) dues.add(new String[]{(String) a[3], String.valueOf(dd)}); }
+        long sharedTotal = 0; for (Long v : perBank.values()) sharedTotal += v;
+        long total = shared ? sharedTotal : plainSum;
+        box.addView(tvW(this, "持卡总览 · " + Math.max(cards, 0) + " 张有额度", 14.5f, colText(), 700));
+        box.addView(tv(this, "总额度 ¥" + fmtMoney(total) + (shared ? "（同行共用取最高）" : "（逐张相加）"), 13, colText2(), false));
+        TextView tog = tv(this, shared ? "口径：同行取最高 · 点此切换" : "口径：逐张相加 · 点此切换", 12.5f, accentColor(), true);
+        tog.setOnClickListener(v -> { haptic(); try { prefs.edit().putBoolean("limit_shared_bank", !shared).commit(); } catch (Throwable ignored) {} refreshMineKeepScroll(); });
+        box.addView(tog);
+        if (!dues.isEmpty()) {
+            dues.sort((a, b) -> Integer.compare(Integer.parseInt(a[1]), Integer.parseInt(b[1])));
+            StringBuilder sb = new StringBuilder("还款日历：");
+            for (int i = 0; i < dues.size() && i < 6; i++) sb.append(i == 0 ? "" : " · ").append(dues.get(i)[0]).append(" 每月").append(dues.get(i)[1]).append("日");
+            box.addView(tv(this, sb.toString(), 12, colText2(), false));
+        } else box.addView(tv(this, "在卡片编辑里填还款日后，这里按日历列出。", 12, colText2(), false));
+        return box;
+    }
+    void openOwnActs() {
+        FrameLayout ov = new FrameLayout(this); ov.setBackgroundColor(colBg());
+        LinearLayout col = new LinearLayout(this); col.setOrientation(LinearLayout.VERTICAL); col.setPadding(dp(this,16), pageTopPad(), dp(this,16), dockPad());
+        ov.addView(col); TextView h = tvW(this, "活动追踪", 22, colText(), 800); col.addView(h);
+        col.addView(tv(this, "开卡任务 / 刷满次数 / 消费达标，纯本机记录。", 12.5f, colText2(), false));
+        ScrollView sv = new ScrollView(this); LinearLayout list = new LinearLayout(this); list.setOrientation(LinearLayout.VERTICAL); sv.addView(list); col.addView(sv, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
+        if (ownActs.isEmpty()) list.addView(tv(this, "还没有活动，点下方新增一条。", 13, colText2(), false));
+        for (final OwnActItem it : ownActs) {
+            LinearLayout row = new LinearLayout(this); row.setOrientation(LinearLayout.VERTICAL); row.setBackground(rippleBg(colSurface(), 14)); row.setPadding(dp(this,14),dp(this,10),dp(this,14),dp(this,10));
+            LinearLayout.LayoutParams rp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT); rp.topMargin = dp(this,8); row.setLayoutParams(rp);
+            row.addView(tvW(this, (it.title == null ? "" : it.title) + (it.finished ? " · 已完成" : ""), 14, colText(), 700));
+            row.addView(tv(this, (it.cardName == null ? "" : it.cardName) + " · " + it.type + " · " + it.done + "/" + it.target + (it.period == null || it.period.isEmpty() ? "" : " · " + it.period), 12, colText2(), false));
+            LinearLayout br = new LinearLayout(this); br.setOrientation(LinearLayout.HORIZONTAL);
+            TextView doneB = tv(this, it.finished ? "取消完成" : "完成打勾", 12.5f, accentColor(), true); doneB.setPadding(dp(this,6),dp(this,6),dp(this,12),dp(this,6));
+            doneB.setOnClickListener(v -> { haptic(); it.finished = !it.finished; if (it.finished && it.target > 0) it.done = it.target; saveOwnActs(); openOwnActsRefresh(ov); });
+            TextView delB = tv(this, "删除", 12.5f, Color.rgb(0xE0,0x31,0x31), true); delB.setPadding(dp(this,6),dp(this,6),dp(this,6),dp(this,6));
+            delB.setOnClickListener(v -> { haptic(); ownActs.remove(it); saveOwnActs(); openOwnActsRefresh(ov); });
+            br.addView(doneB); br.addView(delB); row.addView(br); list.addView(row);
+        }
+        Button add = new Button(this); add.setText("新增活动"); add.setAllCaps(false); add.setTextColor(Color.WHITE); add.setBackground(roundRect(accentColor(), 12, this));
+        add.setOnClickListener(v -> { haptic(); openOwnActForm(ov); });
+        col.addView(add);
+        Button back = new Button(this); back.setText("返回"); back.setAllCaps(false); back.setOnClickListener(v -> { haptic(); ((ViewGroup) content).removeView(ov); restoreChrome(); });
+        col.addView(back);
+        hideChrome(); content.addView(ov); ownActsOverlay = ov;
+    }
+    FrameLayout ownActsOverlay = null;
+    void openOwnActsRefresh(FrameLayout old) { try { if (old != null) ((ViewGroup) content).removeView(old); } catch (Throwable ignored) {} openOwnActs(); }
+    void openOwnActForm(final FrameLayout parentOv) {
+        // minimal inline form appended as sheet-like card at bottom of overlay
+        LinearLayout f = new LinearLayout(this); f.setOrientation(LinearLayout.VERTICAL); f.setBackground(roundRect(colSheet(), 16, this)); f.setPadding(dp(this,16),dp(this,14),dp(this,16),dp(this,14));
+        final EditText t = customInput("活动名，如：开卡礼", "", 30); final EditText cn = customInput("卡名（可空）", "", 20); final EditText tg = customInput("目标次数/金额，如：3", "", 9);
+        f.addView(tvW(this, "新增活动", 15, colText(), 700)); f.addView(t); f.addView(cn); f.addView(tg);
+        Button ok = new Button(this); ok.setText("保存"); ok.setAllCaps(false); ok.setTextColor(Color.WHITE); ok.setBackground(roundRect(accentColor(), 12, this));
+        ok.setOnClickListener(v -> { haptic(); String title = t.getText().toString().trim(); if (title.isEmpty()) { showFloatToast("请填写活动名"); return; } OwnActItem it = new OwnActItem(); it.id = "act-" + System.currentTimeMillis(); it.title = title; it.cardName = cn.getText().toString().trim(); it.type = "刷卡"; it.target = parseDay(tg.getText().toString()); ownActs.add(it); saveOwnActs(); try { ((ViewGroup) f.getParent()).removeView(f); } catch (Throwable ignored) {} openOwnActsRefresh(parentOv); });
+        f.addView(ok);
+        FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT); lp.gravity = Gravity.BOTTOM; lp.leftMargin = dp(this,12); lp.rightMargin = dp(this,12); lp.bottomMargin = dp(this,12) + navBarH();
+        parentOv.addView(f, lp);
+    }
+
     View buildMinePage() {
         LinearLayout page = basePage("我的卡片");
         // Q39: .mine-pagetitle 1.7rem/800/-.01em，与通用 .page-title 区分
@@ -7717,6 +7787,8 @@ public class MainActivity extends Activity {
             skEntry.setOnClickListener(v -> { haptic(); openSimKeep(); });
             inner.addView(skEntry);
         }
+        if (prefs == null || prefs.getBoolean("owncard_enabled", true)) inner.addView(buildCreditOverview(mineRows));
+        if (prefs == null || prefs.getBoolean("ownact_enabled", true)) { View _ae = settingRow("活动追踪", ownActs.isEmpty() ? "开卡任务 / 刷卡达标登记 ›" : (ownActs.size() + " 条活动 · 点开管理 ›")); _ae.setOnClickListener(v -> { haptic(); openOwnActs(); }); inner.addView(_ae); }
         // Q22 页级构成对照混合版：自定义区在前（index.html #customSec 先于 #grid），其后卡包分析，再「我的卡片」折叠条+瓷砖
         inner.addView(buildCustomSection());
         if (!mineRows.isEmpty()) inner.addView(buildMineAnalysis(mineCards));
@@ -8547,6 +8619,9 @@ public class MainActivity extends Activity {
         if (isBankKind(c.kind)) rowList.add(new String[]{"卡组织", dash(c.org)});
         if (isBankKind(c.kind) && c.acctClass != null && !c.acctClass.isEmpty()) rowList.add(new String[]{"账户类别", c.acctClass});
         rowList.add(new String[]{"备注", dash(c.note)});
+        if (isBankKind(c.kind) && c.limitYuan > 0) rowList.add(new String[]{"信用额度", "¥" + fmtMoney(c.limitYuan)});
+        if (isBankKind(c.kind) && c.billDay > 0) rowList.add(new String[]{"账单日", "每月 " + c.billDay + " 日"});
+        if (isBankKind(c.kind) && c.dueDay > 0) rowList.add(new String[]{"还款日", "每月 " + c.dueDay + " 日"});
         String[][] rows = rowList.toArray(new String[0][]);
         for (int i = 0; i < rows.length; i++) {
             specBox.addView(customDetailRow(rows[i][0], rows[i][1]));
@@ -8556,6 +8631,18 @@ public class MainActivity extends Activity {
                 specBox.addView(div, new LinearLayout.LayoutParams(
                     ViewGroup.LayoutParams.MATCH_PARENT, Math.max(1, dp(this, 1) / 2)));
             }
+        }
+        // Q79 PAN eye row (per-open reset closed)
+        if (isBankKind(c.kind) && c.pan != null && !c.pan.isEmpty()) {
+            LinearLayout panRow = new LinearLayout(this); panRow.setOrientation(LinearLayout.HORIZONTAL); panRow.setGravity(Gravity.CENTER_VERTICAL);
+            LinearLayout.LayoutParams pp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT); pp.topMargin = dp(this, 12); panRow.setLayoutParams(pp);
+            final TextView panTv = tv(this, maskPan(c.pan), 14, colText(), true); panTv.setLetterSpacing(0.04f);
+            final boolean[] panShown = {false};
+            TextView eye = tv(this, "显示", 12.5f, accentColor(), true); eye.setPadding(dp(this, 12), dp(this, 6), dp(this, 12), dp(this, 6));
+            eye.setOnClickListener(v -> { haptic(); panShown[0] = !panShown[0]; panTv.setText(panShown[0] ? fmtPan(c.pan) : maskPan(c.pan)); ((TextView) v).setText(panShown[0] ? "隐藏" : "显示"); });
+            panRow.addView(tv(this, "卡号", 13, colText2(), false)); View _sp = new View(this); panRow.addView(_sp, new LinearLayout.LayoutParams(0, 1, 1f)); panRow.addView(panTv); panRow.addView(eye);
+            inner.addView(panRow);
+            inner.addView(tv(this, "卡号只存本机，离开本页自动隐藏。", 11, colText2(), false));
         }
         // Q65：详情内直接改类别（不标/一类/二类），改完重开本窗使规格行与色带 chip 同步
         LinearLayout tagBox = new LinearLayout(this);
@@ -9658,8 +9745,9 @@ public class MainActivity extends Activity {
             draft.org = edit.org; draft.note = edit.note; draft.style = edit.style;
             draft.acctClass = edit.acctClass == null ? "" : edit.acctClass;
             draft.kind = normCardKind(edit.kind);
+            draft.pan = edit.pan == null ? "" : edit.pan; draft.limitYuan = edit.limitYuan; draft.billDay = edit.billDay; draft.dueDay = edit.dueDay;
         } else {
-            draft.id = null; draft.name = ""; draft.bank = ""; draft.org = ""; draft.note = ""; draft.style = 0; draft.acctClass = ""; draft.kind = "bank";
+            draft.id = null; draft.name = ""; draft.bank = ""; draft.org = ""; draft.note = ""; draft.style = 0; draft.acctClass = ""; draft.kind = "bank"; draft.pan = ""; draft.limitYuan = 0; draft.billDay = 0; draft.dueDay = 0;
         }
         final String[] kindSel = {normCardKind(draft.kind)};
         final Runnable[] applyKindVisibilityHolder = {null};
@@ -9892,6 +9980,27 @@ public class MainActivity extends Activity {
         }
         form.addView(customFormLabel("备注"));
         form.addView(inNote);
+        // Q79 自有卡字段（仅银行卡）：卡号只存本机、额度与账单/还款日供总览与日历
+        final TextView panLabel = customFormLabel("完整卡号（可空，只存本机）");
+        final EditText inPan = customInput("如：6222021234567890", draft.pan, 23);
+        final TextView limLabel = customFormLabel("信用额度（元，可空）");
+        final EditText inLim = customInput("如：50000", draft.limitYuan > 0 ? String.valueOf(draft.limitYuan) : "", 9);
+        final TextView billLabel = customFormLabel("账单日 / 还款日（几号，可空）");
+        LinearLayout billRow = new LinearLayout(this); billRow.setOrientation(LinearLayout.HORIZONTAL);
+        final EditText inBill = customInput("账单日，如：5", draft.billDay > 0 ? String.valueOf(draft.billDay) : "", 2);
+        final EditText inDue = customInput("还款日，如：25", draft.dueDay > 0 ? String.valueOf(draft.dueDay) : "", 2);
+        LinearLayout.LayoutParams blp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+        LinearLayout.LayoutParams dlp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f); dlp.leftMargin = dp(this, 10);
+        billRow.addView(inBill, blp); billRow.addView(inDue, dlp);
+        form.addView(panLabel); form.addView(inPan); form.addView(limLabel); form.addView(inLim); form.addView(billLabel); form.addView(billRow);
+        {
+            final Runnable prev2 = applyKindVisibilityHolder[0];
+            applyKindVisibilityHolder[0] = () -> { if (prev2 != null) prev2.run(); boolean bk = isBankKind(kindSel[0]); int vis = bk ? View.VISIBLE : View.GONE; panLabel.setVisibility(vis); inPan.setVisibility(vis); limLabel.setVisibility(vis); inLim.setVisibility(vis); billLabel.setVisibility(vis); billRow.setVisibility(vis); };
+            applyKindVisibilityHolder[0].run();
+        }
+        // expose to save via tags
+        inPan.setTag("q79pan"); inLim.setTag("q79lim"); inBill.setTag("q79bill"); inDue.setTag("q79due");
+        form.setTag(inPan);
 
         LinearLayout acts = new LinearLayout(this);
         acts.setOrientation(LinearLayout.HORIZONTAL);
@@ -9929,6 +10038,7 @@ public class MainActivity extends Activity {
                 c.style = styleSel[0];
                 c.acctClass = isBankKind(kindSel[0]) ? normAcctClass(acctSel[0]) : "";
                 c.kind = normCardKind(kindSel[0]);
+                { EditText _p = (EditText) form.getTag(); EditText _l = (EditText) form.findViewWithTag("q79lim"); EditText _b = (EditText) form.findViewWithTag("q79bill"); EditText _d = (EditText) form.findViewWithTag("q79due"); boolean bk2 = isBankKind(kindSel[0]); c.pan = bk2 && _p != null ? _p.getText().toString().replaceAll("[^0-9]", "") : ""; c.limitYuan = bk2 && _l != null ? parseYuan(_l.getText().toString()) : 0; c.billDay = bk2 && _b != null ? parseDay(_b.getText().toString()) : 0; c.dueDay = bk2 && _d != null ? parseDay(_d.getText().toString()) : 0; }
                 if (!isBankKind(kindSel[0])) c.org = "";
                 customCards.add(c);
                 customOpen = true;
@@ -9941,6 +10051,7 @@ public class MainActivity extends Activity {
                 edit.style = styleSel[0];
                 edit.acctClass = isBankKind(kindSel[0]) ? normAcctClass(acctSel[0]) : "";
                 edit.kind = normCardKind(kindSel[0]);
+                { EditText _p = (EditText) form.getTag(); EditText _l = (EditText) form.findViewWithTag("q79lim"); EditText _b = (EditText) form.findViewWithTag("q79bill"); EditText _d = (EditText) form.findViewWithTag("q79due"); boolean bk2 = isBankKind(kindSel[0]); edit.pan = bk2 && _p != null ? _p.getText().toString().replaceAll("[^0-9]", "") : ""; edit.limitYuan = bk2 && _l != null ? parseYuan(_l.getText().toString()) : 0; edit.billDay = bk2 && _b != null ? parseDay(_b.getText().toString()) : 0; edit.dueDay = bk2 && _d != null ? parseDay(_d.getText().toString()) : 0; }
                 if (!isBankKind(kindSel[0])) edit.org = "";
                 showFloatToast("已保存「" + name + "」");
             }
@@ -12507,6 +12618,12 @@ public class MainActivity extends Activity {
         });
         switchRow(page, "保号管家", "电话卡 / eSIM 保号到期管理，关掉后入口不出现", prefs == null || prefs.getBoolean("simkeep_enabled", true), on -> {
             if (prefs != null) prefs.edit().putBoolean("simkeep_enabled", on).apply(); haptic(); rebuildPages();
+        });
+        switchRow(page, "持卡总览", "我的卡片页的额度汇总与还款日历", prefs == null || prefs.getBoolean("owncard_enabled", true), on -> {
+            if (prefs != null) prefs.edit().putBoolean("owncard_enabled", on).apply(); haptic(); rebuildPages();
+        });
+        switchRow(page, "活动追踪", "开卡任务与刷卡达标登记，关掉后入口不出现", prefs == null || prefs.getBoolean("ownact_enabled", true), on -> {
+            if (prefs != null) prefs.edit().putBoolean("ownact_enabled", on).apply(); haptic(); rebuildPages();
         });
 
         // Q72 外观分区：深色模式/主题色/卡面配色三件事各管各、互不染指（卡面配色只管无图占位底色）
