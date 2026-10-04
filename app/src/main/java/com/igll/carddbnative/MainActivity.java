@@ -10947,10 +10947,11 @@ public class MainActivity extends Activity {
         inner.addView(hint, hLp);
     }
     void markSimKeepDone(final SimKeepItem it) {
+        String newDue = simkeepAddDays(it.nextDue, it.cycleDays <= 0 ? 30 : it.cycleDays);
         java.util.List<SimKeepItem> items = loadSimKeeps();
-        for (SimKeepItem x : items) if (x.id.equals(it.id)) { x.nextDue = simkeepAddDays(x.nextDue, x.cycleDays <= 0 ? 30 : x.cycleDays); break; }
+        for (SimKeepItem x : items) if (x.id.equals(it.id)) { x.nextDue = newDue; break; }
         saveSimKeeps(items);
-        showFloatToast("已顺延到 " + it.nextDue);
+        showFloatToast("已顺延到 " + newDue);
         buildSimKeepBody();
     }
     void openSimKeepForm(final SimKeepItem edit) {
