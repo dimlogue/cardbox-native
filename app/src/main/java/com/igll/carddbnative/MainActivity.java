@@ -2114,11 +2114,19 @@ public class MainActivity extends Activity {
                 File f = new File(c.getFilesDir(), "cards-ota.json");
                 if (f.exists()) otaJson = readAll(new FileInputStream(f));
             } catch (Exception e) { otaJson = null; }
-            if (otaJson != null && assetJson != null && versionOf(otaJson) > versionOf(assetJson)) {
+            // Q98 双保险：OTA 文件只有「经确认窗应用成功后落下的标记 ota_applied_version 与文件
+            // 版本一致」才认——系统备份/克隆把文件单独带回新装时标记对不上，一律回落包内资产，
+            // 绝不再出现「一打开就是远端新版、没经过确认」。标记只由 applyPendingUpdate 在写入
+            // 成功后落盘；老版本经确认更新过的机器首次跑本版会回落资产并重新走一次确认窗。
+            int otaVer = otaJson == null ? -1 : versionOf(otaJson);
+            int appliedVer = -1;
+            try { appliedVer = c.getSharedPreferences("cardbox_native", Context.MODE_PRIVATE).getInt("ota_applied_version", -1); } catch (Exception e) { appliedVer = -1; }
+            boolean otaConfirmed = otaJson != null && otaVer > 0 && otaVer == appliedVer;
+            if (otaConfirmed && assetJson != null && otaVer > versionOf(assetJson)) {
                 if (parseInto(otaJson)) return;
             }
             if (assetJson != null) parseInto(assetJson);
-            if (all.isEmpty() && otaJson != null) parseInto(otaJson);
+            if (all.isEmpty() && otaConfirmed) parseInto(otaJson);
         }
     }
 
@@ -11322,7 +11330,8 @@ public class MainActivity extends Activity {
                 updateApplying = false;
                 if (!fok) { showFloatToast("检查更新失败，请检查网络"); return; }
                 pendingUpdateJson = null; pendingUpdateVer = -1;
-                if (prefs != null) prefs.edit().remove("pending_update_version").apply();
+                // Q98：确认应用成功才落标记——Store.load 凭此标记（且须与文件版本一致）才认 OTA 文件
+                if (prefs != null) prefs.edit().remove("pending_update_version").putInt("ota_applied_version", Store.dataVersion).apply();
                 showFloatToast("卡片数据已更新到 v" + Store.dataVersion + "（" + Store.all.size() + " 张）");
                 pages.clear(); if (detailCard == null) rebuildPages();
             });

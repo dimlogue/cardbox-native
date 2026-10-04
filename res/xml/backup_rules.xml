@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Q98：OTA 卡库文件（files/cards-ota.json）不得进系统备份——否则卸载重装后备份恢复
+     会把旧版卡库原样带回「全新安装」，绕过更新确认闸直接覆盖包内资产。
+     用户自有数据（收藏/自定义卡等 prefs）不在排除之列，照常可备份。 -->
+<full-backup-content>
+    <exclude domain="file" path="cards-ota.json" />
+</full-backup-content>

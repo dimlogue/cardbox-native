@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Q98：同 backup_rules.xml，API 31+ 的云备份与设备迁移两条通道都排除 OTA 卡库文件。 -->
+<data-extraction-rules>
+    <cloud-backup>
+        <exclude domain="file" path="cards-ota.json" />
+    </cloud-backup>
+    <device-transfer>
+        <exclude domain="file" path="cards-ota.json" />
+    </device-transfer>
+</data-extraction-rules>
