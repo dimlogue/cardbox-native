@@ -254,6 +254,30 @@ public class MainActivity extends Activity {
     }
 
     /** 柔和次按钮：柔色面（colChipOff）+ 主字，48dp/圆角 14；替代原生灰 Button。 */
+    // Q104（2.18）：柔和强调钮——主题色竖向微渐变（上沿向白柔和 22%）＋16dp 圆角（与输入框同档）
+    // ＋发丝白边光＋Ripple，替 softPrimaryBtn 的平实色块（用户评 BIN 窗查询钮生硬）；色仍走 accentColor() 主题色。
+    TextView softAccentBtn(String label) {
+        TextView b = tv(this, label, 15, Color.WHITE, true);
+        b.setGravity(Gravity.CENTER);
+        b.setSingleLine(true);
+        int acc = accentColor();
+        int hi = Color.rgb(
+            Math.min(255, Color.red(acc) + (255 - Color.red(acc)) * 22 / 100),
+            Math.min(255, Color.green(acc) + (255 - Color.green(acc)) * 22 / 100),
+            Math.min(255, Color.blue(acc) + (255 - Color.blue(acc)) * 22 / 100));
+        GradientDrawable g = new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM, new int[]{hi, acc});
+        g.setCornerRadius(dp(this, 16));
+        g.setStroke(Math.max(1, dp(this, 0.6f)), Color.argb(70, 255, 255, 255));
+        b.setBackground(new RippleDrawable(ColorStateList.valueOf(Color.argb(36, 255, 255, 255)), g, null));
+        if (Build.VERSION.SDK_INT >= 21) b.setElevation(dp(this, 2));
+        b.setPadding(dp(this, 16), 0, dp(this, 16), 0);
+        b.setOnTouchListener((v, e) -> {
+            if (e.getAction() == MotionEvent.ACTION_DOWN) pressBounce(v, true);
+            else if (e.getAction() == MotionEvent.ACTION_UP || e.getAction() == MotionEvent.ACTION_CANCEL) pressBounce(v, false);
+            return false;
+        });
+        return b;
+    }
     TextView softGhostBtn(String label) {
         TextView b = tv(this, label, 15, colText(), false);
         b.setGravity(Gravity.CENTER);
@@ -1008,8 +1032,9 @@ public class MainActivity extends Activity {
         STR.put("card_color_light", new String[]{"浅色柔光","Light Soft"});
         STR.put("card_color_dark", new String[]{"深色沉稳","Dark Calm"});
         STR.put("font", new String[]{"字体","Font"});
-        STR.put("font_builtin", new String[]{"软件字体","App Font"});
-        STR.put("font_system", new String[]{"系统字体","System Font"});
+        STR.put("font_builtin", new String[]{"默认","Default"}); // Q104（2.18）：字体三档真选择——默认=内置 Noto Sans SC（Q42 字体栈原样）
+        STR.put("font_system", new String[]{"本机字体","System Font"});
+        STR.put("font_serif", new String[]{"内置宋体","Built-in Serif"});
         STR.put("font_custom", new String[]{"自定义","Custom"});
         STR.put("ui_size", new String[]{"界面大小","UI Size"});
         STR.put("ui_compact", new String[]{"紧凑","Compact"});
@@ -2312,13 +2337,18 @@ public class MainActivity extends Activity {
     // Noto Sans SC 可变字体实例化三档（400/500/700）并子集化（GB2312 一级字+卡库/资讯/
     // 更新日志/界面实际用字+常用标点，共 3940 码位，每档约 1.1MB，合计约 3.4MB）。
     // 缺字由安卓字体回落链自动落系统无衬线，不出豆腐块；资产加载失败整段回落系统无衬线。
-    // fontMode：builtin=软件字体（默认，内置 Noto Sans SC）/ system=系统字体。
-    // 旧值 default/serif 一律迁移为 builtin——UI 全面禁用衬线（serif），杜绝整窗落宋体。
+    // fontMode：builtin=默认（内置 Noto Sans SC）/ system=本机字体 / serif=内置宋体（Q104 新增，
+    // 随包子集 Noto Serif SC）/ custom=用户导入（Q55）。Q42 旧注「UI 禁用衬线」自 2.18 起作废：
+    // 衬线只以随包子集宋体一档受控出现；更早的旧值 default 一律落 builtin。
     static String fontMode = "builtin";
     static float uiScale = 1f;          // 界面大小：0.9 紧凑 / 1 标准 / 1.12 大号（作用于 sp）
     static int hapticLevel = 2; // P3 触感分档：0 关 / 1 轻(10ms) / 2 中(20ms) / 3 强(40ms)，存 prefs haptic_level（旧 boolean haptic 自动迁移）
     static android.graphics.Typeface sansRegularTf = null, sansMediumTf = null, sansBoldTf = null;
     static boolean sansLoadTried = false;
+    // Q104（2.18）内置宋体：Noto Serif SC 子集（与内置黑体同一 3937 码位集，400/700 两档，
+    // assets/fonts/serif-regular.ttf + serif-bold.ttf，合计约 3.16MB；来源/子集细节记 PROGRESS Q104）
+    static android.graphics.Typeface serifRegularTf = null, serifBoldTf = null;
+    static boolean serifLoadTried = false;
     // Q55 自定义字体：用户导入的单文件 .ttf/.otf 存私有目录，字重由系统合成；异常回退链 自定义→软件字体→系统无衬线
     static android.graphics.Typeface customTf = null;
     static boolean customLoadTried = false;
@@ -2338,6 +2368,27 @@ public class MainActivity extends Activity {
         ensureSansLoaded(c);
         android.graphics.Typeface base = weight >= 600 ? sansBoldTf : (weight >= 450 ? sansMediumTf : sansRegularTf);
         if (base == null) base = sansRegularTf != null ? sansRegularTf : android.graphics.Typeface.SANS_SERIF;
+        if (android.os.Build.VERSION.SDK_INT >= 28) {
+            int w = Math.max(100, Math.min(1000, weight));
+            try { return android.graphics.Typeface.create(base, w, false); } catch (Throwable e) { return base; }
+        }
+        return weight >= 600 ? android.graphics.Typeface.create(base, android.graphics.Typeface.BOLD) : base;
+    }
+
+    static void ensureSerifLoaded(Context c) {
+        if (serifLoadTried) return;
+        serifLoadTried = true;
+        try { serifRegularTf = android.graphics.Typeface.createFromAsset(c.getAssets(), "fonts/serif-regular.ttf"); } catch (Throwable e) { serifRegularTf = null; }
+        try { serifBoldTf = android.graphics.Typeface.createFromAsset(c.getAssets(), "fonts/serif-bold.ttf"); } catch (Throwable e) { serifBoldTf = null; }
+    }
+
+    // Q104（2.18）：内置宋体取字（与 builtinSansTypeface 同构：≥600 走 bold 档、450+ 以 regular 为基
+    // 走 API28 字重合成）；资产缺失整段回落内置黑体——不出系统杂牌衬线、不出豆腐字。
+    static android.graphics.Typeface serifTypeface(Context c, int weight) {
+        ensureSerifLoaded(c);
+        android.graphics.Typeface base = weight >= 600 ? serifBoldTf : serifRegularTf;
+        if (base == null) base = serifRegularTf != null ? serifRegularTf : serifBoldTf;
+        if (base == null) return builtinSansTypeface(c, weight);
         if (android.os.Build.VERSION.SDK_INT >= 28) {
             int w = Math.max(100, Math.min(1000, weight));
             try { return android.graphics.Typeface.create(base, w, false); } catch (Throwable e) { return base; }
@@ -2387,6 +2438,7 @@ public class MainActivity extends Activity {
 
     // Q39 排字字距/行高口径不变；字形来源按 Q42：软件字体=内置 Noto Sans SC 三档，系统字体=系统无衬线。
     static android.graphics.Typeface weightTypeface(Context c, int weight) {
+        if ("serif".equals(fontMode)) return serifTypeface(c, weight); // Q104（2.18）：内置宋体档
         if ("custom".equals(fontMode)) return customSansTypeface(c, weight);
         if (!"system".equals(fontMode)) return builtinSansTypeface(c, weight);
         android.graphics.Typeface base = android.graphics.Typeface.SANS_SERIF;
@@ -3557,7 +3609,7 @@ public class MainActivity extends Activity {
                 fontMode = "builtin";
                 try { prefs.edit().putString("font_mode", "builtin").apply(); } catch (Throwable ignored) {}
             }
-        } else if (!"system".equals(fontMode) && !"builtin".equals(fontMode)) fontMode = "builtin"; // Q42 迁移：旧 default/serif 统一落软件字体（无衬线）
+        } else if (!"system".equals(fontMode) && !"builtin".equals(fontMode) && !"serif".equals(fontMode)) fontMode = "builtin"; // Q104（2.18）：合法四态 builtin/system/serif/custom（custom 已在上支校验文件），余者回落默认
         uiScale = prefs.getFloat("ui_scale", 1f);
         if (uiScale != 0.9f && uiScale != 1f && uiScale != 1.12f) uiScale = 1f;
         if (prefs.contains("haptic_level")) hapticLevel = prefs.getInt("haptic_level", 2);
@@ -3875,7 +3927,7 @@ public class MainActivity extends Activity {
         overlay.addView(shade, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         LinearLayout cardBox = new LinearLayout(this);
         cardBox.setOrientation(LinearLayout.VERTICAL);
-        GradientDrawable cg = softSheetBg(); // Q94 铺开：窗身换 Soft 柔面（原 Q92 语义平色）
+        GradientDrawable cg = glassWindowTint(22, false); // Q104/2.18：窗级玻璃（同 BIN 窗口径，替 Soft 近实白面）
         cg.setCornerRadius(dp(this, 22)); // Q92：四角全圆（窗改浮起式，不再贴底直角）
         cardBox.setBackground(cg);
         if (Build.VERSION.SDK_INT >= 21) { cardBox.setElevation(dp(this, 24)); roundClip(cardBox, 22, this); }
@@ -4005,7 +4057,7 @@ public class MainActivity extends Activity {
         overlay.addView(shade, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         LinearLayout cardBox = new LinearLayout(this);
         cardBox.setOrientation(LinearLayout.VERTICAL);
-        GradientDrawable cg = softSheetBg(); // Q94 铺开：窗身换 Soft 柔面（原 Q92 语义平色）
+        GradientDrawable cg = glassWindowTint(22, false); // Q104/2.18：窗级玻璃（同 BIN 窗口径）
         cg.setCornerRadius(dp(this, 22));
         cardBox.setBackground(cg);
         if (Build.VERSION.SDK_INT >= 21) { cardBox.setElevation(dp(this, 24)); roundClip(cardBox, 22, this); }
@@ -5119,7 +5171,7 @@ public class MainActivity extends Activity {
         LinearLayout card = new LinearLayout(this);
         card.setOrientation(LinearLayout.VERTICAL);
         // Q45：添加底表改为贴底形态——仅顶部圆角、底部直角直达屏底，消灭底部两角透出遮罩的黑三角
-        GradientDrawable addBg = softSheetTopBg(22); // Q94 铺开：窗身换 Soft 柔面（原 Q54/Q72 实底）
+        GradientDrawable addBg = glassWindowTint(22, true); // Q104/2.18：窗级玻璃（同 BIN 窗口径）
         card.setBackground(addBg);
         if (Build.VERSION.SDK_INT >= 21) { card.setElevation(dp(this, 24)); topSheetClip(card, 22, this); } // Q45 顶圆底直轮廓
         card.setPadding(dp(this, 18), dp(this, 16), dp(this, 18), dp(this, 12) + navBarH());
@@ -5693,6 +5745,9 @@ public class MainActivity extends Activity {
             cv.drawText("JCB", box.centerX(), centeredBaseline(p, box.centerY()), p);
         }
     }
+    // Q104（2.18）停用：用户 2026-10-04 21:07 定「银联/万事达/Visa 这些标别在卡面上显示了」，
+    // 全部 8 个卡面落点已撤（cardTile/wizThumb/详情图廊/stuThumb/扩展本地·远端结果/展柜库内卡·自定义卡），
+    // 组织信息只保留文字行与详情参数表字段。本方法与下方 OrgBadgeView 代码留存停用，日后若要恢复从此一处接回。
     void addOrgBadge(FrameLayout parent, String org, float scale, boolean darkBg) {
         if (parent == null || !hasOrgBadge(org)) return;
         try {
@@ -5880,7 +5935,7 @@ public class MainActivity extends Activity {
         iv.setBackground(placeholderGradFor(c.id, 0, this));
         art.addView(iv, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         Bitmap b = Img.getSized(this, c.image, tileW); // Q99：卡图按瓷砖实际显示宽一次解码缓存，不再原图逐帧缩放
-        if (b != null) { iv.setImageBitmap(b); if (darkEff()) iv.setAlpha(0.90f); } else { iv.setImageBitmap(null); addOrgBadge(art, c.org, 1f, placeholderDarkFor(c.id)); }
+        if (b != null) { iv.setImageBitmap(b); if (darkEff()) iv.setAlpha(0.90f); } else iv.setImageBitmap(null); // Q104/2.18：卡面组织小标全撤（用户 21:07 定，组织信息只保留文字行）
 
         LinearLayout body = new LinearLayout(this);
         body.setOrientation(LinearLayout.VERTICAL);
@@ -6189,7 +6244,11 @@ public class MainActivity extends Activity {
         // 定位：优先贴在卡下方 8dp，放不下改上方；左右夹在屏内 12dp（对照 openCardMenu 的 W=224 定位）
         int popW = dp(this, 224);
         // Q11：菜单入树前先备好冻结模糊层（快照含轻暗遮罩之下的页面，与 backdrop-filter 叠序一致）
-        final ImageView menuGlass = glassLayer(pop, 16, false);
+        // Q104（2.18）：玻璃原与 pop 严丝合缝，pop elevation 24 的阴影带/圆角外露生肉（与 ⋯ 菜单
+        // 右沿同病）。玻璃外扩 12dp 盖住含阴影占位，圆角按 16+12 同心；pop 本体落位不动，采样在
+        // onDraw 按玻璃件实测坐标算，外扩区对位天然成立。
+        final int cmPad = dp(this, 12);
+        final ImageView menuGlass = glassLayer(pop, 28, false);
         cardMenuGlass = menuGlass;
         FrameLayout.LayoutParams plp = new FrameLayout.LayoutParams(popW, ViewGroup.LayoutParams.WRAP_CONTENT);
         rootView.addView(pop, plp);
@@ -6203,8 +6262,8 @@ public class MainActivity extends Activity {
         int pt = below ? top + h + dp(this, 8) : Math.max(dp(this, 12), top - dp(this, 8) - popH);
         plp.leftMargin = pl; plp.topMargin = pt;
         pop.setLayoutParams(plp);
-        FrameLayout.LayoutParams mglp = new FrameLayout.LayoutParams(popW, popH);
-        mglp.leftMargin = pl; mglp.topMargin = pt;
+        FrameLayout.LayoutParams mglp = new FrameLayout.LayoutParams(popW + cmPad * 2, popH + cmPad * 2);
+        mglp.leftMargin = Math.max(0, pl - cmPad); mglp.topMargin = Math.max(0, pt - cmPad);
         rootView.addView(menuGlass, Math.max(0, rootView.indexOfChild(pop)), mglp);
         pop.setPivotX(Math.max(0, Math.min(popW, left + w / 2 - pl)));
         pop.setPivotY(below ? 0 : popH);
@@ -6887,7 +6946,8 @@ public class MainActivity extends Activity {
                 row.addView(tile);
             } else {
                 View spacer = new View(this);
-                LinearLayout.LayoutParams slp2 = new LinearLayout.LayoutParams(0, 1, 1f);
+                LinearLayout.LayoutParams slp2 = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1f);
+                // Q104（2.18）防同病：补位占位原固定 1px 高，部分行会把 MATCH_PARENT 瓷砖行高毒死（我的卡片塌线同源），改随行高
                 if (j > 0) slp2.leftMargin = rowGap;
                 spacer.setLayoutParams(slp2);
                 row.addView(spacer);
@@ -8002,7 +8062,7 @@ public class MainActivity extends Activity {
         wizThumb.addView(iv, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         roundClip(wizThumb, 9, this);
         Bitmap b = Img.get(this, c.image);
-        if (b != null) iv.setImageBitmap(b); else addOrgBadge(wizThumb, c.org, 0.75f, placeholderDarkFor(c.id));
+        if (b != null) iv.setImageBitmap(b); // Q104/2.18：卡面组织小标全撤（同 cardTile 口径）
 
         LinearLayout info = new LinearLayout(this);
         info.setOrientation(LinearLayout.VERTICAL);
@@ -8586,7 +8646,7 @@ public class MainActivity extends Activity {
                 dlp.leftMargin = dp(this, 8); dlp.topMargin = dp(this, 8);
                 imgFrame.addView(doubtBadge(c, b, 10.5f, 9, 4), dlp);
             }
-            if (b == null) { iv.setBackground(placeholderGradFor(c.id, cardR, this)); addOrgBadge(imgFrame, c.org, 1.5f, placeholderDarkFor(c.id));
+            if (b == null) { iv.setBackground(placeholderGradFor(c.id, cardR, this)); // Q104/2.18：卡面组织小标全撤（详情图廊同口径，参数表组织字段保留）
                 if (placeholderCustomEnabled) imgFrame.setOnLongClickListener(v -> { haptic(); openPlaceholderColorPicker(c); return true; });
             }
             else {
@@ -9076,7 +9136,7 @@ public class MainActivity extends Activity {
             stuThumb.addView(iv, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
             roundClip(stuThumb, 9, this);
             Bitmap b = Img.get(this, c.image);
-            if (b != null) iv.setImageBitmap(b); else addOrgBadge(stuThumb, c.org, 0.7f, placeholderDarkFor(c.id));
+            if (b != null) iv.setImageBitmap(b); // Q104/2.18：卡面组织小标全撤（学生瓷砖同口径）
             LinearLayout tx = new LinearLayout(this);
             tx.setOrientation(LinearLayout.VERTICAL);
             LinearLayout.LayoutParams txLp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
@@ -9145,8 +9205,9 @@ public class MainActivity extends Activity {
                         grow.addView(tile);
                     } else {
                         View spacer = new View(this);
-                        LinearLayout.LayoutParams slp = new LinearLayout.LayoutParams(0, 1, 1f);
+                        LinearLayout.LayoutParams slp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1f);
                         if (j > 0) slp.leftMargin = stuGap;
+                        // Q104（2.18）防同病：占位高改随行（原 1px 固定高会毒死部分行，见 addMineCardRows 注）
                         grow.addView(spacer, slp);
                     }
                 }
@@ -9888,7 +9949,11 @@ public class MainActivity extends Activity {
                     final int idx = i + j;
                     final View tile = cardTile(c, row, mineCols, mr.entry.acctClass);
                     tile.setOnTouchListener(null); // Q1：我的卡片页长按拖动优先，清掉 cardTile 默认贴卡菜单触摸
-                    LinearLayout.LayoutParams tlp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1f);
+                    // Q104（2.18）塌线根因：瓷砖在行内挂 MATCH_PARENT 高，而同行补位 spacer 是
+                    // 固定 1px 高——部分行（用户 1 张自有卡）测高时 1px 占位把整行毒死，瓷砖被
+                    // 压成 ~2px 发丝线再被 clipToOutline 裁净（真机图灰线即此）。改瓷砖自测高
+                    // WRAP_CONTENT（图高固定＋正文自洽），高度不再受同行占位摆布。
+                    LinearLayout.LayoutParams tlp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
                     if (j > 0) tlp.leftMargin = mineGap;
                     tile.setLayoutParams(tlp);
                     tile.setOnClickListener(v -> {
@@ -11502,16 +11567,16 @@ public class MainActivity extends Activity {
         sheet.addView(shade, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         LinearLayout card = new LinearLayout(this);
         card.setOrientation(LinearLayout.VERTICAL);
-        GradientDrawable cg = softSheetTopBg(22); // Q94 铺开：窗身换 Soft 柔面（原 Q54/Q72 实底）；Q45 顶圆底直不变
+        GradientDrawable cg = glassWindowTint(22, true); // Q104/2.18：BIN 窗改窗级玻璃（用户 21:08 评实白塑料底丑，与情景窗同口径）；Q45 顶圆底直不变
         card.setBackground(cg);
         if (Build.VERSION.SDK_INT >= 21) { card.setElevation(dp(this, 24)); topSheetClip(card, 22, this); } // Q45 顶圆底直轮廓
         card.setOnClickListener(v -> {});
-        card.setPadding(dp(this, 18), dp(this, 18), dp(this, 18), dp(this, 14) + navBarH());
+        card.setPadding(dp(this, 18), dp(this, 18), dp(this, 18), dp(this, 16)); // Q104：底部去 navBarH 空腔（dock 已藏、手势条区双算成白块），窗高贴合内容
         final EditText inBin = customInput("输入卡号前 6–8 位", "", 8);
         inBin.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
         final LinearLayout resultBox = new LinearLayout(this);
         resultBox.setOrientation(LinearLayout.VERTICAL);
-        final TextView addBtn = softPrimaryBtn("加入我的卡片");
+        final TextView addBtn = softAccentBtn("加入我的卡片"); // Q104：与查询钮同柔和强调档
         card.addView(tv(this, "在线查询卡信息", 17, colText(), true));
         TextView hint = tv(this, "输入银行卡号前 6–8 位，在线查询卡组织、发卡行等信息，可一键加入我的卡片。", 12.5f, colText2(), false);
         LinearLayout.LayoutParams hintLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
@@ -11522,8 +11587,8 @@ public class MainActivity extends Activity {
         LinearLayout.LayoutParams formLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         formLp.topMargin = dp(this, 12);
         card.addView(formRow, formLp);
-        formRow.addView(inBin, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
-        TextView go = softPrimaryBtn("查询");
+        formRow.addView(inBin, new LinearLayout.LayoutParams(0, dp(this, 48), 1f)); // Q104：输入框与查询钮同高 48 对齐
+        TextView go = softAccentBtn("查询"); // Q104：主题强调色柔渐变钮，替平实色块
         LinearLayout.LayoutParams goLp = new LinearLayout.LayoutParams(dp(this, 84), dp(this, 48));
         goLp.leftMargin = dp(this, 10);
         // customInput 自带 topMargin 6，与查询钮对齐需把输入框的边距在行内归零
@@ -11816,7 +11881,7 @@ public class MainActivity extends Activity {
         card.setOrientation(LinearLayout.VERTICAL);
         // Q94 试点样板：窗身换 Soft 弹层柔面（雾白微透＋白描边），顶部圆角 22→26 与柔面同语言；
         // 底部仍贴屏直角（Q45 口径不回退，防底部两角露遮罩黑三角）。本窗只换视觉层，字段/保存逻辑不动。
-        GradientDrawable cg = softSheetBg();
+        GradientDrawable cg = glassWindowTint(22, true); // Q104/2.18：窗级玻璃（同 BIN 窗口径，底沉式贴底窗顶圆底直）
         float formR = dp(this, 26);
         cg.setCornerRadii(new float[]{formR, formR, formR, formR, 0, 0, 0, 0});
         card.setBackground(cg);
@@ -12213,7 +12278,7 @@ public class MainActivity extends Activity {
         View shade = new View(this); shade.setBackgroundColor(Color.argb(102,0,0,0)); shade.setAlpha(0f);
         sheet.addView(shade, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         LinearLayout card = new LinearLayout(this); card.setOrientation(LinearLayout.VERTICAL);
-        GradientDrawable cg = softSheetTopBg(22); card.setBackground(cg); // Q94 铺开：窗身换 Soft 柔面（原写死纯白）
+        GradientDrawable cg = glassWindowTint(22, true); card.setBackground(cg); // Q104/2.18：窗级玻璃（同 BIN 窗口径）
         if (Build.VERSION.SDK_INT >= 21) { card.setElevation(dp(this,24)); topSheetClip(card,22,this); }
         card.setOnClickListener(v->{}); card.setPadding(dp(this,18),dp(this,18),dp(this,18),dp(this,14)+navBarH());
         card.addView(tv(this,title,17,Color.rgb(0x1C,0x1C,0x1E),true));
@@ -12686,9 +12751,7 @@ public class MainActivity extends Activity {
                 FrameLayout lthumb = new FrameLayout(this);
                 lthumb.setBackground(placeholderGradFor(lc.id, 8, this));
                 roundClip(lthumb, 8, this);
-                if (hasOrgBadge(lc.org)) {
-                    addOrgBadge(lthumb, lc.org, 0.7f, placeholderDarkFor(lc.id));
-                } else {
+                { // Q104/2.18：卡面组织小标全撤，有无标一律走文字兜底（组织只以文字呈现）
                     TextView los = tv(this, (lc.org == null || lc.org.trim().isEmpty()) ? "卡" : orgLabel(lc.org.trim()), 10, Color.WHITE, true);
                     los.setGravity(Gravity.CENTER);
                     los.setShadowLayer(dp(this, 1), 0, dp(this, 0.5f), Color.argb(120, 0, 0, 0));
@@ -12744,9 +12807,7 @@ public class MainActivity extends Activity {
             FrameLayout thumb = new FrameLayout(this);
             thumb.setBackground(placeholderGradFor(e.id != null && !e.id.isEmpty() ? e.id : ((e.bank == null ? "" : e.bank) + (e.name == null ? "" : e.name)), 8, this));
             roundClip(thumb, 8, this);
-            if (hasOrgBadge(e.org)) {
-                addOrgBadge(thumb, e.org, 0.7f, placeholderDarkFor(e.id != null && !e.id.isEmpty() ? e.id : ((e.bank == null ? "" : e.bank) + (e.name == null ? "" : e.name))));
-            } else {
+            { // Q104/2.18：卡面组织小标全撤，有无标一律走文字兜底
                 TextView orgShort = tv(this, (e.org == null || e.org.trim().isEmpty()) ? "卡" : orgLabel(e.org.trim()), 10, Color.WHITE, true);
                 orgShort.setGravity(Gravity.CENTER);
                 orgShort.setShadowLayer(dp(this, 1), 0, dp(this, 0.5f), Color.argb(120, 0, 0, 0));
@@ -12902,10 +12963,10 @@ public class MainActivity extends Activity {
             Bitmap b = Img.get(this, it.card.image);
             if (b != null) { iv.setImageBitmap(b); if (darkEff()) iv.setAlpha(0.92f); }
             face.addView(iv, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
-            if (b == null) addOrgBadge(face, it.card.org, 1.2f, placeholderDarkFor(it.card.id));
+            // Q104/2.18：卡面组织小标全撤（展柜库内卡同口径）
         } else {
             face.setBackground(customGradient(it.custom.style));
-            addOrgBadge(face, showcaseOrgCode(it), 1.2f, customStyleDark(it.custom.style));
+            // Q104/2.18：卡面组织小标全撤（展柜自定义卡同口径）
         }
         face.setTag(it.key);
         return face;
@@ -13302,7 +13363,7 @@ public class MainActivity extends Activity {
         shade.setOnClickListener(v -> closeSimKeepForm());
         sheet.addView(shade, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         LinearLayout card = new LinearLayout(this); card.setOrientation(LinearLayout.VERTICAL);
-        GradientDrawable cg = softSheetBg(); // Q94 铺开：窗身换 Soft 柔面（原 Q92 语义平色＋白描边）
+        GradientDrawable cg = glassWindowTint(22, false); // Q104/2.18：窗级玻璃（同 BIN 窗口径）
         cg.setCornerRadius(dp(this, 22)); // Q92 浮起窗四角全圆
         card.setBackground(cg);
         if (Build.VERSION.SDK_INT >= 21) { card.setElevation(dp(this, 24)); roundClip(card, 22, this); }
@@ -13625,7 +13686,7 @@ public class MainActivity extends Activity {
         shade.setOnClickListener(v -> closeSubFollowForm());
         sheet.addView(shade, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         LinearLayout card = new LinearLayout(this); card.setOrientation(LinearLayout.VERTICAL);
-        GradientDrawable cg = softSheetBg(); // Q94 铺开：窗身换 Soft 柔面（原 Q92 语义平色＋白描边）
+        GradientDrawable cg = glassWindowTint(22, false); // Q104/2.18：窗级玻璃（同 BIN 窗口径）
         cg.setCornerRadius(dp(this, 22)); // Q92 浮起窗四角全圆
         card.setBackground(cg);
         if (Build.VERSION.SDK_INT >= 21) { card.setElevation(dp(this, 24)); roundClip(card, 22, this); }
@@ -13968,7 +14029,7 @@ public class MainActivity extends Activity {
         shade.setOnClickListener(v -> closeFootprintForm());
         sheet.addView(shade, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         LinearLayout card = new LinearLayout(this); card.setOrientation(LinearLayout.VERTICAL);
-        GradientDrawable cg = softSheetBg(); // Q94 铺开：窗身换 Soft 柔面（原 Q92 语义平色＋白描边）
+        GradientDrawable cg = glassWindowTint(22, false); // Q104/2.18：窗级玻璃（同 BIN 窗口径）
         cg.setCornerRadius(dp(this, 22)); // Q92 浮起窗四角全圆
         card.setBackground(cg);
         if (Build.VERSION.SDK_INT >= 21) { card.setElevation(dp(this, 24)); roundClip(card, 22, this); }
@@ -14348,7 +14409,7 @@ public class MainActivity extends Activity {
         sheet.addView(shade, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         LinearLayout card = new LinearLayout(this);
         card.setOrientation(LinearLayout.VERTICAL);
-        GradientDrawable cg = softSheetBg(); // Q94 铺开：窗身换 Soft 柔面（原 Q92 语义平色）
+        GradientDrawable cg = glassWindowTint(22, false); // Q104/2.18：窗级玻璃（同 BIN 窗口径）
         cg.setCornerRadius(dp(this, 22));
         card.setBackground(cg);
         if (Build.VERSION.SDK_INT >= 21) { card.setElevation(dp(this, 24)); roundClip(card, 22, this); }
@@ -15472,12 +15533,17 @@ public class MainActivity extends Activity {
         overlay.setOnClickListener(v -> closeMoreMenu());
         // Q73: more-menu joins the same true-glass family (frozen blur + thin tint + wash),
         // was a solid white card. Rows keep their ripple over the glass.
+        // Q104（2.17 真机回图）：菜单玻璃恰好止于 cardWrap 边界，右沿阴影带/圆角外的
+        // 背景以全锐度生肉透出（红圈处）。修：玻璃宿主整体外扩 menuPad——玻璃/wash 盖满
+        // 含阴影的占位，card 本体在外扩框内内缩 menuPad 保持原落位分毫不动；采样对位
+        // 在 GlassBackdropView.onDraw 按宿主实测坐标算，外扩区采样画外场景天然成立。
+        final int menuPad = dp(this, 16);
         final FrameLayout cardWrap = new FrameLayout(this);
-        glassClip(cardWrap, 16, false);
+        glassClip(cardWrap, 16 + 16, false); // 外框圆角与内卡同心：16+外扩量
         cardWrap.setElevation(dp(this, 18));
-        cardWrap.addView(glassLayer(cardWrap, 16, false), new FrameLayout.LayoutParams(
+        cardWrap.addView(glassLayer(cardWrap, 32, false), new FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
-        cardWrap.addView(glassWashView(16, false), new FrameLayout.LayoutParams(
+        cardWrap.addView(glassWashView(32, false), new FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         final LinearLayout card = new LinearLayout(this);
         card.setOrientation(LinearLayout.VERTICAL);
@@ -15490,26 +15556,37 @@ public class MainActivity extends Activity {
         card.addView(moreMenuRow("welcome", "欢迎页", () -> showHello())); // Q93：旧欢迎页已删，入口直达「你好」页
         card.addView(moreMenuRow("about", "关于卡盒", () -> openAbout()));
         int menuW = dp(this, 208);
-        // Q92：同糊层事故防线——cardWrap 先测 card 实高、钉死像素高，玻璃/wash 显式同高，
-        // 不让 WRAP_CONTENT + MATCH_PARENT 玻璃子层把菜单背板撑出卡外一片。
+        // Q92：同糊层事故防线——cardWrap 先测 card 实高、钉死像素高，不让 WRAP_CONTENT
+        // 把菜单背板撑出卡外一片。Q104：玻璃/wash 改盖外扩后的 cardWrap 全幅（含 menuPad 外扩带）。
         card.measure(View.MeasureSpec.makeMeasureSpec(menuW, View.MeasureSpec.EXACTLY),
             View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED));
         int menuH = card.getMeasuredHeight();
-        cardWrap.addView(card, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, menuH));
+        FrameLayout.LayoutParams cardInWrap = new FrameLayout.LayoutParams(menuW, menuH);
+        cardInWrap.leftMargin = menuPad; cardInWrap.topMargin = menuPad;
+        cardWrap.addView(card, cardInWrap);
         card.setOnClickListener(v -> {});
-        FrameLayout.LayoutParams clp = new FrameLayout.LayoutParams(menuW, menuH);
+        FrameLayout.LayoutParams clp = new FrameLayout.LayoutParams(menuW + menuPad * 2, menuH + menuPad * 2);
         int[] al = new int[2]; anchor.getLocationOnScreen(al);
         int[] cl = new int[2]; content.getLocationOnScreen(cl);
         int anchorRight = al[0] - cl[0] + anchor.getWidth();
         int anchorTop = al[1] - cl[1];
-        clp.leftMargin = Math.max(dp(this, 12), anchorRight - menuW);
-        clp.topMargin = Math.max(pageTopPad(), anchorTop + anchor.getHeight() + dp(this, 6));
+        // card 本体落位与旧版一致（左 = max(12, anchorRight-menuW)、上 = max(pageTop, anchor 底+6)），外框再往外让 menuPad
+        clp.leftMargin = Math.max(dp(this, 2), Math.max(dp(this, 12), anchorRight - menuW) - menuPad);
+        clp.topMargin = Math.max(dp(this, 2), Math.max(pageTopPad(), anchorTop + anchor.getHeight() + dp(this, 6)) - menuPad);
         overlay.addView(cardWrap, clp);
         content.addView(overlay, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         moreMenuOverlay = overlay;
+        // Q104：落位落定后再同步重抓一帧冻结背板——开窗瞬间的预抓帧若与菜单最终几何
+        // 有任何时序差（页面未停稳/字体落定），按最终落位重采样对齐；抓图时宿主整面
+        // 让开（captureBackdrop 既有机制），画面上不会闪没。关窗后 overlay 已换则跳过。
+        cardWrap.post(() -> {
+            if (moreMenuOverlay != overlay) return;
+            backdropLastCapMs = 0L;
+            try { captureBackdrop(); } catch (Throwable ignored) {}
+        });
         // 缩放原点贴按钮角（右上）：菜单像从 ⋯ 钮角上长出来；缩放与淡入同步、带轻回弹。
-        cardWrap.setPivotX(menuW);
-        cardWrap.setPivotY(0f);
+        cardWrap.setPivotX(menuPad + menuW);
+        cardWrap.setPivotY(menuPad);
         cardWrap.setScaleX(0.72f); cardWrap.setScaleY(0.72f); cardWrap.setAlpha(0f);
         cardWrap.animate().scaleX(1f).scaleY(1f).alpha(1f)
             .setDuration(ANIM_DUR_MENU_IN).setInterpolator(ANIM_MENU_SPRING).start();
@@ -15573,61 +15650,12 @@ public class MainActivity extends Activity {
         } catch (Throwable ignored) {}
         // Q92：情景选卡入口已收进 ⋯ 菜单（菜单行「情景选卡」），设置页不再重复长行。
 
-        // 功能启用区（2026-10-04 06:33 钉版）：可选模块逐项登记在此，关掉入口与界面彻底不出现、不占位
-        sectionHead(page, S("sec_features"));
-        switchRow(page, "展柜", "我的卡片页的纯卡面展示（堆叠 / 平放自由画布）", prefs == null || prefs.getBoolean("showcase_enabled", true), on -> {
-            if (prefs != null) prefs.edit().putBoolean("showcase_enabled", on).apply(); haptic(); invalidatePagesSoft();
-        });
-        switchRow(page, "保号管家", "电话卡 / eSIM 保号到期管理，关掉后入口不出现", prefs == null || prefs.getBoolean("simkeep_enabled", true), on -> {
-            if (prefs != null) prefs.edit().putBoolean("simkeep_enabled", on).apply(); haptic(); invalidatePagesSoft();
-        });
-        switchRow(page, "订阅跟随", "订阅扣款日与金额跟随，关掉后入口不出现", prefs == null || prefs.getBoolean("subfollow_enabled", true), on -> {
-            if (prefs != null) prefs.edit().putBoolean("subfollow_enabled", on).apply(); haptic(); invalidatePagesSoft();
-        });
-        switchRow(page, "玩卡足迹", "申请 / 开卡 / 提额等持卡事件时间线，关掉后入口不出现", prefs == null || prefs.getBoolean("footprint_enabled", true), on -> {
-            if (prefs != null) prefs.edit().putBoolean("footprint_enabled", on).apply(); haptic(); invalidatePagesSoft();
-        });
-        switchRow(page, "持卡总览", "我的卡片页的额度汇总与还款日历", prefs == null || prefs.getBoolean("owncard_enabled", true), on -> {
-            if (prefs != null) prefs.edit().putBoolean("owncard_enabled", on).apply(); haptic(); invalidatePagesSoft();
-        });
-        switchRow(page, "活动追踪", "开卡任务与刷卡达标登记，关掉后入口不出现", prefs == null || prefs.getBoolean("ownact_enabled", true), on -> {
-            if (prefs != null) prefs.edit().putBoolean("ownact_enabled", on).apply(); haptic(); invalidatePagesSoft();
-        });
+        // Q104（2.18）：功能启用六开关折成一组（默认收起、状态持久化），见 buildFeaturePanel。
+        // 06:33 钉版口径不变：可选模块逐项登记于此（FEATURE_KEYS），关掉入口与界面彻底不出现、不占位。
+        buildFeaturePanel(page);
 
-        // Q72 外观分区：深色模式/主题色/卡面配色三件事各管各、互不染指（卡面配色只管无图占位底色）
-        sectionHead(page, S("sec_appearance"));
-        segRow(page, S("dark_mode"), new String[][]{{"system",S("dark_system")},{"light",S("dark_light")},{"dark",S("dark_dark")}}, darkModePref, v -> {
-            darkModePref = v; prefs.edit().putString("dark_mode", v).apply(); haptic(); applyAppearanceChrome(); rebuildPages();
-        });
-        segRow(page, S("language"), new String[][]{{"system",S("lang_system")},{"zh",S("lang_zh")},{"en",S("lang_en")}}, appLangPref, v -> {
-            appLangPref = v; if (prefs != null) prefs.edit().putString("app_lang", v).apply(); haptic(); refreshNavLabels(); rebuildPages();
-        });
-        themeColorRow(page);
-        segRow(page, S("card_color"), new String[][]{{"light",S("card_color_light")},{"dark",S("card_color_dark")}}, placeholderStyle, v -> {
-            placeholderStyle = v; prefs.edit().putString("placeholder_style", v).apply(); haptic(); rebuildPages();
-        });
-        switchRow(page, "自选卡面配色", "开启后在无图卡详情里逐张换颜色；关闭用自动配色", placeholderCustomEnabled, on -> {
-            placeholderCustomEnabled = on; prefs.edit().putBoolean("placeholder_custom_enabled", on).apply(); haptic(); invalidatePagesSoft();
-        });
-
-        sectionHead(page, S("sec_display"));
-        segRow(page, S("font"), new String[][]{{"builtin",S("font_builtin")},{"system",S("font_system")},{"custom",S("font_custom")}}, fontMode, v -> {
-            if ("custom".equals(v) && !hasCustomFont(this)) { haptic(); showFloatToast("先导入一个字体文件再用自定义"); openFontPicker(); return; }
-            fontMode = v; prefs.edit().putString("font_mode", v).apply(); haptic(); rebuildPages();
-        });
-        View fontImpRow = settingRow("导入字体文件", hasCustomFont(this)
-            ? ("已导入：" + (customFontName == null || customFontName.length() == 0 ? "自定义字体" : customFontName) + " · 点此更换 ›")
-            : "选择 .ttf / .otf 字体文件 ›");
-        fontImpRow.setOnClickListener(v -> { haptic(); openFontPicker(); });
-        page.addView(fontImpRow);
-        if (hasCustomFont(this)) {
-            View fontDelRow = settingRow("删除自定义字体", "删掉后回到软件字体 ›");
-            fontDelRow.setOnClickListener(v -> { deleteCustomFont(); });
-            page.addView(fontDelRow);
-        }
-        segRow(page, S("ui_size"), new String[][]{{"0.9",S("ui_compact")},{"1",S("ui_standard")},{"1.12",S("ui_large")}}, String.valueOf(uiScale), v -> {
-            uiScale = Float.parseFloat(v); prefs.edit().putFloat("ui_scale", uiScale).apply(); haptic(); rebuildPages();
-        });
+        // Q104（2.18）：外观 + 显示融合为一整块大面板（内部分区小标题 + 发丝线），见 buildAppearancePanel
+        buildAppearancePanel(page);
         sectionHead(page, S("sec_experience"));
         switchRow(page, "高刷新率", "把刷新率拉到屏幕最高档（耗电略增）", prefs.getBoolean("high_refresh", false), on -> {
             prefs.edit().putBoolean("high_refresh", on).apply(); haptic(); applyHighRefresh(); rebuildPages();
@@ -15910,7 +15938,7 @@ public class MainActivity extends Activity {
         final ToggleView sw = new ToggleView(this);
         sw.setOn(on, false);
         row.addView(sw, new LinearLayout.LayoutParams(dp(this, 46), dp(this, 28)));
-        row.setOnClickListener(v -> { sw.setOn(!on, true); set.onSet(!on); });
+        row.setOnClickListener(v -> { boolean nv = !sw.on; sw.setOn(nv, true); set.onSet(nv); }); // Q104（2.18）：以开关自身状态为准——旧式捕获构建时 on，连点第二次写回同值拨不动（摘要计数与折叠组同修）
         page.addView(row);
     }
 
@@ -15927,6 +15955,263 @@ public class MainActivity extends Activity {
         TextView sv2 = tv(this, v, 12, colText2(), false); bodyLH(sv2);
         row.addView(sv2);
         return row;
+    }
+
+    // ── Q104（2.18）设置重构：功能启用折叠组 + 外观/显示融合面板 ──
+    // 面板内行变体（In 系列）：与 segRow/switchRow/settingRow/themeColorRow 控件、回调、视觉
+    // 逐字一致，只摘掉各自的卡背景与 topMargin——融合成一整块面板后不再卡中卡，分隔走发丝线。
+    void addHair(LinearLayout panel) {
+        View v = new View(this);
+        v.setBackgroundColor(colDivider());
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, Math.max(1, dp(this, 0.7f)));
+        lp.topMargin = dp(this, 4); lp.bottomMargin = dp(this, 4);
+        v.setLayoutParams(lp);
+        panel.addView(v);
+    }
+
+    void panelSubHead(LinearLayout panel, String s, boolean first) {
+        TextView t = tvW(this, s, 12, colText2(), 600);
+        t.setLetterSpacing(0.02f);
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        lp.topMargin = first ? dp(this, 2) : dp(this, 14);
+        lp.bottomMargin = dp(this, 4);
+        t.setLayoutParams(lp);
+        panel.addView(t);
+    }
+
+    void segInner(LinearLayout panel, String label, String[][] opts, String cur, final SegPick pick) {
+        LinearLayout box = new LinearLayout(this);
+        box.setOrientation(LinearLayout.VERTICAL);
+        box.setPadding(0, dp(this, 8), 0, dp(this, 10));
+        box.addView(tv(this, label, 14, colText(), true));
+        LinearLayout row = new LinearLayout(this);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        LinearLayout.LayoutParams rlp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        rlp.topMargin = dp(this, 9);
+        box.addView(row, rlp);
+        for (final String[] o : opts) {
+            final boolean on = segOn(o[0], cur);
+            TextView t = tv(this, o[1], 12.5f, on ? accentColor() : colText(), on);
+            t.setGravity(Gravity.CENTER);
+            t.setBackground(on ? softCapsuleBg(9) : roundRect(colChipOff(), 9, this));
+            t.setPadding(dp(this, 4), dp(this, 8), dp(this, 4), dp(this, 8));
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+            lp.rightMargin = dp(this, 8);
+            t.setLayoutParams(lp);
+            t.setOnClickListener(v -> pick.onPick(o[0]));
+            row.addView(t);
+        }
+        panel.addView(box);
+    }
+
+    void switchInner(LinearLayout panel, String label, String desc, final boolean on, final SwitchSet set) {
+        LinearLayout row = new LinearLayout(this);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        row.setGravity(Gravity.CENTER_VERTICAL);
+        row.setPadding(0, dp(this, 10), 0, dp(this, 10));
+        LinearLayout txt = new LinearLayout(this);
+        txt.setOrientation(LinearLayout.VERTICAL);
+        txt.addView(tv(this, label, 14, colText(), true));
+        txt.addView(tv(this, desc, 11.5f, colText2(), false));
+        row.addView(txt, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+        final ToggleView sw = new ToggleView(this);
+        sw.setOn(on, false);
+        row.addView(sw, new LinearLayout.LayoutParams(dp(this, 46), dp(this, 28)));
+        row.setOnClickListener(v -> { boolean nv = !sw.on; sw.setOn(nv, true); set.onSet(nv); }); // 同 switchRow 的 sw.on 口径
+        panel.addView(row);
+    }
+
+    View settingInner(String k, String v) {
+        LinearLayout row = new LinearLayout(this);
+        row.setOrientation(LinearLayout.VERTICAL);
+        row.setPadding(0, dp(this, 10), 0, dp(this, 10));
+        row.addView(tvW(this, k, 15, colText(), 600));
+        TextView sv2 = tv(this, v, 12, colText2(), false); bodyLH(sv2);
+        row.addView(sv2);
+        return row;
+    }
+
+    void themeColorInner(LinearLayout panel) {
+        LinearLayout box = new LinearLayout(this);
+        box.setOrientation(LinearLayout.VERTICAL);
+        box.setPadding(0, dp(this, 8), 0, dp(this, 10));
+        box.addView(tv(this, S("theme_color"), 14, colText(), true));
+        box.addView(tv(this, "只改选中态、开关、链接与强调色，不改卡面颜色", 11.5f, colText2(), false));
+        LinearLayout row = new LinearLayout(this);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        LinearLayout.LayoutParams rlp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        rlp.topMargin = dp(this, 10);
+        box.addView(row, rlp);
+        final int[] sw = {Color.rgb(0x0A,0x5C,0xD6), Color.rgb(0x0E,0x7C,0x7B), Color.rgb(0x6C,0x4B,0xD8), Color.rgb(0x1D,0x8A,0x49), Color.rgb(0xC7,0x5A,0x00)};
+        for (int i = 0; i < THEME_OPTS.length; i++) {
+            final String key = THEME_OPTS[i][0];
+            final boolean on = key.equals(themeColorKey);
+            LinearLayout cell = new LinearLayout(this);
+            cell.setOrientation(LinearLayout.VERTICAL);
+            cell.setGravity(Gravity.CENTER_HORIZONTAL);
+            FrameLayout dotWrap = new FrameLayout(this);
+            View dot = new View(this);
+            GradientDrawable dg = new GradientDrawable();
+            dg.setShape(GradientDrawable.OVAL);
+            dg.setColor(sw[i]);
+            if (on) dg.setStroke(dp(this, 2), accentColor());
+            dot.setBackground(dg);
+            dotWrap.addView(dot, new FrameLayout.LayoutParams(dp(this, 30), dp(this, 30), Gravity.CENTER));
+            if (on) {
+                GradientDrawable ring = new GradientDrawable();
+                ring.setShape(GradientDrawable.OVAL);
+                ring.setColor(Color.TRANSPARENT);
+                ring.setStroke(dp(this, 2), accentColor());
+                FrameLayout ringV = new FrameLayout(this);
+                ringV.setBackground(ring);
+                dotWrap.addView(ringV, new FrameLayout.LayoutParams(dp(this, 38), dp(this, 38), Gravity.CENTER));
+            }
+            cell.addView(dotWrap, new LinearLayout.LayoutParams(dp(this, 38), dp(this, 38)));
+            TextView nm = tv(this, THEME_OPTS[i][1], 11, on ? accentColor() : colText2(), on);
+            nm.setGravity(Gravity.CENTER);
+            LinearLayout.LayoutParams nlp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            nlp.topMargin = dp(this, 3);
+            cell.addView(nm, nlp);
+            LinearLayout.LayoutParams clp2 = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+            row.addView(cell, clp2);
+            cell.setOnClickListener(v -> {
+                themeColorKey = key; prefs.edit().putString("theme_color", key).apply(); haptic(); rebuildPages();
+            });
+        }
+        panel.addView(box);
+    }
+
+    static final String[] FEATURE_KEYS = {"showcase_enabled", "simkeep_enabled", "subfollow_enabled", "footprint_enabled", "owncard_enabled", "ownact_enabled"};
+
+    int featureOnCount() {
+        int n = 0;
+        for (String k : FEATURE_KEYS) if (prefs == null || prefs.getBoolean(k, true)) n++;
+        return n;
+    }
+
+    void addFeatureSwitch(LinearLayout body, String label, String desc, final String prefKey, final Runnable afterChange) {
+        boolean on = prefs == null || prefs.getBoolean(prefKey, true);
+        switchInner(body, label, desc, on, nv -> {
+            if (prefs != null) prefs.edit().putBoolean(prefKey, nv).apply();
+            haptic(); invalidatePagesSoft();
+            if (afterChange != null) afterChange.run();
+        });
+    }
+
+    // 功能启用折叠组：默认收起（settings_feat_open 持久化记住上次状态），组头 = 分组名 + 「6 项 · 已开 N 项」+ 箭头；
+    // 展开体与旧 switchRow 同款即时生效（摘要计数从 prefs 现读，连点可来回——见 switchRow 的 sw.on 修正）。
+    void buildFeaturePanel(LinearLayout page) {
+        LinearLayout wrap = new LinearLayout(this);
+        wrap.setOrientation(LinearLayout.VERTICAL);
+        wrap.setBackground(roundRect(colSurface(), 18, this));
+        wrap.setClipToOutline(true);
+        wrap.setPadding(dp(this, 14), dp(this, 10), dp(this, 14), dp(this, 12));
+        LinearLayout.LayoutParams wlp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        wlp.topMargin = dp(this, 8);
+        wrap.setLayoutParams(wlp);
+
+        final boolean[] open = {prefs != null && prefs.getBoolean("settings_feat_open", false)};
+        LinearLayout head = new LinearLayout(this);
+        head.setOrientation(LinearLayout.HORIZONTAL);
+        head.setGravity(Gravity.CENTER_VERTICAL);
+        head.setPadding(0, dp(this, 4), 0, dp(this, 4));
+        LinearLayout hcol = new LinearLayout(this);
+        hcol.setOrientation(LinearLayout.VERTICAL);
+        hcol.addView(tv(this, S("sec_features"), 14, colText(), true));
+        final TextView sumTv = tv(this, "6 项 · 已开 " + featureOnCount() + " 项", 11.5f, colText2(), false);
+        LinearLayout.LayoutParams sumLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        sumLp.topMargin = dp(this, 2);
+        sumTv.setLayoutParams(sumLp);
+        hcol.addView(sumTv);
+        head.addView(hcol, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+        final TextView chev = tv(this, open[0] ? "▾" : "▸", 15, colText2(), false);
+        head.addView(chev, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        wrap.addView(head);
+
+        final LinearLayout body = new LinearLayout(this);
+        body.setOrientation(LinearLayout.VERTICAL);
+        body.setVisibility(open[0] ? View.VISIBLE : View.GONE);
+        final Runnable refreshSummary = () -> sumTv.setText("6 项 · 已开 " + featureOnCount() + " 项");
+        String[][] feats = {
+            {"展柜", "我的卡片页的纯卡面展示（堆叠 / 平放自由画布）", "showcase_enabled"},
+            {"保号管家", "电话卡 / eSIM 保号到期管理，关掉后入口不出现", "simkeep_enabled"},
+            {"订阅跟随", "订阅扣款日与金额跟随，关掉后入口不出现", "subfollow_enabled"},
+            {"玩卡足迹", "申请 / 开卡 / 提额等持卡事件时间线，关掉后入口不出现", "footprint_enabled"},
+            {"持卡总览", "我的卡片页的额度汇总与还款日历", "owncard_enabled"},
+            {"活动追踪", "开卡任务与刷卡达标登记，关掉后入口不出现", "ownact_enabled"},
+        };
+        for (int i = 0; i < feats.length; i++) {
+            if (i > 0) addHair(body);
+            addFeatureSwitch(body, feats[i][0], feats[i][1], feats[i][2], refreshSummary);
+        }
+        wrap.addView(body);
+        head.setOnClickListener(v -> {
+            open[0] = !open[0];
+            haptic();
+            try { if (prefs != null) prefs.edit().putBoolean("settings_feat_open", open[0]).apply(); } catch (Throwable ignored) {}
+            body.setVisibility(open[0] ? View.VISIBLE : View.GONE);
+            chev.setText(open[0] ? "▾" : "▸");
+        });
+        page.addView(wrap);
+    }
+
+    // 外观 + 显示融合大面板：两分区小标题 + 发丝线，控件行为与现值同旧 segRow/switchRow/settingRow 逐字保持。
+    void buildAppearancePanel(LinearLayout page) {
+        LinearLayout panel = new LinearLayout(this);
+        panel.setOrientation(LinearLayout.VERTICAL);
+        panel.setBackground(roundRect(colSurface(), 18, this));
+        panel.setClipToOutline(true);
+        panel.setPadding(dp(this, 14), dp(this, 12), dp(this, 14), dp(this, 12));
+        LinearLayout.LayoutParams plp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        plp.topMargin = dp(this, 8);
+        panel.setLayoutParams(plp);
+
+        panelSubHead(panel, S("sec_appearance"), true);
+        segInner(panel, S("dark_mode"), new String[][]{{"system",S("dark_system")},{"light",S("dark_light")},{"dark",S("dark_dark")}}, darkModePref, v -> {
+            darkModePref = v; prefs.edit().putString("dark_mode", v).apply(); haptic(); applyAppearanceChrome(); rebuildPages();
+        });
+        addHair(panel);
+        segInner(panel, S("language"), new String[][]{{"system",S("lang_system")},{"zh",S("lang_zh")},{"en",S("lang_en")}}, appLangPref, v -> {
+            appLangPref = v; if (prefs != null) prefs.edit().putString("app_lang", v).apply(); haptic(); refreshNavLabels(); rebuildPages();
+        });
+        addHair(panel);
+        themeColorInner(panel);
+        addHair(panel);
+        segInner(panel, S("card_color"), new String[][]{{"light",S("card_color_light")},{"dark",S("card_color_dark")}}, placeholderStyle, v -> {
+            placeholderStyle = v; prefs.edit().putString("placeholder_style", v).apply(); haptic(); rebuildPages();
+        });
+        addHair(panel);
+        switchInner(panel, "自选卡面配色", "开启后在无图卡详情里逐张换颜色；关闭用自动配色", placeholderCustomEnabled, on -> {
+            placeholderCustomEnabled = on; prefs.edit().putBoolean("placeholder_custom_enabled", on).apply(); haptic(); invalidatePagesSoft();
+        });
+
+        addHair(panel);
+        panelSubHead(panel, S("sec_display"), false);
+        // Q104（2.18）字体三档真选择：默认（内置 Noto Sans SC）/ 本机字体（系统字）/ 内置宋体
+        // （随包子集 Noto Serif SC）——三者字型肉眼可辨，原「使用本机字体」单列开关并入此选择。
+        // 已导入的自定义字体（Q55）作为第四项仅在文件存在时出现，不与三档打架。
+        String[][] fontOpts = hasCustomFont(this)
+            ? new String[][]{{"builtin",S("font_builtin")},{"system",S("font_system")},{"serif",S("font_serif")},{"custom",S("font_custom")}}
+            : new String[][]{{"builtin",S("font_builtin")},{"system",S("font_system")},{"serif",S("font_serif")}};
+        segInner(panel, S("font"), fontOpts, fontMode, v -> {
+            if ("custom".equals(v) && !hasCustomFont(this)) { haptic(); showFloatToast("先导入一个字体文件再用自定义"); openFontPicker(); return; }
+            fontMode = v; prefs.edit().putString("font_mode", v).apply(); haptic(); rebuildPages();
+        });
+        View fontImpRow = settingInner("导入字体文件", hasCustomFont(this)
+            ? ("已导入：" + (customFontName == null || customFontName.length() == 0 ? "自定义字体" : customFontName) + " · 点此更换 ›")
+            : "选择 .ttf / .otf 字体文件 ›");
+        fontImpRow.setOnClickListener(v -> { haptic(); openFontPicker(); });
+        panel.addView(fontImpRow);
+        if (hasCustomFont(this)) {
+            View fontDelRow = settingInner("删除自定义字体", "删掉后回到默认字体 ›");
+            fontDelRow.setOnClickListener(v -> { deleteCustomFont(); });
+            panel.addView(fontDelRow);
+        }
+        addHair(panel);
+        segInner(panel, S("ui_size"), new String[][]{{"0.9",S("ui_compact")},{"1",S("ui_standard")},{"1.12",S("ui_large")}}, String.valueOf(uiScale), v -> {
+            uiScale = Float.parseFloat(v); prefs.edit().putFloat("ui_scale", uiScale).apply(); haptic(); rebuildPages();
+        });
+        page.addView(panel);
     }
 
     LinearLayout basePage(String title) {
