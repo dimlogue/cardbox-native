@@ -1039,14 +1039,23 @@ public class MainActivity extends Activity {
     // dark thin tint. Pieces: float toast/undo bar, more-menu, detail close, card +/check (Q47),
     // search/filter fabs, top fab, dock, search capsules. Sampling stays Q29/Q41 static-band:
     // refresh on settle/tab-switch only, zero capture while scrolling, no Bitmap.recycle (Q21).
+    // Q97：透明程度三档的染色浓淡倍率——薄透更清透、毛玻璃为现行基准（1.0 不动旧观感）。
+    // 只缩放填充 alpha，描边高光不参与（那是边缘顺滑，不是染色）。
+    float glassTintScale() { return glassLevel <= 0 ? 0.70f : glassLevel == 1 ? 0.88f : 1.0f; }
+    static int scaleColorAlpha(int color, float scale) {
+        int a = Math.round(Color.alpha(color) * scale);
+        if (a < 0) a = 0; if (a > 255) a = 255;
+        return Color.argb(a, Color.red(color), Color.green(color), Color.blue(color));
+    }
     GradientDrawable glassTintDrawable(float radiusDp, boolean oval) {
         GradientDrawable g;
+        float ts = glassTintScale();
         if (darkEff()) {
             g = new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
-                new int[]{Color.argb(96, 52, 52, 58), Color.argb(84, 40, 40, 46), Color.argb(76, 34, 34, 40)});
+                new int[]{scaleColorAlpha(Color.argb(96, 52, 52, 58), ts), scaleColorAlpha(Color.argb(84, 40, 40, 46), ts), scaleColorAlpha(Color.argb(76, 34, 34, 40), ts)});
         } else {
             g = new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
-                new int[]{Color.argb(84, 255, 255, 255), Color.argb(72, 246, 249, 253), Color.argb(64, 238, 244, 250)});
+                new int[]{scaleColorAlpha(Color.argb(84, 255, 255, 255), ts), scaleColorAlpha(Color.argb(72, 246, 249, 253), ts), scaleColorAlpha(Color.argb(64, 238, 244, 250), ts)});
         }
         if (oval) g.setShape(GradientDrawable.OVAL); else g.setCornerRadius(dp(this, radiusDp));
         g.setStroke(dp(this, 1), darkEff() ? Color.argb(44, 255, 255, 255) : Color.argb(110, 255, 255, 255));
@@ -1054,12 +1063,13 @@ public class MainActivity extends Activity {
     }
     GradientDrawable glassWashDrawable(float radiusDp, boolean oval) {
         GradientDrawable g;
+        float ts = glassTintScale();
         if (darkEff()) {
             g = new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
-                new int[]{Color.argb(34, 255, 255, 255), Color.argb(22, 255, 255, 255)});
+                new int[]{scaleColorAlpha(Color.argb(34, 255, 255, 255), ts), scaleColorAlpha(Color.argb(22, 255, 255, 255), ts)});
         } else {
             g = new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
-                new int[]{Color.argb(96, 255, 255, 255), Color.argb(78, 248, 250, 253)});
+                new int[]{scaleColorAlpha(Color.argb(96, 255, 255, 255), ts), scaleColorAlpha(Color.argb(78, 248, 250, 253), ts)});
         }
         if (oval) g.setShape(GradientDrawable.OVAL); else g.setCornerRadius(dp(this, radiusDp));
         g.setStroke(dp(this, 1), darkEff() ? Color.argb(36, 255, 255, 255) : Color.argb(120, 255, 255, 255));
@@ -1325,28 +1335,16 @@ public class MainActivity extends Activity {
             ph.setVisibility(View.INVISIBLE);
             return ph;
         }
-        if (Build.VERSION.SDK_INT >= 31) {
-            // Q90 玻璃换代：实时背板层——不再抓帧贴快照。背板由 recordBackdrop 在每帧
-            // preDraw 以 RenderNode 录制根视图（玻璃宿主整面让开，与旧抓图同语义），本层
-            // onDraw 只把背板节点按自身屏幕位对位绘出；模糊+饱和由节点上的 RenderEffect
-            // 链在 GPU 完成，故糊层跟随身后内容实时变化：进页即在、滑动零时差、切页首帧
-            // 即新页实景、无旧帧残影、无整屏白糊遮罩。染色/提亮/描边仍由宿主图层序承担。
-            final GlassBackdropView iv = new GlassBackdropView(this);
-            setupGlassLayerVisual(iv, radiusDp);
-            iv.setTag(live ? "live" : "frozen");
-            glassViews.add(iv);
-            if (host != null) glassHosts.put(iv, host);
-            ensureBackdropHook();
-            return iv;
-        }
-        // Q90：API<31 静态磨砂染色兜底——不抓帧、不贴快照、不等帧；宿主下方的
-        // glassTintDrawable 薄染色 + 提亮层即为最终面，宁可不透也不许白屏等待。
-        ImageView ph = new ImageView(this);
-        ph.setClickable(false); ph.setFocusable(false);
-        ph.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
-        ph.setTag(live ? "live" : "frozen");
-        ph.setVisibility(View.INVISIBLE);
-        return ph;
+        // Q97 玻璃换代（软件背板）：不再分 API——背板是软件 Canvas 抓根视图→降采样
+        // →盒式模糊的普通 Bitmap，全版本同一实现（Q90 的 RenderNode/RenderEffect 链
+        // 因 vivo X200 Pro mini/Android 15 HWUI 原生层崩溃定案后整段拆除，见 Q96/Q97）。
+        final GlassBackdropView iv = new GlassBackdropView(this);
+        setupGlassLayerVisual(iv, radiusDp);
+        iv.setTag(live ? "live" : "frozen");
+        glassViews.add(iv);
+        if (host != null) glassHosts.put(iv, host);
+        ensureBackdropHook();
+        return iv;
     }
 
     /** Q90 抽出：玻璃层的圆角裁切 + 边缘高光（旧快照层与新背板层同一套视觉口径）。 */
@@ -1375,52 +1373,83 @@ public class MainActivity extends Activity {
         }
     }
 
-    // ---------- Q90 实时背板玻璃（API 31+）：RenderNode 背板 + RenderEffect ----------
-    // 机制：根视图每帧 preDraw 把「扣掉全部玻璃宿主后的场景」以 BACKDROP_SCALE 缩放录进
-    // 一张全屏 RenderNode，节点自带 blur+饱和的 RenderEffect 链（GPU 合成）；每件玻璃层
-    // onDraw 只按自身与根视图的屏幕位差对位 drawRenderNode。零 Bitmap 抓图、零 recycle、
-    // 滚动中无降采样位图往返——糊层与身后内容同一帧，旧快照链的迟到/残影/白糊同根皆断。
-    // 磨砂口径（用户 15:11「毛毛毛玻璃」，数值对混合版 styles.css .dock-glass
-    // blur(28px) saturate(2) 一脉）：背板 0.40 缩放录制 + 节点模糊半径 20（背板像素，
-    // 约合全分辨率 50）+ 饱和 1.9；薄染色/浅提亮/柔边仍由宿主的 glassTintDrawable/
-    // glassWashView/描边在图层序上承担，深色模式经 darkEff 同规范换深色档。
-    static final float BACKDROP_SCALE = 0.40f;
-    static final float BACKDROP_BLUR_PX = 20f;
-    static final float BACKDROP_SATURATE = 1.9f;
-    android.graphics.RenderNode backdropNode = null;
-    int backdropNodeW = 0, backdropNodeH = 0;
-    boolean backdropRecording = false;
+    // ---------- Q97 实时背板玻璃（软件 Bitmap 背板，全版本同一实现） ----------
+    // 定案背景：Q90 的 RenderNode 录制＋RenderEffect 链在用户机（vivo X200 Pro mini /
+    // Android 15）HWUI 原生层崩溃（2.08 硬关玻璃后真机可正常进 App，Q96 定位版定案），
+    // 故整段拆除。新链不碰任何 HWUI 录制：根视图每帧 preDraw 由钩子以 BACKDROP_SCALE
+    // 降采样用软件 Canvas 画进一张复用 Bitmap（抓图时全部玻璃宿主整面让开，与旧抓图
+    // 同语义），再做三遍盒式模糊近似高斯（手写滑动窗均值）；饱和在绘制期以
+    // ColorMatrixColorFilter 施加。每件玻璃层 onDraw 只把这张共享背板按自身与根视图
+    // 的屏幕位差对位绘出（与 Q90 同一组对位数学），故糊层跟随身后内容滚动。
+    // 抓图节流 50ms（preDraw 只在有重绘时触发，静止零开销）；模糊半径已按
+    // 「等效全分辨率 σ≈28px」在 0.20 降采样下折算，强度三档由设置页「透明程度」
+    // 成套映射（半径/饱和/染色 alpha，见 BACKDROP_BLUR_R / BACKDROP_SAT / glassTintScale）。
+    // 自检降级：抓图/模糊/绘制任一环抛 Throwable → disableGlassNow 一次性持久关停
+    // （Java 层记账、写 pref），玻璃件整面隐藏回静态染色兜底，绝不重试、不带走进程。
+    // 位图纪律同 Q21：背板图只复用/解引用，绝不主动 Bitmap.recycle()。
+    static final float BACKDROP_SCALE = 0.20f;
+    static final int[] BACKDROP_BLUR_R = {2, 3, 5};        // 薄透≈10px / 标准≈18px / 毛玻璃≈28px（全分辨率 σ 折算）
+    static final float[] BACKDROP_SAT = {1.35f, 1.6f, 1.9f};
+    static final long BACKDROP_MIN_INTERVAL_MS = 50;
+    Bitmap backdropBmp = null;
+    boolean backdropCapturing = false;
     boolean backdropHookInstalled = false;
+    long backdropLastCapMs = 0;
+    final Paint backdropPaint = new Paint(Paint.FILTER_BITMAP_FLAG);
+    int backdropPaintLevel = -1;
     final android.view.ViewTreeObserver.OnPreDrawListener backdropPreDraw =
         new android.view.ViewTreeObserver.OnPreDrawListener() {
             @Override public boolean onPreDraw() {
-                recordBackdrop();
+                captureBackdrop();
                 return true;
             }
         };
 
-    /** 背板玻璃层：自身不持任何位图，onDraw 只对位绘出共享背板节点。 */
+    /** 绘制期饱和滤镜按当前档位刷新（档位没变不重建滤镜对象）。 */
+    void updateBackdropPaint() {
+        if (backdropPaintLevel == glassLevel) return;
+        backdropPaintLevel = glassLevel;
+        ColorMatrix cm = new ColorMatrix();
+        cm.setSaturation(BACKDROP_SAT[Math.max(0, Math.min(2, glassLevel))]);
+        backdropPaint.setColorFilter(new ColorMatrixColorFilter(cm));
+    }
+
+    /** Q97 降级：新链任一环异常即一次性关停并持久化，玻璃件整面隐藏回静态染色。 */
+    void disableGlassNow() {
+        glassDisabled = true;
+        glassAutoOff = true;
+        try { if (prefs != null) prefs.edit().putBoolean("glass_disabled", true).putBoolean("glass_auto_off", true).apply(); } catch (Throwable ignored) {}
+        try {
+            for (ImageView iv : new java.util.ArrayList<>(glassViews)) {
+                try { iv.setVisibility(View.INVISIBLE); } catch (Throwable ignored) {}
+            }
+        } catch (Throwable ignored) {}
+        backdropBmp = null; // 只解引用交系统回收（Q21 纪律，不 recycle）
+    }
+
+    /** 背板玻璃层：自身不持位图，onDraw 只把共享软件背板按屏幕位对位绘出。 */
     class GlassBackdropView extends ImageView {
         GlassBackdropView(Context c) { super(c); }
         @Override protected void onDraw(Canvas canvas) {
-            // 录制中自排除（否则背板画进背板自引用爆栈，同 LIQUID-GLASS-NOTES 红线）；
+            // 抓图进行中自排除（否则背板画进背板自引用，同 LIQUID-GLASS-NOTES 红线）；
             // 玻璃被关停/背板未就绪时什么都不画，宿主下方薄染色兜底直接显形，绝不白屏。
-            if (backdropRecording || glassDisabled || backdropNode == null || rootView == null) return;
+            if (backdropCapturing || glassDisabled || rootView == null) return;
+            Bitmap bmp = backdropBmp;
+            if (bmp == null || bmp.isRecycled()) return;
             try {
-                if (!canvas.isHardwareAccelerated()) return;
                 int[] rl = new int[2]; rootView.getLocationInWindow(rl);
                 int[] ml = new int[2]; getLocationInWindow(ml);
                 canvas.save();
                 // Q92 硬兜底：先把画布裁到本层自身 bounds——无论宿主布局如何异常，
                 // 玻璃取样层物理上不可能画出自身矩形之外（防再次全屏糊层事故）。
                 canvas.clipRect(0, 0, Math.max(1, getWidth()), Math.max(1, getHeight()));
-                // 对位：节点以 BACKDROP_SCALE 录制（节点 px = 根坐标 × scale），绘出时先按
-                // 本层在根坐标中的位置平移、再 1/scale 放大回全分辨率，内容比例才与身后实景 1:1。
+                // 对位：背板以 BACKDROP_SCALE 降采样（图 px = 根坐标 × scale），绘出时先按
+                // 本层在根坐标中的位置平移、再 1/scale 放大回全分辨率，与身后实景 1:1。
                 canvas.translate(-(ml[0] - rl[0]), -(ml[1] - rl[1]));
                 canvas.scale(1f / BACKDROP_SCALE, 1f / BACKDROP_SCALE);
-                canvas.drawRenderNode(backdropNode);
+                canvas.drawBitmap(bmp, 0, 0, backdropPaint);
                 canvas.restore();
-            } catch (Throwable t) { noteGlassFailure(); }
+            } catch (Throwable t) { disableGlassNow(); }
         }
     }
 
@@ -1432,35 +1461,81 @@ public class MainActivity extends Activity {
         } catch (Throwable ignored) {}
     }
 
-    void ensureBackdropNode(int w, int h) {
-        if (backdropNode != null && backdropNodeW == w && backdropNodeH == h) return;
-        android.graphics.RenderNode n = new android.graphics.RenderNode("cardbox-backdrop");
-        n.setPosition(0, 0, w, h);
-        ColorMatrix cm = new ColorMatrix();
-        cm.setSaturation(BACKDROP_SATURATE);
-        n.setRenderEffect(RenderEffect.createChainEffect(
-            RenderEffect.createColorFilterEffect(new ColorMatrixColorFilter(cm)),
-            RenderEffect.createBlurEffect(BACKDROP_BLUR_PX, BACKDROP_BLUR_PX, Shader.TileMode.CLAMP)));
-        backdropNode = n; // Q21 同纪律：旧节点只解引用交系统回收，不做任何位图式释放
-        backdropNodeW = w; backdropNodeH = h;
+    /** 手写盒式模糊（三遍滑动窗均值近似高斯，边缘钳制取样）；直接在像素数组上原地进行。 */
+    static void boxBlurPass(int[] px, int w, int h, int r) {
+        if (r < 1 || w <= 0 || h <= 0) return;
+        int[] tmp = new int[px.length];
+        int win = 2 * r + 1;
+        // 横向
+        for (int y = 0; y < h; y++) {
+            int row = y * w;
+            long sa = 0, sr = 0, sg = 0, sb = 0;
+            for (int i = -r; i <= r; i++) {
+                int c = px[row + Math.max(0, Math.min(w - 1, i))];
+                sa += Color.alpha(c); sr += Color.red(c); sg += Color.green(c); sb += Color.blue(c);
+            }
+            for (int x = 0; x < w; x++) {
+                tmp[row + x] = Color.argb((int) (sa / win), (int) (sr / win), (int) (sg / win), (int) (sb / win));
+                int cout = px[row + Math.max(0, Math.min(w - 1, x - r))];
+                int cin = px[row + Math.max(0, Math.min(w - 1, x + r + 1))];
+                sa += Color.alpha(cin) - Color.alpha(cout);
+                sr += Color.red(cin) - Color.red(cout);
+                sg += Color.green(cin) - Color.green(cout);
+                sb += Color.blue(cin) - Color.blue(cout);
+            }
+        }
+        // 纵向
+        for (int x = 0; x < w; x++) {
+            long sa = 0, sr = 0, sg = 0, sb = 0;
+            for (int i = -r; i <= r; i++) {
+                int c = tmp[Math.max(0, Math.min(h - 1, i)) * w + x];
+                sa += Color.alpha(c); sr += Color.red(c); sg += Color.green(c); sb += Color.blue(c);
+            }
+            for (int y = 0; y < h; y++) {
+                px[y * w + x] = Color.argb((int) (sa / win), (int) (sr / win), (int) (sg / win), (int) (sb / win));
+                int cout = tmp[Math.max(0, Math.min(h - 1, y - r)) * w + x];
+                int cin = tmp[Math.max(0, Math.min(h - 1, y + r + 1)) * w + x];
+                sa += Color.alpha(cin) - Color.alpha(cout);
+                sr += Color.red(cin) - Color.red(cout);
+                sg += Color.green(cin) - Color.green(cout);
+                sb += Color.blue(cin) - Color.blue(cout);
+            }
+        }
     }
 
-    /** 每帧绘制前录制一次背板：玻璃宿主整面让开（与旧 captureGlassSnapshot 同语义），录的是纯场景。 */
-    void recordBackdrop() {
-        if (backdropRecording || glassDisabled || rootView == null) return;
+    static void stackBlur(Bitmap bmp, int radius) {
+        int w = bmp.getWidth(), h = bmp.getHeight();
+        if (w <= 0 || h <= 0 || radius < 1) return;
+        int[] px = new int[w * h];
+        bmp.getPixels(px, 0, w, 0, 0, w, h);
+        boxBlurPass(px, w, h, radius);
+        boxBlurPass(px, w, h, radius);
+        boxBlurPass(px, w, h, radius);
+        bmp.setPixels(px, 0, w, 0, 0, w, h);
+    }
+
+    /**
+     * 软件背板抓图（preDraw 钩子节流调用，亦可由 refreshLiveGlass 清节流强制）：
+     * 玻璃宿主整面让开后，把根视图以 BACKDROP_SCALE 软件渲染进复用 Bitmap 并模糊。
+     * 任一环异常 → disableGlassNow 一次性持久关停（新链降级口径，不再三次计数）。
+     */
+    void captureBackdrop() {
+        if (backdropCapturing || glassDisabled || rootView == null) return;
         if (rootView.getWidth() <= 0 || rootView.getHeight() <= 0) return;
+        long nowMs = android.os.SystemClock.uptimeMillis();
+        if (nowMs - backdropLastCapMs < BACKDROP_MIN_INTERVAL_MS) return;
         pruneGlass();
         boolean any = false;
         for (ImageView iv : glassViews) {
             if (iv instanceof GlassBackdropView && iv.isAttachedToWindow() && iv.isShown()) { any = true; break; }
         }
-        if (!any) return; // 屏上无玻璃件则零开销：不录、不占 GPU
-        int nw = Math.max(1, Math.round(rootView.getWidth() * BACKDROP_SCALE));
-        int nh = Math.max(1, Math.round(rootView.getHeight() * BACKDROP_SCALE));
+        if (!any) return; // 屏上无玻璃件则零开销：不抓、不占 CPU
+        backdropLastCapMs = nowMs;
+        int bw = Math.max(1, Math.round(rootView.getWidth() * BACKDROP_SCALE));
+        int bh = Math.max(1, Math.round(rootView.getHeight() * BACKDROP_SCALE));
         java.util.Map<View, Integer> saved = new java.util.HashMap<>();
-        backdropRecording = true;
+        backdropCapturing = true;
         try {
-            ensureBackdropNode(nw, nh);
             for (ImageView iv : new java.util.ArrayList<>(glassViews)) {
                 View h = glassHosts.get(iv);
                 View t = h != null ? h : iv;
@@ -1469,22 +1544,30 @@ public class MainActivity extends Activity {
                     t.setVisibility(View.INVISIBLE);
                 }
             }
-            android.graphics.RecordingCanvas rc = backdropNode.beginRecording(nw, nh);
-            try {
-                rc.scale(BACKDROP_SCALE, BACKDROP_SCALE);
-                rootView.draw(rc); // 显示列表录制（GPU 路径），非位图抓帧
-            } finally {
-                backdropNode.endRecording();
+            if (backdropBmp == null || backdropBmp.isRecycled()
+                || backdropBmp.getWidth() != bw || backdropBmp.getHeight() != bh) {
+                backdropBmp = Bitmap.createBitmap(bw, bh, Bitmap.Config.ARGB_8888); // 旧图只解引用（Q21）
             }
+            Canvas cv = new Canvas(backdropBmp);
+            cv.scale(BACKDROP_SCALE, BACKDROP_SCALE);
+            rootView.draw(cv); // 软件 Canvas 渲染整树（玻璃宿主已让开，画的是纯场景）
+            stackBlur(backdropBmp, BACKDROP_BLUR_R[Math.max(0, Math.min(2, glassLevel))]);
+            updateBackdropPaint();
             noteGlassSuccess();
         } catch (Throwable t) {
-            noteGlassFailure(); // 三次失败自动关停回薄染色兜底（noteGlassFailure 既有口径）
+            disableGlassNow();
         } finally {
             for (java.util.Map.Entry<View, Integer> e : saved.entrySet()) {
                 try { e.getKey().setVisibility(e.getValue()); } catch (Throwable ignored) {}
             }
-            backdropRecording = false;
+            backdropCapturing = false;
         }
+        // 新背板帧落地：让已上屏的玻璃层按新帧重绘（位置对位在各自 onDraw 内按当前坐标算）
+        try {
+            for (ImageView iv : new java.util.ArrayList<>(glassViews)) {
+                if (iv instanceof GlassBackdropView) iv.invalidate();
+            }
+        } catch (Throwable ignored) {}
     }
 
     /** 抓当前根视图快照（0.2 降采样）：抓图时把所有已登记玻璃面整面隐藏，避免把玻璃自己拍进背景。 */
@@ -1627,24 +1710,13 @@ public class MainActivity extends Activity {
     /** Q29：静态帧刷新——只在停稳/切页这两个时刻调用（底栏/悬浮钮/回顶/搜索胶囊共用一帧）；
      *  有浮窗在场时不刷，浮窗用的是各自升起时的冻结快照。 */
     void refreshLiveGlass() {
-        // Q37（推翻 Q34 纯白实底，用户 20:24–20:27 拍板回老图毛玻璃）：dock/悬浮钮/回顶/搜索胶囊改静态定格毛玻璃——
-        // 糊一帧定住、滚动中绝不调用本函数换帧；只在停稳（scheduleGlassRefresh 650ms 防抖跑完）与切页两个时刻更新，
-        // 换帧经 applyGlass 的 220ms 交叉淡入，不许硬跳色。浮窗在场不刷（浮窗用各自冻结帧）。
-        if (glassDisabled || glassCapturing || rootView == null || rootView.getWidth() <= 0) return;
-        // Q90：API 31+ 背板逐帧自更新——切页/停稳不再抓帧换帧，本函数整段让路；
-        // API<31 已改静态染色兜底、glassViews 无旧式登记层，同样直接收工。
-        if (Build.VERSION.SDK_INT >= 31 || glassViews.isEmpty()) return;
-        // Q63：切页淡入窗（280ms）内让路——此刻抓图必混入正在淡出的旧页，等 showTab 的代次守卫延迟刷新抓定格帧。
-        if (glassSnapStale && android.os.SystemClock.uptimeMillis() - glassTabSwitchMs < 280) return;
-        // Q21 ③：底栏拖动/弹簧进行中不做整屏抓图——capture 是全树 draw，正是滑动发卡与 MOVE 被饿死的主因之一；落稳后防抖任务会补上最终帧。
-        if (navDragging || navSpringRunning) return;
-        if (cardMenuPop != null || filterSheet != null || wizardOpen || aboutPageOpen
-            || detailCard != null || helloOpen || changelogOpen) return;
-        captureGlassSnapshot();
-        rebuildBand(); // Q41：停稳/切页帧顺带生成条带，滚动期靠它平移跟随（失败自动回落静态帧）
-        for (ImageView iv : new java.util.ArrayList<>(glassViews)) {
-            if ("live".equals(iv.getTag()) && iv.isAttachedToWindow()) applyGlass(iv);
-        }
+        // Q97：软件背板——切页/停稳时刻清节流强制重抓一帧新背板；帧间跟随由 preDraw
+        // 钩子的节流抓图承担，玻璃件位置对位在各自 onDraw 按当前坐标算。旧快照链
+        // （captureGlassSnapshot/applyGlass/条带）仅剩 API<31 时代的登记路径调用，
+        // 玻璃件现全是 GlassBackdropView，不再经它成像，代码留仓封存。
+        if (glassDisabled || rootView == null || rootView.getWidth() <= 0) return;
+        backdropLastCapMs = 0;
+        captureBackdrop();
     }
 
     void scheduleGlassRefresh() {
@@ -2674,6 +2746,10 @@ public class MainActivity extends Activity {
     // Q18: glass consecutive-failure auto-disable + crash trace
     int glassFailCount = 0;
     boolean glassDisabled = false;
+    // Q97：玻璃透明程度三档（0 薄透 / 1 标准 / 2 毛玻璃默认）与「自动停用」来源标记，
+    // 与 glass_disabled 同存 prefs（glass_level / glass_auto_off），设置页可调。
+    int glassLevel = 2;
+    boolean glassAutoOff = false;
     String crashLogText = null;
     static volatile String sCrashTab = "home";
     static volatile String sCrashVersion = "";
@@ -2980,11 +3056,21 @@ public class MainActivity extends Activity {
                 }
             } catch (Throwable ignored) {}
         }
-        // 2.08 定位版（隔离 S2）：无条件硬关玻璃——在上面 Q90 重置逻辑之后压住，
-        // glassDisabled=true 时 GlassBackdropView 不创建、recordBackdrop/refreshLiveGlass 直接返回，
-        // RenderNode 背板零录制零绘制，全部玻璃件走既有静态染色兜底。若真机此版可用即定案玻璃原生崩。
-        glassDisabled = true;
-        try { prefs.edit().putBoolean("glass_disabled", true).apply(); } catch (Throwable ignored) {}
+        // Q97 一次性迁移：2.08 定位版曾无条件把 glass_disabled 硬写为 true，
+        // 升级首启清零一次（glass_hw_q97 标记，只跑一次），否则老用户玻璃永远开
+        // 不回来；迁移后再失败由新链 disableGlassNow 重新持久关停，不无限重试。
+        // 用户在设置页手动关的玻璃（glass_hw_q97 已落盘后）不再被迁移碰。
+        try {
+            if (!prefs.getBoolean("glass_hw_q97", false)) {
+                glassDisabled = false;
+                prefs.edit().putBoolean("glass_disabled", false).putBoolean("glass_hw_q97", true).apply();
+            }
+        } catch (Throwable ignored) {}
+        try {
+            glassAutoOff = prefs.getBoolean("glass_auto_off", false);
+            glassLevel = prefs.getInt("glass_level", 2);
+            if (glassLevel < 0 || glassLevel > 2) glassLevel = 2;
+        } catch (Throwable ignored) { glassAutoOff = false; glassLevel = 2; }
         loadCrashLog();
         installCrashHandler();
         fontMode = prefs.getString("font_mode", "builtin");
@@ -5029,29 +5115,34 @@ public class MainActivity extends Activity {
         badge.setClickable(false); badge.setFocusable(false);
         badge.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
         MineFrost frost = bmp != null ? makeDoubtFrost(bmp, "doubtfrost:" + c.image) : null;
-        if (frost != null && frost.bmp != null && !frost.bmp.isRecycled()) {
-            ImageView fiv = new ImageView(this);
-            fiv.setScaleType(ImageView.ScaleType.CENTER_CROP);
-            fiv.setImageBitmap(frost.bmp);
-            fiv.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
-            badge.addView(fiv, new FrameLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
-        }
-        View tint = new View(this);
-        tint.setBackground(glassTintDrawable(999, false));
-        tint.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
-        badge.addView(tint, new FrameLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
-        badge.addView(glassWashView(999, false), new FrameLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
-        // 字色按底明暗取（同 Q47 字形口径）：亮底深字、暗底或深色档白字带轻影压图
+        // Q97 根因修复（用户 16:48 实拍详情英雄图大椭圆）：本胶囊是 WRAP_CONTENT 容器，
+        // 旧写法把磨砂/染色/提亮三层全以 MATCH_PARENT 塞入——MATCH_PARENT 子层按
+        // AT_MOST 上限把胶囊顶满整个父容器（详情英雄图/瓷砖图区），glassClip(999)
+        // 再把这块巨面圆成盖满卡面的大椭圆（真图卡为磨砂椭圆、占位卡为乳白椭圆）。
+        // 与 Q92 全屏糊层同病：WRAP_CONTENT 容器里不许留 MATCH_PARENT 子层。
+        // 改：先量文字实尺寸，三层与文字全部钉死该像素尺寸，胶囊只有字面大小。
         boolean lightBg = !darkEff() && (frost != null ? frost.lum > 168 : placeholderLightBg(c.id));
         TextView t = tv(this, S("doubt"), textSp, lightBg ? Color.rgb(0x1C, 0x1C, 0x1E) : Color.WHITE, true);
         t.setGravity(Gravity.CENTER);
         t.setPadding(dp(this, padH), dp(this, padV), dp(this, padH), dp(this, padV));
         if (!lightBg) t.setShadowLayer(dp(this, 1.5f), 0, dp(this, 0.5f), Color.argb(110, 0, 0, 0));
-        badge.addView(t, new FrameLayout.LayoutParams(
-            ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        t.measure(View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED),
+                  View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED));
+        int tw = Math.max(1, t.getMeasuredWidth());
+        int th = Math.max(1, t.getMeasuredHeight());
+        if (frost != null && frost.bmp != null && !frost.bmp.isRecycled()) {
+            ImageView fiv = new ImageView(this);
+            fiv.setScaleType(ImageView.ScaleType.CENTER_CROP);
+            fiv.setImageBitmap(frost.bmp);
+            fiv.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
+            badge.addView(fiv, new FrameLayout.LayoutParams(tw, th));
+        }
+        View tint = new View(this);
+        tint.setBackground(glassTintDrawable(999, false));
+        tint.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
+        badge.addView(tint, new FrameLayout.LayoutParams(tw, th));
+        badge.addView(glassWashView(999, false), new FrameLayout.LayoutParams(tw, th));
+        badge.addView(t, new FrameLayout.LayoutParams(tw, th));
         glassClip(badge, 999, false);
         return badge;
     }
@@ -6912,9 +7003,13 @@ public class MainActivity extends Activity {
         if (stepSwitch) {
             sheet.setAlpha(1f);
             float dx = dp(this, wizStep >= lastWizStepShown ? 28 : -28);
-            card.setAlpha(0f);
+            // Q97：步进不再对整卡做 alpha 淡入——alpha<1 会把整卡（含标题文字）提升为
+            // 离屏硬件层纹理，用户机出现结果首行卡名被纵向压扁重印的叠字（16:47 实拍；
+            // 审计确认标题为单 TextView 单次绘制、tv() 无描边无假粗）。只保留横向轻滑，
+            // 文字在最终合成面直绘一次。首次开窗的遮罩淡入不受影响。
+            card.setAlpha(1f);
             card.setTranslationX(dx);
-            card.animate().alpha(1f).translationX(0f)
+            card.animate().translationX(0f)
                 .setDuration(ANIM_DUR_FADE).setInterpolator(ANIM_ENTER).start();
         } else {
             sheet.setAlpha(0f);
@@ -7081,7 +7176,11 @@ public class MainActivity extends Activity {
                     LinearLayout tile = new LinearLayout(this);
                     tile.setOrientation(LinearLayout.VERTICAL);
                     tile.setBackground(rippleBg(Color.WHITE, 18));
-                    tile.setClipToOutline(true);
+                    // Q97：补显式圆角轮廓——旧写法只有 setClipToOutline 而无 OutlineProvider，
+                    // 部分机型默认轮廓退化为直角矩形，elevation 阴影按直角打出、圆角背景外
+                    // 在底部两角露出灰楔（用户 16:47 实拍）；roundClip 给 18dp 圆角轮廓，
+                    // 裁切与阴影同形（与 wizResultRow 外其他圆角卡同一口径）。
+                    roundClip(tile, 18, this);
                     if (Build.VERSION.SDK_INT >= 21) tile.setElevation(dp(this, 3));
                     tile.setPadding(dp(this, 14), dp(this, 15), dp(this, 14), dp(this, 15));
                     LinearLayout.LayoutParams tlp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
@@ -7213,6 +7312,9 @@ public class MainActivity extends Activity {
         TextView nm = tv(this, c.name, 14.5f, Color.rgb(0x1C, 0x1C, 0x1E), true);
         nm.setMaxLines(2);
         nm.setEllipsize(android.text.TextUtils.TruncateAt.END);
+        // Q97：标题改软件层直绘——结果页经步进横滑动画显现时，硬件离屏层纹理在用户机
+        // 把首行卡名压扁重印成叠字；软件层每次按字形直绘、只画一次，不吃动画层纹理。
+        nm.setLayerType(View.LAYER_TYPE_SOFTWARE, null);
         info.addView(nm);
         String orgTxt = (c.org == null || c.org.isEmpty()) ? "—" : orgLabel(c.org);
         TextView meta = tv(this, c.bank + " · " + orgTxt + " · " + (c.isCredit() ? "信用卡" : "借记卡"), 11.5f, Color.rgb(0x8E, 0x8E, 0x93), false);
@@ -14621,6 +14723,21 @@ public class MainActivity extends Activity {
         switchRow(page, "高刷新率", "把刷新率拉到屏幕最高档（耗电略增）", prefs.getBoolean("high_refresh", false), on -> {
             prefs.edit().putBoolean("high_refresh", on).apply(); haptic(); applyHighRefresh(); rebuildPages();
         });
+        // Q97：玻璃控制二合一——开关（关走静态半透染色、本机保存）＋状态说明同行；
+        // 旧《关于」区被动状态行（仅关停时出现、不可操作）就此退役，由本行接管。
+        switchRow(page, "玻璃效果",
+            glassDisabled
+                ? (glassAutoOff ? "已自动停用（异常后回落半透，不影响使用），打开可重试" : "已关闭，玻璃件使用静态半透染色")
+                : "已开启，底栏与弹窗按身后内容实时磨砂",
+            !glassDisabled, on -> {
+                glassDisabled = !on;
+                if (on) glassAutoOff = false;
+                try { prefs.edit().putBoolean("glass_disabled", glassDisabled).putBoolean("glass_auto_off", glassAutoOff).apply(); } catch (Throwable ignored) {}
+                haptic();
+                applyGlassEnabledChange();
+                rebuildPages();
+            });
+        glassLevelRow(page);
         segRow(page, S("haptic"), new String[][]{{"0",S("haptic_off")},{"1",S("haptic_light")},{"2",S("haptic_mid")},{"3",S("haptic_strong")}}, String.valueOf(hapticLevel), v -> {
             hapticLevel = Integer.parseInt(v); prefs.edit().putInt("haptic_level", hapticLevel).apply(); haptic(); rebuildPages();
         });
@@ -14673,17 +14790,7 @@ public class MainActivity extends Activity {
             clrLp.leftMargin = dp(this, 10);
             crashBtns.addView(clearBtn, clrLp);
             crashBox.addView(crashBtns);
-            // glass status line (Q18 auto-disable visibility)
-            if (glassDisabled) {
-                TextView gs = tv(this, "玻璃效果已自动停用（连续失败后回落半透，不影响使用）", 11, Color.rgb(0x8E, 0x8E, 0x93), false);
-                LinearLayout.LayoutParams gsl = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-                gsl.topMargin = dp(this, 8);
-                gs.setLayoutParams(gsl);
-                crashBox.addView(gs);
-            }
             page.addView(crashBox);
-        } else if (glassDisabled) {
-            page.addView(settingRow("玻璃效果", "已自动停用（连续失败后回落半透，不影响使用）"));
         }
         page.addView(settingRow(S("version"), appVersion() + (isEn() ? " (Native)" : "（原生版）")));
         // Q92 设置页瘦身：更新日志/欢迎页/关于卡盒/情景选卡四个次级入口已收进标题栏 ⋯ 菜单
@@ -14813,6 +14920,65 @@ public class MainActivity extends Activity {
     }
 
     interface SwitchSet { void onSet(boolean on); }
+
+    /** 玻璃开关状态变更即时落地：关→全部背板层整面隐藏回静态染色；开→恢复并强制重抓一帧。 */
+    void applyGlassEnabledChange() {
+        try {
+            for (ImageView iv : new java.util.ArrayList<>(glassViews)) {
+                if (iv instanceof GlassBackdropView) iv.setVisibility(glassDisabled ? View.INVISIBLE : View.VISIBLE);
+            }
+        } catch (Throwable ignored) {}
+        if (!glassDisabled) { backdropLastCapMs = 0; captureBackdrop(); }
+    }
+
+    // Q97：「透明程度」三档行（与 segRow 同形制）——玻璃关时整行置灰不可点；
+    // 档位成套映射新背板三参数：模糊半径（BACKDROP_BLUR_R）/饱和（BACKDROP_SAT）/染色浓淡（glassTintScale）。
+    void glassLevelRow(LinearLayout page) {
+        final boolean enabled = !glassDisabled;
+        LinearLayout box = new LinearLayout(this);
+        box.setOrientation(LinearLayout.VERTICAL);
+        box.setBackground(roundRect(colSurface(), 12, this));
+        box.setPadding(dp(this, 14), dp(this, 10), dp(this, 14), dp(this, 12));
+        LinearLayout.LayoutParams blp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        blp.topMargin = dp(this, 8);
+        box.setLayoutParams(blp);
+        if (!enabled) box.setAlpha(0.45f);
+        box.addView(tv(this, "透明程度", 14, enabled ? colText() : colText2(), true));
+        TextView dsc = tv(this, enabled ? "模糊强度、饱和与染色浓淡成套调节，默认毛玻璃" : "玻璃效果已关闭，开启后可调", 11.5f, colText2(), false);
+        LinearLayout.LayoutParams dlp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        dlp.topMargin = dp(this, 2);
+        box.addView(dsc, dlp);
+        LinearLayout row = new LinearLayout(this);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        LinearLayout.LayoutParams rlp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        rlp.topMargin = dp(this, 9);
+        box.addView(row, rlp);
+        String[][] opts = {{"0", "薄透"}, {"1", "标准"}, {"2", "毛玻璃"}};
+        for (final String[] o : opts) {
+            final int lv = Integer.parseInt(o[0]);
+            final boolean on = glassLevel == lv;
+            TextView t = tv(this, o[1], 12.5f, on ? Color.WHITE : colText(), on);
+            t.setGravity(Gravity.CENTER);
+            t.setBackground(roundRect(on ? accentColor() : colChipOff(), 9, this));
+            t.setPadding(dp(this, 4), dp(this, 8), dp(this, 4), dp(this, 8));
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+            lp.rightMargin = dp(this, 8);
+            t.setLayoutParams(lp);
+            if (enabled) {
+                t.setOnClickListener(v -> {
+                    if (glassLevel == lv) return;
+                    glassLevel = lv;
+                    try { prefs.edit().putInt("glass_level", glassLevel).apply(); } catch (Throwable ignored) {}
+                    haptic();
+                    backdropLastCapMs = 0; // 清节流：新半径立即重抓一帧背板（饱和随绘制滤镜同步换档）
+                    captureBackdrop();
+                    rebuildPages();
+                });
+            }
+            row.addView(t);
+        }
+        page.addView(box);
+    }
 
     void switchRow(LinearLayout page, String label, String desc, final boolean on, final SwitchSet set) {
         LinearLayout row = new LinearLayout(this);
