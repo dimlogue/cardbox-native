@@ -206,6 +206,7 @@ public class MainActivity extends Activity {
             || customFormSheet != null || customDetailSheet != null || binSheet != null || addSheetView != null
             || extSheet != null || showcaseView != null || simkeepView != null || simkeepFormSheet != null
             || subfollowView != null || subfollowFormSheet != null
+            || footprintView != null || footprintFormSheet != null
             || placeholderPickerView != null
             || delConfirmSheet != null || updateTipSheet != null || updateConfirmSheet != null;
     }
@@ -1787,6 +1788,18 @@ public class MainActivity extends Activity {
     FrameLayout subfollowBody = null;
     View subfollowFormSheet = null;
     boolean subfollowFormClosing = false;
+    // Q87 玩卡足迹：模块自成一块（footprint_ 前缀），设置「功能启用」可关，关掉入口与界面彻底不出现、不占位。
+    // 数据模板参考：GitHub 开源卡包类应用的持卡事件时间线结构（事件类型/日期/结果状态签/金额变化），代码自写；纯本机记录，不抓银行数据。
+    static class FootItem {
+        String id, cardName, type, status, date, amountFrom, amountTo, note;
+    }
+    View footprintView = null;
+    boolean footprintClosing = false;
+    FrameLayout footprintBody = null;
+    View footprintFormSheet = null;
+    boolean footprintFormClosing = false;
+    String footFilterType = "";
+    String footFilterStatus = "";
     boolean suppressNextChromeRestore = false; // Q12: chain open (menu->detail, addSheet->form) skips one restore to avoid dock flicker
     View addSheetView = null; // Q12: 添加卡片底表，浮窗退场名单内
     String lastBin = null, lastBinScheme = null, lastBinType = null, lastBinBrand = null, lastBinBank = null, lastBinCountry = null;
@@ -8018,6 +8031,14 @@ public class MainActivity extends Activity {
             sfEntry.setOnClickListener(v -> { haptic(); openSubFollow(); });
             inner.addView(sfEntry);
         }
+        // Q87 玩卡足迹入口（设置关掉不占位）：显示事件数与最近一条
+        if (footprintEnabled()) {
+            java.util.List<FootItem> ft = loadFootprints();
+            String sub3 = ft.isEmpty() ? "申请 / 开卡 / 提额等事件时间线 ›" : (ft.size() + " 条足迹 · 点开查看 ›");
+            View ftEntry = settingRow("玩卡足迹", sub3);
+            ftEntry.setOnClickListener(v -> { haptic(); openFootprint(); });
+            inner.addView(ftEntry);
+        }
         if (prefs == null || prefs.getBoolean("owncard_enabled", true)) inner.addView(buildCreditOverview(mineRows));
         if (prefs == null || prefs.getBoolean("ownact_enabled", true)) { View _ae = settingRow("活动追踪", ownActs.isEmpty() ? "开卡任务 / 刷卡达标登记 ›" : (ownActs.size() + " 条活动 · 点开管理 ›")); _ae.setOnClickListener(v -> { haptic(); openOwnActs(); }); inner.addView(_ae); }
         // Q22 页级构成对照混合版：自定义区在前（index.html #customSec 先于 #grid），其后卡包分析，再「我的卡片」折叠条+瓷砖
@@ -11815,6 +11836,359 @@ public class MainActivity extends Activity {
         if (subfollowView == null) restoreChrome();
     }
 
+    // ---------- Q87 玩卡足迹（模块键 footprint_，设置可关、关掉不占位） ----------
+    static final String[] FOOT_TYPE_VALS = {"apply", "open", "limit", "limitTemp", "other"};
+    static final String[] FOOT_TYPE_LABELS = {"申请", "开卡", "提额", "提临额", "其他"};
+    static final String[] FOOT_STATUS_VALS = {"ok", "fail", "pending"};
+    static final String[] FOOT_STATUS_LABELS = {"成功", "拒绝", "待定"};
+    static String footTypeLabel(String v) {
+        if (v == null) return "其他";
+        for (int i = 0; i < FOOT_TYPE_VALS.length; i++) if (FOOT_TYPE_VALS[i].equals(v)) return FOOT_TYPE_LABELS[i];
+        return "其他";
+    }
+    static String footStatusLabel(String v) {
+        if (v == null) return "待定";
+        for (int i = 0; i < FOOT_STATUS_VALS.length; i++) if (FOOT_STATUS_VALS[i].equals(v)) return FOOT_STATUS_LABELS[i];
+        return "待定";
+    }
+    static int footStatusColor(String v) {
+        if ("ok".equals(v)) return Color.rgb(0x2E, 0x8C, 0x3C);
+        if ("fail".equals(v)) return Color.rgb(0xE0, 0x31, 0x31);
+        return Color.rgb(0x8E, 0x8E, 0x93);
+    }
+    boolean footprintEnabled() { return prefs == null || prefs.getBoolean("footprint_enabled", true); }
+    java.util.List<FootItem> loadFootprints() {
+        java.util.List<FootItem> out = new ArrayList<>();
+        if (prefs == null) return out;
+        try {
+            String raw = prefs.getString("footprint_items", "[]");
+            JSONArray arr = new JSONArray(raw == null || raw.isEmpty() ? "[]" : raw);
+            for (int i = 0; i < arr.length(); i++) {
+                JSONObject o = arr.getJSONObject(i);
+                FootItem it = new FootItem();
+                it.id = o.optString("id"); it.cardName = o.optString("card");
+                it.type = o.optString("type", "other"); it.status = o.optString("status", "pending");
+                it.date = o.optString("date"); it.amountFrom = o.optString("from"); it.amountTo = o.optString("to");
+                it.note = o.optString("note");
+                if (it.id == null || it.id.isEmpty()) it.id = "foot-" + i;
+                out.add(it);
+            }
+        } catch (Throwable ignored) {}
+        return out;
+    }
+    void saveFootprints(java.util.List<FootItem> items) {
+        if (prefs == null) return;
+        try {
+            JSONArray arr = new JSONArray();
+            for (FootItem it : items) {
+                JSONObject o = new JSONObject();
+                o.put("id", it.id == null ? "" : it.id); o.put("card", it.cardName == null ? "" : it.cardName);
+                o.put("type", it.type == null ? "other" : it.type); o.put("status", it.status == null ? "pending" : it.status);
+                o.put("date", it.date == null ? "" : it.date); o.put("from", it.amountFrom == null ? "" : it.amountFrom);
+                o.put("to", it.amountTo == null ? "" : it.amountTo); o.put("note", it.note == null ? "" : it.note);
+                arr.put(o);
+            }
+            prefs.edit().putString("footprint_items", arr.toString()).commit();
+        } catch (Throwable ignored) {}
+    }
+    java.util.List<FootItem> footprintsSorted() {
+        java.util.List<FootItem> items = loadFootprints();
+        java.util.Collections.sort(items, (a, b) -> {
+            String da = a.date == null ? "" : a.date, db = b.date == null ? "" : b.date;
+            return db.compareTo(da);
+        });
+        return items;
+    }
+    void openFootprint() {
+        if (footprintView != null) return;
+        captureCurrentPageScroll();
+        hideChrome();
+        footprintClosing = false;
+        final FrameLayout overlay = new FrameLayout(this);
+        overlay.setBackgroundColor(colBg());
+        LinearLayout col = new LinearLayout(this);
+        col.setOrientation(LinearLayout.VERTICAL);
+        overlay.addView(col, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        LinearLayout head = new LinearLayout(this);
+        head.setOrientation(LinearLayout.HORIZONTAL); head.setGravity(Gravity.CENTER_VERTICAL);
+        head.setPadding(dp(this, 16), pageTopPad(), dp(this, 12), dp(this, 8));
+        col.addView(head, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        head.addView(tvW(this, "玩卡足迹", 20, colText(), 800), new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+        FrameLayout closeBtn = new FrameLayout(this);
+        closeBtn.setBackground(roundRect(colSurface(), 999, this)); closeBtn.setClipToOutline(true);
+        CloseIconView civ = new CloseIconView(this); civ.iconColor = colText();
+        closeBtn.addView(civ, new FrameLayout.LayoutParams(dp(this, 18), dp(this, 18), Gravity.CENTER));
+        LinearLayout.LayoutParams cbLp = new LinearLayout.LayoutParams(dp(this, 36), dp(this, 36)); cbLp.leftMargin = dp(this, 8);
+        closeBtn.setLayoutParams(cbLp);
+        closeBtn.setOnClickListener(v -> { haptic(); closeFootprint(); });
+        head.addView(closeBtn);
+        footprintBody = new FrameLayout(this);
+        col.addView(footprintBody, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
+        content.addView(overlay, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        footprintView = overlay;
+        buildFootprintBody();
+        overlay.setAlpha(0f);
+        overlay.animate().alpha(1f).setDuration(ANIM_DUR_FADE).setInterpolator(ANIM_ENTER).start();
+    }
+    void closeFootprintNow() {
+        View v = footprintView; footprintView = null; footprintBody = null; footprintClosing = false;
+        if (v != null && v.getParent() != null) ((ViewGroup) v.getParent()).removeView(v);
+    }
+    void closeFootprint() {
+        final View v = footprintView;
+        if (v == null || footprintClosing) return;
+        if (footprintFormSheet != null) { closeFootprintForm(); return; }
+        footprintClosing = true;
+        v.animate().alpha(0f).setDuration(ANIM_DUR_SHEET_OUT).setInterpolator(ANIM_EXIT)
+            .withEndAction(() -> { closeFootprintNow(); restoreChrome(); }).start();
+    }
+    TextView footFilterChip(String label, boolean on) {
+        TextView chip = tv(this, label, 12.5f, on ? Color.WHITE : colText(), on);
+        chip.setGravity(Gravity.CENTER); chip.setPadding(dp(this, 12), dp(this, 7), dp(this, 12), dp(this, 7));
+        chip.setBackground(roundRect(on ? accentColor() : colChipOff(), 999, this));
+        return chip;
+    }
+    void buildFootprintBody() {
+        if (footprintBody == null) return;
+        footprintBody.removeAllViews();
+        ScrollView sv = new ScrollView(this); thinScrollbar(sv); sv.setClipToPadding(false);
+        LinearLayout inner = new LinearLayout(this); inner.setOrientation(LinearLayout.VERTICAL);
+        inner.setPadding(dp(this, 14), dp(this, 6), dp(this, 14), dockPad());
+        sv.addView(inner, new ScrollView.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        footprintBody.addView(sv, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        java.util.List<FootItem> all = footprintsSorted();
+        int okN = 0, failN = 0;
+        for (FootItem it : all) { if ("ok".equals(it.status)) okN++; else if ("fail".equals(it.status)) failN++; }
+        LinearLayout sumCard = new LinearLayout(this); sumCard.setOrientation(LinearLayout.VERTICAL);
+        sumCard.setBackground(glassTintDrawable(16, false)); sumCard.setClipToOutline(true); glassClip(sumCard, 16, false);
+        sumCard.setPadding(dp(this, 14), dp(this, 12), dp(this, 14), dp(this, 12));
+        inner.addView(sumCard, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        sumCard.addView(tvW(this, all.isEmpty() ? "还没有足迹" : ("共 " + all.size() + " 条 · 成功 " + okN + " · 拒绝 " + failN), 14, colText(), 600));
+        sumCard.addView(tv(this, "记录申请、开卡、提额这些持卡事件，只存本机，不抓银行数据", 11.5f, colText2(), false));
+        TextView addBtn = tv(this, "+ 添加一条", 14, Color.WHITE, true); addBtn.setGravity(Gravity.CENTER);
+        addBtn.setPadding(0, dp(this, 12), 0, dp(this, 12)); addBtn.setBackground(roundRect(accentColor(), 12, this));
+        LinearLayout.LayoutParams abLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT); abLp.topMargin = dp(this, 12);
+        inner.addView(addBtn, abLp);
+        addBtn.setOnClickListener(v -> { haptic(); openFootprintForm(null); });
+        // 筛选：类型 / 状态两组
+        TextView f1 = tvW(this, "按类型", 12.5f, colText2(), 600);
+        LinearLayout.LayoutParams f1Lp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT); f1Lp.topMargin = dp(this, 14);
+        inner.addView(f1, f1Lp);
+        LinearLayout tRow = new LinearLayout(this); tRow.setOrientation(LinearLayout.HORIZONTAL);
+        LinearLayout.LayoutParams tRowLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT); tRowLp.topMargin = dp(this, 6);
+        inner.addView(tRow, tRowLp);
+        TextView tAll = footFilterChip("全部", footFilterType.isEmpty());
+        tAll.setOnClickListener(v -> { haptic(); footFilterType = ""; buildFootprintBody(); });
+        tRow.addView(tAll, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        for (int i = 0; i < FOOT_TYPE_VALS.length; i++) {
+            final String val = FOOT_TYPE_VALS[i];
+            TextView c = footFilterChip(FOOT_TYPE_LABELS[i], val.equals(footFilterType));
+            LinearLayout.LayoutParams clp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT); clp.leftMargin = dp(this, 6);
+            c.setLayoutParams(clp);
+            c.setOnClickListener(v -> { haptic(); footFilterType = val.equals(footFilterType) ? "" : val; buildFootprintBody(); });
+            tRow.addView(c);
+        }
+        TextView f2 = tvW(this, "按结果", 12.5f, colText2(), 600);
+        LinearLayout.LayoutParams f2Lp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT); f2Lp.topMargin = dp(this, 10);
+        inner.addView(f2, f2Lp);
+        LinearLayout sRow = new LinearLayout(this); sRow.setOrientation(LinearLayout.HORIZONTAL);
+        LinearLayout.LayoutParams sRowLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT); sRowLp.topMargin = dp(this, 6);
+        inner.addView(sRow, sRowLp);
+        TextView sAll = footFilterChip("全部", footFilterStatus.isEmpty());
+        sAll.setOnClickListener(v -> { haptic(); footFilterStatus = ""; buildFootprintBody(); });
+        sRow.addView(sAll, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        for (int i = 0; i < FOOT_STATUS_VALS.length; i++) {
+            final String val = FOOT_STATUS_VALS[i];
+            TextView c = footFilterChip(FOOT_STATUS_LABELS[i], val.equals(footFilterStatus));
+            LinearLayout.LayoutParams clp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT); clp.leftMargin = dp(this, 6);
+            c.setLayoutParams(clp);
+            c.setOnClickListener(v -> { haptic(); footFilterStatus = val.equals(footFilterStatus) ? "" : val; buildFootprintBody(); });
+            sRow.addView(c);
+        }
+        java.util.List<FootItem> items = new ArrayList<>();
+        for (FootItem it : all) {
+            if (!footFilterType.isEmpty() && !footFilterType.equals(it.type)) continue;
+            if (!footFilterStatus.isEmpty() && !footFilterStatus.equals(it.status)) continue;
+            items.add(it);
+        }
+        TextView sec = tvW(this, "时间线 · " + items.size() + " 条（日期新到旧）", 13, colText2(), 600);
+        LinearLayout.LayoutParams secLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT); secLp.topMargin = dp(this, 16); secLp.bottomMargin = dp(this, 4);
+        inner.addView(sec, secLp);
+        if (items.isEmpty()) {
+            LinearLayout em = new LinearLayout(this); em.setOrientation(LinearLayout.VERTICAL);
+            em.setBackground(roundRect(colSurface(), 14, this)); em.setPadding(dp(this, 16), dp(this, 22), dp(this, 16), dp(this, 22));
+            em.addView(tv(this, all.isEmpty() ? "还没有足迹。点上方添加，记下第一次申请、开卡或提额。" : "当前筛选下没有记录，换个类型或结果看看。", 13, colText2(), false));
+            inner.addView(em, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+            return;
+        }
+        for (final FootItem it : items) {
+            LinearLayout card = new LinearLayout(this); card.setOrientation(LinearLayout.VERTICAL);
+            card.setBackground(glassTintDrawable(16, false)); card.setClipToOutline(true); glassClip(card, 16, false);
+            try { if (Build.VERSION.SDK_INT >= 21) card.setElevation(dp(this, 4)); } catch (Throwable ignored) {}
+            card.setPadding(dp(this, 14), dp(this, 12), dp(this, 14), dp(this, 12));
+            LinearLayout.LayoutParams cardLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT); cardLp.topMargin = dp(this, 10);
+            inner.addView(card, cardLp);
+            LinearLayout top = new LinearLayout(this); top.setOrientation(LinearLayout.HORIZONTAL); top.setGravity(Gravity.CENTER_VERTICAL);
+            card.addView(top);
+            top.addView(tvW(this, footTypeLabel(it.type) + (it.cardName == null || it.cardName.isEmpty() ? "" : (" · " + it.cardName)), 15, colText(), 700), new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+            TextView bd = tv(this, footStatusLabel(it.status), 11.5f, Color.WHITE, true);
+            bd.setGravity(Gravity.CENTER); bd.setPadding(dp(this, 9), dp(this, 5), dp(this, 9), dp(this, 5));
+            bd.setBackground(roundRect(footStatusColor(it.status), 999, this));
+            top.addView(bd);
+            StringBuilder meta = new StringBuilder();
+            meta.append(it.date == null || it.date.isEmpty() ? "未设日期" : it.date);
+            boolean isLimit = "limit".equals(it.type) || "limitTemp".equals(it.type);
+            if (isLimit && it.amountFrom != null && !it.amountFrom.isEmpty() && it.amountTo != null && !it.amountTo.isEmpty()) {
+                meta.append(" · ¥").append(it.amountFrom).append(" → ¥").append(it.amountTo);
+            } else if (it.amountTo != null && !it.amountTo.isEmpty()) {
+                meta.append(" · ¥").append(it.amountTo);
+            }
+            if (it.note != null && !it.note.isEmpty()) meta.append(" · ").append(it.note);
+            TextView mv = tv(this, meta.toString(), 12, colText2(), false); bodyLH(mv);
+            LinearLayout.LayoutParams mvLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT); mvLp.topMargin = dp(this, 6);
+            card.addView(mv, mvLp);
+            TextView edit = tv(this, "点此编辑", 11.5f, accentColor(), true);
+            LinearLayout.LayoutParams edLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT); edLp.topMargin = dp(this, 6);
+            card.addView(edit, edLp);
+            card.setOnClickListener(v -> { haptic(); openFootprintForm(it); });
+        }
+    }
+    void openFootprintForm(final FootItem edit) {
+        closeFootprintFormNow();
+        final boolean isNew = edit == null;
+        final FootItem draft = new FootItem();
+        if (isNew) { draft.id = null; draft.cardName = ""; draft.type = "apply"; draft.status = "ok"; draft.date = simkeepTodayStr(); draft.amountFrom = ""; draft.amountTo = ""; draft.note = ""; }
+        else { draft.id = edit.id; draft.cardName = edit.cardName; draft.type = edit.type; draft.status = edit.status; draft.date = edit.date; draft.amountFrom = edit.amountFrom; draft.amountTo = edit.amountTo; draft.note = edit.note; }
+        final String[] typeSel = {draft.type == null || draft.type.isEmpty() ? "other" : draft.type};
+        final String[] statusSel = {draft.status == null || draft.status.isEmpty() ? "pending" : draft.status};
+        hideChrome();
+        final FrameLayout sheet = new FrameLayout(this);
+        View shade = new View(this); shade.setBackgroundColor(Color.argb(102, 0, 0, 0));
+        shade.setOnClickListener(v -> closeFootprintForm());
+        sheet.addView(shade, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        LinearLayout card = new LinearLayout(this); card.setOrientation(LinearLayout.VERTICAL);
+        GradientDrawable cg = new GradientDrawable(); cg.setColor(colSheet()); cg.setStroke(dp(this, 1), Color.argb(140, 255, 255, 255));
+        float formR = dp(this, 22); cg.setCornerRadii(new float[]{formR, formR, formR, formR, 0, 0, 0, 0});
+        card.setBackground(cg);
+        if (Build.VERSION.SDK_INT >= 21) { card.setElevation(dp(this, 24)); topSheetClip(card, 22, this); }
+        card.setOnClickListener(v -> {});
+        ScrollView sv = new ScrollView(this); thinScrollbar(sv);
+        LinearLayout form = new LinearLayout(this); form.setOrientation(LinearLayout.VERTICAL);
+        form.setPadding(dp(this, 18), dp(this, 18), dp(this, 18), dp(this, 18) + navBarH());
+        sv.addView(form); card.addView(sv, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        form.addView(tv(this, isNew ? "添加足迹" : "编辑足迹", 17, colText(), true));
+        form.addView(customFormLabel("卡片名称*"));
+        final EditText inCard = customInput("如：招商银行经典白 / 工行奋斗卡", draft.cardName, 30); form.addView(inCard);
+        form.addView(customFormLabel("事件类型"));
+        LinearLayout typeRow = new LinearLayout(this); typeRow.setOrientation(LinearLayout.HORIZONTAL); form.addView(typeRow);
+        final java.util.List<TextView> typeChips = new ArrayList<>();
+        final Runnable[] paintType = new Runnable[1];
+        paintType[0] = () -> { for (int i = 0; i < typeChips.size(); i++) paintChoiceChip(typeChips.get(i), FOOT_TYPE_VALS[i].equals(typeSel[0])); };
+        for (int i = 0; i < FOOT_TYPE_VALS.length; i++) {
+            final String cv = FOOT_TYPE_VALS[i];
+            TextView b = formOrgChip(FOOT_TYPE_LABELS[i]);
+            b.setOnClickListener(v -> { haptic(); typeSel[0] = cv; paintType[0].run(); });
+            LinearLayout.LayoutParams blp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT); if (i > 0) blp.leftMargin = dp(this, 6);
+            b.setLayoutParams(blp); typeChips.add(b); typeRow.addView(b);
+        }
+        paintType[0].run();
+        form.addView(customFormLabel("结果"));
+        LinearLayout stRow = new LinearLayout(this); stRow.setOrientation(LinearLayout.HORIZONTAL); form.addView(stRow);
+        final java.util.List<TextView> stChips = new ArrayList<>();
+        final Runnable[] paintSt = new Runnable[1];
+        paintSt[0] = () -> { for (int i = 0; i < stChips.size(); i++) paintChoiceChip(stChips.get(i), FOOT_STATUS_VALS[i].equals(statusSel[0])); };
+        for (int i = 0; i < FOOT_STATUS_VALS.length; i++) {
+            final String cv = FOOT_STATUS_VALS[i];
+            TextView b = formOrgChip(FOOT_STATUS_LABELS[i]);
+            b.setOnClickListener(v -> { haptic(); statusSel[0] = cv; paintSt[0].run(); });
+            LinearLayout.LayoutParams blp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT); if (i > 0) blp.leftMargin = dp(this, 6);
+            b.setLayoutParams(blp); stChips.add(b); stRow.addView(b);
+        }
+        paintSt[0].run();
+        form.addView(customFormLabel("日期（yyyy-MM-dd）"));
+        final EditText inDate = customInput("2026-10-04", draft.date, 10); form.addView(inDate);
+        form.addView(customFormLabel("变更前金额（提额时填，可空）"));
+        final EditText inFrom = customInput("如：82000", draft.amountFrom, 12); form.addView(inFrom);
+        form.addView(customFormLabel("变更后金额 / 当前额度（可空）"));
+        final EditText inTo = customInput("如：88000", draft.amountTo, 12); form.addView(inTo);
+        form.addView(customFormLabel("备注（可空）"));
+        final EditText inNote = customInput("如：电话申请 / App 自助提额", draft.note, 40); form.addView(inNote);
+        LinearLayout acts = new LinearLayout(this); acts.setOrientation(LinearLayout.HORIZONTAL);
+        LinearLayout.LayoutParams actLp2 = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT); actLp2.topMargin = dp(this, 16);
+        form.addView(acts, actLp2);
+        Button cancel = new Button(this); cancel.setText("取消"); cancel.setTextSize(15); cancel.setAllCaps(false);
+        cancel.setBackground(roundRect(Color.rgb(0xF2, 0xF3, 0xF7), 14, this));
+        cancel.setOnClickListener(v -> { haptic(); closeFootprintForm(); });
+        acts.addView(cancel, new LinearLayout.LayoutParams(0, dp(this, 48), 1f));
+        Button save = new Button(this); save.setText("保存"); save.setTextSize(15); save.setAllCaps(false); save.setTextColor(Color.WHITE);
+        GradientDrawable saveBg = new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM, new int[]{Color.rgb(0x0A, 0x84, 0xFF), Color.rgb(0x00, 0x66, 0xE6)}); saveBg.setCornerRadius(dp(this, 14)); save.setBackground(saveBg);
+        LinearLayout.LayoutParams saveLp = new LinearLayout.LayoutParams(0, dp(this, 48), 2f); saveLp.leftMargin = dp(this, 10);
+        acts.addView(save, saveLp);
+        save.setOnClickListener(v -> {
+            haptic();
+            String cn = inCard.getText().toString().trim();
+            String dt = inDate.getText().toString().trim();
+            if (cn.isEmpty()) { showFloatToast("请填卡片名称"); inCard.requestFocus(); return; }
+            if (simkeepParseDate(dt) == null) { showFloatToast("日期请用 yyyy-MM-dd"); inDate.requestFocus(); return; }
+            java.util.List<FootItem> items = loadFootprints();
+            if (isNew) {
+                FootItem ni = new FootItem(); ni.id = "foot-" + System.currentTimeMillis();
+                ni.cardName = cn; ni.type = typeSel[0]; ni.status = statusSel[0]; ni.date = dt;
+                ni.amountFrom = inFrom.getText().toString().trim(); ni.amountTo = inTo.getText().toString().trim(); ni.note = inNote.getText().toString().trim();
+                items.add(ni); showFloatToast("已添加足迹");
+            } else {
+                for (FootItem x : items) if (x.id.equals(edit.id)) { x.cardName = cn; x.type = typeSel[0]; x.status = statusSel[0]; x.date = dt; x.amountFrom = inFrom.getText().toString().trim(); x.amountTo = inTo.getText().toString().trim(); x.note = inNote.getText().toString().trim(); break; }
+                showFloatToast("已保存");
+            }
+            saveFootprints(items); closeFootprintForm(); buildFootprintBody();
+        });
+        if (!isNew) {
+            TextView del = tv(this, "删除这条足迹", 13, Color.rgb(0xE0, 0x31, 0x31), true); del.setGravity(Gravity.CENTER);
+            LinearLayout.LayoutParams delLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT); delLp.topMargin = dp(this, 12);
+            form.addView(del, delLp);
+            del.setOnClickListener(v -> {
+                haptic();
+                java.util.List<FootItem> items = loadFootprints();
+                FootItem rm = null; for (FootItem x : items) if (x.id.equals(edit.id)) { rm = x; break; }
+                if (rm != null) { items.remove(rm); saveFootprints(items); }
+                closeFootprintForm(); buildFootprintBody(); showFloatToast("已删除");
+            });
+        }
+        int sw = getResources().getDisplayMetrics().widthPixels;
+        int maxH = (int) (getResources().getDisplayMetrics().heightPixels * 0.82);
+        card.measure(View.MeasureSpec.makeMeasureSpec(sw - dp(this, 24), View.MeasureSpec.EXACTLY), View.MeasureSpec.makeMeasureSpec(maxH, View.MeasureSpec.AT_MOST));
+        FrameLayout.LayoutParams clp = new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, Math.min(card.getMeasuredHeight(), maxH));
+        clp.gravity = Gravity.BOTTOM; clp.leftMargin = dp(this, 12); clp.rightMargin = dp(this, 12); clp.bottomMargin = 0;
+        FrameLayout wrap = new FrameLayout(this);
+        View glass = glassLayer(card, 22, false); topSheetClip(glass, 22, this);
+        wrap.addView(glass, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, clp.height + dp(this, 22)));
+        wrap.addView(card, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        sheet.addView(wrap, clp);
+        content.addView(sheet, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        footprintFormSheet = sheet;
+        animShadeIn(shade); animSheetIn(wrap);
+    }
+    void closeFootprintFormNow() {
+        View s = footprintFormSheet; footprintFormSheet = null; footprintFormClosing = false;
+        if (s != null && s.getParent() != null) ((ViewGroup) s.getParent()).removeView(s);
+    }
+    void closeFootprintForm() {
+        final View sheet = footprintFormSheet;
+        if (sheet == null || footprintFormClosing) return;
+        footprintFormClosing = true; hideKeyboardNow();
+        if (sheet.getParent() != null) {
+            View wrap = sheet instanceof ViewGroup && ((ViewGroup) sheet).getChildCount() > 1 ? ((ViewGroup) sheet).getChildAt(((ViewGroup) sheet).getChildCount() - 1) : null;
+            if (wrap != null) {
+                animSheetOut(wrap, () -> { closeFootprintFormNow(); if (footprintView == null) restoreChrome(); });
+                if (sheet instanceof ViewGroup && ((ViewGroup) sheet).getChildCount() > 0) animShadeOut(((ViewGroup) sheet).getChildAt(0));
+                return;
+            }
+            ((ViewGroup) sheet.getParent()).removeView(sheet);
+        }
+        footprintFormSheet = null; footprintFormClosing = false;
+        if (footprintView == null) restoreChrome();
+    }
+
     void stopShowcaseDrift() {
         if (showcaseDriftTask != null && mainHandler != null) mainHandler.removeCallbacks(showcaseDriftTask);
         showcaseDriftTask = null;
@@ -13419,6 +13793,9 @@ public class MainActivity extends Activity {
         switchRow(page, "订阅跟随", "订阅扣款日与金额跟随，关掉后入口不出现", prefs == null || prefs.getBoolean("subfollow_enabled", true), on -> {
             if (prefs != null) prefs.edit().putBoolean("subfollow_enabled", on).apply(); haptic(); rebuildPages();
         });
+        switchRow(page, "玩卡足迹", "申请 / 开卡 / 提额等持卡事件时间线，关掉后入口不出现", prefs == null || prefs.getBoolean("footprint_enabled", true), on -> {
+            if (prefs != null) prefs.edit().putBoolean("footprint_enabled", on).apply(); haptic(); rebuildPages();
+        });
         switchRow(page, "持卡总览", "我的卡片页的额度汇总与还款日历", prefs == null || prefs.getBoolean("owncard_enabled", true), on -> {
             if (prefs != null) prefs.edit().putBoolean("owncard_enabled", on).apply(); haptic(); rebuildPages();
         });
@@ -13721,6 +14098,8 @@ public class MainActivity extends Activity {
 
     @Override
     public void onBackPressed() {
+        if (footprintFormSheet != null) { closeFootprintForm(); return; }
+        if (footprintView != null) { closeFootprint(); return; }
         if (subfollowFormSheet != null) { closeSubFollowForm(); return; }
         if (subfollowView != null) { closeSubFollow(); return; }
         if (acctPickerView != null) { closeAcctClassPicker(); return; }
