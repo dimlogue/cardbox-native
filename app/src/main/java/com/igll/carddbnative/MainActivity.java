@@ -1254,6 +1254,7 @@ public class MainActivity extends Activity {
         EN_TXT.put("已自动停用（异常后回落半透，不影响使用），打开可重试", "Auto-disabled after an error (fell back to translucent). Turn on to retry");
         EN_TXT.put("已关闭，玻璃件使用静态半透染色", "Off — glass parts use a static translucent tint");
         EN_TXT.put("已开启，底栏与弹窗按身后内容实时磨砂", "On — dock and popups frost what's behind them in real time");
+        EN_TXT.put("硬件玻璃（实验）", "Hardware Glass (Beta)");
         EN_TXT.put("启动时自动检测更新", "Check for Updates at Launch");
         EN_TXT.put("开启只检测并提示，不自动应用；关闭则仅手动检查", "Only checks and notifies, never auto-applies; off = manual checks only");
         EN_TXT.put("最近一次崩溃记录", "Latest Crash Log"); EN_TXT.put("复制记录", "Copy Log"); EN_TXT.put("清除记录", "Clear Log");
@@ -1897,6 +1898,14 @@ public class MainActivity extends Activity {
         return iv;
     }
 
+    /** Q108 试点件构造：与 glassLayer 同路同视觉，仅多打一个硬件试点标（底栏＋⋯
+     * 菜单）；硬件关/退/低版本时 onDraw 自动回落软件路，构造侧无需分叉。 */
+    ImageView glassLayerHw(View host, float radiusDp, boolean live) {
+        ImageView iv = glassLayer(host, radiusDp, live);
+        if (iv instanceof GlassBackdropView) ((GlassBackdropView) iv).hwPilot = true;
+        return iv;
+    }
+
     /** Q90 抽出：玻璃层的圆角裁切 + 边缘高光（旧快照层与新背板层同一套视觉口径）。 */
     void setupGlassLayerVisual(ImageView iv, float radiusDp) {
         iv.setScaleType(ImageView.ScaleType.FIT_XY);
@@ -2082,6 +2091,12 @@ public class MainActivity extends Activity {
      * 自然恢复跟随，且既有 650ms 停稳防抖会强制重抓一帧对齐。强制抓图（切页/开关窗/
      * 设置变更）走 captureBackdrop() 直调，不受冻结影响。 */
     void captureBackdropTick() {
+        // Q108：硬件背板随 preDraw 逐帧录制（实时跟随正是实验目的；录制函数自带
+        // helloOpen/开关/16ms 地板守卫）。但 ⋯ 菜单开窗冻结（Q102）必须尊重：开窗
+        // 那一帧已由 captureBackdrop 末尾的结构性录制存好，动画期间不再重录，否则
+        // 菜单玻璃会把开窗动画中的自身染色面录进节点自引用。节点内容即本帧场景，
+        // 试点件在本帧 onDraw 画出的就是当前帧，无旧帧残影。
+        if (!moreMenuBackdropFrozen) recordHwBackdrop();
         if (helloOpen) return; // Q99：你好页入场动画全程冻结背板采样，不与飞入抢主线程
         if (moreMenuBackdropFrozen) return; // Q102：⋯ 菜单开窗期间背板冻结（开窗瞬间已同步抓存静止帧），不许动画期逐帧整屏重抓＋三遍模糊抖背景
         if (android.os.SystemClock.uptimeMillis() - lastScrollEventMs < 200) return;
@@ -2132,6 +2147,7 @@ public class MainActivity extends Activity {
      * Q99：live 件采样文档条带（按当前 scrollY 取文档行，同帧跟随）；frozen 件与
      * 条带无源时采样屏幕快照。两种取景共用同一组「平移→1/scale 放大」对位数学。 */
     class GlassBackdropView extends ImageView {
+        boolean hwPilot = false; // Q108：硬件玻璃实验试点件（底栏/⋯菜单），onDraw 首行分流
         final int[] rl2 = new int[2];
         final int[] ml2 = new int[2];
         final int[] sl2 = new int[2];
@@ -2147,6 +2163,19 @@ public class MainActivity extends Activity {
                 // Q92 硬兜底：先把画布裁到本层自身 bounds——无论宿主布局如何异常，
                 // 玻璃取样层物理上不可能画出自身矩形之外（防再次全屏糊层事故）。
                 canvas.clipRect(0, 0, Math.max(1, getWidth()), Math.max(1, getHeight()));
+                // Q108 硬件试点分流：节点与本层同一组对位数学（平移→1/scale 放大），
+                // 只是取景源换成 RenderNode（模糊＋饱和在录制期由节点 RenderEffect 承担）。
+                // 首帧成功画完即写 stable——原生崩若发生在本行之内，stable 永不落盘，
+                // 下次冷启由 initHwGlassGuard 识别并自退，本层此后恒走软件路。
+                if (hwPilot && hwGlassEnabled && !hwGlassDead && hwNodeValid && hwNode != null
+                    && Build.VERSION.SDK_INT >= 31) {
+                    canvas.translate(-(ml2[0] - rl2[0]), -(ml2[1] - rl2[1]));
+                    canvas.scale(1f / HW_BACKDROP_SCALE, 1f / HW_BACKDROP_SCALE);
+                    canvas.drawRenderNode(hwNode);
+                    canvas.restore();
+                    markHwStable();
+                    return;
+                }
                 Bitmap band = bandBmp;
                 ScrollView bsv = bandScroll();
                 boolean bandOk = "live".equals(getTag()) && band != null && !band.isRecycled()
@@ -2196,6 +2225,177 @@ public class MainActivity extends Activity {
             rootView.getViewTreeObserver().addOnPreDrawListener(backdropPreDraw);
             backdropHookInstalled = true;
         } catch (Throwable ignored) {}
+    }
+
+    // ---------- Q108 硬件玻璃实验（2.22，用户 22:03 授权单试，崩则自退） ----------
+    // 背景定案：Q90 的 RenderNode＋RenderEffect 实时背板在用户机（vivo X200 Pro mini /
+    // Android 15）HWUI 原生层崩溃、Java catch 不住、失败计数永不落盘永不自愈（Q96 定案，
+    // 现行玻璃自 Q97 起走软件背板安全链）。本版只给两个试点件换实现通道同参数试水：
+    // 底栏（live）＋设置 ⋯ 菜单（frozen），其余玻璃件与三档四轴数值（BACKDROP_BLUR_R /
+    // BACKDROP_SAT / glassTintScale / glassWashScale）一律不动；硬件路模糊半径由软件档
+    // 同源折算（0.20 采样 px → 全分辨率 σ → 节点采样 px），饱和用同一组 BACKDROP_SAT。
+    // 自退护栏（替代 catch，原生崩 Java 记不上账）：双标记法——首帧真正录制前同步写
+    // glass_hw_armed=true＋glass_hw_stable=false（commit，必须赶在 HWUI 出事前落盘）；
+    // 首帧 drawRenderNode 成功返回后写 glass_hw_stable=true。冷启 initHwGlassGuard 若见
+    // armed && !stable，即认定上一会话死在硬件路上：置 glass_hw_dead、关实验开关、留
+    // 时间戳 glass_hw_note（设置行可查），全程回落软件链——「崩一次、重开即愈」。
+    // 手动开关「硬件玻璃（实验）」（glass_hw_exp，默认开）随时可关：试点件 onDraw 逐帧
+    // 查开关，关掉下一帧即回软件路（即时生效）；自动退回后重新打开＝清 dead 再试一轮。
+    static final float HW_BACKDROP_SCALE = 0.5f; // 节点录制缩放（软件链 0.20；硬件路取 0.5 换细腻度，仍非全分辨率）
+    boolean hwGlassEnabled = false;   // 本进程硬件通道可用（启动护栏判定结果）
+    boolean hwGlassDead = false;      // 已自动退回（或本进程判定不可用）
+    boolean hwArmWritten = false;     // 本进程已写过 armed（懒写：推迟到首帧录制前，缩小误判窗）
+    boolean hwStableMarked = false;   // 本进程已写过 stable
+    boolean hwJustRetreated = false;  // 本次冷启刚发生自动退回（待 UI 就绪后提示一次）
+    String hwGlassNote = "";          // 自动退回时间戳（glass_hw_note，设置行可查）
+    android.graphics.RenderNode hwNode = null;
+    boolean hwNodeValid = false;
+    float hwEffectLevel = -1f;        // 节点 RenderEffect 已按哪档建（-1 未建）
+    long hwLastRecordMs = 0;
+    boolean hwRecording = false;
+
+    /** 冷启护栏（onCreate 读完玻璃 prefs 后调用，先于任何页面构建）：
+     * 上一会话 armed 而无 stable ＝判定硬件路原生崩，永久关闭本实验（直到用户手动
+     * 在设置里重新打开再试），并落时间戳留痕。本函数不写 armed——武装推迟到首帧
+     * 录制前一刻（recordHwBackdrop 懒写），把「开了 App 没碰玻璃就被杀」的误判窗压到
+     * 约一帧。API<31 无硬件路，实验恒关。 */
+    void initHwGlassGuard() {
+        hwGlassEnabled = false;
+        try { hwGlassNote = prefs == null ? "" : prefs.getString("glass_hw_note", ""); } catch (Throwable ignored) { hwGlassNote = ""; }
+        if (Build.VERSION.SDK_INT < 31 || prefs == null) { hwGlassDead = true; return; }
+        try {
+            hwGlassDead = prefs.getBoolean("glass_hw_dead", false);
+            boolean exp = prefs.getBoolean("glass_hw_exp", true); // 2.22 实验载体：默认开
+            if (hwGlassDead || !exp) return;
+            boolean armed = prefs.getBoolean("glass_hw_armed", false);
+            boolean stable = prefs.getBoolean("glass_hw_stable", false);
+            if (armed && !stable) {
+                hwGlassDead = true;
+                hwJustRetreated = true;
+                hwGlassNote = new java.text.SimpleDateFormat("yyyy-MM-dd HH:mm", java.util.Locale.US).format(new java.util.Date());
+                prefs.edit().putBoolean("glass_hw_dead", true)
+                    .putBoolean("glass_hw_exp", false)
+                    .putBoolean("glass_hw_armed", false)
+                    .putString("glass_hw_note", hwGlassNote)
+                    .commit(); // 同步落盘：退回决定不许丢
+                return;
+            }
+            hwGlassEnabled = true;
+        } catch (Throwable ignored) { hwGlassEnabled = false; }
+    }
+
+    void markHwStable() {
+        if (hwStableMarked) return;
+        hwStableMarked = true;
+        try { if (prefs != null) prefs.edit().putBoolean("glass_hw_stable", true).commit(); } catch (Throwable ignored) {}
+    }
+
+    /** 节点效果链按当前档重建（三档数值与软件链同源，不新设参数）：
+     * 模糊半径＝BACKDROP_BLUR_R（0.20 采样 px）÷0.20 得全分辨率 σ 量级，再乘节点采样
+     * HW_BACKDROP_SCALE 换回节点 px；饱和直接用 BACKDROP_SAT 同档。档位未变不重建。 */
+    boolean updateHwEffect() {
+        if (hwNode == null || Build.VERSION.SDK_INT < 31) return false;
+        if (hwEffectLevel == glassLevel) return false;
+        hwEffectLevel = glassLevel;
+        try {
+            int lv = Math.max(0, Math.min(2, glassLevel));
+            float r = (BACKDROP_BLUR_R[lv] / BACKDROP_SCALE) * HW_BACKDROP_SCALE;
+            ColorMatrix cm = new ColorMatrix();
+            cm.setSaturation(BACKDROP_SAT[lv]);
+            android.graphics.RenderEffect sat =
+                android.graphics.RenderEffect.createColorFilterEffect(new ColorMatrixColorFilter(cm));
+            android.graphics.RenderEffect blur =
+                android.graphics.RenderEffect.createBlurEffect(r, r, sat, android.graphics.Shader.TileMode.CLAMP);
+            hwNode.setRenderEffect(blur);
+            return true;
+        } catch (Throwable t) { return false; }
+    }
+
+    /** 硬件背板录制：玻璃宿主整面让开后把根视图以 HW_BACKDROP_SCALE 录进共享
+     * RenderNode（preDraw 钩子与结构性抓图点调用，每帧至多一次）。Java 级异常只废
+     * 这一帧、试点件自动回落软件路，不计数关停——原生崩靠启动期双标记自退，不在此
+     * 处理。录制成功且节点由无效转有效（或效果换档）时才让试点件重绘，避免
+     * 「录制→invalidate→再录制」自激空转：常态重绘由滚动/建页的既有失效驱动。 */
+    void recordHwBackdrop() {
+        if (!hwGlassEnabled || hwGlassDead || glassDisabled || helloOpen || rootView == null) return;
+        if (Build.VERSION.SDK_INT < 31 || hwRecording || backdropCapturing) return;
+        int rw = rootView.getWidth(), rh = rootView.getHeight();
+        if (rw <= 0 || rh <= 0) return;
+        long now = android.os.SystemClock.uptimeMillis();
+        if (now - hwLastRecordMs < 16) return; // 至多每帧一次，防连环重绘自激
+        hwLastRecordMs = now;
+        if (!hwArmWritten) {
+            // 武装：必须在第一次真正碰 HWUI 之前同步落盘（commit），崩在录制/绘制
+            // 任一环，下次冷启 armed && !stable 即被识别为硬件崩并自退。
+            hwArmWritten = true;
+            try { if (prefs != null) prefs.edit().putBoolean("glass_hw_armed", true).putBoolean("glass_hw_stable", false).commit(); } catch (Throwable ignored) {}
+        }
+        java.util.Map<View, Integer> saved = new java.util.HashMap<>();
+        hwRecording = true;
+        boolean wasValid = hwNodeValid;
+        try {
+            for (ImageView iv : new java.util.ArrayList<>(glassViews)) {
+                View h = glassHosts.get(iv);
+                View t = h != null ? h : iv;
+                if (t != null && t.isAttachedToWindow() && !saved.containsKey(t)) {
+                    saved.put(t, t.getVisibility());
+                    t.setVisibility(View.INVISIBLE);
+                }
+            }
+            int bw = Math.max(1, Math.round(rw * HW_BACKDROP_SCALE));
+            int bh = Math.max(1, Math.round(rh * HW_BACKDROP_SCALE));
+            if (hwNode == null) hwNode = new android.graphics.RenderNode("cardboxHwGlass");
+            hwNode.setPosition(0, 0, bw, bh);
+            android.graphics.Canvas rc = hwNode.beginRecording(bw, bh);
+            rc.drawColor(colBg()); // 宿主让开的空位以页底色垫齐（与 captureBackdrop 同口径）
+            rc.scale(HW_BACKDROP_SCALE, HW_BACKDROP_SCALE);
+            rootView.draw(rc);
+            hwNode.endRecording();
+            boolean effectChanged = updateHwEffect();
+            hwNodeValid = true;
+            if (!wasValid || effectChanged) invalidateHwPilots();
+        } catch (Throwable t) {
+            hwNodeValid = false; // 只废这一帧：试点件回落软件背板/染色，不拖死全局（原生崩另有启动护栏）
+        } finally {
+            for (java.util.Map.Entry<View, Integer> e : saved.entrySet()) {
+                try { e.getKey().setVisibility(e.getValue()); } catch (Throwable ignored) {}
+            }
+            hwRecording = false;
+        }
+    }
+
+    void invalidateHwPilots() {
+        try {
+            for (ImageView iv : new java.util.ArrayList<>(glassViews)) {
+                if (iv instanceof GlassBackdropView && ((GlassBackdropView) iv).hwPilot) iv.invalidate();
+            }
+        } catch (Throwable ignored) {}
+    }
+
+    /** 实验开关即时落地：开→立刻录一帧并让试点件重绘；关→试点件下一帧 onDraw 自查
+     * 开关自动回落软件路，本函数只需补一帧软件背板并令其重绘，不必重建任何页。 */
+    void applyHwGlassChange() {
+        if (hwGlassEnabled) {
+            recordHwBackdrop();
+        } else {
+            hwNodeValid = false;
+            if (!glassDisabled) { backdropLastCapMs = 0; captureBackdrop(); }
+        }
+        invalidateHwPilots();
+    }
+
+    /** 设置行副文案：退回留痕（时间戳）在此可查。 */
+    String hwGlassDesc() {
+        if (Build.VERSION.SDK_INT < 31) return isEn() ? "Needs Android 12+ for the hardware path" : "需 Android 12 以上才有硬件通道";
+        if (glassDisabled) return isEn() ? "Glass is off — turn Glass Effect on first" : "玻璃效果已关闭，先打开上面的玻璃效果";
+        if (hwGlassDead && hwJustRetreated || (hwGlassDead && !hwGlassNote.isEmpty() && !hwGlassEnabled)) {
+            return isEn() ? "Crashed last time — auto-reverted to safe glass (" + hwGlassNote + "). Turn on to retry"
+                          : "上次开启后闪退，已自动退回安全玻璃（" + hwGlassNote + "），重新打开可再试";
+        }
+        if (hwGlassEnabled) return isEn() ? "Beta: dock & menus use system real-time blur. May crash; reverts automatically on relaunch"
+                                         : "实验中：底栏与菜单走系统硬件实时模糊，可能闪退，闪退后重开自动退回";
+        return isEn() ? "Off — all glass uses the safe software blur"
+                      : "已关闭，全部玻璃走安全软件磨砂";
     }
 
     /** 手写盒式模糊（三遍滑动窗均值近似高斯，边缘钳制取样）；直接在像素数组上原地进行。 */
@@ -2308,6 +2508,10 @@ public class MainActivity extends Activity {
             }
             backdropCapturing = false;
         }
+        // Q108：结构性抓图点（切页/开窗/设置变更经此或 refreshLiveGlass 至此）同步录
+        // 一帧硬件背板——⋯ 菜单开窗瞬间 captureBackdrop 先行、菜单玻璃随后建层首绘，
+        // 节点里存的正是开窗前那一帧静止场景（frozen 语义与软件路一致）。
+        recordHwBackdrop();
         // 新背板帧落地：让已上屏的玻璃层按新帧重绘（位置对位在各自 onDraw 内按当前坐标算）
         try {
             for (ImageView iv : new java.util.ArrayList<>(glassViews)) {
@@ -3986,6 +4190,7 @@ public class MainActivity extends Activity {
             glassLevel = prefs.getInt("glass_level", 2);
             if (glassLevel < 0 || glassLevel > 2) glassLevel = 2;
         } catch (Throwable ignored) { glassAutoOff = false; glassLevel = 2; }
+        initHwGlassGuard(); // Q108：硬件玻璃实验双标记自退判定（须在任何页面/玻璃件构建之前）
         loadCrashLog();
         installCrashHandler();
         fontMode = prefs.getString("font_mode", "builtin");
@@ -4040,6 +4245,16 @@ public class MainActivity extends Activity {
         showTab("home");
         if (prefs == null || prefs.getBoolean("auto_check_update", true)) checkDataUpdate(false); // Q62: auto only detects
         if (!prefs.getBoolean("welcomed", false) && !prefs.getBoolean("hello_done", false)) showHello(); // Q93：旧欢迎页已删，首启直达「你好」
+        if (hwJustRetreated) {
+            // Q108：本次冷启刚把硬件玻璃自退回安全链——等欢迎页散场后提示一次，
+            // 让用户知道不是他的错觉（设置页「硬件玻璃（实验）」行留有时间戳可查）。
+            mainHandler.postDelayed(new Runnable() {
+                @Override public void run() {
+                    if (helloOpen) { mainHandler.postDelayed(this, 1200); return; }
+                    showFloatToast(isEn() ? "Hardware glass crashed — auto-reverted to safe glass" : "硬件玻璃已自动退回安全模式");
+                }
+            }, 3200);
+        }
     }
 
     @Override protected void onResume() {
@@ -4905,7 +5120,7 @@ public class MainActivity extends Activity {
             navLabels.put(key, label);
             navRow.addView(item, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
         }
-        navWrap.addView(glassLayer(navWrap, 26, true), new FrameLayout.LayoutParams(
+        navWrap.addView(glassLayerHw(navWrap, 26, true), new FrameLayout.LayoutParams( // Q108 试点①底栏（live）
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         navWrap.addView(navBar, new FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
@@ -16097,7 +16312,7 @@ public class MainActivity extends Activity {
         final FrameLayout cardWrap = new FrameLayout(this);
         glassClip(cardWrap, 16 + 16, false); // 外框圆角与内卡同心：16+外扩量
         cardWrap.setElevation(dp(this, 18));
-        cardWrap.addView(glassLayer(cardWrap, 32, false), new FrameLayout.LayoutParams(
+        cardWrap.addView(glassLayerHw(cardWrap, 32, false), new FrameLayout.LayoutParams( // Q108 试点②⋯菜单（frozen）
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         // Q106（2.20，用户 21:54 点名双层）：删「玻璃外框＋内嵌白板」——card 不再自带
         // glassWindowTint(16) 近实底内缩 16dp，改由窗级染色以半径 32 铺满整个 cardWrap
@@ -16237,6 +16452,25 @@ public class MainActivity extends Activity {
                 applyGlassEnabledChange();
                 rebuildPages();
             });
+        // Q108（2.22）：硬件玻璃实验开关——本版实验载体默认开；只试点底栏＋⋯菜单两
+        // 件，关掉即时回落软件链（试点件 onDraw 逐帧自查）。自动退回（hwGlassDead）
+        // 时行副文案带时间戳留痕；重新打开＝清 dead＋重置双标记，再试一轮。
+        switchRow(page, "硬件玻璃（实验）", hwGlassDesc(), hwGlassEnabled, on -> {
+            if (on) {
+                hwGlassDead = false;
+                hwArmWritten = false;   // 重新武装：下一帧录制前重写 armed/stable
+                hwStableMarked = false;
+                hwJustRetreated = false;
+                try { prefs.edit().putBoolean("glass_hw_exp", true).putBoolean("glass_hw_dead", false).putString("glass_hw_note", "").apply(); } catch (Throwable ignored) {}
+                hwGlassEnabled = Build.VERSION.SDK_INT >= 31 && !glassDisabled;
+            } else {
+                hwGlassEnabled = false;
+                try { prefs.edit().putBoolean("glass_hw_exp", false).apply(); } catch (Throwable ignored) {}
+            }
+            haptic();
+            applyHwGlassChange();
+            rebuildPages();
+        });
         glassLevelRow(page);
         segRow(page, S("haptic"), new String[][]{{"0",S("haptic_off")},{"1",S("haptic_light")},{"2",S("haptic_mid")},{"3",S("haptic_strong")}}, String.valueOf(hapticLevel), v -> {
             hapticLevel = Integer.parseInt(v); prefs.edit().putInt("haptic_level", hapticLevel).apply(); haptic(); rebuildPages();
