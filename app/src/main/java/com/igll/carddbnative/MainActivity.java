@@ -205,6 +205,7 @@ public class MainActivity extends Activity {
             || filterSheet != null || detailCard != null || cardMenuPop != null
             || customFormSheet != null || customDetailSheet != null || binSheet != null || addSheetView != null
             || extSheet != null || showcaseView != null || simkeepView != null || simkeepFormSheet != null
+            || subfollowView != null || subfollowFormSheet != null
             || placeholderPickerView != null
             || delConfirmSheet != null || updateTipSheet != null || updateConfirmSheet != null;
     }
@@ -1774,6 +1775,18 @@ public class MainActivity extends Activity {
     FrameLayout simkeepBody = null;
     View simkeepFormSheet = null;
     boolean simkeepFormClosing = false;
+    // Q86 订阅与费用跟随：模块自成一块（subfollow_ 前缀），设置「功能启用」可关，关掉入口与界面彻底不出现、不占位。
+    // 数据模板参考：GitHub 开源订阅管理类应用的条目结构（名称/金额/周期/下次扣款日/自动或手动续费/提醒），代码自写；不做真记账流水。
+    static class SubFollowItem {
+        String id, name, amount, cycle, nextDue, note;
+        int cycleDays;
+        boolean autoRenew;
+    }
+    View subfollowView = null;
+    boolean subfollowClosing = false;
+    FrameLayout subfollowBody = null;
+    View subfollowFormSheet = null;
+    boolean subfollowFormClosing = false;
     boolean suppressNextChromeRestore = false; // Q12: chain open (menu->detail, addSheet->form) skips one restore to avoid dock flicker
     View addSheetView = null; // Q12: 添加卡片底表，浮窗退场名单内
     String lastBin = null, lastBinScheme = null, lastBinType = null, lastBinBrand = null, lastBinBank = null, lastBinCountry = null;
@@ -7991,6 +8004,20 @@ public class MainActivity extends Activity {
             skEntry.setOnClickListener(v -> { haptic(); openSimKeep(); });
             inner.addView(skEntry);
         }
+        // Q86 订阅跟随入口（设置关掉不占位）：显示订阅数与最近扣款
+        if (subfollowEnabled()) {
+            java.util.List<SubFollowItem> sf = subfollowSorted();
+            String sub2;
+            if (sf.isEmpty()) sub2 = "订阅到期与扣款提醒管理 ›";
+            else {
+                int left = simkeepDaysLeft(sf.get(0).nextDue);
+                String dl = left < 0 ? ("已逾期 " + (-left) + " 天") : (left == 0 ? "今天扣款" : (left + " 天后扣款"));
+                sub2 = sf.size() + " 项订阅 · 最近 " + dl + " ›";
+            }
+            View sfEntry = settingRow("订阅跟随", sub2);
+            sfEntry.setOnClickListener(v -> { haptic(); openSubFollow(); });
+            inner.addView(sfEntry);
+        }
         if (prefs == null || prefs.getBoolean("owncard_enabled", true)) inner.addView(buildCreditOverview(mineRows));
         if (prefs == null || prefs.getBoolean("ownact_enabled", true)) { View _ae = settingRow("活动追踪", ownActs.isEmpty() ? "开卡任务 / 刷卡达标登记 ›" : (ownActs.size() + " 条活动 · 点开管理 ›")); _ae.setOnClickListener(v -> { haptic(); openOwnActs(); }); inner.addView(_ae); }
         // Q22 页级构成对照混合版：自定义区在前（index.html #customSec 先于 #grid），其后卡包分析，再「我的卡片」折叠条+瓷砖
@@ -11440,6 +11467,354 @@ public class MainActivity extends Activity {
         if (simkeepView == null) restoreChrome();
     }
 
+    // ---------- Q86 订阅与费用跟随（模块键 subfollow_，设置可关、关掉不占位） ----------
+    static final String[] SUB_CYCLE_VALS = {"week", "month", "quarter", "year", "custom"};
+    static final String[] SUB_CYCLE_LABELS = {"每周", "每月", "每季", "每年", "自定义"};
+    static int subCycleDays(SubFollowItem it) {
+        if (it == null) return 30;
+        if ("week".equals(it.cycle)) return 7;
+        if ("quarter".equals(it.cycle)) return 91;
+        if ("year".equals(it.cycle)) return 365;
+        if ("custom".equals(it.cycle)) return it.cycleDays > 0 ? it.cycleDays : 30;
+        return 30;
+    }
+    static String subCycleLabel(String v) {
+        if (v == null) return "每月";
+        for (int i = 0; i < SUB_CYCLE_VALS.length; i++) if (SUB_CYCLE_VALS[i].equals(v)) return SUB_CYCLE_LABELS[i];
+        return "每月";
+    }
+    boolean subfollowEnabled() { return prefs == null || prefs.getBoolean("subfollow_enabled", true); }
+    java.util.List<SubFollowItem> loadSubFollows() {
+        java.util.List<SubFollowItem> out = new ArrayList<>();
+        if (prefs == null) return out;
+        try {
+            String raw = prefs.getString("subfollow_items", "[]");
+            JSONArray arr = new JSONArray(raw == null || raw.isEmpty() ? "[]" : raw);
+            for (int i = 0; i < arr.length(); i++) {
+                JSONObject o = arr.getJSONObject(i);
+                SubFollowItem it = new SubFollowItem();
+                it.id = o.optString("id"); it.name = o.optString("name");
+                it.amount = o.optString("amount"); it.cycle = o.optString("cycle", "month");
+                it.nextDue = o.optString("nextDue"); it.note = o.optString("note");
+                it.cycleDays = o.optInt("cycleDays", 30); it.autoRenew = o.optBoolean("auto", true);
+                if (it.id == null || it.id.isEmpty()) it.id = "sub-" + i;
+                if (it.cycleDays <= 0) it.cycleDays = 30;
+                out.add(it);
+            }
+        } catch (Throwable ignored) {}
+        return out;
+    }
+    void saveSubFollows(java.util.List<SubFollowItem> items) {
+        if (prefs == null) return;
+        try {
+            JSONArray arr = new JSONArray();
+            for (SubFollowItem it : items) {
+                JSONObject o = new JSONObject();
+                o.put("id", it.id == null ? "" : it.id); o.put("name", it.name == null ? "" : it.name);
+                o.put("amount", it.amount == null ? "" : it.amount); o.put("cycle", it.cycle == null ? "month" : it.cycle);
+                o.put("nextDue", it.nextDue == null ? "" : it.nextDue); o.put("note", it.note == null ? "" : it.note);
+                o.put("cycleDays", it.cycleDays); o.put("auto", it.autoRenew);
+                arr.put(o);
+            }
+            prefs.edit().putString("subfollow_items", arr.toString()).commit();
+        } catch (Throwable ignored) {}
+    }
+    java.util.List<SubFollowItem> subfollowSorted() {
+        java.util.List<SubFollowItem> items = loadSubFollows();
+        java.util.Collections.sort(items, (a, b) -> Integer.compare(simkeepDaysLeft(a.nextDue), simkeepDaysLeft(b.nextDue)));
+        return items;
+    }
+    static double subMonthlyEstimate(SubFollowItem it) {
+        long y = parseYuan(it.amount == null ? "" : it.amount);
+        if (y <= 0) return 0;
+        int d = subCycleDays(it);
+        if ("week".equals(it.cycle)) return y * 4.33;
+        if ("quarter".equals(it.cycle)) return y / 3.0;
+        if ("year".equals(it.cycle)) return y / 12.0;
+        if ("custom".equals(it.cycle)) return y * 30.0 / Math.max(1, d);
+        return y;
+    }
+    void openSubFollow() {
+        if (subfollowView != null) return;
+        captureCurrentPageScroll();
+        hideChrome();
+        subfollowClosing = false;
+        final FrameLayout overlay = new FrameLayout(this);
+        overlay.setBackgroundColor(colBg());
+        LinearLayout col = new LinearLayout(this);
+        col.setOrientation(LinearLayout.VERTICAL);
+        overlay.addView(col, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        LinearLayout head = new LinearLayout(this);
+        head.setOrientation(LinearLayout.HORIZONTAL); head.setGravity(Gravity.CENTER_VERTICAL);
+        head.setPadding(dp(this, 16), pageTopPad(), dp(this, 12), dp(this, 8));
+        col.addView(head, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        head.addView(tvW(this, "订阅跟随", 20, colText(), 800), new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+        FrameLayout closeBtn = new FrameLayout(this);
+        closeBtn.setBackground(roundRect(colSurface(), 999, this)); closeBtn.setClipToOutline(true);
+        CloseIconView civ = new CloseIconView(this); civ.iconColor = colText();
+        closeBtn.addView(civ, new FrameLayout.LayoutParams(dp(this, 18), dp(this, 18), Gravity.CENTER));
+        LinearLayout.LayoutParams cbLp = new LinearLayout.LayoutParams(dp(this, 36), dp(this, 36)); cbLp.leftMargin = dp(this, 8);
+        closeBtn.setLayoutParams(cbLp);
+        closeBtn.setOnClickListener(v -> { haptic(); closeSubFollow(); });
+        head.addView(closeBtn);
+        subfollowBody = new FrameLayout(this);
+        col.addView(subfollowBody, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
+        content.addView(overlay, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        subfollowView = overlay;
+        buildSubFollowBody();
+        overlay.setAlpha(0f);
+        overlay.animate().alpha(1f).setDuration(ANIM_DUR_FADE).setInterpolator(ANIM_ENTER).start();
+    }
+    void closeSubFollowNow() {
+        View v = subfollowView; subfollowView = null; subfollowBody = null; subfollowClosing = false;
+        if (v != null && v.getParent() != null) ((ViewGroup) v.getParent()).removeView(v);
+    }
+    void closeSubFollow() {
+        final View v = subfollowView;
+        if (v == null || subfollowClosing) return;
+        if (subfollowFormSheet != null) { closeSubFollowForm(); return; }
+        subfollowClosing = true;
+        v.animate().alpha(0f).setDuration(ANIM_DUR_SHEET_OUT).setInterpolator(ANIM_EXIT)
+            .withEndAction(() -> { closeSubFollowNow(); restoreChrome(); }).start();
+    }
+    void buildSubFollowBody() {
+        if (subfollowBody == null) return;
+        subfollowBody.removeAllViews();
+        ScrollView sv = new ScrollView(this); thinScrollbar(sv); sv.setClipToPadding(false);
+        LinearLayout inner = new LinearLayout(this); inner.setOrientation(LinearLayout.VERTICAL);
+        inner.setPadding(dp(this, 14), dp(this, 6), dp(this, 14), dockPad());
+        sv.addView(inner, new ScrollView.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        subfollowBody.addView(sv, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        java.util.List<SubFollowItem> items = subfollowSorted();
+        double monthly = 0; for (SubFollowItem it : items) monthly += subMonthlyEstimate(it);
+        LinearLayout sumCard = new LinearLayout(this); sumCard.setOrientation(LinearLayout.VERTICAL);
+        sumCard.setBackground(glassTintDrawable(16, false)); sumCard.setClipToOutline(true); glassClip(sumCard, 16, false);
+        sumCard.setPadding(dp(this, 14), dp(this, 12), dp(this, 14), dp(this, 12));
+        inner.addView(sumCard, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        sumCard.addView(tvW(this, items.isEmpty() ? "还没有订阅" : (items.size() + " 项订阅"), 14, colText(), 600));
+        sumCard.addView(tv(this, monthly > 0 ? ("按周期折算约 ¥" + String.format(java.util.Locale.US, "%.0f", monthly) + " / 月 · 临期在本页标急（系统通知后续接）") : "填上金额后这里会折算每月约花多少 · 只存本机、不做记账流水", 11.5f, colText2(), false));
+        final int remindDays = prefs == null ? 7 : prefs.getInt("subfollow_remind_days", 7);
+        LinearLayout rdRow = new LinearLayout(this); rdRow.setOrientation(LinearLayout.HORIZONTAL);
+        LinearLayout.LayoutParams rdLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT); rdLp.topMargin = dp(this, 8);
+        sumCard.addView(rdRow, rdLp);
+        rdRow.addView(tv(this, "临期 ", 12, colText2(), false));
+        final int[] rdOpts = {0, 1, 3, 7};
+        for (final int dv : rdOpts) {
+            final boolean on = dv == remindDays;
+            TextView chip = tv(this, dv == 0 ? "当天" : (dv + "天前"), 12.5f, on ? Color.WHITE : colText(), on);
+            chip.setGravity(Gravity.CENTER); chip.setPadding(dp(this, 12), dp(this, 7), dp(this, 12), dp(this, 7));
+            chip.setBackground(roundRect(on ? accentColor() : colChipOff(), 999, this));
+            LinearLayout.LayoutParams clp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT); clp.leftMargin = dp(this, 6);
+            chip.setLayoutParams(clp);
+            chip.setOnClickListener(v -> { haptic(); if (prefs != null) prefs.edit().putInt("subfollow_remind_days", dv).apply(); buildSubFollowBody(); });
+            rdRow.addView(chip);
+        }
+        TextView addBtn = tv(this, "+ 添加订阅", 14, Color.WHITE, true); addBtn.setGravity(Gravity.CENTER);
+        addBtn.setPadding(0, dp(this, 12), 0, dp(this, 12)); addBtn.setBackground(roundRect(accentColor(), 12, this));
+        LinearLayout.LayoutParams abLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT); abLp.topMargin = dp(this, 12);
+        inner.addView(addBtn, abLp);
+        addBtn.setOnClickListener(v -> { haptic(); openSubFollowForm(null); });
+        TextView sec = tvW(this, "按到期排序 · " + items.size() + " 项", 13, colText2(), 600);
+        LinearLayout.LayoutParams secLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT); secLp.topMargin = dp(this, 16); secLp.bottomMargin = dp(this, 4);
+        inner.addView(sec, secLp);
+        if (items.isEmpty()) {
+            LinearLayout em = new LinearLayout(this); em.setOrientation(LinearLayout.VERTICAL);
+            em.setBackground(roundRect(colSurface(), 14, this)); em.setPadding(dp(this, 16), dp(this, 22), dp(this, 16), dp(this, 22));
+            em.addView(tv(this, "还没有订阅。点上方添加，填名称、金额、周期和下次扣款日。", 13, colText2(), false));
+            inner.addView(em, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+            return;
+        }
+        for (final SubFollowItem it : items) {
+            final int left = simkeepDaysLeft(it.nextDue);
+            final boolean urgent = left <= remindDays;
+            LinearLayout card = new LinearLayout(this); card.setOrientation(LinearLayout.VERTICAL);
+            card.setBackground(glassTintDrawable(16, false)); card.setClipToOutline(true); glassClip(card, 16, false);
+            try { if (Build.VERSION.SDK_INT >= 21) card.setElevation(dp(this, 4)); } catch (Throwable ignored) {}
+            card.setPadding(dp(this, 14), dp(this, 12), dp(this, 14), dp(this, 12));
+            LinearLayout.LayoutParams cardLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT); cardLp.topMargin = dp(this, 10);
+            inner.addView(card, cardLp);
+            LinearLayout top = new LinearLayout(this); top.setOrientation(LinearLayout.HORIZONTAL); top.setGravity(Gravity.CENTER_VERTICAL);
+            card.addView(top);
+            top.addView(tvW(this, it.name == null || it.name.isEmpty() ? "订阅" : it.name, 15, colText(), 700), new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+            String badge = left < 0 ? ("逾期 " + (-left) + " 天") : (left == 0 ? "今天扣款" : (left + " 天后"));
+            TextView bd = tv(this, (urgent ? "急 · " : "") + badge, 11.5f, urgent ? Color.WHITE : colText2(), true);
+            bd.setGravity(Gravity.CENTER); bd.setPadding(dp(this, 9), dp(this, 5), dp(this, 9), dp(this, 5));
+            bd.setBackground(roundRect(urgent ? Color.rgb(0xE0, 0x31, 0x31) : colChipOff(), 999, this));
+            top.addView(bd);
+            StringBuilder meta = new StringBuilder();
+            if (it.amount != null && !it.amount.isEmpty()) meta.append(it.amount).append(" · ");
+            meta.append(subCycleLabel(it.cycle));
+            if ("custom".equals(it.cycle)) meta.append("（每 ").append(it.cycleDays).append(" 天）");
+            meta.append(" · 下次 ").append(it.nextDue == null || it.nextDue.isEmpty() ? "未设日期" : it.nextDue);
+            meta.append(" · ").append(it.autoRenew ? "自动续费" : "手动续费");
+            if (it.note != null && !it.note.isEmpty()) meta.append(" · ").append(it.note);
+            TextView mv = tv(this, meta.toString(), 12, colText2(), false); bodyLH(mv);
+            LinearLayout.LayoutParams mvLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT); mvLp.topMargin = dp(this, 6);
+            card.addView(mv, mvLp);
+            LinearLayout acts = new LinearLayout(this); acts.setOrientation(LinearLayout.HORIZONTAL);
+            LinearLayout.LayoutParams actLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT); actLp.topMargin = dp(this, 10);
+            card.addView(acts, actLp);
+            TextView done = tv(this, it.autoRenew ? "已扣款 · 顺延" : "已续费 · 顺延", 13, Color.WHITE, true); done.setGravity(Gravity.CENTER);
+            done.setPadding(0, dp(this, 9), 0, dp(this, 9)); done.setBackground(roundRect(accentColor(), 10, this));
+            acts.addView(done, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+            done.setOnClickListener(v -> { haptic(); markSubFollowDone(it); });
+            TextView edit = tv(this, "编辑", 13, colText(), true); edit.setGravity(Gravity.CENTER);
+            edit.setPadding(0, dp(this, 9), 0, dp(this, 9)); edit.setBackground(roundRect(colChipOff(), 10, this));
+            LinearLayout.LayoutParams edLp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f); edLp.leftMargin = dp(this, 8);
+            acts.addView(edit, edLp);
+            edit.setOnClickListener(v -> { haptic(); openSubFollowForm(it); });
+        }
+        TextView hint = tv(this, "点「顺延」会按周期推进下次扣款日；订阅信息只存本机。", 11, colText3(), false);
+        LinearLayout.LayoutParams hLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT); hLp.topMargin = dp(this, 12);
+        inner.addView(hint, hLp);
+    }
+    void markSubFollowDone(final SubFollowItem it) {
+        String newDue = simkeepAddDays(it.nextDue, subCycleDays(it));
+        java.util.List<SubFollowItem> items = loadSubFollows();
+        for (SubFollowItem x : items) if (x.id.equals(it.id)) { x.nextDue = newDue; break; }
+        saveSubFollows(items);
+        showFloatToast("已顺延到 " + newDue);
+        buildSubFollowBody();
+    }
+    void openSubFollowForm(final SubFollowItem edit) {
+        closeSubFollowFormNow();
+        final boolean isNew = edit == null;
+        final SubFollowItem draft = new SubFollowItem();
+        if (isNew) { draft.id = null; draft.name = ""; draft.amount = ""; draft.cycle = "month"; draft.nextDue = simkeepTodayStr(); draft.note = ""; draft.cycleDays = 30; draft.autoRenew = true; }
+        else { draft.id = edit.id; draft.name = edit.name; draft.amount = edit.amount; draft.cycle = edit.cycle; draft.nextDue = edit.nextDue; draft.note = edit.note; draft.cycleDays = edit.cycleDays; draft.autoRenew = edit.autoRenew; }
+        final String[] cycleSel = {draft.cycle == null || draft.cycle.isEmpty() ? "month" : draft.cycle};
+        final boolean[] autoSel = {draft.autoRenew};
+        hideChrome();
+        final FrameLayout sheet = new FrameLayout(this);
+        View shade = new View(this); shade.setBackgroundColor(Color.argb(102, 0, 0, 0));
+        shade.setOnClickListener(v -> closeSubFollowForm());
+        sheet.addView(shade, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        LinearLayout card = new LinearLayout(this); card.setOrientation(LinearLayout.VERTICAL);
+        GradientDrawable cg = new GradientDrawable(); cg.setColor(colSheet()); cg.setStroke(dp(this, 1), Color.argb(140, 255, 255, 255));
+        float formR = dp(this, 22); cg.setCornerRadii(new float[]{formR, formR, formR, formR, 0, 0, 0, 0});
+        card.setBackground(cg);
+        if (Build.VERSION.SDK_INT >= 21) { card.setElevation(dp(this, 24)); topSheetClip(card, 22, this); }
+        card.setOnClickListener(v -> {});
+        ScrollView sv = new ScrollView(this); thinScrollbar(sv);
+        LinearLayout form = new LinearLayout(this); form.setOrientation(LinearLayout.VERTICAL);
+        form.setPadding(dp(this, 18), dp(this, 18), dp(this, 18), dp(this, 18) + navBarH());
+        sv.addView(form); card.addView(sv, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        form.addView(tv(this, isNew ? "添加订阅" : "编辑订阅", 17, colText(), true));
+        form.addView(customFormLabel("订阅名称*"));
+        final EditText inName = customInput("如：视频会员 / 音乐 / 云盘", draft.name, 30); form.addView(inName);
+        form.addView(customFormLabel("金额（可空）"));
+        final EditText inAmt = customInput("如：¥15 / $4.99", draft.amount, 20); form.addView(inAmt);
+        form.addView(customFormLabel("扣款周期"));
+        LinearLayout cycRow = new LinearLayout(this); cycRow.setOrientation(LinearLayout.HORIZONTAL); form.addView(cycRow);
+        final java.util.List<TextView> cycChips = new ArrayList<>();
+        final Runnable[] paintCyc = new Runnable[1];
+        paintCyc[0] = () -> { for (int i = 0; i < cycChips.size(); i++) paintChoiceChip(cycChips.get(i), SUB_CYCLE_VALS[i].equals(cycleSel[0])); };
+        for (int i = 0; i < SUB_CYCLE_VALS.length; i++) {
+            final String cv = SUB_CYCLE_VALS[i];
+            TextView b = formOrgChip(SUB_CYCLE_LABELS[i]);
+            b.setOnClickListener(v -> { haptic(); cycleSel[0] = cv; paintCyc[0].run(); });
+            LinearLayout.LayoutParams blp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT); if (i > 0) blp.leftMargin = dp(this, 6);
+            b.setLayoutParams(blp); cycChips.add(b); cycRow.addView(b);
+        }
+        paintCyc[0].run();
+        form.addView(customFormLabel("自定义周期（天，选自定义时用）"));
+        final EditText inCycleDays = customInput("30", String.valueOf(draft.cycleDays), 4); form.addView(inCycleDays);
+        form.addView(customFormLabel("下次扣款日期（yyyy-MM-dd）"));
+        final EditText inDue = customInput("2026-11-01", draft.nextDue, 10); form.addView(inDue);
+        form.addView(customFormLabel("续费方式"));
+        LinearLayout autoRow = new LinearLayout(this); autoRow.setOrientation(LinearLayout.HORIZONTAL); form.addView(autoRow);
+        final java.util.List<TextView> autoChips = new ArrayList<>();
+        final Runnable[] paintAuto = new Runnable[1];
+        paintAuto[0] = () -> { for (int i = 0; i < autoChips.size(); i++) paintChoiceChip(autoChips.get(i), (i == 0) == autoSel[0]); };
+        String[] autoLabels = {"自动续费", "手动续费"};
+        for (int i = 0; i < autoLabels.length; i++) {
+            final boolean val = i == 0;
+            TextView b = formOrgChip(autoLabels[i]);
+            b.setOnClickListener(v -> { haptic(); autoSel[0] = val; paintAuto[0].run(); });
+            LinearLayout.LayoutParams blp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT); if (i > 0) blp.leftMargin = dp(this, 6);
+            b.setLayoutParams(blp); autoChips.add(b); autoRow.addView(b);
+        }
+        paintAuto[0].run();
+        form.addView(customFormLabel("备注（可空）"));
+        final EditText inNote = customInput("如：绑了哪张卡 / 从哪扣", draft.note, 40); form.addView(inNote);
+        LinearLayout acts = new LinearLayout(this); acts.setOrientation(LinearLayout.HORIZONTAL);
+        LinearLayout.LayoutParams actLp2 = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT); actLp2.topMargin = dp(this, 16);
+        form.addView(acts, actLp2);
+        Button cancel = new Button(this); cancel.setText("取消"); cancel.setTextSize(15); cancel.setAllCaps(false);
+        cancel.setBackground(roundRect(Color.rgb(0xF2, 0xF3, 0xF7), 14, this));
+        cancel.setOnClickListener(v -> { haptic(); closeSubFollowForm(); });
+        acts.addView(cancel, new LinearLayout.LayoutParams(0, dp(this, 48), 1f));
+        Button save = new Button(this); save.setText("保存"); save.setTextSize(15); save.setAllCaps(false); save.setTextColor(Color.WHITE);
+        GradientDrawable saveBg = new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM, new int[]{Color.rgb(0x0A, 0x84, 0xFF), Color.rgb(0x00, 0x66, 0xE6)}); saveBg.setCornerRadius(dp(this, 14)); save.setBackground(saveBg);
+        LinearLayout.LayoutParams saveLp = new LinearLayout.LayoutParams(0, dp(this, 48), 2f); saveLp.leftMargin = dp(this, 10);
+        acts.addView(save, saveLp);
+        save.setOnClickListener(v -> {
+            haptic();
+            String nm = inName.getText().toString().trim();
+            String due = inDue.getText().toString().trim();
+            if (nm.isEmpty()) { showFloatToast("请填订阅名称"); inName.requestFocus(); return; }
+            if (simkeepParseDate(due) == null) { showFloatToast("日期请用 yyyy-MM-dd"); inDue.requestFocus(); return; }
+            int cyc = 30; try { cyc = Integer.parseInt(inCycleDays.getText().toString().trim()); } catch (Throwable ignored) {}
+            if (cyc <= 0) cyc = 30;
+            java.util.List<SubFollowItem> items = loadSubFollows();
+            if (isNew) {
+                SubFollowItem ni = new SubFollowItem(); ni.id = "sub-" + System.currentTimeMillis();
+                ni.name = nm; ni.amount = inAmt.getText().toString().trim(); ni.cycle = cycleSel[0];
+                ni.nextDue = due; ni.note = inNote.getText().toString().trim(); ni.cycleDays = cyc; ni.autoRenew = autoSel[0];
+                items.add(ni); showFloatToast("已添加订阅");
+            } else {
+                for (SubFollowItem x : items) if (x.id.equals(edit.id)) { x.name = nm; x.amount = inAmt.getText().toString().trim(); x.cycle = cycleSel[0]; x.nextDue = due; x.note = inNote.getText().toString().trim(); x.cycleDays = cyc; x.autoRenew = autoSel[0]; break; }
+                showFloatToast("已保存");
+            }
+            saveSubFollows(items); closeSubFollowForm(); buildSubFollowBody();
+        });
+        if (!isNew) {
+            TextView del = tv(this, "删除这项订阅", 13, Color.rgb(0xE0, 0x31, 0x31), true); del.setGravity(Gravity.CENTER);
+            LinearLayout.LayoutParams delLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT); delLp.topMargin = dp(this, 12);
+            form.addView(del, delLp);
+            del.setOnClickListener(v -> {
+                haptic();
+                java.util.List<SubFollowItem> items = loadSubFollows();
+                SubFollowItem rm = null; for (SubFollowItem x : items) if (x.id.equals(edit.id)) { rm = x; break; }
+                if (rm != null) { items.remove(rm); saveSubFollows(items); }
+                closeSubFollowForm(); buildSubFollowBody(); showFloatToast("已删除");
+            });
+        }
+        int sw = getResources().getDisplayMetrics().widthPixels;
+        int maxH = (int) (getResources().getDisplayMetrics().heightPixels * 0.82);
+        card.measure(View.MeasureSpec.makeMeasureSpec(sw - dp(this, 24), View.MeasureSpec.EXACTLY), View.MeasureSpec.makeMeasureSpec(maxH, View.MeasureSpec.AT_MOST));
+        FrameLayout.LayoutParams clp = new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, Math.min(card.getMeasuredHeight(), maxH));
+        clp.gravity = Gravity.BOTTOM; clp.leftMargin = dp(this, 12); clp.rightMargin = dp(this, 12); clp.bottomMargin = 0;
+        FrameLayout wrap = new FrameLayout(this);
+        View glass = glassLayer(card, 22, false); topSheetClip(glass, 22, this);
+        wrap.addView(glass, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, clp.height + dp(this, 22)));
+        wrap.addView(card, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        sheet.addView(wrap, clp);
+        content.addView(sheet, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        subfollowFormSheet = sheet;
+        animShadeIn(shade); animSheetIn(wrap);
+    }
+    void closeSubFollowFormNow() {
+        View s = subfollowFormSheet; subfollowFormSheet = null; subfollowFormClosing = false;
+        if (s != null && s.getParent() != null) ((ViewGroup) s.getParent()).removeView(s);
+    }
+    void closeSubFollowForm() {
+        final View sheet = subfollowFormSheet;
+        if (sheet == null || subfollowFormClosing) return;
+        subfollowFormClosing = true; hideKeyboardNow();
+        if (sheet.getParent() != null) {
+            View wrap = sheet instanceof ViewGroup && ((ViewGroup) sheet).getChildCount() > 1 ? ((ViewGroup) sheet).getChildAt(((ViewGroup) sheet).getChildCount() - 1) : null;
+            if (wrap != null) {
+                animSheetOut(wrap, () -> { closeSubFollowFormNow(); if (subfollowView == null) restoreChrome(); });
+                if (sheet instanceof ViewGroup && ((ViewGroup) sheet).getChildCount() > 0) animShadeOut(((ViewGroup) sheet).getChildAt(0));
+                return;
+            }
+            ((ViewGroup) sheet.getParent()).removeView(sheet);
+        }
+        subfollowFormSheet = null; subfollowFormClosing = false;
+        if (subfollowView == null) restoreChrome();
+    }
+
     void stopShowcaseDrift() {
         if (showcaseDriftTask != null && mainHandler != null) mainHandler.removeCallbacks(showcaseDriftTask);
         showcaseDriftTask = null;
@@ -13041,6 +13416,9 @@ public class MainActivity extends Activity {
         switchRow(page, "保号管家", "电话卡 / eSIM 保号到期管理，关掉后入口不出现", prefs == null || prefs.getBoolean("simkeep_enabled", true), on -> {
             if (prefs != null) prefs.edit().putBoolean("simkeep_enabled", on).apply(); haptic(); rebuildPages();
         });
+        switchRow(page, "订阅跟随", "订阅扣款日与金额跟随，关掉后入口不出现", prefs == null || prefs.getBoolean("subfollow_enabled", true), on -> {
+            if (prefs != null) prefs.edit().putBoolean("subfollow_enabled", on).apply(); haptic(); rebuildPages();
+        });
         switchRow(page, "持卡总览", "我的卡片页的额度汇总与还款日历", prefs == null || prefs.getBoolean("owncard_enabled", true), on -> {
             if (prefs != null) prefs.edit().putBoolean("owncard_enabled", on).apply(); haptic(); rebuildPages();
         });
@@ -13343,6 +13721,8 @@ public class MainActivity extends Activity {
 
     @Override
     public void onBackPressed() {
+        if (subfollowFormSheet != null) { closeSubFollowForm(); return; }
+        if (subfollowView != null) { closeSubFollow(); return; }
         if (acctPickerView != null) { closeAcctClassPicker(); return; }
         if (simkeepFormSheet != null) { closeSimKeepForm(); return; }
         if (simkeepView != null) { closeSimKeep(); return; }
