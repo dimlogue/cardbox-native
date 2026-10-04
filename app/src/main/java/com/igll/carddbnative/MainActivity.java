@@ -1567,8 +1567,22 @@ public class MainActivity extends Activity {
     static class CustomCard {
         String id, name, bank, org, note;
         String acctClass = ""; // Q65：用户自有账户标记（""/"一类"/"二类"），纯手填，未设不显示
+        String kind = "bank"; // Q82：卡种扩展位（bank 银行卡/phone 电话卡/other 其他），旧卡默认 bank，字段按卡种收窄
         int style;
     }
+    static final String[] CARD_KIND_VALS = {"bank", "phone", "other"};
+    static final String[] CARD_KIND_LABELS = {"银行卡", "电话卡", "其他卡"};
+    static String normCardKind(String s) {
+        if ("phone".equals(s) || "other".equals(s)) return s;
+        return "bank";
+    }
+    static String cardKindLabel(String k) {
+        String nk = normCardKind(k);
+        if ("phone".equals(nk)) return "电话卡";
+        if ("other".equals(nk)) return "其他卡";
+        return "银行卡";
+    }
+    static boolean isBankKind(String k) { return "bank".equals(normCardKind(k)); }
     static final int[][] CUSTOM_STYLES = {
         {0x3B82C4, 0x1E3A5F}, {0x8E44AD, 0x2C1A4D}, {0x16A085, 0x0A3D2E},
         {0xE67E22, 0x7E2F0E}, {0x2C3E50, 0x0D1520}, {0xC0392B, 0x4D0F0A}
@@ -1722,6 +1736,7 @@ public class MainActivity extends Activity {
                 c.org = o.optString("org");
                 c.note = o.optString("note");
                 c.acctClass = normAcctClass(o.optString("cls", ""));
+                c.kind = normCardKind(o.optString("kind", "bank"));
                 c.style = o.optInt("style", 0);
                 if (c.id == null || c.id.isEmpty()) c.id = "custom-" + i;
                 if (c.style < 0 || c.style >= CUSTOM_STYLES.length) c.style = 0;
@@ -1743,6 +1758,7 @@ public class MainActivity extends Activity {
                         c.org = o.optString("org");
                         c.note = o.optString("note");
                         c.acctClass = normAcctClass(o.optString("cls", ""));
+                        c.kind = normCardKind(o.optString("kind", "bank"));
                         c.style = o.optInt("style", 0);
                         if (c.id == null || c.id.isEmpty()) c.id = "custom-" + i;
                         if (c.style < 0 || c.style >= CUSTOM_STYLES.length) c.style = 0;
@@ -1764,6 +1780,7 @@ public class MainActivity extends Activity {
                 o.put("org", c.org == null ? "" : c.org);
                 o.put("note", c.note == null ? "" : c.note);
                 o.put("cls", c.acctClass == null ? "" : c.acctClass);
+                o.put("kind", c.kind == null ? "bank" : c.kind);
                 o.put("style", c.style);
                 arr.put(o);
             }
@@ -7896,8 +7913,16 @@ public class MainActivity extends Activity {
             mtv.setMaxLines(1);
             mtv.setEllipsize(android.text.TextUtils.TruncateAt.END);
             tx.addView(mtv);
+            // Q82：非银行卡种 chip（电话卡/其他卡）与类别 chip 同语言；Q65 类别仅银行卡
+            if (!isBankKind(c.kind)) {
+                TextView kChip = chip(cardKindLabel(c.kind), Color.rgb(0xF0, 0xF7, 0xFF), Color.rgb(0x2F, 0x6F, 0xD0), 9.5f);
+                LinearLayout.LayoutParams kclp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+                kclp.topMargin = dp(this, 5);
+                kChip.setLayoutParams(kclp);
+                tx.addView(kChip);
+            }
             // Q65：自建卡类别 chip 与瓷砖同语言（浅底小字），未标不占位
-            if (c.acctClass != null && !c.acctClass.isEmpty()) {
+            if (isBankKind(c.kind) && c.acctClass != null && !c.acctClass.isEmpty()) {
                 TextView clsChip = chip(c.acctClass, Color.rgb(0xF0, 0xF7, 0xFF), Color.rgb(0x2F, 0x6F, 0xD0), 9.5f);
                 LinearLayout.LayoutParams cclp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
                 cclp.topMargin = dp(this, 5);
@@ -8401,8 +8426,9 @@ public class MainActivity extends Activity {
         TextView nm = tvW(this, c.name == null ? "" : c.name, 20, Color.WHITE, 800);
         nm.setLineSpacing(0, 1.15f);
         hero.addView(nm);
-        String sub = (c.bank == null || c.bank.isEmpty() ? "未填发卡行" : c.bank)
-            + (c.org != null && !c.org.isEmpty() ? " · " + c.org : "");
+        String sub = (c.bank == null || c.bank.isEmpty()
+            ? (isBankKind(c.kind) ? "未填发卡行" : ("phone".equals(normCardKind(c.kind)) ? "未填运营商" : "未填发行方")) : c.bank)
+            + (isBankKind(c.kind) && c.org != null && !c.org.isEmpty() ? " · " + c.org : "");
         TextView sb = tv(this, sub, 13.5f, Color.argb(224, 255, 255, 255), false);
         LinearLayout.LayoutParams slp = new LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
@@ -8446,9 +8472,10 @@ public class MainActivity extends Activity {
         inner.addView(specBox);
         java.util.List<String[]> rowList = new ArrayList<>();
         rowList.add(new String[]{"卡片名称", dash(c.name)});
-        rowList.add(new String[]{"发卡银行", dash(c.bank)});
-        rowList.add(new String[]{"卡组织", dash(c.org)});
-        if (c.acctClass != null && !c.acctClass.isEmpty()) rowList.add(new String[]{"账户类别", c.acctClass});
+        rowList.add(new String[]{"卡种", cardKindLabel(c.kind)});
+        rowList.add(new String[]{isBankKind(c.kind) ? "发卡银行" : ("phone".equals(normCardKind(c.kind)) ? "运营商" : "发行方"), dash(c.bank)});
+        if (isBankKind(c.kind)) rowList.add(new String[]{"卡组织", dash(c.org)});
+        if (isBankKind(c.kind) && c.acctClass != null && !c.acctClass.isEmpty()) rowList.add(new String[]{"账户类别", c.acctClass});
         rowList.add(new String[]{"备注", dash(c.note)});
         String[][] rows = rowList.toArray(new String[0][]);
         for (int i = 0; i < rows.length; i++) {
@@ -8462,6 +8489,7 @@ public class MainActivity extends Activity {
         }
         // Q65：详情内直接改类别（不标/一类/二类），改完重开本窗使规格行与色带 chip 同步
         LinearLayout tagBox = new LinearLayout(this);
+        tagBox.setVisibility(isBankKind(c.kind) ? View.VISIBLE : View.GONE); // Q82：电话卡/其他卡无一类二类
         tagBox.setOrientation(LinearLayout.VERTICAL);
         LinearLayout.LayoutParams tagLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         tagLp.topMargin = dp(this, 14);
@@ -9559,9 +9587,13 @@ public class MainActivity extends Activity {
             draft.id = edit.id; draft.name = edit.name; draft.bank = edit.bank;
             draft.org = edit.org; draft.note = edit.note; draft.style = edit.style;
             draft.acctClass = edit.acctClass == null ? "" : edit.acctClass;
+            draft.kind = normCardKind(edit.kind);
         } else {
-            draft.id = null; draft.name = ""; draft.bank = ""; draft.org = ""; draft.note = ""; draft.style = 0; draft.acctClass = "";
+            draft.id = null; draft.name = ""; draft.bank = ""; draft.org = ""; draft.note = ""; draft.style = 0; draft.acctClass = ""; draft.kind = "bank";
         }
+        final String[] kindSel = {normCardKind(draft.kind)};
+        final Runnable[] applyKindVisibilityHolder = {null};
+        final Runnable applyKindVisibility = () -> { if (applyKindVisibilityHolder[0] != null) applyKindVisibilityHolder[0].run(); };
         final String[] orgSel = {draft.org == null ? "" : draft.org};
         final String[] acctSel = {draft.acctClass == null ? "" : draft.acctClass};
         final int[] styleSel = {draft.style};
@@ -9599,14 +9631,34 @@ public class MainActivity extends Activity {
         card.addView(sv, new LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
 
-        form.addView(tv(this, isNew ? "添加自定义卡片" : "编辑自定义卡片", 17, Color.rgb(0x1C, 0x1C, 0x1E), true));
+        form.addView(tv(this, isNew ? "添加自定义卡片" : "编辑自定义卡片", 17, colText(), true));
+        // Q82 卡种扩展位：银行卡/电话卡/其他，字段按卡种收窄（电话卡不套银行卡的组织/一类二类）
+        form.addView(customFormLabel("卡种"));
+        LinearLayout kindRow = new LinearLayout(this);
+        kindRow.setOrientation(LinearLayout.HORIZONTAL);
+        form.addView(kindRow, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        final java.util.List<TextView> kindChips = new ArrayList<>();
+        final Runnable[] paintKind = new Runnable[1];
+        paintKind[0] = () -> { for (int i = 0; i < kindChips.size(); i++) paintChoiceChip(kindChips.get(i), CARD_KIND_VALS[i].equals(kindSel[0])); };
+        for (int i = 0; i < CARD_KIND_VALS.length; i++) {
+            final String kv = CARD_KIND_VALS[i];
+            TextView b = formOrgChip(CARD_KIND_LABELS[i]);
+            b.setOnClickListener(v -> { haptic(); kindSel[0] = kv; paintKind[0].run(); applyKindVisibility.run(); });
+            LinearLayout.LayoutParams kblp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            if (i > 0) kblp.leftMargin = dp(this, 6);
+            b.setLayoutParams(kblp);
+            kindChips.add(b);
+            kindRow.addView(b);
+        }
         form.addView(customFormLabel("卡片名称*"));
         final EditText inName = customInput("如：我的工资卡", draft.name, 30);
         form.addView(inName);
-        form.addView(customFormLabel("发卡银行"));
+        final TextView bankLabel = customFormLabel("发卡银行");
+        form.addView(bankLabel);
         final EditText inBank = customInput("如：招商银行", draft.bank, 20);
         form.addView(inBank);
-        form.addView(customFormLabel("卡组织"));
+        final TextView orgLabel = customFormLabel("卡组织");
+        form.addView(orgLabel);
         // 组织 chips 流式换行：按文字量宽逐行打包（行距/间距 6dp，同 .dlg .chips），任何一项不裁
         final LinearLayout orgFlow = new LinearLayout(this);
         orgFlow.setOrientation(LinearLayout.VERTICAL);
@@ -9649,7 +9701,8 @@ public class MainActivity extends Activity {
         }
         paintOrgs.run();
         // Q65 账户类别（可不选）：不标/一类/二类，默认不标、不推断；下方一句说明，全文词条归 Q66
-        form.addView(customFormLabel("账户类别（可不选）"));
+        final TextView acctLabel = customFormLabel("账户类别（可不选）");
+        form.addView(acctLabel);
         LinearLayout acctRow = new LinearLayout(this);
         acctRow.setOrientation(LinearLayout.HORIZONTAL);
         form.addView(acctRow, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
@@ -9674,6 +9727,18 @@ public class MainActivity extends Activity {
         LinearLayout.LayoutParams ahLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         ahLp.topMargin = dp(this, 6);
         form.addView(acctHint, ahLp);
+        // Q82 字段收窄：仅银行卡显示卡组织/账户类别/NFC；电话卡银行行改运营商、其他卡改发行方
+        final Runnable applyKindVisibilityReal = () -> {
+            boolean bank = isBankKind(kindSel[0]);
+            int vis = bank ? View.VISIBLE : View.GONE;
+            orgLabel.setVisibility(vis);
+            orgFlow.setVisibility(vis);
+            acctLabel.setVisibility(vis);
+            acctRow.setVisibility(vis);
+            acctHint.setVisibility(vis);
+            bankLabel.setText(bank ? "发卡银行" : ("phone".equals(kindSel[0]) ? "运营商" : "发行方"));
+        };
+        applyKindVisibilityHolder[0] = applyKindVisibilityReal;
         form.addView(customFormLabel("卡面样式"));
         // 卡面 3×2 大色块：每块高 40dp、间隔 10dp、圆角 8（.swatch 量级），选中蓝边+浅蓝外圈
         final java.util.List<View> swatchCells = new ArrayList<>();
@@ -9745,7 +9810,16 @@ public class MainActivity extends Activity {
             else if (e.getAction() == MotionEvent.ACTION_UP || e.getAction() == MotionEvent.ACTION_CANCEL) pressBounce(v, false);
             return false;
         });
+        nfcBtn.setTag("kindBankOnly");
         form.addView(nfcBtn);
+        // Q82：NFC 仅银行卡，电话卡/其他卡隐藏该行（applyKindVisibility 终版在此补 NFC）
+        {
+            final Runnable prev = applyKindVisibilityHolder[0];
+            final TextView nfcRef = nfcBtn;
+            applyKindVisibilityHolder[0] = () -> { if (prev != null) prev.run(); nfcRef.setVisibility(isBankKind(kindSel[0]) ? View.VISIBLE : View.GONE); };
+            applyKindVisibilityHolder[0].run();
+            paintKind[0].run();
+        }
         form.addView(customFormLabel("备注"));
         form.addView(inNote);
 
@@ -9783,7 +9857,9 @@ public class MainActivity extends Activity {
                 c.org = orgSel[0];
                 c.note = inNote.getText().toString().trim();
                 c.style = styleSel[0];
-                c.acctClass = normAcctClass(acctSel[0]);
+                c.acctClass = isBankKind(kindSel[0]) ? normAcctClass(acctSel[0]) : "";
+                c.kind = normCardKind(kindSel[0]);
+                if (!isBankKind(kindSel[0])) c.org = "";
                 customCards.add(c);
                 customOpen = true;
                 showFloatToast("已添加「" + name + "」");
@@ -9793,7 +9869,9 @@ public class MainActivity extends Activity {
                 edit.org = orgSel[0];
                 edit.note = inNote.getText().toString().trim();
                 edit.style = styleSel[0];
-                edit.acctClass = normAcctClass(acctSel[0]);
+                edit.acctClass = isBankKind(kindSel[0]) ? normAcctClass(acctSel[0]) : "";
+                edit.kind = normCardKind(kindSel[0]);
+                if (!isBankKind(kindSel[0])) edit.org = "";
                 showFloatToast("已保存「" + name + "」");
             }
             saveCustomCards();
@@ -10267,7 +10345,7 @@ public class MainActivity extends Activity {
         note.append(" · 规格待补，以发卡行官网为准");
         if (e.url != null && !e.url.trim().isEmpty()) note.append(" · ").append(e.url.trim());
         c.note = note.toString();
-        c.acctClass = "";
+        c.acctClass = ""; c.kind = "bank";
         c.style = Math.abs((c.name + "|" + c.bank).hashCode()) % CUSTOM_STYLES.length;
         customCards.add(c);
         customOpen = true;
