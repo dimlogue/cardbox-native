@@ -138,17 +138,25 @@ public class MainActivity extends Activity {
     /** Q74：窗体收起——顺势下沉 42dp + 淡出，ANIM_EXIT/SHEET_OUT，落定回调。 */
     void animSheetOut(View wrap, Runnable end) {
         if (wrap == null) { if (end != null) end.run(); return; }
+        // Q98：单跑守卫 + 主线程兜底——wrap 中途被摘除/动画取消时 withEndAction 可能永不达，
+        // 调用方的关窗收尾（摘窗/清引用/恢复底栏）就永远不跑、窗与状态双双卡死；320ms 后补跑。
+        final boolean[] ran = { false };
+        final Runnable once = () -> { if (ran[0]) return; ran[0] = true; if (end != null) end.run(); };
         wrap.animate().cancel();
         wrap.animate().alpha(0f).translationY(dp(this, SHEET_RISE_DP))
             .setDuration(ANIM_DUR_SHEET_OUT).setInterpolator(ANIM_EXIT)
-            .withEndAction(end).start();
+            .withEndAction(once).start();
+        mainHandler.postDelayed(once, ANIM_DUR_SHEET_OUT + 130);
     }
     void animCardOut(View card, Runnable end) {
         if (card == null) { if (end != null) end.run(); return; }
+        final boolean[] ran = { false };
+        final Runnable once = () -> { if (ran[0]) return; ran[0] = true; if (end != null) end.run(); }; // Q98 同 animSheetOut
         card.animate().cancel();
         card.animate().alpha(0f).scaleX(0.96f).scaleY(0.96f).translationY(dp(this, 10))
             .setDuration(ANIM_DUR_SHEET_OUT).setInterpolator(ANIM_EXIT)
-            .withEndAction(end).start();
+            .withEndAction(once).start();
+        mainHandler.postDelayed(once, ANIM_DUR_SHEET_OUT + 130);
     }
     /** 通用按压反馈：按下 90ms 缩到 .92，松手 260ms 弹簧回弹到 1.0（微 overshoot）。 */
     static void pressBounce(View v, boolean down) {
@@ -511,7 +519,7 @@ public class MainActivity extends Activity {
             .withEndAction(() -> { if (fab.getParent() instanceof ViewGroup) ((ViewGroup) fab.getParent()).removeView(fab); })
             .start();
         // 兜底：动画被打断时 220ms 后强制摘除，防残留挡窗
-        fab.postDelayed(() -> { if (fab.getParent() instanceof ViewGroup) ((ViewGroup) fab.getParent()).removeView(fab); }, ANIM_DUR_SHEET_OUT + 30);
+        fab.postDelayed(() -> { if (fab.getParent() instanceof ViewGroup) ((ViewGroup) fab.getParent()).removeView(fab); }, ANIM_DUR_SHEET_OUT + 30); // 已父检兜底；若 fab 已被摘，removeView 自然跳过（Q98 对表保留）
     }
     void restoreChrome() {
         if (suppressNextChromeRestore) { suppressNextChromeRestore = false; hideChrome(); return; }
@@ -709,6 +717,29 @@ public class MainActivity extends Activity {
         lp.rightMargin = dp(this, 2);
         host.addView(bar, lp);
         return bar;
+    }
+    // Q98：长列表滚动条轨道顶锚定死——轨道自卡片列表头起算（拇指行程 rangeAnchor 同步指向列表头），
+    // 且无论如何不进状态栏：顶距下限 = 状态栏高 + 8dp。布局落位后按列表头在内容坐标中的
+    // 纵向偏移（静止时即其屏幕纵坐标）一次性钉死，两页（首页/学生）同一口径。
+    void anchorDragBarToList(final DragBarView bar, final View listHead) {
+        if (bar == null || listHead == null) return;
+        bar.rangeAnchor = listHead;
+        final android.view.ViewTreeObserver.OnGlobalLayoutListener[] self = new android.view.ViewTreeObserver.OnGlobalLayoutListener[1];
+        self[0] = new android.view.ViewTreeObserver.OnGlobalLayoutListener() {
+            @Override public void onGlobalLayout() {
+                try {
+                    int y = bar.rangeStartPx();
+                    if (y <= 0) return; // 列表头还没落位，等下一帧布局
+                    listHead.getViewTreeObserver().removeOnGlobalLayoutListener(self[0]);
+                    if (bar.getLayoutParams() instanceof FrameLayout.LayoutParams) {
+                        FrameLayout.LayoutParams lp = (FrameLayout.LayoutParams) bar.getLayoutParams();
+                        int want = Math.max(statusBarH() + dp(MainActivity.this, 8), y);
+                        if (lp.topMargin != want) { lp.topMargin = want; bar.setLayoutParams(lp); }
+                    }
+                } catch (Throwable ignored) {}
+            }
+        };
+        listHead.getViewTreeObserver().addOnGlobalLayoutListener(self[0]);
     }
     // P-scroll：当前长列表（回顶钮指向它）——详情/更新日志为覆盖层时优先于底下主页
     ScrollView activeLongScroll() {
@@ -1395,15 +1426,40 @@ public class MainActivity extends Activity {
     boolean backdropCapturing = false;
     boolean backdropHookInstalled = false;
     long backdropLastCapMs = 0;
+    // Q98：滚动冻结与失败自愈的状态位——lastScrollEventMs 由根视图滚动监听打点，
+    // preDraw 抓图在滚动活跃期（末次滚动事件 200ms 内）跳过，背板稳定冻结、滚动
+    // 零采样不抢主线程，停稳由既有 650ms 防抖强制重抓一帧；backdropFailStreak 数
+    // 抓图/绘制的连续失败，单次失败只丢帧、下一帧自然重试，连续 3 次才持久关停。
+    long lastScrollEventMs = 0;
+    int backdropFailStreak = 0;
     final Paint backdropPaint = new Paint(Paint.FILTER_BITMAP_FLAG);
     int backdropPaintLevel = -1;
     final android.view.ViewTreeObserver.OnPreDrawListener backdropPreDraw =
         new android.view.ViewTreeObserver.OnPreDrawListener() {
             @Override public boolean onPreDraw() {
-                captureBackdrop();
+                captureBackdropTick();
                 return true;
             }
         };
+
+    /** Q98：preDraw 抓图入口——滚动活跃期（末次滚动事件 200ms 内）稳定冻结背板：
+     * 滚动全程不抓图（旧链每 50ms 在主线程整树重绘＋三遍模糊，既与滚动帧抢主线程
+     * 造成下拉抽搐，背板又以 20fps 阶梯换帧在玻璃件下跳）；停稳满 200ms 后 preDraw
+     * 自然恢复跟随，且既有 650ms 停稳防抖会强制重抓一帧对齐。强制抓图（切页/开关窗/
+     * 设置变更）走 captureBackdrop() 直调，不受冻结影响。 */
+    void captureBackdropTick() {
+        if (android.os.SystemClock.uptimeMillis() - lastScrollEventMs < 200) return;
+        captureBackdrop();
+    }
+
+    /** Q98：背板失败计数——单次抓图/绘制异常只丢这一帧（旧帧继续垫着），连续 3 次
+     * 才走 disableGlassNow 一次性持久关停。旧口径「任一 Throwable 即永久关停」会让
+     * 开悬浮搜索（键盘顶起、窗口尺寸骤变那一帧）之类的瞬时异常把玻璃永久打死、
+     * 之后怎么点都不恢复（用户 17:12 实拍）；成功一帧即清零，状态机自愈。 */
+    void noteBackdropFailure() {
+        backdropFailStreak++;
+        if (backdropFailStreak >= 3) disableGlassNow();
+    }
 
     /** 绘制期饱和滤镜按当前档位刷新（档位没变不重建滤镜对象）。 */
     void updateBackdropPaint() {
@@ -1418,6 +1474,7 @@ public class MainActivity extends Activity {
     void disableGlassNow() {
         glassDisabled = true;
         glassAutoOff = true;
+        backdropFailStreak = 0; // Q98：关停落盘后计数归零，设置页重新打开即从干净状态重试
         try { if (prefs != null) prefs.edit().putBoolean("glass_disabled", true).putBoolean("glass_auto_off", true).apply(); } catch (Throwable ignored) {}
         try {
             for (ImageView iv : new java.util.ArrayList<>(glassViews)) {
@@ -1449,7 +1506,7 @@ public class MainActivity extends Activity {
                 canvas.scale(1f / BACKDROP_SCALE, 1f / BACKDROP_SCALE);
                 canvas.drawBitmap(bmp, 0, 0, backdropPaint);
                 canvas.restore();
-            } catch (Throwable t) { disableGlassNow(); }
+            } catch (Throwable t) { /* Q98：单件单帧绘制异常只跳过本帧，不再一击拖死全 App 玻璃 */ }
         }
     }
 
@@ -1515,9 +1572,10 @@ public class MainActivity extends Activity {
     }
 
     /**
-     * 软件背板抓图（preDraw 钩子节流调用，亦可由 refreshLiveGlass 清节流强制）：
-     * 玻璃宿主整面让开后，把根视图以 BACKDROP_SCALE 软件渲染进复用 Bitmap 并模糊。
-     * 任一环异常 → disableGlassNow 一次性持久关停（新链降级口径，不再三次计数）。
+     * 软件背板抓图（preDraw 钩子经 captureBackdropTick 节流调用，亦可由 refreshLiveGlass
+     * 清节流强制）：玻璃宿主整面让开后，把根视图以 BACKDROP_SCALE 软件渲染进复用
+     * Bitmap 并模糊。Q98：异常不再一击持久关停——noteBackdropFailure 连续 3 次才
+     * disableGlassNow；成功即清零计数，瞬时异常下一帧自愈。
      */
     void captureBackdrop() {
         if (backdropCapturing || glassDisabled || rootView == null) return;
@@ -1553,9 +1611,10 @@ public class MainActivity extends Activity {
             rootView.draw(cv); // 软件 Canvas 渲染整树（玻璃宿主已让开，画的是纯场景）
             stackBlur(backdropBmp, BACKDROP_BLUR_R[Math.max(0, Math.min(2, glassLevel))]);
             updateBackdropPaint();
+            backdropFailStreak = 0; // Q98：成功一帧即清零失败计数
             noteGlassSuccess();
         } catch (Throwable t) {
-            disableGlassNow();
+            noteBackdropFailure();
         } finally {
             for (java.util.Map.Entry<View, Integer> e : saved.entrySet()) {
                 try { e.getKey().setVisibility(e.getValue()); } catch (Throwable ignored) {}
@@ -2374,6 +2433,9 @@ public class MainActivity extends Activity {
 
     void restorePageScroll(String key, final ScrollView sv) {
         if (sv == null) return;
+        // Q98：常识深链待落点（openGlossaryTerm 刚点名词条）时不许保位恢复把页面抢回旧位置/顶部，
+        // 跳转定位（renderGlossary 内的 post）优先，落点由它独占。
+        if ("news".equals(key) && pendingGlossaryId != null) return;
         final int y = savedPageScrollY(key, sv);
         if (y > 0) sv.post(() -> sv.scrollTo(0, y));
     }
@@ -2771,6 +2833,7 @@ public class MainActivity extends Activity {
     float navPos = 0f;              // indicator position in tab-index units (fractional while dragging/springing)
     int navSettled = 0;
     int navTintIdx = 0;             // Q38: tab index currently tinted as "under the lens" (icon+label follow the lens, not only the settled page)
+    int navIndicatorRetry = 0;      // Q98: layoutNavIndicator 在底栏未落位时的自投递重试计数（有上限，防无界空转）
     View currentPageView;           // Q38: currently displayed page view - only pages crossfade on switch; FABs/sheets in content keep removeAll semantics
     int lastTabIdx = 0;             // Q64: last settled tab index for directional slide
     int tabAnimGen = 0;             // Q64: generation token to cancel stale page animators on rapid taps
@@ -3128,7 +3191,7 @@ public class MainActivity extends Activity {
         applyAppearanceChrome(); // Q72：先套色再显页，切深色不闪白
         // Q29：滚动只重置停稳计时、滚动中零截图（scheduleGlassRefresh 内 650ms 防抖，见其注释）
         // Q41：滚动期条带平移跟随（只 Canvas 绘制、不重采样，与停稳计时互不干扰）
-        root.getViewTreeObserver().addOnScrollChangedListener(() -> { scheduleGlassRefresh(); followBandScroll(); });
+        root.getViewTreeObserver().addOnScrollChangedListener(() -> { lastScrollEventMs = android.os.SystemClock.uptimeMillis(); scheduleGlassRefresh(); followBandScroll(); }); // Q98 打点供背板滚动冻结判定
 
         showTab("home");
         if (prefs == null || prefs.getBoolean("auto_check_update", true)) checkDataUpdate(false); // Q62: auto only detects
@@ -3390,7 +3453,7 @@ public class MainActivity extends Activity {
             wrap.animate().alpha(0f).translationY(dp(this, SHEET_RISE_DP))
                 .setDuration(ANIM_DUR_SHEET_OUT).setInterpolator(ANIM_EXIT)
                 .withEndAction(() -> { if (v.getParent() instanceof ViewGroup) ((ViewGroup) v.getParent()).removeView(v); }).start();
-            v.postDelayed(() -> { if (v.getParent() instanceof ViewGroup) ((ViewGroup) v.getParent()).removeView(v); }, ANIM_DUR_SHEET_OUT + 40);
+            mainHandler.postDelayed(() -> { if (v.getParent() instanceof ViewGroup) ((ViewGroup) v.getParent()).removeView(v); }, ANIM_DUR_SHEET_OUT + 40); // Q98：兜底改投主线程（view.postDelayed 在视图被摘时 park 走丢）
         } else if (v.getParent() instanceof ViewGroup) ((ViewGroup) v.getParent()).removeView(v);
     }
 
@@ -3506,10 +3569,10 @@ public class MainActivity extends Activity {
                     if (v.getParent() instanceof ViewGroup) ((ViewGroup) v.getParent()).removeView(v);
                     restoreChrome();
                 }).start();
-            v.postDelayed(() -> {
+            mainHandler.postDelayed(() -> {
                 if (v.getParent() instanceof ViewGroup) ((ViewGroup) v.getParent()).removeView(v);
                 restoreChrome();
-            }, ANIM_DUR_SHEET_OUT + 40);
+            }, ANIM_DUR_SHEET_OUT + 40); // Q98：改投主线程，同 closeAcctClassPicker
         } else {
             if (v.getParent() instanceof ViewGroup) ((ViewGroup) v.getParent()).removeView(v);
             restoreChrome();
@@ -4032,7 +4095,13 @@ public class MainActivity extends Activity {
     void layoutNavIndicator(int idx, boolean snap) {
         if (navIndicator == null) return;
         float slot = navSlotW();
-        if (slot <= 0) { navBar.post(() -> layoutNavIndicator(idx, snap)); return; }
+        if (slot <= 0) {
+            // Q98：旧实现无界自投递——navRow 宽度持续为 0（底栏未落位/被整面隐藏）时每帧
+            // repost 空转烧主线程。加上限 40 次（约首帧布局窗口）后停手，下一次正经调用再续。
+            if (navBar != null && ++navIndicatorRetry <= 40) navBar.post(() -> layoutNavIndicator(idx, snap));
+            return;
+        }
+        navIndicatorRetry = 0;
         int w = Math.max(dp(this, 40), Math.round(slot - dp(this, 6)));
         View sample = navItems.get("home");
         int h = sample != null && sample.getHeight() > 0 ? sample.getHeight() - dp(this, 4) : dp(this, 52);
@@ -4542,10 +4611,10 @@ public class MainActivity extends Activity {
                 }).start();
             sheet.animate().cancel();
             sheet.animate().alpha(0f).setDuration(ANIM_DUR_SHADE_OUT).setInterpolator(ANIM_EXIT).start();
-            sheet.postDelayed(() -> {
+            mainHandler.postDelayed(() -> {
                 if (sheet.getParent() != null) ((ViewGroup) sheet.getParent()).removeView(sheet);
                 restoreChrome();
-            }, ANIM_DUR_SHEET_OUT + 40);
+            }, ANIM_DUR_SHEET_OUT + 40); // Q98：改投主线程，同 closeAcctClassPicker
         } else {
             ((ViewGroup) sheet.getParent()).removeView(sheet);
             restoreChrome();
@@ -4732,7 +4801,18 @@ public class MainActivity extends Activity {
         if (bar == null) return;
         bar.animate().alpha(0f).translationY(-dp(this, 8)).setDuration(ANIM_DUR_SHEET_OUT)
             .setInterpolator(ANIM_EXIT)
-            .withEndAction(() -> { if (!floatSearchOpen) bar.setVisibility(View.GONE); }).start();
+            .withEndAction(() -> {
+                if (!floatSearchOpen) bar.setVisibility(View.GONE);
+                refreshLiveGlass(); // Q98：关窗落定强制重抓一帧背板，头部胶囊/底栏玻璃状态即时恢复正常（配合失败计数自愈）
+            }).start();
+        // Q98 兜底：endAction 不达时胶囊会以 alpha 0 滞留屏顶（看不见却吃触摸、挡头部点击）；
+        // 320ms 后若仍未 GONE 强制落位并重抓一帧（与 endAction 同动作为等价兜底，重复跑无害）。
+        mainHandler.postDelayed(() -> {
+            if (!floatSearchOpen && floatSearchBar == bar && bar.getVisibility() != View.GONE) {
+                bar.setVisibility(View.GONE);
+                refreshLiveGlass();
+            }
+        }, ANIM_DUR_SHEET_OUT + 130);
     }
 
     void showKeyboard(View target) {
@@ -5739,15 +5819,10 @@ public class MainActivity extends Activity {
         pullLp.gravity = Gravity.TOP | Gravity.CENTER_HORIZONTAL;
         pullLp.topMargin = statusBarH() + dp(this, 10);
         page.addView(homePullBar, pullLp);
-        // Q49/Q91：全部卡片长列表可拖拽滚动条——轨道改为与日志页同口径（自视口顶部、状态栏下 8dp 起，
-        // 旧 120dp 固定顶距废除），拇指行程锚到卡片列表头（homeList 建好后回填 rangeAnchor）：
-        // 拖条滑的只是卡片那一段，不再从页面最顶部把标题/英雄卡的滚动摊进行程
+        // Q49/Q91/Q98：全部卡片长列表可拖拽滚动条——轨道顶锚到卡片列表头起算（布局落位后由
+        // anchorDragBarToList 钉死，下限状态栏下 8dp），不再自视口顶部起让胶囊贴进状态栏区；
+        // 拇指行程同步锚到列表头（homeList 建好后回填）：拖条滑的只是卡片那一段。
         homeDragBar = attachDragBar(page, homeScroll, false, 8, 100);
-        try {
-            FrameLayout.LayoutParams blp2 = (FrameLayout.LayoutParams) homeDragBar.getLayoutParams();
-            blp2.topMargin = statusBarH() + dp(this, 8);
-            homeDragBar.setLayoutParams(blp2);
-        } catch (Throwable ignored) {}
 
         LinearLayout col = new LinearLayout(this);
         col.setOrientation(LinearLayout.VERTICAL);
@@ -5842,7 +5917,7 @@ public class MainActivity extends Activity {
         homeList = new LinearLayout(this);
         homeList.setOrientation(LinearLayout.VERTICAL);
         col.addView(homeList, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
-        if (homeDragBar != null) homeDragBar.rangeAnchor = homeList; // Q91：滚动条行程自卡片列表头起算
+        anchorDragBarToList(homeDragBar, homeList); // Q98：轨道顶与拇指行程同锚卡片列表头（下限状态栏+8dp）
 
         // Q10 inline search capsule (mixed header .top/#search): in-flow under the title, pill 999,
         // glass white rgba(255,255,255,.78)+blur20, thin magnifier, clear-X circle appears once typing.
@@ -6438,6 +6513,8 @@ public class MainActivity extends Activity {
                 .setDuration(ANIM_DUR_SHEET_OUT).setInterpolator(ANIM_EXIT)
                 .withEndAction(() -> { closeFilterSheetNow(sheet); restoreChrome(); }).start();
             sheet.animate().alpha(0f).setDuration(ANIM_DUR_SHADE_OUT).setInterpolator(ANIM_EXIT).start();
+            // Q98 兜底：endAction 不达则窗滞留屏上且底栏永不恢复；320ms 强制收尾（Now 内部已摘窗、重复跑无害）
+            mainHandler.postDelayed(() -> { if (sheet.getParent() != null) { closeFilterSheetNow(sheet); restoreChrome(); } }, ANIM_DUR_SHEET_OUT + 130);
         } else {
             closeFilterSheetNow(sheet);
             restoreChrome();
@@ -6946,6 +7023,7 @@ public class MainActivity extends Activity {
                         restoreChrome(); // Q12
                     }).start();
                 sheet.animate().alpha(0f).setDuration(ANIM_DUR_SHADE_OUT).setInterpolator(ANIM_EXIT).start();
+                mainHandler.postDelayed(() -> { if (sheet.getParent() != null) { ((ViewGroup) sheet.getParent()).removeView(sheet); restoreChrome(); } }, ANIM_DUR_SHEET_OUT + 130); // Q98 兜底，同 closeFilterSheet
                 return;
             }
             ((ViewGroup) sheet.getParent()).removeView(sheet);
@@ -7609,7 +7687,10 @@ public class MainActivity extends Activity {
         final View wrap = detailSheetWrap;
         final View shade = detailShade;
         final boolean wasWiz = detailFromWiz;
+        final boolean[] finishRan = { false };
         Runnable finish = () -> {
+            if (finishRan[0]) return; // Q98：endAction 与兜底双通道只许跑一次（finish 内含排队开下一张，重复跑会叠窗）
+            finishRan[0] = true;
             if (overlay != null && overlay.getParent() instanceof ViewGroup)
                 ((ViewGroup) overlay.getParent()).removeView(overlay);
             detailView = null; detailSheetWrap = null; detailShade = null; detailCloseGlyph = null; detailPrimaryBtn = null;
@@ -7630,6 +7711,9 @@ public class MainActivity extends Activity {
         if (shade != null) shade.animate().alpha(0f).setDuration(ANIM_DUR_SHADE_OUT).setInterpolator(ANIM_EXIT).start();
         wrap.animate().translationY(targetY).setDuration(ANIM_DUR_SHEET_OUT).setInterpolator(ANIM_EXIT)
             .withEndAction(finish).start();
+        // Q98 兜底：动画被摘除/取消导致 endAction 不达时 320ms 后强制走完同一 finish（单跑守卫防双跑）；
+        // 旧实现只有 endAction 一条路，finish 不达则 detailCard/detailClosing 永久卡死、详情与底栏再也回不来。
+        mainHandler.postDelayed(() -> { if (detailView == overlay && detailClosing) finish.run(); }, ANIM_DUR_SHEET_OUT + 130);
     }
 
     String variantBinText(Card c, int idx) {
@@ -8212,8 +8296,14 @@ public class MainActivity extends Activity {
         studentScroll = sv;
         if (Build.VERSION.SDK_INT >= 23) sv.setOnScrollChangeListener((v, sx, sy, ox, oy) -> { pageScrollSaveY.put("student", sy); updateTopFabVisibility(sy); });
         page.addView(sv, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
-        // Q49：学生页同为长列表（混合版 syncSbar onList 含 student），挂可拖拽滚动条
-        attachDragBar(page, sv, false, 8, 100);
+        // Q49/Q98：学生页同为长列表（混合版 syncSbar onList 含 student），挂可拖拽滚动条；
+        // 轨道顶与首页同口径锚到卡片列表头（首张学生卡，布局落位后钉死，下限状态栏+8dp）
+        final DragBarView stuDragBar = attachDragBar(page, sv, false, 8, 100);
+        try { // 落位前先抬到状态栏下兜底；有学生卡时再由 anchorDragBarToList 锚到首卡
+            FrameLayout.LayoutParams sblp = (FrameLayout.LayoutParams) stuDragBar.getLayoutParams();
+            sblp.topMargin = statusBarH() + dp(this, 8);
+            stuDragBar.setLayoutParams(sblp);
+        } catch (Throwable ignored) {}
         LinearLayout col = new LinearLayout(this);
         col.setOrientation(LinearLayout.VERTICAL);
         col.setPadding(dp(this, 14), pageTopPad(), dp(this, 14), dockPad());
@@ -8274,6 +8364,7 @@ public class MainActivity extends Activity {
         sectLp.topMargin = dp(this, 14);
         col.addView(sect, sectLp);
 
+        boolean stuAnchored = false;
         for (final Card c : stu) {
             LinearLayout cardBox = new LinearLayout(this);
             cardBox.setOrientation(LinearLayout.VERTICAL);
@@ -8283,6 +8374,7 @@ public class MainActivity extends Activity {
             LinearLayout.LayoutParams clp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
             clp.topMargin = dp(this, 10);
             col.addView(cardBox, clp);
+            if (!stuAnchored) { stuAnchored = true; anchorDragBarToList(stuDragBar, cardBox); } // Q98：首卡即列表头
             cardBox.setOnClickListener(v -> openDetail(c));
             attachCardMenuLongPress(cardBox, c, false);
 
@@ -9621,6 +9713,15 @@ public class MainActivity extends Activity {
                     restoreChrome(); // Q12
                 }).start();
             sheet.animate().alpha(0f).setDuration(ANIM_DUR_SHADE_OUT).setInterpolator(ANIM_EXIT).start();
+            // Q98 兜底：endAction 不达则 delConfirmClosing 恒真、删除确认窗再也关不掉；320ms 强制收尾（重复跑无害）
+            mainHandler.postDelayed(() -> {
+                if (delConfirmClosing && sheet.getParent() != null) {
+                    ((ViewGroup) sheet.getParent()).removeView(sheet);
+                    if (delConfirmSheet == sheet) delConfirmSheet = null;
+                    delConfirmClosing = false;
+                    restoreChrome();
+                }
+            }, ANIM_DUR_SHEET_OUT + 130);
         } else {
             ((ViewGroup) sheet.getParent()).removeView(sheet);
             delConfirmSheet = null; delConfirmClosing = false;
@@ -9978,7 +10079,10 @@ public class MainActivity extends Activity {
         customDetailClosing = true;
         final View overlay = customDetailSheet;
         final View wrap = customDetailWrap;
+        final boolean[] finishRan = { false };
         Runnable finish = () -> {
+            if (finishRan[0]) return; // Q98：与兜底双通道单跑
+            finishRan[0] = true;
             if (overlay.getParent() instanceof ViewGroup)
                 ((ViewGroup) overlay.getParent()).removeView(overlay);
             if (customDetailSheet == overlay) {
@@ -9996,6 +10100,7 @@ public class MainActivity extends Activity {
         int targetY = wrap.getHeight() > 0 ? wrap.getHeight() : dp(this, 420);
         wrap.animate().translationY(targetY).setDuration(ANIM_DUR_SHEET_OUT).setInterpolator(ANIM_EXIT)
             .withEndAction(finish).start();
+        mainHandler.postDelayed(() -> { if (customDetailSheet == overlay && customDetailClosing) finish.run(); }, ANIM_DUR_SHEET_OUT + 130); // Q98 兜底，同 closeDetail
     }
 
     void closeCustomDetailNow() {
@@ -10094,6 +10199,7 @@ public class MainActivity extends Activity {
                         restoreChrome(); // Q12
                     }).start();
                 sheet.animate().alpha(0f).setDuration(ANIM_DUR_SHADE_OUT).setInterpolator(ANIM_EXIT).start();
+                mainHandler.postDelayed(() -> { if (sheet.getParent() != null) { ((ViewGroup) sheet.getParent()).removeView(sheet); restoreChrome(); } }, ANIM_DUR_SHEET_OUT + 130); // Q98 兜底（closeCustomForm）
                 return;
             }
             ((ViewGroup) sheet.getParent()).removeView(sheet);
@@ -10762,6 +10868,7 @@ public class MainActivity extends Activity {
                         restoreChrome(); // Q12
                     }).start();
                 sheet.animate().alpha(0f).setDuration(ANIM_DUR_SHADE_OUT).setInterpolator(ANIM_EXIT).start();
+                mainHandler.postDelayed(() -> { if (sheet.getParent() != null) { ((ViewGroup) sheet.getParent()).removeView(sheet); restoreChrome(); } }, ANIM_DUR_SHEET_OUT + 130); // Q98 兜底，同 closeFilterSheet
                 return;
             }
             ((ViewGroup) sheet.getParent()).removeView(sheet);
@@ -11388,8 +11495,13 @@ public class MainActivity extends Activity {
         if(sheet==null) return; boolean isTip=(sheet==updateTipSheet); boolean isConf=(sheet==updateConfirmSheet);
         if(isTip){ if(updateTipClosing) return; updateTipClosing=true; } if(isConf){ if(updateConfirmClosing) return; updateConfirmClosing=true; }
         Object[] t=sheet.getTag() instanceof Object[] ? (Object[])sheet.getTag() : null; View wrap=t!=null?(View)t[0]:null;
-        Runnable done=()->{ if(sheet.getParent()!=null) ((ViewGroup)sheet.getParent()).removeView(sheet); if(isTip){updateTipSheet=null;updateTipClosing=false;} if(isConf){updateConfirmSheet=null;updateConfirmClosing=false;} restoreChrome(); };
-        if(wrap!=null){ wrap.animate().translationY(dp(this,42)).alpha(0f).setDuration(ANIM_DUR_SHEET_OUT).setInterpolator(ANIM_EXIT).withEndAction(done).start(); sheet.animate().alpha(0f).setDuration(ANIM_DUR_SHADE_OUT).setInterpolator(ANIM_EXIT).start(); } else done.run();
+        final boolean[] doneRan={false};
+        Runnable done=()->{ if(doneRan[0]) return; doneRan[0]=true; if(sheet.getParent()!=null) ((ViewGroup)sheet.getParent()).removeView(sheet); if(isTip){updateTipSheet=null;updateTipClosing=false;} if(isConf){updateConfirmSheet=null;updateConfirmClosing=false;} restoreChrome(); };
+        if(wrap!=null){ wrap.animate().translationY(dp(this,42)).alpha(0f).setDuration(ANIM_DUR_SHEET_OUT).setInterpolator(ANIM_EXIT).withEndAction(done).start(); sheet.animate().alpha(0f).setDuration(ANIM_DUR_SHADE_OUT).setInterpolator(ANIM_EXIT).start();
+            // Q98 兜底：endAction 不达时 320ms 后强制 done（单跑守卫）；旧实现走丢则 closing 标记与
+            // sheet 引用永久卡死，更新窗再也弹不出、isChromeCovered 恒真连累全套悬浮件。
+            mainHandler.postDelayed(()->{ if(updateTipSheet==sheet||updateConfirmSheet==sheet) done.run(); },ANIM_DUR_SHEET_OUT+130);
+        } else done.run();
     }
 
     // ---------- 资讯（Phase 2c，对照 app.js renderNews/loadNews/checkNewsUpdate） ----------
@@ -11497,7 +11609,9 @@ public class MainActivity extends Activity {
         pendingGlossaryId = id;
         glossaryOpen.add(id);
         if (!"news".equals(tab)) showTab("news");
-        else if (glossaryBox != null) renderGlossary();
+        // Q98：资讯页已建好时 showTab 不会重走 buildNewsPage，必须主动重渲染才会展开词条并
+        // 触发定位 post；刚建好时渲染已在 build 内跑过，再跑一次无副作用（定位 post 后到者胜）。
+        if (glossaryBox != null) renderGlossary();
     }
 
     void renderGlossary() {
@@ -11574,8 +11688,10 @@ public class MainActivity extends Activity {
                     while (cur != null && cur != newsScroll.getChildAt(0)) { y += cur.getTop(); cur = (View) cur.getParent(); }
                     newsScroll.smoothScrollTo(0, Math.max(0, y - dp(MainActivity.this, 12)));
                 } catch (Throwable ignored) {}
+                pendingGlossaryId = null; // 清除放 post 内执行：showTab 尾段的保位守卫要靠它拦下抢位（Q98）
             });
-            pendingGlossaryId = null;
+        } else if (jumpId != null) {
+            pendingGlossaryId = null; // Q98：词条不在当前词表（远端已换版）时清标记，免资讯页保位被永久跳过
         }
     }
 
@@ -12161,6 +12277,8 @@ public class MainActivity extends Activity {
         stopShowcaseDrift();
         v.animate().alpha(0f).setDuration(ANIM_DUR_SHEET_OUT).setInterpolator(ANIM_EXIT)
             .withEndAction(() -> { closeShowcaseNow(); restoreChrome(); }).start();
+        // Q98 兜底：endAction 不达则 showcaseClosing 恒真、展柜再也开不了；320ms 强制收尾
+        mainHandler.postDelayed(() -> { if (showcaseView == v && showcaseClosing) { closeShowcaseNow(); restoreChrome(); } }, ANIM_DUR_SHEET_OUT + 130);
     }
 
     // ---------- Q84 电话卡保号管家（模块键 simkeep_，设置可关、关掉不占位） ----------
@@ -12273,6 +12391,7 @@ public class MainActivity extends Activity {
         simkeepClosing = true;
         v.animate().alpha(0f).setDuration(ANIM_DUR_SHEET_OUT).setInterpolator(ANIM_EXIT)
             .withEndAction(() -> { closeSimKeepNow(); restoreChrome(); }).start();
+        mainHandler.postDelayed(() -> { if (simkeepView == v && simkeepClosing) { closeSimKeepNow(); restoreChrome(); } }, ANIM_DUR_SHEET_OUT + 130); // Q98 兜底，同 closeShowcase
     }
     void buildSimKeepBody() {
         if (simkeepBody == null) return;
@@ -12594,6 +12713,7 @@ public class MainActivity extends Activity {
         subfollowClosing = true;
         v.animate().alpha(0f).setDuration(ANIM_DUR_SHEET_OUT).setInterpolator(ANIM_EXIT)
             .withEndAction(() -> { closeSubFollowNow(); restoreChrome(); }).start();
+        mainHandler.postDelayed(() -> { if (subfollowView == v && subfollowClosing) { closeSubFollowNow(); restoreChrome(); } }, ANIM_DUR_SHEET_OUT + 130); // Q98 兜底，同 closeShowcase
     }
     void buildSubFollowBody() {
         if (subfollowBody == null) return;
@@ -12923,6 +13043,7 @@ public class MainActivity extends Activity {
         footprintClosing = true;
         v.animate().alpha(0f).setDuration(ANIM_DUR_SHEET_OUT).setInterpolator(ANIM_EXIT)
             .withEndAction(() -> { closeFootprintNow(); restoreChrome(); }).start();
+        mainHandler.postDelayed(() -> { if (footprintView == v && footprintClosing) { closeFootprintNow(); restoreChrome(); } }, ANIM_DUR_SHEET_OUT + 130); // Q98 兜底，同 closeShowcase
     }
     TextView footFilterChip(String label, boolean on) {
         TextView chip = tv(this, label, 12.5f, on ? Color.WHITE : colText(), on);
@@ -13524,6 +13645,14 @@ public class MainActivity extends Activity {
                         restoreChrome();
                     }).start();
                 sheet.animate().alpha(0f).setDuration(ANIM_DUR_SHADE_OUT).setInterpolator(ANIM_EXIT).start();
+                // Q98 兜底：endAction 不达则 extClosing 永久为真、窗再也关不掉；320ms 强制收尾（同动作重复跑无害）
+                mainHandler.postDelayed(() -> {
+                    if (extClosing && sheet.getParent() != null) {
+                        ((ViewGroup) sheet.getParent()).removeView(sheet);
+                        extClosing = false; extResultBox = null; extMeta = null; extInput = null;
+                        restoreChrome();
+                    }
+                }, ANIM_DUR_SHEET_OUT + 130);
                 return;
             }
             ((ViewGroup) sheet.getParent()).removeView(sheet);
@@ -14289,7 +14418,7 @@ public class MainActivity extends Activity {
                 float rot = helloFlat ? (i - 2) * 3f : (i - (n - 1) / 2f) * 2.2f;
                 float sc = helloFlat ? 0.62f : 1f;
                 cards[i].animate().translationX(tx).translationY(ty).rotation(rot).scaleX(sc).scaleY(sc)
-                    .setDuration(ANIM_DUR_FADE).setInterpolator(ANIM_ENTER).start();
+                    .setDuration(460).setInterpolator(ANIM_ENTER).start(); // Q98：堆叠↔平放切换同步放慢（旧 ANIM_DUR_FADE 220ms 一晃而过）
             }
         };
         stackChip.setOnClickListener(v -> { haptic(); if (helloFlat) { helloFlat = false; styleTrial.run(); spread.run(); } });
@@ -14316,7 +14445,9 @@ public class MainActivity extends Activity {
         col.addView(hint, hnp);
 
         root.setOnClickListener(v -> closeHello());
-        // 飞入：每张自四周带位移与缩小飞入，120ms 错峰，单张 ANIM_DUR_SHEET_IN 走 ANIM_ENTER；落定后笑脸与文案依次淡入。
+        // 飞入：每张自四周带位移与缩小飞入，错峰错开，单张缓出（ANIM_ENTER）飞入；落定后笑脸与文案依次淡入。
+        // Q98 调速（用户 17:08 点名太快没看清）：旧单张 ANIM_DUR_SHEET_IN(280ms)+错峰 120ms，五张
+        // 约 0.76s 一闪而过；新单张 560ms、错峰 210ms，末张落定约 1.4s，文案尾序毕总时长约 2.0s。
         root.post(() -> {
             float w = Math.max(stage.getWidth(), dp(this, 320));
             float[] dx = {-w * 0.7f, w * 0.7f, -w * 0.55f, w * 0.55f, 0f};
@@ -14331,15 +14462,15 @@ public class MainActivity extends Activity {
                 c.setAlpha(0f);
                 c.animate().translationX(0f).translationY(baseTy).rotation(baseRot)
                     .scaleX(1f).scaleY(1f).alpha(1f)
-                    .setStartDelay(i * 120L).setDuration(ANIM_DUR_SHEET_IN).setInterpolator(ANIM_ENTER).start();
+                    .setStartDelay(i * 210L).setDuration(560).setInterpolator(ANIM_ENTER).start();
             }
-            long tail = (n - 1) * 120L + ANIM_DUR_SHEET_IN;
+            long tail = (n - 1) * 210L + 560L;
             if (face[0] != null) face[0].animate().alpha(1f).setStartDelay(tail).setDuration(ANIM_DUR_FADE).setInterpolator(ANIM_ENTER).start();
-            hi.animate().alpha(1f).translationY(0f).setStartDelay(tail + 60).setDuration(ANIM_DUR_FADE).setInterpolator(ANIM_ENTER).start();
-            sub.animate().alpha(1f).translationY(0f).setStartDelay(tail + 120).setDuration(ANIM_DUR_FADE).setInterpolator(ANIM_ENTER).start();
-            trial.animate().alpha(1f).setStartDelay(tail + 180).setDuration(ANIM_DUR_FADE).setInterpolator(ANIM_ENTER).start();
-            go.animate().alpha(1f).translationY(0f).setStartDelay(tail + 240).setDuration(ANIM_DUR_FADE).setInterpolator(ANIM_ENTER).start();
-            hint.animate().alpha(1f).setStartDelay(tail + 300).setDuration(ANIM_DUR_FADE).setInterpolator(ANIM_ENTER).start();
+            hi.animate().alpha(1f).translationY(0f).setStartDelay(tail + 90).setDuration(ANIM_DUR_FADE).setInterpolator(ANIM_ENTER).start();
+            sub.animate().alpha(1f).translationY(0f).setStartDelay(tail + 180).setDuration(ANIM_DUR_FADE).setInterpolator(ANIM_ENTER).start();
+            trial.animate().alpha(1f).setStartDelay(tail + 270).setDuration(ANIM_DUR_FADE).setInterpolator(ANIM_ENTER).start();
+            go.animate().alpha(1f).translationY(0f).setStartDelay(tail + 360).setDuration(ANIM_DUR_FADE).setInterpolator(ANIM_ENTER).start();
+            hint.animate().alpha(1f).setStartDelay(tail + 450).setDuration(ANIM_DUR_FADE).setInterpolator(ANIM_ENTER).start();
         });
         return root;
     }
@@ -14630,6 +14761,8 @@ public class MainActivity extends Activity {
                 .setDuration(ANIM_DUR_MENU_OUT).setInterpolator(ANIM_EXIT)
                 .withEndAction(() -> { if (ov.getParent() != null) ((ViewGroup) ov.getParent()).removeView(ov); })
                 .start();
+            // Q98 兜底：endAction 不达则全屏菜单罩以 alpha 动画中途态滞留屏上吃触摸；超时强制摘除
+            mainHandler.postDelayed(() -> { if (ov.getParent() != null) ((ViewGroup) ov.getParent()).removeView(ov); }, ANIM_DUR_MENU_OUT + 130);
         } else if (ov.getParent() != null) {
             ((ViewGroup) ov.getParent()).removeView(ov);
         }
