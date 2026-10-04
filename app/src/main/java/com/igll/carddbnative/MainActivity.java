@@ -158,6 +158,267 @@ public class MainActivity extends Activity {
         else v.animate().scaleX(1f).scaleY(1f).setDuration(260).setInterpolator(ANIM_SPRING).start();
     }
 
+    // ---------- Q92 UI 收口：全站统一控件与二级页模板 ----------
+    // 审美口径（用户 2026-10-04 真机连环点名）：柔和扁平——低饱和柔色面、大圆角、轻阴影、
+    // 圆形细线图标钮、层级靠字重字号与留白，忌安卓原生控件脸（默认灰 Button/系统蓝大块/硬阴影）。
+    // 以下助手为本批唯一落点：二级页头、主/次按钮、开关、工具宫格图标、菜单图标全走这里，
+    // 不再各页自创形制。图标一律 Canvas 细线自绘（24 网格、1.7 线宽、圆头），禁用 emoji。
+
+    /** 细线左箭头（二级页返回钮专用，与 SceneIconView 同语言）。 */
+    class BackChevronView extends View {
+        int iconColor = 0;
+        BackChevronView(Context c) { super(c); }
+        @Override protected void onDraw(Canvas cv) {
+            Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);
+            p.setStyle(Paint.Style.STROKE);
+            p.setStrokeCap(Paint.Cap.ROUND);
+            p.setStrokeJoin(Paint.Join.ROUND);
+            p.setColor(iconColor != 0 ? iconColor : colText());
+            float sx = getWidth() / 24f, sy = getHeight() / 24f;
+            p.setStrokeWidth(2f * sx);
+            cv.drawLine(14.5f * sx, 5.5f * sy, 8f * sx, 12f * sy, p);
+            cv.drawLine(8f * sx, 12f * sy, 14.5f * sx, 18.5f * sy, p);
+        }
+    }
+
+    /** 圆形细线图标钮（返回/关闭同形制）：柔色面 + pressBounce，不用白药丸、不用原生 Button。 */
+    FrameLayout circleIconBtn(boolean back, int iconCol, final Runnable act) {
+        FrameLayout b = new FrameLayout(this);
+        b.setBackground(rippleBg(colSurface(), 999));
+        b.setClipToOutline(true);
+        if (Build.VERSION.SDK_INT >= 21) b.setElevation(dp(this, 2));
+        View iv;
+        if (back) { BackChevronView v = new BackChevronView(this); v.iconColor = iconCol; iv = v; }
+        else { CloseIconView v = new CloseIconView(this); v.iconColor = iconCol; iv = v; }
+        b.addView(iv, new FrameLayout.LayoutParams(dp(this, 19), dp(this, 19), Gravity.CENTER));
+        b.setOnTouchListener((v, e) -> {
+            if (e.getAction() == MotionEvent.ACTION_DOWN) pressBounce(v, true);
+            else if (e.getAction() == MotionEvent.ACTION_UP || e.getAction() == MotionEvent.ACTION_CANCEL) pressBounce(v, false);
+            return false;
+        });
+        b.setOnClickListener(v -> { haptic(); if (act != null) act.run(); });
+        return b;
+    }
+
+    /** 二级页头：左圆形返回钮 + 标题（20sp/800），全站二级页同一张脸。 */
+    LinearLayout pageBackHead(String title, final Runnable onBack) {
+        LinearLayout head = new LinearLayout(this);
+        head.setOrientation(LinearLayout.HORIZONTAL);
+        head.setGravity(Gravity.CENTER_VERTICAL);
+        head.setPadding(dp(this, 14), pageTopPad(), dp(this, 14), dp(this, 8));
+        head.addView(circleIconBtn(true, colText(), onBack), new LinearLayout.LayoutParams(dp(this, 38), dp(this, 38)));
+        TextView t = tvW(this, title, 20, colText(), 800);
+        LinearLayout.LayoutParams tlp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+        tlp.leftMargin = dp(this, 10);
+        head.addView(t, tlp);
+        return head;
+    }
+
+    /** 二级页头下一行小字（Q92：与 pageBackHead 左缘对齐的副标题）。 */
+    TextView slimSub(String s) {
+        TextView t = tv(this, s, 12.5f, colText2(), false);
+        t.setLineSpacing(0, 1.5f);
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        lp.leftMargin = dp(this, 16);
+        lp.rightMargin = dp(this, 16);
+        t.setLayoutParams(lp);
+        return t;
+    }
+
+    /** 柔和主按钮：主色柔面、48dp 高、圆角 14、白字 15sp/600；统一替代原生蓝 Button。 */
+    TextView softPrimaryBtn(String label) {
+        TextView b = tv(this, label, 15, Color.WHITE, true);
+        b.setGravity(Gravity.CENTER);
+        b.setSingleLine(true);
+        GradientDrawable g = new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
+            new int[]{accentColor(), accentColor()});
+        g.setColor(accentColor());
+        g.setCornerRadius(dp(this, 14));
+        b.setBackground(new RippleDrawable(ColorStateList.valueOf(Color.argb(36, 255, 255, 255)), g, null));
+        if (Build.VERSION.SDK_INT >= 21) b.setElevation(dp(this, 2));
+        b.setPadding(dp(this, 16), 0, dp(this, 16), 0);
+        b.setOnTouchListener((v, e) -> {
+            if (e.getAction() == MotionEvent.ACTION_DOWN) pressBounce(v, true);
+            else if (e.getAction() == MotionEvent.ACTION_UP || e.getAction() == MotionEvent.ACTION_CANCEL) pressBounce(v, false);
+            return false;
+        });
+        return b;
+    }
+
+    /** 柔和次按钮：柔色面（colChipOff）+ 主字，48dp/圆角 14；替代原生灰 Button。 */
+    TextView softGhostBtn(String label) {
+        TextView b = tv(this, label, 15, colText(), false);
+        b.setGravity(Gravity.CENTER);
+        b.setSingleLine(true);
+        b.setBackground(rippleBg(colChipOff(), 14));
+        b.setPadding(dp(this, 16), 0, dp(this, 16), 0);
+        b.setOnTouchListener((v, e) -> {
+            if (e.getAction() == MotionEvent.ACTION_DOWN) pressBounce(v, true);
+            else if (e.getAction() == MotionEvent.ACTION_UP || e.getAction() == MotionEvent.ACTION_CANCEL) pressBounce(v, false);
+            return false;
+        });
+        return b;
+    }
+
+    /** 迷你行内钮（卡片内操作：顺延/编辑等）：小一号的主/次面，圆角 10。 */
+    TextView softMiniBtn(String label, boolean primary) {
+        TextView b = tv(this, label, 13, primary ? Color.WHITE : colText(), true);
+        b.setGravity(Gravity.CENTER);
+        b.setSingleLine(true);
+        b.setPadding(0, dp(this, 9), 0, dp(this, 9));
+        if (primary) {
+            GradientDrawable g = new GradientDrawable();
+            g.setColor(accentColor()); g.setCornerRadius(dp(this, 10));
+            b.setBackground(new RippleDrawable(ColorStateList.valueOf(Color.argb(36, 255, 255, 255)), g, null));
+        } else b.setBackground(rippleBg(colChipOff(), 10));
+        b.setOnTouchListener((v, e) -> {
+            if (e.getAction() == MotionEvent.ACTION_DOWN) pressBounce(v, true);
+            else if (e.getAction() == MotionEvent.ACTION_UP || e.getAction() == MotionEvent.ACTION_CANCEL) pressBounce(v, false);
+            return false;
+        });
+        return b;
+    }
+
+    /** 柔和开关：46×28 轨道 + 白色拇指（关=柔灰、开=主色），替代「开/关」文字药丸的原生脸。 */
+    class ToggleView extends View {
+        boolean on = false;
+        float thumbPos = 0f; // 0 关 1 开，供切换动画插值
+        ToggleView(Context c) { super(c); }
+        public void setThumbPos(float v) { thumbPos = v; invalidate(); }
+        void setOn(boolean v, boolean anim) {
+            on = v;
+            if (anim) {
+                android.animation.ObjectAnimator oa = android.animation.ObjectAnimator.ofFloat(this, "thumbPos", thumbPos, v ? 1f : 0f);
+                oa.setDuration(180);
+                oa.setInterpolator(ANIM_ENTER);
+                oa.start();
+            } else { thumbPos = v ? 1f : 0f; invalidate(); }
+        }
+        @Override protected void onDraw(Canvas cv) {
+            Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);
+            float w = getWidth(), h = getHeight();
+            float trackH = Math.min(h, dp(getContext(), 28));
+            float top = (h - trackH) / 2f;
+            int trackCol = on ? accentColor() : (darkEff() ? Color.rgb(0x3A, 0x3A, 0x3E) : Color.rgb(0xD8, 0xDC, 0xE4));
+            GradientDrawable track = new GradientDrawable();
+            track.setColor(trackCol);
+            track.setCornerRadius(trackH / 2f);
+            track.setBounds(0, (int) top, (int) w, (int) (top + trackH));
+            track.draw(cv);
+            float r = trackH / 2f - dp(getContext(), 2.5f);
+            float cx = dp(getContext(), 2.5f) + r + (w - trackH) * thumbPos;
+            p.setStyle(Paint.Style.FILL);
+            p.setColor(Color.WHITE);
+            p.setShadowLayer(dp(getContext(), 2), 0, dp(getContext(), 1), Color.argb(60, 0, 0, 0));
+            cv.drawCircle(cx, h / 2f, r, p);
+            p.clearShadowLayer();
+        }
+    }
+
+    /** 工具宫格细线图标（我的卡片页整合区专用）：24 网格细线自绘。 */
+    class ToolIconView extends View {
+        String kind = "showcase";
+        int iconColor = 0;
+        ToolIconView(Context c) { super(c); }
+        @Override protected void onDraw(Canvas cv) {
+            Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);
+            p.setStyle(Paint.Style.STROKE);
+            p.setStrokeCap(Paint.Cap.ROUND);
+            p.setStrokeJoin(Paint.Join.ROUND);
+            p.setColor(iconColor != 0 ? iconColor : colText());
+            float sx = getWidth() / 24f, sy = getHeight() / 24f;
+            p.setStrokeWidth(1.7f * sx);
+            android.graphics.Path path = new android.graphics.Path();
+            if ("showcase".equals(kind)) { // 叠放的两张卡
+                android.graphics.RectF r1 = new android.graphics.RectF(7f * sx, 3.5f * sy, 20f * sx, 13.5f * sy);
+                cv.drawRoundRect(r1, 2f * sx, 2f * sy, p);
+                android.graphics.RectF r2 = new android.graphics.RectF(4f * sx, 10.5f * sy, 17f * sx, 20.5f * sy);
+                cv.drawRoundRect(r2, 2f * sx, 2f * sy, p);
+            } else if ("sim".equals(kind)) { // 电话卡：卡体缺角 + 触点
+                path.moveTo(7f * sx, 4f * sy); path.lineTo(17f * sx, 4f * sy);
+                path.lineTo(20f * sx, 7f * sy); path.lineTo(20f * sx, 19f * sy);
+                path.lineTo(7f * sx, 19f * sy); path.close();
+                cv.drawPath(path, p);
+                path.reset();
+                path.moveTo(11f * sx, 9f * sy); path.lineTo(16f * sx, 9f * sy);
+                path.moveTo(11f * sx, 12.5f * sy); path.lineTo(16f * sx, 12.5f * sy);
+                cv.drawPath(path, p);
+                cv.drawLine(11f * sx, 9f * sy, 11f * sx, 12.5f * sy, p);
+                cv.drawLine(16f * sx, 9f * sy, 16f * sx, 12.5f * sy, p);
+            } else if ("sub".equals(kind)) { // 铃铛
+                path.moveTo(12f * sx, 4f * sy);
+                path.cubicTo(8.5f * sx, 4f * sy, 7f * sx, 7f * sy, 7f * sx, 11f * sy);
+                path.cubicTo(7f * sx, 14.5f * sy, 5.8f * sx, 15.8f * sy, 4.8f * sx, 16.8f * sy);
+                path.lineTo(19.2f * sx, 16.8f * sy);
+                path.cubicTo(18.2f * sx, 15.8f * sy, 17f * sx, 14.5f * sy, 17f * sx, 11f * sy);
+                path.cubicTo(17f * sx, 7f * sy, 15.5f * sx, 4f * sy, 12f * sx, 4f * sy);
+                cv.drawPath(path, p);
+                cv.drawCircle(12f * sx, 19f * sy, 1.9f * sx, p);
+            } else if ("foot".equals(kind)) { // 时间线：竖线 + 节点（玩卡足迹）
+                cv.drawLine(7f * sx, 4f * sy, 7f * sx, 20f * sy, p);
+                cv.drawCircle(7f * sx, 7f * sy, 2.3f * sx, p);
+                cv.drawCircle(7f * sx, 16.5f * sy, 2.3f * sx, p);
+                cv.drawLine(12f * sx, 7f * sy, 19.5f * sx, 7f * sy, p);
+                cv.drawLine(12f * sx, 16.5f * sy, 17.5f * sx, 16.5f * sy, p);
+            } else if ("act".equals(kind)) { // 旗帜（活动追踪）
+                cv.drawLine(6f * sx, 3.5f * sy, 6f * sx, 20.5f * sy, p);
+                path.moveTo(6f * sx, 4.5f * sy);
+                path.lineTo(18.5f * sx, 4.5f * sy);
+                path.lineTo(15.8f * sx, 8.2f * sy);
+                path.lineTo(18.5f * sx, 11.8f * sy);
+                path.lineTo(6f * sx, 11.8f * sy);
+                cv.drawPath(path, p);
+            } else { // custom：加号卡
+                android.graphics.RectF r = new android.graphics.RectF(4f * sx, 5.5f * sy, 20f * sx, 18.5f * sy);
+                cv.drawRoundRect(r, 2.5f * sx, 2.5f * sy, p);
+                cv.drawLine(12f * sx, 9f * sy, 12f * sx, 15f * sy, p);
+                cv.drawLine(9f * sx, 12f * sy, 15f * sx, 12f * sy, p);
+            }
+        }
+    }
+
+    /** ⋯菜单行细线图标（与 ToolIconView 同语言，菜单专用语义）。 */
+    class MenuIconView extends View {
+        String kind = "about";
+        int iconColor = 0;
+        MenuIconView(Context c) { super(c); }
+        @Override protected void onDraw(Canvas cv) {
+            Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);
+            p.setStyle(Paint.Style.STROKE);
+            p.setStrokeCap(Paint.Cap.ROUND);
+            p.setStrokeJoin(Paint.Join.ROUND);
+            p.setColor(iconColor != 0 ? iconColor : colText());
+            float sx = getWidth() / 24f, sy = getHeight() / 24f;
+            p.setStrokeWidth(1.7f * sx);
+            android.graphics.Path path = new android.graphics.Path();
+            if ("scene".equals(kind)) { // 罗盘
+                cv.drawCircle(12f * sx, 12f * sy, 8.5f * sx, p);
+                path.moveTo(15.5f * sx, 8.5f * sy); path.lineTo(13.2f * sx, 13.2f * sy);
+                path.lineTo(8.5f * sx, 15.5f * sy); path.lineTo(10.8f * sx, 10.8f * sy);
+                path.close(); cv.drawPath(path, p);
+            } else if ("log".equals(kind)) { // 列表
+                cv.drawLine(9f * sx, 6.5f * sy, 20f * sx, 6.5f * sy, p);
+                cv.drawLine(9f * sx, 12f * sy, 20f * sx, 12f * sy, p);
+                cv.drawLine(9f * sx, 17.5f * sy, 15.5f * sx, 17.5f * sy, p);
+                p.setStyle(Paint.Style.FILL);
+                cv.drawCircle(5f * sx, 6.5f * sy, 1.3f * sx, p);
+                cv.drawCircle(5f * sx, 12f * sy, 1.3f * sx, p);
+                cv.drawCircle(5f * sx, 17.5f * sy, 1.3f * sx, p);
+            } else if ("welcome".equals(kind)) { // 星芒（欢迎/初见）
+                path.moveTo(12f * sx, 4f * sy); path.lineTo(13.8f * sx, 10.2f * sy);
+                path.lineTo(20f * sx, 12f * sy); path.lineTo(13.8f * sx, 13.8f * sy);
+                path.lineTo(12f * sx, 20f * sy); path.lineTo(10.2f * sx, 13.8f * sy);
+                path.lineTo(4f * sx, 12f * sy); path.lineTo(10.2f * sx, 10.2f * sy);
+                path.close(); cv.drawPath(path, p);
+            } else { // about：卡面轮廓 + 磁条
+                android.graphics.RectF r = new android.graphics.RectF(3.5f * sx, 6f * sy, 20.5f * sx, 18f * sy);
+                cv.drawRoundRect(r, 2.5f * sx, 2.5f * sy, p);
+                cv.drawLine(3.5f * sx, 10f * sy, 20.5f * sx, 10f * sy, p);
+                cv.drawLine(6.5f * sx, 14.8f * sy, 10.5f * sx, 14.8f * sy, p);
+            }
+        }
+    }
+
 
     // ---------- 小工具 ----------
     static int dp(Context c, float v) { return (int) (v * c.getResources().getDisplayMetrics().density + 0.5f); }
@@ -1134,6 +1395,9 @@ public class MainActivity extends Activity {
                 int[] rl = new int[2]; rootView.getLocationInWindow(rl);
                 int[] ml = new int[2]; getLocationInWindow(ml);
                 canvas.save();
+                // Q92 硬兜底：先把画布裁到本层自身 bounds——无论宿主布局如何异常，
+                // 玻璃取样层物理上不可能画出自身矩形之外（防再次全屏糊层事故）。
+                canvas.clipRect(0, 0, Math.max(1, getWidth()), Math.max(1, getHeight()));
                 // 对位：节点以 BACKDROP_SCALE 录制（节点 px = 根坐标 × scale），绘出时先按
                 // 本层在根坐标中的位置平移、再 1/scale 放大回全分辨率，内容比例才与身后实景 1:1。
                 canvas.translate(-(ml[0] - rl[0]), -(ml[1] - rl[1]));
@@ -1916,6 +2180,7 @@ public class MainActivity extends Activity {
     boolean extFetchFailed = false; // Q91：双线都没拉到且无可用索引时置真（有缓存则不算失败）
     String extQuery = "";
     LinearLayout extResultBox = null;
+    ScrollView extResScroll = null; // Q92：自适应高度持有者
     TextView extMeta = null;
     EditText extInput = null;
     // Q78 展柜：我的卡片纯卡面展示（堆叠/平放自由画布），只用自有卡（收藏条目+自定义卡），
@@ -2850,6 +3115,13 @@ public class MainActivity extends Activity {
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         toastWrap.addView(bar, new FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        // Q92 根因修复（全屏糊层事故）：wrap 切勿 WRAP_CONTENT——内含 MATCH_PARENT 高的
+        // wash 玻璃层时，普通 View 首遍测量按 AT_MOST 取满高会把 wrap 顶到近全屏，
+        // 玻璃随 bounds 铺满整屏。改先测 bar 实高、wrap 钉死像素高，玻璃绝不越界。
+        bar.measure(View.MeasureSpec.makeMeasureSpec(
+                getResources().getDisplayMetrics().widthPixels - dp(this, 32), View.MeasureSpec.AT_MOST),
+            View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED));
+        lp.height = Math.max(dp(this, 44), bar.getMeasuredHeight());
         rootView.addView(toastWrap, lp);
         toastWrap.bringToFront();
         floatToastView = toastWrap;
@@ -3002,13 +3274,12 @@ public class MainActivity extends Activity {
         LinearLayout cardBox = new LinearLayout(this);
         cardBox.setOrientation(LinearLayout.VERTICAL);
         GradientDrawable cg = new GradientDrawable();
-        cg.setColor(Color.WHITE);
-        float rTop = dp(this, 22);
-        cg.setCornerRadii(new float[]{rTop, rTop, rTop, rTop, 0, 0, 0, 0});
+        cg.setColor(colSheet()); // Q92：走语义浮层色，不再写死纯白
+        cg.setCornerRadius(dp(this, 22)); // Q92：四角全圆（窗改浮起式，不再贴底直角）
         cardBox.setBackground(cg);
-        if (Build.VERSION.SDK_INT >= 21) { cardBox.setElevation(dp(this, 24)); topSheetClip(cardBox, 22, this); }
+        if (Build.VERSION.SDK_INT >= 21) { cardBox.setElevation(dp(this, 24)); roundClip(cardBox, 22, this); }
         cardBox.setOnClickListener(v -> {});
-        cardBox.setPadding(dp(this, 18), dp(this, 18), dp(this, 18), dp(this, 14) + navBarH());
+        cardBox.setPadding(dp(this, 18), dp(this, 18), dp(this, 18), dp(this, 14));
         cardBox.addView(tv(this, title, 17, Color.rgb(0x1C, 0x1C, 0x1E), true));
         TextView sub = tv(this, c.name, 12.5f, Color.rgb(0x8E, 0x8E, 0x93), false);
         LinearLayout.LayoutParams subLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
@@ -3053,14 +3324,22 @@ public class MainActivity extends Activity {
         canLp.topMargin = dp(this, 4);
         cardBox.addView(cancel, canLp);
         cancel.setOnClickListener(v -> { haptic(); closeAcctClassPicker(); });
-        FrameLayout.LayoutParams clp = new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        // Q92：先预测高再定版（与各表单窗同口径）——wrap 钉死像素高，玻璃层显式同高，
+        // 不再让 WRAP_CONTENT + MATCH_PARENT 玻璃子层的测量把窗体顶到全屏（糊层事故根因）。
+        int availW = getResources().getDisplayMetrics().widthPixels - dp(this, 24);
+        int capH = (int) (getResources().getDisplayMetrics().heightPixels * 0.82);
+        cardBox.measure(View.MeasureSpec.makeMeasureSpec(availW, View.MeasureSpec.EXACTLY),
+            View.MeasureSpec.makeMeasureSpec(capH, View.MeasureSpec.AT_MOST));
+        int pickerH = Math.min(cardBox.getMeasuredHeight(), capH);
+        FrameLayout.LayoutParams clp = new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, pickerH);
         clp.gravity = Gravity.BOTTOM;
         clp.leftMargin = dp(this, 12); clp.rightMargin = dp(this, 12);
+        clp.bottomMargin = dp(this, 10) + navBarH(); // Q92：浮起并避手势条，不顶到屏幕底
         FrameLayout wrap = new FrameLayout(this);
         View glass = glassLayer(cardBox, 22, false);
-        topSheetClip(glass, 22, this);
-        wrap.addView(glass, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
-        wrap.addView(cardBox, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        roundClip(glass, 22, this);
+        wrap.addView(glass, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, pickerH));
+        wrap.addView(cardBox, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, pickerH));
         overlay.addView(wrap, clp);
         rootView.addView(overlay, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         acctPickerView = overlay;
@@ -3126,13 +3405,12 @@ public class MainActivity extends Activity {
         LinearLayout cardBox = new LinearLayout(this);
         cardBox.setOrientation(LinearLayout.VERTICAL);
         GradientDrawable cg = new GradientDrawable();
-        cg.setColor(Color.WHITE);
-        float rTop = dp(this, 22);
-        cg.setCornerRadii(new float[]{rTop, rTop, rTop, rTop, 0, 0, 0, 0});
+        cg.setColor(colSheet()); // Q92：语义浮层色 + 四角全圆浮起（同批口径）
+        cg.setCornerRadius(dp(this, 22));
         cardBox.setBackground(cg);
-        if (Build.VERSION.SDK_INT >= 21) { cardBox.setElevation(dp(this, 24)); topSheetClip(cardBox, 22, this); }
+        if (Build.VERSION.SDK_INT >= 21) { cardBox.setElevation(dp(this, 24)); roundClip(cardBox, 22, this); }
         cardBox.setOnClickListener(v -> {});
-        cardBox.setPadding(dp(this, 18), dp(this, 18), dp(this, 18), dp(this, 14) + navBarH());
+        cardBox.setPadding(dp(this, 18), dp(this, 18), dp(this, 18), dp(this, 14));
         cardBox.addView(tv(this, "卡面颜色", 17, Color.rgb(0x1C, 0x1C, 0x1E), true));
         TextView sub = tv(this, c.name + " · 只改无图占位面，真卡图不受影响", 12.5f, Color.rgb(0x8E, 0x8E, 0x93), false);
         LinearLayout.LayoutParams subLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
@@ -3192,14 +3470,21 @@ public class MainActivity extends Activity {
         cancel.setPadding(0, dp(this, 8), 0, dp(this, 4));
         cardBox.addView(cancel);
         cancel.setOnClickListener(v -> { haptic(); closePlaceholderPicker(); });
-        FrameLayout.LayoutParams clp2 = new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        // Q92：同选择窗——预测高定版，玻璃显式同高，浮起避手势条
+        int availW2 = getResources().getDisplayMetrics().widthPixels - dp(this, 24);
+        int capH2 = (int) (getResources().getDisplayMetrics().heightPixels * 0.82);
+        cardBox.measure(View.MeasureSpec.makeMeasureSpec(availW2, View.MeasureSpec.EXACTLY),
+            View.MeasureSpec.makeMeasureSpec(capH2, View.MeasureSpec.AT_MOST));
+        int phH = Math.min(cardBox.getMeasuredHeight(), capH2);
+        FrameLayout.LayoutParams clp2 = new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, phH);
         clp2.gravity = Gravity.BOTTOM;
         clp2.leftMargin = dp(this, 12); clp2.rightMargin = dp(this, 12);
+        clp2.bottomMargin = dp(this, 10) + navBarH();
         FrameLayout wrap = new FrameLayout(this);
         View glass = glassLayer(cardBox, 22, false);
-        topSheetClip(glass, 22, this);
-        wrap.addView(glass, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
-        wrap.addView(cardBox, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        roundClip(glass, 22, this);
+        wrap.addView(glass, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, phH));
+        wrap.addView(cardBox, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, phH));
         overlay.addView(wrap, clp2);
         rootView.addView(overlay, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         placeholderPickerView = overlay;
@@ -6979,31 +7264,26 @@ public class MainActivity extends Activity {
         if (Build.VERSION.SDK_INT >= 21) { sheetCard.setElevation(dp(this, 24)); topSheetClip(sheetCard, 20, this); } // Q45 顶圆底直轮廓
         sheetCard.setOnClickListener(v -> {}); // 窗体吃点击防穿透遮罩
 
-        // 内容滚动区 + 底部常驻收藏钮（窗内延续，不随内容滚走）
+        // 内容滚动区（窗内延续，不随内容滚走）；底部浮钮已悬浮在窗外（Q92），
+        // 正文末尾留 76dp 让最后一行能滚出浮钮之上不被遮。
         ScrollView sc = new ScrollView(this);
         thinScrollbar(sc);
         sc.setBackgroundColor(Color.TRANSPARENT);
         sc.setFillViewport(false);
         detailScroll = sc;
         LinearLayout body = buildDetailSheetBody(c);
-        body.setPadding(0, 0, 0, dp(this, 10)); // Q83：窗底改为常驻主按钮栏，内容末行不再直落窗底
+        body.setPadding(0, 0, 0, dp(this, 76));
         sc.addView(body);
         sheetCard.addView(sc, new LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
 
-        // Q83 底部常驻主按钮：用户 2026-10-04 06:11 点名的沉浸式详情结构（大图英雄区+标题+标签+
-        // 分块信息卡+底部主按钮）；口径上取代 Q28 的「详情只看不加入、底部行整行移除」——
-        // 未加入点它走 Q65 类别选择，已加入点它进同一个窗管理（再加一张/移除已有）。
-        LinearLayout detailFoot = new LinearLayout(this);
-        detailFoot.setOrientation(LinearLayout.HORIZONTAL);
-        detailFoot.setPadding(dp(this, 18), dp(this, 10), dp(this, 18), dp(this, 10) + navBarH());
+        // Q83 沉浸式详情结构的主按钮，Q92 改悬浮沉浸式（用户 2026-10-04 15:20 口径）：
+        // 脱离窗体实条，作 wrap 的姊妹层浮在窗下缘之上、左右留距、避手势条，钮身走
+        // Q90 实时玻璃（已加入态透出玻璃、未加入态主色柔面），不再硬贴屏底。
         detailPrimaryBtn = tv(this, "", 15, Color.WHITE, true);
         detailPrimaryBtn.setGravity(Gravity.CENTER);
         detailPrimaryBtn.setPadding(0, dp(this, 13), 0, dp(this, 13));
         detailPrimaryBtn.setOnClickListener(v -> { haptic(); onDetailPrimary(detailCard); });
-        detailFoot.addView(detailPrimaryBtn, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
-        sheetCard.addView(detailFoot, new LinearLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
         updateDetailPrimary(c);
 
         // 先量高再定版（内容可能短于封顶）
@@ -7024,6 +7304,22 @@ public class MainActivity extends Activity {
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         overlay.addView(wrap, wlp);
         detailSheetWrap = wrap;
+        // Q92 悬浮主钮层：独立 FrameLayout 置于窗体之上（overlay 子级），高度钉死 50dp
+        // （不用 WRAP_CONTENT+MATCH_PARENT 玻璃的模糊测量链），钮下贴安全距避手势条。
+        FrameLayout pillWrap = new FrameLayout(this);
+        int pillH = dp(this, 50);
+        pillWrap.addView(glassLayer(detailPrimaryBtn, 999, false),
+            new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, pillH));
+        pillWrap.addView(glassWashView(999, false),
+            new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, pillH));
+        pillWrap.addView(detailPrimaryBtn, new FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, pillH));
+        if (Build.VERSION.SDK_INT >= 21) pillWrap.setElevation(dp(this, 6));
+        FrameLayout.LayoutParams pillLp = new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, pillH);
+        pillLp.gravity = Gravity.BOTTOM;
+        pillLp.leftMargin = dp(this, 18); pillLp.rightMargin = dp(this, 18);
+        pillLp.bottomMargin = dp(this, 12) + navBarH();
+        overlay.addView(pillWrap, pillLp);
 
         // Q30 关闭钮：长在窗体内部，随窗同升同降同销毁。对照混合版 .p-close 数值——
         // 34dp 半透圆、top/right 12dp 浮在图廊右上；48dp 只是触控框，圆心对齐靠框边距 5dp+居中 7dp=12dp。
@@ -7603,13 +7899,14 @@ public class MainActivity extends Activity {
         if (joined) {
             detailPrimaryBtn.setText(S("added_manage"));
             detailPrimaryBtn.setTextColor(colText());
-            detailPrimaryBtn.setBackground(roundRect(colSurface(), 14, this));
+            // Q92 悬浮玻璃态：钮身半透染色贴在 pillWrap 的实时玻璃之上，胶囊全圆
+            detailPrimaryBtn.setBackground(glassTintDrawable(999, darkEff()));
         } else {
             detailPrimaryBtn.setText(S("add_to_mine"));
             detailPrimaryBtn.setTextColor(Color.WHITE);
             GradientDrawable g = new GradientDrawable(GradientDrawable.Orientation.LEFT_RIGHT,
                 new int[]{Color.rgb(0x0A, 0x84, 0xFF), Color.rgb(0x5E, 0x5C, 0xE6)});
-            g.setCornerRadius(dp(this, 14));
+            g.setCornerRadius(dp(this, 999));
             detailPrimaryBtn.setBackground(g);
         }
     }
@@ -7905,7 +8202,8 @@ public class MainActivity extends Activity {
     }
 
     // 卡包分析（对照 app.js mineAnalysisHtml：最高档次/组织覆盖清单/最通用一张/短板/境外能力四条进度）
-    View buildMineAnalysis(final List<Card> owned) {
+    boolean pendingScrollCustom = false; // Q92：工具宫格「自定义卡片」点后重建并滚到自定义区
+    View buildMineAnalysis(final List<Card> owned, boolean includeHero) {
         LinearLayout wrap = new LinearLayout(this);
         wrap.setOrientation(LinearLayout.VERTICAL);
         wrap.setLayoutParams(new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
@@ -7949,7 +8247,8 @@ public class MainActivity extends Activity {
         String verdict = owned.size() >= 8 ? "卡包比较齐整了"
             : owned.size() >= 4 ? "主力框架有了，再补短板就行" : "还在起步阶段，先把主力卡配齐";
 
-        // 深蓝英雄卡：2×2 指标格
+        // 深蓝英雄卡：2×2 指标格（Q92 起被顶部汇总卡瘦身版取代，仅 includeHero 时才出整块）
+        if (includeHero) {
         LinearLayout hero = new LinearLayout(this);
         hero.setOrientation(LinearLayout.VERTICAL);
         GradientDrawable hg = new GradientDrawable(GradientDrawable.Orientation.TL_BR,
@@ -7971,6 +8270,7 @@ public class MainActivity extends Activity {
             hasOrgs.isEmpty() ? null : joinCn(hasOrgs), false), mineTileLp(1.25f, true));
         row2.addView(mineHeroTile(nNoFtf + " 张", null, "无转换费",
             missOrgs.isEmpty() ? "组织全覆盖了" : "还差 " + joinCn(missOrgs), false), mineTileLp(1f, false));
+        }
 
         // 境外能力白卡（Q22 对照 .dash-sect/.dash-card/.drow：分节 1.02rem/700、白卡圆角 16 内边距 4/16/12、行内图标+不截断标签+渐变条）
         TextView sect = tvW(this, "境外能力", 16, Color.rgb(0x1C, 0x1C, 0x1E), 700);
@@ -8197,6 +8497,12 @@ public class MainActivity extends Activity {
         LinearLayout box = new LinearLayout(this); box.setOrientation(LinearLayout.VERTICAL);
         box.setBackground(rippleBg(colSurface(), 14)); box.setPadding(dp(this,14),dp(this,12),dp(this,14),dp(this,12));
         LinearLayout.LayoutParams bp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT); bp.topMargin = dp(this,10); box.setLayoutParams(bp);
+        fillCreditLines(box, rows);
+        return box;
+    }
+
+    /** Q92：额度总览正文（标题/总额度/口径切换/还款日历），供独立卡与「我的卡片」顶部汇总卡共用，不重复。 */
+    void fillCreditLines(LinearLayout box, java.util.List<MineRow> rows) {
         boolean shared = prefs == null || prefs.getBoolean("limit_shared_bank", true);
         java.util.Map<String, Long> perBank = new java.util.HashMap<>();
         java.util.List<String[]> dues = new java.util.ArrayList<>();
@@ -8218,15 +8524,18 @@ public class MainActivity extends Activity {
             for (int i = 0; i < dues.size() && i < 6; i++) sb.append(i == 0 ? "" : " · ").append(dues.get(i)[0]).append(" 每月").append(dues.get(i)[1]).append("日");
             box.addView(tv(this, sb.toString(), 12, colText2(), false));
         } else box.addView(tv(this, "在卡片编辑里填还款日后，这里按日历列出。", 12, colText2(), false));
-        return box;
     }
     void openOwnActs() {
+        // Q92 二级页模板：顶部圆形细线返回 + 标题（不用白药丸、不用底部灰色返回大块）、
+        // 内容卡片化、行动钮统一 softPrimaryBtn、空状态瘦身居中。
         FrameLayout ov = new FrameLayout(this); ov.setBackgroundColor(colBg());
-        LinearLayout col = new LinearLayout(this); col.setOrientation(LinearLayout.VERTICAL); col.setPadding(dp(this,16), pageTopPad(), dp(this,16), dockPad());
-        ov.addView(col); TextView h = tvW(this, "活动追踪", 22, colText(), 800); col.addView(h);
-        col.addView(tv(this, "开卡任务 / 刷满次数 / 消费达标，纯本机记录。", 12.5f, colText2(), false));
+        LinearLayout col = new LinearLayout(this); col.setOrientation(LinearLayout.VERTICAL);
+        col.setPadding(dp(this, 14), 0, dp(this, 14), dockPad());
+        ov.addView(col);
+        col.addView(pageBackHead("活动追踪", () -> { haptic(); ((ViewGroup) content).removeView(ov); restoreChrome(); }), new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        col.addView(slimSub("开卡任务 / 刷满次数 / 消费达标，纯本机记录。"));
         ScrollView sv = new ScrollView(this); LinearLayout list = new LinearLayout(this); list.setOrientation(LinearLayout.VERTICAL); sv.addView(list); col.addView(sv, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
-        if (ownActs.isEmpty()) list.addView(tv(this, "还没有活动，点下方新增一条。", 13, colText2(), false));
+        if (ownActs.isEmpty()) list.addView(emptyState("还没有活动\n点下方新增一条开卡任务或消费达标。"));
         for (final OwnActItem it : ownActs) {
             LinearLayout row = new LinearLayout(this); row.setOrientation(LinearLayout.VERTICAL); row.setBackground(rippleBg(colSurface(), 14)); row.setPadding(dp(this,14),dp(this,10),dp(this,14),dp(this,10));
             LinearLayout.LayoutParams rp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT); rp.topMargin = dp(this,8); row.setLayoutParams(rp);
@@ -8239,11 +8548,12 @@ public class MainActivity extends Activity {
             delB.setOnClickListener(v -> { haptic(); ownActs.remove(it); saveOwnActs(); openOwnActsRefresh(ov); });
             br.addView(doneB); br.addView(delB); row.addView(br); list.addView(row);
         }
-        Button add = new Button(this); add.setText("新增活动"); add.setAllCaps(false); add.setTextColor(Color.WHITE); add.setBackground(roundRect(accentColor(), 12, this));
+        TextView add = softPrimaryBtn("新增活动");
+        LinearLayout.LayoutParams alp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(this, 48));
+        alp.topMargin = dp(this, 10);
+        add.setLayoutParams(alp);
         add.setOnClickListener(v -> { haptic(); openOwnActForm(ov); });
         col.addView(add);
-        Button back = new Button(this); back.setText("返回"); back.setAllCaps(false); back.setOnClickListener(v -> { haptic(); ((ViewGroup) content).removeView(ov); restoreChrome(); });
-        col.addView(back);
         hideChrome(); content.addView(ov); ownActsOverlay = ov;
     }
     FrameLayout ownActsOverlay = null;
@@ -8253,11 +8563,183 @@ public class MainActivity extends Activity {
         LinearLayout f = new LinearLayout(this); f.setOrientation(LinearLayout.VERTICAL); f.setBackground(roundRect(colSheet(), 16, this)); f.setPadding(dp(this,16),dp(this,14),dp(this,16),dp(this,14));
         final EditText t = customInput("活动名，如：开卡礼", "", 30); final EditText cn = customInput("卡名（可空）", "", 20); final EditText tg = customInput("目标次数/金额，如：3", "", 9);
         f.addView(tvW(this, "新增活动", 15, colText(), 700)); f.addView(t); f.addView(cn); f.addView(tg);
-        Button ok = new Button(this); ok.setText("保存"); ok.setAllCaps(false); ok.setTextColor(Color.WHITE); ok.setBackground(roundRect(accentColor(), 12, this));
+        TextView ok = softPrimaryBtn("保存");
+        LinearLayout.LayoutParams okLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(this, 48));
+        okLp.topMargin = dp(this, 10);
+        ok.setLayoutParams(okLp);
         ok.setOnClickListener(v -> { haptic(); String title = t.getText().toString().trim(); if (title.isEmpty()) { showFloatToast("请填写活动名"); return; } OwnActItem it = new OwnActItem(); it.id = "act-" + System.currentTimeMillis(); it.title = title; it.cardName = cn.getText().toString().trim(); it.type = "刷卡"; it.target = parseDay(tg.getText().toString()); ownActs.add(it); saveOwnActs(); try { ((ViewGroup) f.getParent()).removeView(f); } catch (Throwable ignored) {} openOwnActsRefresh(parentOv); });
         f.addView(ok);
         FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT); lp.gravity = Gravity.BOTTOM; lp.leftMargin = dp(this,12); lp.rightMargin = dp(this,12); lp.bottomMargin = dp(this,12) + navBarH();
         parentOv.addView(f, lp);
+    }
+
+    // Q92「我的卡片」顶部汇总卡：原深蓝仪表盘四格瘦身并入（统计一排 + verdict 一行），
+    // 持卡总览（额度/口径/还款日历）在开关开启时并入同卡下半，不再单占一整块深色大卡。
+    View buildMineSummaryCard(List<MineRow> rows, List<Card> owned) {
+        LinearLayout box = new LinearLayout(this);
+        box.setOrientation(LinearLayout.VERTICAL);
+        box.setBackground(rippleBg(colSurface(), 16));
+        box.setClipToOutline(true);
+        box.setPadding(dp(this, 14), dp(this, 12), dp(this, 14), dp(this, 12));
+        LinearLayout.LayoutParams bp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        bp.topMargin = dp(this, 2);
+        box.setLayoutParams(bp);
+        int[] tiers = new int[4];
+        for (Card c : owned) tiers[cardTier(c)]++;
+        int topTier = 0;
+        for (int i = 0; i < 4; i++) if (tiers[i] > 0) topTier = i;
+        int orgHas = 0;
+        for (String[] o : ORG_LIST) {
+            boolean has = false;
+            for (Card c : owned) if (o[0].equals(c.org)) { has = true; break; }
+            if (has) orgHas++;
+        }
+        int nNoFtf = 0;
+        for (Card c : owned) if (featMatch(c, "noftf")) nNoFtf++;
+        String verdict = owned.size() >= 8 ? "卡包比较齐整了"
+            : owned.size() >= 4 ? "主力框架有了，再补短板就行" : "还在起步阶段，先把主力卡配齐";
+        LinearLayout stats = new LinearLayout(this);
+        stats.setOrientation(LinearLayout.HORIZONTAL);
+        box.addView(stats, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        stats.addView(mineStatCell((rows.size() + customCards.size()) + "", "持有卡"), new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+        stats.addView(mineStatCell(owned.isEmpty() ? "—" : TIER_NAMES[topTier], "最高档次"), new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+        stats.addView(mineStatCell(orgHas + " / " + ORG_LIST.length, "组织覆盖"), new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+        stats.addView(mineStatCell(nNoFtf + " 张", "无转换费"), new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+        TextView vd = tv(this, "我的卡包 · " + verdict, 12, colText2(), false);
+        LinearLayout.LayoutParams vdlp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        vdlp.topMargin = dp(this, 8);
+        box.addView(vd, vdlp);
+        if (prefs == null || prefs.getBoolean("owncard_enabled", true)) {
+            View div = new View(this);
+            div.setBackgroundColor(colDivider());
+            LinearLayout.LayoutParams dlp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, Math.max(1, dp(this, 1)));
+            dlp.topMargin = dp(this, 10);
+            dlp.bottomMargin = dp(this, 10);
+            box.addView(div, dlp);
+            LinearLayout lines = new LinearLayout(this);
+            lines.setOrientation(LinearLayout.VERTICAL);
+            box.addView(lines);
+            fillCreditLines(lines, rows);
+        }
+        return box;
+    }
+
+    View mineStatCell(String value, String label) {
+        LinearLayout cell = new LinearLayout(this);
+        cell.setOrientation(LinearLayout.VERTICAL);
+        TextView v = tvW(this, value, 17, colText(), 800);
+        v.setSingleLine(true);
+        v.setEllipsize(android.text.TextUtils.TruncateAt.END);
+        cell.addView(v);
+        TextView l = tv(this, label, 10.5f, colText2(), false);
+        l.setSingleLine(true);
+        LinearLayout.LayoutParams llp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        llp.topMargin = dp(this, 2);
+        cell.addView(l, llp);
+        return cell;
+    }
+
+    // Q92 工具宫格：原「一功能一条大卡」收成一块紧凑宫格（一排 4 格、细线图标+短名+迷你副行），
+    // 关掉的功能开关宫格里同步不见；以后加功能只加一格、页面不涨高。
+    View buildMineToolGrid(final List<MineRow> rows) {
+        java.util.List<Object[]> cells = new java.util.ArrayList<>(); // kind, name, sub, act
+        final int ownedN = rows.size() + customCards.size();
+        if (prefs == null || prefs.getBoolean("showcase_enabled", true)) {
+            cells.add(new Object[]{"showcase", "展柜", ownedN > 0 ? (ownedN + " 张自有卡") : "先添加卡片",
+                (Runnable) () -> openShowcase()});
+        }
+        if (simkeepEnabled()) {
+            java.util.List<SimKeepItem> sk = simkeepSorted();
+            String sub;
+            if (sk.isEmpty()) sub = "未添加";
+            else {
+                int left = simkeepDaysLeft(sk.get(0).nextDue);
+                sub = sk.size() + " 张 · " + (left < 0 ? "已逾期" : (left == 0 ? "今天到期" : (left + " 天后")));
+            }
+            cells.add(new Object[]{"sim", "保号管家", sub, (Runnable) () -> openSimKeep()});
+        }
+        if (subfollowEnabled()) {
+            java.util.List<SubFollowItem> sf = subfollowSorted();
+            String sub;
+            if (sf.isEmpty()) sub = "未添加";
+            else {
+                int left = simkeepDaysLeft(sf.get(0).nextDue);
+                sub = sf.size() + " 项 · " + (left < 0 ? "已逾期" : (left == 0 ? "今天" : (left + " 天后")));
+            }
+            cells.add(new Object[]{"sub", "订阅跟随", sub, (Runnable) () -> openSubFollow()});
+        }
+        if (footprintEnabled()) {
+            java.util.List<FootItem> ft = loadFootprints();
+            cells.add(new Object[]{"foot", "玩卡足迹", ft.isEmpty() ? "未记录" : (ft.size() + " 条"),
+                (Runnable) () -> openFootprint()});
+        }
+        if (prefs == null || prefs.getBoolean("ownact_enabled", true)) {
+            cells.add(new Object[]{"act", "活动追踪", ownActs.isEmpty() ? "未登记" : (ownActs.size() + " 条"),
+                (Runnable) () -> openOwnActs()});
+        }
+        cells.add(new Object[]{"custom", "自定义卡片", customCards.size() + " 张",
+            (Runnable) () -> { customOpen = true; pendingScrollCustom = true; refreshMineKeepScroll(); }});
+        if (cells.isEmpty()) return new View(this);
+        LinearLayout card = new LinearLayout(this);
+        card.setOrientation(LinearLayout.VERTICAL);
+        card.setBackground(rippleBg(colSurface(), 16));
+        card.setClipToOutline(true);
+        card.setPadding(dp(this, 10), dp(this, 10), dp(this, 10), dp(this, 10));
+        LinearLayout.LayoutParams clp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        clp.topMargin = dp(this, 16);
+        card.setLayoutParams(clp);
+        TextView hd = tvW(this, "工具", 15, colText(), 700);
+        hd.setPadding(dp(this, 4), 0, 0, dp(this, 6));
+        card.addView(hd);
+        for (int i = 0; i < cells.size(); i += 4) {
+            LinearLayout rowL = new LinearLayout(this);
+            rowL.setOrientation(LinearLayout.HORIZONTAL);
+            card.addView(rowL, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+            for (int j = 0; j < 4; j++) {
+                if (i + j < cells.size()) {
+                    Object[] cell = cells.get(i + j);
+                    rowL.addView(toolCell((String) cell[0], (String) cell[1], (String) cell[2], (Runnable) cell[3]),
+                        new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+                } else {
+                    View sp = new View(this);
+                    rowL.addView(sp, new LinearLayout.LayoutParams(0, 1, 1f));
+                }
+            }
+        }
+        return card;
+    }
+
+    View toolCell(String kind, String name, String sub, final Runnable act) {
+        LinearLayout cell = new LinearLayout(this);
+        cell.setOrientation(LinearLayout.VERTICAL);
+        cell.setGravity(Gravity.CENTER_HORIZONTAL);
+        cell.setPadding(dp(this, 2), dp(this, 10), dp(this, 2), dp(this, 8));
+        cell.setBackground(rippleBg(Color.TRANSPARENT, 12));
+        cell.setClipToOutline(true);
+        FrameLayout chip = new FrameLayout(this);
+        chip.setBackground(roundRect(colChipOff(), 14, this));
+        ToolIconView iv = new ToolIconView(this);
+        iv.kind = kind; iv.iconColor = colText();
+        chip.addView(iv, new FrameLayout.LayoutParams(dp(this, 24), dp(this, 24), Gravity.CENTER));
+        cell.addView(chip, new LinearLayout.LayoutParams(dp(this, 46), dp(this, 46)));
+        TextView n = tv(this, name, 12, colText(), true);
+        n.setSingleLine(true);
+        LinearLayout.LayoutParams nlp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        nlp.topMargin = dp(this, 6);
+        cell.addView(n, nlp);
+        TextView s = tv(this, sub, 9.5f, colText2(), false);
+        s.setSingleLine(true);
+        s.setEllipsize(android.text.TextUtils.TruncateAt.END);
+        LinearLayout.LayoutParams slp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        slp.topMargin = dp(this, 2);
+        cell.addView(s, slp);
+        cell.setOnTouchListener((v, e) -> {
+            if (e.getAction() == MotionEvent.ACTION_DOWN) pressBounce(v, true);
+            else if (e.getAction() == MotionEvent.ACTION_UP || e.getAction() == MotionEvent.ACTION_CANCEL) pressBounce(v, false);
+            return false;
+        });
+        cell.setOnClickListener(v -> { haptic(); if (act != null) act.run(); });
+        return cell;
     }
 
     View buildMinePage() {
@@ -8294,66 +8776,19 @@ public class MainActivity extends Activity {
         page.addView(sv, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
         // P-deck ③：重建后恢复上次滚动位置（换序/展开收起不跳顶）
         if (mineScrollSaveY > 0) sv.post(() -> sv.scrollTo(0, mineScrollSaveY));
-        // Q78 展柜入口（设置「功能启用」关掉时整行不出现、不占位）
-        if (prefs == null || prefs.getBoolean("showcase_enabled", true)) {
-            final int ownedN = mineRows.size() + customCards.size();
-            View scEntry = settingRow("展柜", ownedN > 0
-                ? ("只看卡面 · " + ownedN + " 张自有卡，堆叠或平放展示 ›")
-                : "只看卡面展示，先添加几张自己的卡 ›");
-            scEntry.setOnClickListener(v -> { haptic(); openShowcase(); });
-            inner.addView(scEntry);
-        }
-        // Q84 保号管家入口（设置关掉不占位）：显示待保号数与最近到期
-        if (simkeepEnabled()) {
-            java.util.List<SimKeepItem> sk = simkeepSorted();
-            String sub;
-            if (sk.isEmpty()) sub = "电话卡 / eSIM 保号到期管理 ›";
-            else {
-                int left = simkeepDaysLeft(sk.get(0).nextDue);
-                String dl = left < 0 ? ("已逾期 " + (-left) + " 天") : (left == 0 ? "今天到期" : (left + " 天后到期"));
-                sub = sk.size() + " 张待保号 · 最近 " + dl + " ›";
-            }
-            View skEntry = settingRow("保号管家", sub);
-            skEntry.setOnClickListener(v -> { haptic(); openSimKeep(); });
-            inner.addView(skEntry);
-        }
-        // Q86 订阅跟随入口（设置关掉不占位）：显示订阅数与最近扣款
-        if (subfollowEnabled()) {
-            java.util.List<SubFollowItem> sf = subfollowSorted();
-            String sub2;
-            if (sf.isEmpty()) sub2 = "订阅到期与扣款提醒管理 ›";
-            else {
-                int left = simkeepDaysLeft(sf.get(0).nextDue);
-                String dl = left < 0 ? ("已逾期 " + (-left) + " 天") : (left == 0 ? "今天扣款" : (left + " 天后扣款"));
-                sub2 = sf.size() + " 项订阅 · 最近 " + dl + " ›";
-            }
-            View sfEntry = settingRow("订阅跟随", sub2);
-            sfEntry.setOnClickListener(v -> { haptic(); openSubFollow(); });
-            inner.addView(sfEntry);
-        }
-        // Q87 玩卡足迹入口（设置关掉不占位）：显示事件数与最近一条
-        if (footprintEnabled()) {
-            java.util.List<FootItem> ft = loadFootprints();
-            String sub3 = ft.isEmpty() ? "申请 / 开卡 / 提额等事件时间线 ›" : (ft.size() + " 条足迹 · 点开查看 ›");
-            View ftEntry = settingRow("玩卡足迹", sub3);
-            ftEntry.setOnClickListener(v -> { haptic(); openFootprint(); });
-            inner.addView(ftEntry);
-        }
-        if (prefs == null || prefs.getBoolean("owncard_enabled", true)) inner.addView(buildCreditOverview(mineRows));
-        if (prefs == null || prefs.getBoolean("ownact_enabled", true)) { View _ae = settingRow("活动追踪", ownActs.isEmpty() ? "开卡任务 / 刷卡达标登记 ›" : (ownActs.size() + " 条活动 · 点开管理 ›")); _ae.setOnClickListener(v -> { haptic(); openOwnActs(); }); inner.addView(_ae); }
-        // Q22 页级构成对照混合版：自定义区在前（index.html #customSec 先于 #grid），其后卡包分析，再「我的卡片」折叠条+瓷砖
-        inner.addView(buildCustomSection());
-        if (!mineRows.isEmpty()) inner.addView(buildMineAnalysis(mineCards));
+        // Q92 整页重排（用户 2026-10-04 15:31 口径，一条阅读顺序）：汇总概览（统计瘦身并入、
+        // 持卡总览同卡内） →「我的卡片」网格 → 工具宫格 → 自定义卡片 → 境外能力与短板殿后；
+        // 原一排功能长条（展柜/保号/订阅/足迹/持卡总览/活动追踪）全部收进汇总卡与宫格，同类信息只出现一遍。
+        if (!mineRows.isEmpty()) inner.addView(buildMineSummaryCard(mineRows, mineCards));
 
         if (mineRows.isEmpty()) {
-            // 混合版 #empty 口径：居中灰字、上下 36dp 留白，不包白卡
-            TextView em = tv(this, "没有符合条件的卡，换个筛选试试。", 13.5f, Color.rgb(0x8E, 0x8E, 0x93), false);
+            // Q92 空状态瘦身居中：一句指路灰字居中，不包白卡；其下工具宫格与自定义区照常展开
+            TextView em = tv(this, "还没有加入的卡片，在卡片详情里点「加入我的卡片」就会出现在这里。", 13.5f, colText2(), false);
             em.setGravity(Gravity.CENTER);
-            em.setPadding(dp(this, 20), dp(this, 36), dp(this, 20), dp(this, 36));
+            em.setPadding(dp(this, 24), dp(this, 26), dp(this, 24), dp(this, 26));
+            em.setLineSpacing(0, 1.5f);
             inner.addView(em, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
-            return page;
-        }
-
+        } else {
         // Q22 折叠条对照 #mineBar/.ios-sect.dash-sectbtn：「我的卡片」+「N 张」+›（展开旋转 90°），状态存 prefs；废常驻拖动教学行（Q7 口径）
         mineOpen = prefs.getBoolean("mine_open", true);
         LinearLayout barRow = new LinearLayout(this);
@@ -8382,6 +8817,17 @@ public class MainActivity extends Activity {
             refreshMineKeepScroll();
         });
         if (mineOpen) addMineCardRows(inner, mineRows, sv);
+        }
+        // Q92 阅读顺序后段：工具宫格 → 自定义卡片 → 境外能力与短板（殿后，不再重复统计）
+        inner.addView(buildMineToolGrid(mineRows));
+        View customSec = buildCustomSection();
+        inner.addView(customSec);
+        if (pendingScrollCustom) {
+            pendingScrollCustom = false;
+            final View csf = customSec;
+            sv.post(() -> sv.smoothScrollTo(0, Math.max(0, csf.getTop() - dp(this, 8))));
+        }
+        if (!mineRows.isEmpty()) inner.addView(buildMineAnalysis(mineCards, false));
         return page;
     }
 
@@ -9396,9 +9842,10 @@ public class MainActivity extends Activity {
         Runnable paint = () -> {
             boolean foc = e.hasFocus();
             GradientDrawable g = new GradientDrawable();
-            g.setColor(foc ? Color.WHITE : Color.rgb(0xF8, 0xF8, 0xFA));
-            g.setCornerRadius(dp(this, 10));
-            g.setStroke(dp(this, 1), foc ? Color.rgb(0x00, 0x7A, 0xFF) : Color.rgb(0xE2, 0xE2, 0xE6));
+            // Q92：输入框走语义色——未聚焦柔色填充无硬描边，聚焦回浮层色 + 主色细描边，深色自适应
+            g.setColor(foc ? colSurface() : colChipOff());
+            g.setCornerRadius(dp(this, 12));
+            g.setStroke(dp(this, 1), foc ? accentColor() : Color.TRANSPARENT);
             e.setBackground(g);
         };
         paint.run();
@@ -11278,6 +11725,21 @@ public class MainActivity extends Activity {
             em.setPadding(dp(this, 16), dp(this, 28), dp(this, 16), dp(this, 28));
             extResultBox.addView(em);
         }
+        fitExtResultHeight(); // Q92：结果区随内容自适应，少结果不再撑出大半屏空白
+    }
+
+    /** Q92：量结果内容实高，结果滚动区高度 = min(实高, 0.52 屏高)；重建后回顶。 */
+    void fitExtResultHeight() {
+        if (extResScroll == null || extResultBox == null) return;
+        int cap = (int) (getResources().getDisplayMetrics().heightPixels * 0.52);
+        int w = extResScroll.getWidth();
+        if (w <= 0) w = getResources().getDisplayMetrics().widthPixels - dp(this, 60);
+        extResultBox.measure(View.MeasureSpec.makeMeasureSpec(Math.max(1, w), View.MeasureSpec.EXACTLY),
+            View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED));
+        int h = Math.min(extResultBox.getMeasuredHeight(), cap);
+        ViewGroup.LayoutParams lp = extResScroll.getLayoutParams();
+        if (lp != null && lp.height != h) { lp.height = h; extResScroll.setLayoutParams(lp); }
+        extResScroll.scrollTo(0, 0);
     }
 
     // ---------- Q78 展柜（纯卡面展示：堆叠 / 平放自由画布） ----------
@@ -11600,19 +12062,8 @@ public class MainActivity extends Activity {
         LinearLayout col = new LinearLayout(this);
         col.setOrientation(LinearLayout.VERTICAL);
         overlay.addView(col, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
-        LinearLayout head = new LinearLayout(this);
-        head.setOrientation(LinearLayout.HORIZONTAL); head.setGravity(Gravity.CENTER_VERTICAL);
-        head.setPadding(dp(this, 16), pageTopPad(), dp(this, 12), dp(this, 8));
-        col.addView(head, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
-        head.addView(tvW(this, "保号管家", 20, colText(), 800), new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
-        FrameLayout closeBtn = new FrameLayout(this);
-        closeBtn.setBackground(roundRect(colSurface(), 999, this)); closeBtn.setClipToOutline(true);
-        CloseIconView civ = new CloseIconView(this); civ.iconColor = colText();
-        closeBtn.addView(civ, new FrameLayout.LayoutParams(dp(this, 18), dp(this, 18), Gravity.CENTER));
-        LinearLayout.LayoutParams cbLp = new LinearLayout.LayoutParams(dp(this, 36), dp(this, 36)); cbLp.leftMargin = dp(this, 8);
-        closeBtn.setLayoutParams(cbLp);
-        closeBtn.setOnClickListener(v -> { haptic(); closeSimKeep(); });
-        head.addView(closeBtn);
+        // Q92：全站二级页头（圆形细线返回钮 + 标题），废白圆 ✕ 变体
+        col.addView(pageBackHead("保号管家", () -> { haptic(); closeSimKeep(); }), new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
         simkeepBody = new FrameLayout(this);
         col.addView(simkeepBody, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
         content.addView(overlay, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
@@ -11674,10 +12125,7 @@ public class MainActivity extends Activity {
         LinearLayout.LayoutParams secLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT); secLp.topMargin = dp(this, 16); secLp.bottomMargin = dp(this, 4);
         inner.addView(sec, secLp);
         if (items.isEmpty()) {
-            LinearLayout em = new LinearLayout(this); em.setOrientation(LinearLayout.VERTICAL);
-            em.setBackground(roundRect(colSurface(), 14, this)); em.setPadding(dp(this, 16), dp(this, 22), dp(this, 16), dp(this, 22));
-            em.addView(tv(this, "还没有保号卡。点上方添加，填号码、运营商和下次保号日期。", 13, colText2(), false));
-            inner.addView(em, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+            inner.addView(emptyState("还没有保号卡\n点上方添加，填号码、运营商和下次保号日期。"));
             return;
         }
         for (final SimKeepItem it : items) {
@@ -11747,9 +12195,9 @@ public class MainActivity extends Activity {
         sheet.addView(shade, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         LinearLayout card = new LinearLayout(this); card.setOrientation(LinearLayout.VERTICAL);
         GradientDrawable cg = new GradientDrawable(); cg.setColor(colSheet()); cg.setStroke(dp(this, 1), Color.argb(140, 255, 255, 255));
-        float formR = dp(this, 22); cg.setCornerRadii(new float[]{formR, formR, formR, formR, 0, 0, 0, 0});
+        cg.setCornerRadius(dp(this, 22)); // Q92 浮起窗四角全圆
         card.setBackground(cg);
-        if (Build.VERSION.SDK_INT >= 21) { card.setElevation(dp(this, 24)); topSheetClip(card, 22, this); }
+        if (Build.VERSION.SDK_INT >= 21) { card.setElevation(dp(this, 24)); roundClip(card, 22, this); }
         card.setOnClickListener(v -> {});
         ScrollView sv = new ScrollView(this); thinScrollbar(sv);
         LinearLayout form = new LinearLayout(this); form.setOrientation(LinearLayout.VERTICAL);
@@ -11784,12 +12232,10 @@ public class MainActivity extends Activity {
         LinearLayout acts = new LinearLayout(this); acts.setOrientation(LinearLayout.HORIZONTAL);
         LinearLayout.LayoutParams actLp2 = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT); actLp2.topMargin = dp(this, 16);
         form.addView(acts, actLp2);
-        Button cancel = new Button(this); cancel.setText("取消"); cancel.setTextSize(15); cancel.setAllCaps(false);
-        cancel.setBackground(roundRect(Color.rgb(0xF2, 0xF3, 0xF7), 14, this));
+        TextView cancel = softGhostBtn("取消");
         cancel.setOnClickListener(v -> { haptic(); closeSimKeepForm(); });
         acts.addView(cancel, new LinearLayout.LayoutParams(0, dp(this, 48), 1f));
-        Button save = new Button(this); save.setText("保存"); save.setTextSize(15); save.setAllCaps(false); save.setTextColor(Color.WHITE);
-        GradientDrawable saveBg = new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM, new int[]{Color.rgb(0x0A, 0x84, 0xFF), Color.rgb(0x00, 0x66, 0xE6)}); saveBg.setCornerRadius(dp(this, 14)); save.setBackground(saveBg);
+        TextView save = softPrimaryBtn("保存");
         LinearLayout.LayoutParams saveLp = new LinearLayout.LayoutParams(0, dp(this, 48), 2f); saveLp.leftMargin = dp(this, 10);
         acts.addView(save, saveLp);
         save.setOnClickListener(v -> {
@@ -11828,10 +12274,11 @@ public class MainActivity extends Activity {
         int maxH = (int) (getResources().getDisplayMetrics().heightPixels * 0.82);
         card.measure(View.MeasureSpec.makeMeasureSpec(sw - dp(this, 24), View.MeasureSpec.EXACTLY), View.MeasureSpec.makeMeasureSpec(maxH, View.MeasureSpec.AT_MOST));
         FrameLayout.LayoutParams clp = new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, Math.min(card.getMeasuredHeight(), maxH));
-        clp.gravity = Gravity.BOTTOM; clp.leftMargin = dp(this, 12); clp.rightMargin = dp(this, 12); clp.bottomMargin = 0;
+        // Q92：三表单窗改浮起——底部留 10dp+手势区安全距不再被手势条压，玻璃同高全圆
+        clp.gravity = Gravity.BOTTOM; clp.leftMargin = dp(this, 12); clp.rightMargin = dp(this, 12); clp.bottomMargin = dp(this, 10) + navBarH();
         FrameLayout wrap = new FrameLayout(this);
-        View glass = glassLayer(card, 22, false); topSheetClip(glass, 22, this);
-        wrap.addView(glass, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, clp.height + dp(this, 22)));
+        View glass = glassLayer(card, 22, false); roundClip(glass, 22, this);
+        wrap.addView(glass, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, clp.height));
         wrap.addView(card, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         sheet.addView(wrap, clp);
         content.addView(sheet, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
@@ -11936,19 +12383,8 @@ public class MainActivity extends Activity {
         LinearLayout col = new LinearLayout(this);
         col.setOrientation(LinearLayout.VERTICAL);
         overlay.addView(col, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
-        LinearLayout head = new LinearLayout(this);
-        head.setOrientation(LinearLayout.HORIZONTAL); head.setGravity(Gravity.CENTER_VERTICAL);
-        head.setPadding(dp(this, 16), pageTopPad(), dp(this, 12), dp(this, 8));
-        col.addView(head, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
-        head.addView(tvW(this, "订阅跟随", 20, colText(), 800), new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
-        FrameLayout closeBtn = new FrameLayout(this);
-        closeBtn.setBackground(roundRect(colSurface(), 999, this)); closeBtn.setClipToOutline(true);
-        CloseIconView civ = new CloseIconView(this); civ.iconColor = colText();
-        closeBtn.addView(civ, new FrameLayout.LayoutParams(dp(this, 18), dp(this, 18), Gravity.CENTER));
-        LinearLayout.LayoutParams cbLp = new LinearLayout.LayoutParams(dp(this, 36), dp(this, 36)); cbLp.leftMargin = dp(this, 8);
-        closeBtn.setLayoutParams(cbLp);
-        closeBtn.setOnClickListener(v -> { haptic(); closeSubFollow(); });
-        head.addView(closeBtn);
+        // Q92：全站二级页头（圆形细线返回钮 + 标题），废白圆 ✕ 变体
+        col.addView(pageBackHead("订阅跟随", () -> { haptic(); closeSubFollow(); }), new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
         subfollowBody = new FrameLayout(this);
         col.addView(subfollowBody, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
         content.addView(overlay, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
@@ -12010,10 +12446,7 @@ public class MainActivity extends Activity {
         LinearLayout.LayoutParams secLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT); secLp.topMargin = dp(this, 16); secLp.bottomMargin = dp(this, 4);
         inner.addView(sec, secLp);
         if (items.isEmpty()) {
-            LinearLayout em = new LinearLayout(this); em.setOrientation(LinearLayout.VERTICAL);
-            em.setBackground(roundRect(colSurface(), 14, this)); em.setPadding(dp(this, 16), dp(this, 22), dp(this, 16), dp(this, 22));
-            em.addView(tv(this, "还没有订阅。点上方添加，填名称、金额、周期和下次扣款日。", 13, colText2(), false));
-            inner.addView(em, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+            inner.addView(emptyState("还没有订阅\n点上方添加，填名称、金额、周期和下次扣款日。"));
             return;
         }
         for (final SubFollowItem it : items) {
@@ -12083,9 +12516,9 @@ public class MainActivity extends Activity {
         sheet.addView(shade, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         LinearLayout card = new LinearLayout(this); card.setOrientation(LinearLayout.VERTICAL);
         GradientDrawable cg = new GradientDrawable(); cg.setColor(colSheet()); cg.setStroke(dp(this, 1), Color.argb(140, 255, 255, 255));
-        float formR = dp(this, 22); cg.setCornerRadii(new float[]{formR, formR, formR, formR, 0, 0, 0, 0});
+        cg.setCornerRadius(dp(this, 22)); // Q92 浮起窗四角全圆
         card.setBackground(cg);
-        if (Build.VERSION.SDK_INT >= 21) { card.setElevation(dp(this, 24)); topSheetClip(card, 22, this); }
+        if (Build.VERSION.SDK_INT >= 21) { card.setElevation(dp(this, 24)); roundClip(card, 22, this); }
         card.setOnClickListener(v -> {});
         ScrollView sv = new ScrollView(this); thinScrollbar(sv);
         LinearLayout form = new LinearLayout(this); form.setOrientation(LinearLayout.VERTICAL);
@@ -12132,12 +12565,10 @@ public class MainActivity extends Activity {
         LinearLayout acts = new LinearLayout(this); acts.setOrientation(LinearLayout.HORIZONTAL);
         LinearLayout.LayoutParams actLp2 = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT); actLp2.topMargin = dp(this, 16);
         form.addView(acts, actLp2);
-        Button cancel = new Button(this); cancel.setText("取消"); cancel.setTextSize(15); cancel.setAllCaps(false);
-        cancel.setBackground(roundRect(Color.rgb(0xF2, 0xF3, 0xF7), 14, this));
+        TextView cancel = softGhostBtn("取消");
         cancel.setOnClickListener(v -> { haptic(); closeSubFollowForm(); });
         acts.addView(cancel, new LinearLayout.LayoutParams(0, dp(this, 48), 1f));
-        Button save = new Button(this); save.setText("保存"); save.setTextSize(15); save.setAllCaps(false); save.setTextColor(Color.WHITE);
-        GradientDrawable saveBg = new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM, new int[]{Color.rgb(0x0A, 0x84, 0xFF), Color.rgb(0x00, 0x66, 0xE6)}); saveBg.setCornerRadius(dp(this, 14)); save.setBackground(saveBg);
+        TextView save = softPrimaryBtn("保存");
         LinearLayout.LayoutParams saveLp = new LinearLayout.LayoutParams(0, dp(this, 48), 2f); saveLp.leftMargin = dp(this, 10);
         acts.addView(save, saveLp);
         save.setOnClickListener(v -> {
@@ -12176,10 +12607,11 @@ public class MainActivity extends Activity {
         int maxH = (int) (getResources().getDisplayMetrics().heightPixels * 0.82);
         card.measure(View.MeasureSpec.makeMeasureSpec(sw - dp(this, 24), View.MeasureSpec.EXACTLY), View.MeasureSpec.makeMeasureSpec(maxH, View.MeasureSpec.AT_MOST));
         FrameLayout.LayoutParams clp = new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, Math.min(card.getMeasuredHeight(), maxH));
-        clp.gravity = Gravity.BOTTOM; clp.leftMargin = dp(this, 12); clp.rightMargin = dp(this, 12); clp.bottomMargin = 0;
+        // Q92：三表单窗改浮起——底部留 10dp+手势区安全距不再被手势条压，玻璃同高全圆
+        clp.gravity = Gravity.BOTTOM; clp.leftMargin = dp(this, 12); clp.rightMargin = dp(this, 12); clp.bottomMargin = dp(this, 10) + navBarH();
         FrameLayout wrap = new FrameLayout(this);
-        View glass = glassLayer(card, 22, false); topSheetClip(glass, 22, this);
-        wrap.addView(glass, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, clp.height + dp(this, 22)));
+        View glass = glassLayer(card, 22, false); roundClip(glass, 22, this);
+        wrap.addView(glass, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, clp.height));
         wrap.addView(card, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         sheet.addView(wrap, clp);
         content.addView(sheet, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
@@ -12280,19 +12712,8 @@ public class MainActivity extends Activity {
         LinearLayout col = new LinearLayout(this);
         col.setOrientation(LinearLayout.VERTICAL);
         overlay.addView(col, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
-        LinearLayout head = new LinearLayout(this);
-        head.setOrientation(LinearLayout.HORIZONTAL); head.setGravity(Gravity.CENTER_VERTICAL);
-        head.setPadding(dp(this, 16), pageTopPad(), dp(this, 12), dp(this, 8));
-        col.addView(head, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
-        head.addView(tvW(this, "玩卡足迹", 20, colText(), 800), new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
-        FrameLayout closeBtn = new FrameLayout(this);
-        closeBtn.setBackground(roundRect(colSurface(), 999, this)); closeBtn.setClipToOutline(true);
-        CloseIconView civ = new CloseIconView(this); civ.iconColor = colText();
-        closeBtn.addView(civ, new FrameLayout.LayoutParams(dp(this, 18), dp(this, 18), Gravity.CENTER));
-        LinearLayout.LayoutParams cbLp = new LinearLayout.LayoutParams(dp(this, 36), dp(this, 36)); cbLp.leftMargin = dp(this, 8);
-        closeBtn.setLayoutParams(cbLp);
-        closeBtn.setOnClickListener(v -> { haptic(); closeFootprint(); });
-        head.addView(closeBtn);
+        // Q92：全站二级页头（圆形细线返回钮 + 标题），废白圆 ✕ 变体
+        col.addView(pageBackHead("玩卡足迹", () -> { haptic(); closeFootprint(); }), new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
         footprintBody = new FrameLayout(this);
         col.addView(footprintBody, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
         content.addView(overlay, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
@@ -12386,10 +12807,7 @@ public class MainActivity extends Activity {
         LinearLayout.LayoutParams secLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT); secLp.topMargin = dp(this, 16); secLp.bottomMargin = dp(this, 4);
         inner.addView(sec, secLp);
         if (items.isEmpty()) {
-            LinearLayout em = new LinearLayout(this); em.setOrientation(LinearLayout.VERTICAL);
-            em.setBackground(roundRect(colSurface(), 14, this)); em.setPadding(dp(this, 16), dp(this, 22), dp(this, 16), dp(this, 22));
-            em.addView(tv(this, all.isEmpty() ? "还没有足迹。点上方添加，记下第一次申请、开卡或提额。" : "当前筛选下没有记录，换个类型或结果看看。", 13, colText2(), false));
-            inner.addView(em, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+            inner.addView(emptyState(all.isEmpty() ? "还没有足迹\n点上方添加，记下第一次申请、开卡或提额。" : "当前筛选下没有记录\n换个类型或结果看看。"));
             return;
         }
         for (final FootItem it : items) {
@@ -12439,9 +12857,9 @@ public class MainActivity extends Activity {
         sheet.addView(shade, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         LinearLayout card = new LinearLayout(this); card.setOrientation(LinearLayout.VERTICAL);
         GradientDrawable cg = new GradientDrawable(); cg.setColor(colSheet()); cg.setStroke(dp(this, 1), Color.argb(140, 255, 255, 255));
-        float formR = dp(this, 22); cg.setCornerRadii(new float[]{formR, formR, formR, formR, 0, 0, 0, 0});
+        cg.setCornerRadius(dp(this, 22)); // Q92 浮起窗四角全圆
         card.setBackground(cg);
-        if (Build.VERSION.SDK_INT >= 21) { card.setElevation(dp(this, 24)); topSheetClip(card, 22, this); }
+        if (Build.VERSION.SDK_INT >= 21) { card.setElevation(dp(this, 24)); roundClip(card, 22, this); }
         card.setOnClickListener(v -> {});
         ScrollView sv = new ScrollView(this); thinScrollbar(sv);
         LinearLayout form = new LinearLayout(this); form.setOrientation(LinearLayout.VERTICAL);
@@ -12487,12 +12905,10 @@ public class MainActivity extends Activity {
         LinearLayout acts = new LinearLayout(this); acts.setOrientation(LinearLayout.HORIZONTAL);
         LinearLayout.LayoutParams actLp2 = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT); actLp2.topMargin = dp(this, 16);
         form.addView(acts, actLp2);
-        Button cancel = new Button(this); cancel.setText("取消"); cancel.setTextSize(15); cancel.setAllCaps(false);
-        cancel.setBackground(roundRect(Color.rgb(0xF2, 0xF3, 0xF7), 14, this));
+        TextView cancel = softGhostBtn("取消");
         cancel.setOnClickListener(v -> { haptic(); closeFootprintForm(); });
         acts.addView(cancel, new LinearLayout.LayoutParams(0, dp(this, 48), 1f));
-        Button save = new Button(this); save.setText("保存"); save.setTextSize(15); save.setAllCaps(false); save.setTextColor(Color.WHITE);
-        GradientDrawable saveBg = new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM, new int[]{Color.rgb(0x0A, 0x84, 0xFF), Color.rgb(0x00, 0x66, 0xE6)}); saveBg.setCornerRadius(dp(this, 14)); save.setBackground(saveBg);
+        TextView save = softPrimaryBtn("保存");
         LinearLayout.LayoutParams saveLp = new LinearLayout.LayoutParams(0, dp(this, 48), 2f); saveLp.leftMargin = dp(this, 10);
         acts.addView(save, saveLp);
         save.setOnClickListener(v -> {
@@ -12529,10 +12945,11 @@ public class MainActivity extends Activity {
         int maxH = (int) (getResources().getDisplayMetrics().heightPixels * 0.82);
         card.measure(View.MeasureSpec.makeMeasureSpec(sw - dp(this, 24), View.MeasureSpec.EXACTLY), View.MeasureSpec.makeMeasureSpec(maxH, View.MeasureSpec.AT_MOST));
         FrameLayout.LayoutParams clp = new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, Math.min(card.getMeasuredHeight(), maxH));
-        clp.gravity = Gravity.BOTTOM; clp.leftMargin = dp(this, 12); clp.rightMargin = dp(this, 12); clp.bottomMargin = 0;
+        // Q92：三表单窗改浮起——底部留 10dp+手势区安全距不再被手势条压，玻璃同高全圆
+        clp.gravity = Gravity.BOTTOM; clp.leftMargin = dp(this, 12); clp.rightMargin = dp(this, 12); clp.bottomMargin = dp(this, 10) + navBarH();
         FrameLayout wrap = new FrameLayout(this);
-        View glass = glassLayer(card, 22, false); topSheetClip(glass, 22, this);
-        wrap.addView(glass, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, clp.height + dp(this, 22)));
+        View glass = glassLayer(card, 22, false); roundClip(glass, 22, this);
+        wrap.addView(glass, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, clp.height));
         wrap.addView(card, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         sheet.addView(wrap, clp);
         content.addView(sheet, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
@@ -12819,13 +13236,12 @@ public class MainActivity extends Activity {
         LinearLayout card = new LinearLayout(this);
         card.setOrientation(LinearLayout.VERTICAL);
         GradientDrawable cg = new GradientDrawable();
-        cg.setColor(Color.rgb(0xFF, 0xFF, 0xFF));
-        float rTop = dp(this, 22);
-        cg.setCornerRadii(new float[]{rTop, rTop, rTop, rTop, 0, 0, 0, 0});
+        cg.setColor(colSheet()); // Q92：语义浮层色 + 四角全圆浮起（同批口径）
+        cg.setCornerRadius(dp(this, 22));
         card.setBackground(cg);
-        if (Build.VERSION.SDK_INT >= 21) { card.setElevation(dp(this, 24)); topSheetClip(card, 22, this); }
+        if (Build.VERSION.SDK_INT >= 21) { card.setElevation(dp(this, 24)); roundClip(card, 22, this); }
         card.setOnClickListener(v -> {});
-        card.setPadding(dp(this, 18), dp(this, 18), dp(this, 18), dp(this, 14) + navBarH());
+        card.setPadding(dp(this, 18), dp(this, 18), dp(this, 18), dp(this, 14));
         card.addView(tv(this, "在线搜卡 · 扩展卡库", 17, Color.rgb(0x1C, 0x1C, 0x1E), true));
         TextView hint = tv(this, "搜冷门卡、地方银行与合作社卡。扩展索引只存文字、随数据更新增补，加入后只存本机；无图卡先用占位面，规格空缺会如实标注。", 12.5f, Color.rgb(0x8E, 0x8E, 0x93), false);
         hint.setLineSpacing(dp(this, 2), 1f);
@@ -12844,6 +13260,7 @@ public class MainActivity extends Activity {
         card.addView(extMeta, metaLp);
         ScrollView resScroll = new ScrollView(this);
         thinScrollbar(resScroll);
+        extResScroll = resScroll; // Q92：renderExtResults 后按内容实高收缩
         extResultBox = new LinearLayout(this);
         extResultBox.setOrientation(LinearLayout.VERTICAL);
         resScroll.addView(extResultBox, new ScrollView.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
@@ -12854,18 +13271,10 @@ public class MainActivity extends Activity {
         LinearLayout.LayoutParams actLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         actLp.topMargin = dp(this, 14);
         card.addView(acts, actLp);
-        Button refreshBtn = new Button(this);
-        refreshBtn.setText("刷新索引"); refreshBtn.setTextSize(15); refreshBtn.setAllCaps(false);
-        try { refreshBtn.setTypeface(weightTypeface(this, 600)); } catch (Throwable ignored) {}
-        refreshBtn.setBackground(roundRect(Color.rgb(0xF2, 0xF3, 0xF7), 14, this));
+        TextView refreshBtn = softGhostBtn("刷新索引");
         refreshBtn.setOnClickListener(v -> { haptic(); extFetchStarted = false; fetchExtendedUpdate(null); renderExtResults(); });
         acts.addView(refreshBtn, new LinearLayout.LayoutParams(0, dp(this, 48), 1f));
-        Button closeBtn = new Button(this);
-        closeBtn.setText("关闭"); closeBtn.setTextSize(15); closeBtn.setAllCaps(false); closeBtn.setTextColor(Color.WHITE);
-        try { closeBtn.setTypeface(weightTypeface(this, 700)); } catch (Throwable ignored) {}
-        GradientDrawable closeBg = new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM, new int[]{Color.rgb(0x0A, 0x84, 0xFF), Color.rgb(0x00, 0x66, 0xE6)});
-        closeBg.setCornerRadius(dp(this, 14));
-        closeBtn.setBackground(closeBg);
+        TextView closeBtn = softPrimaryBtn("关闭");
         closeBtn.setOnClickListener(v -> { haptic(); closeExtendedSearch(); });
         LinearLayout.LayoutParams closeLp = new LinearLayout.LayoutParams(0, dp(this, 48), 1.4f);
         closeLp.leftMargin = dp(this, 10);
@@ -12879,12 +13288,13 @@ public class MainActivity extends Activity {
         int maxCardH = (int) (getResources().getDisplayMetrics().heightPixels * 0.86);
         card.measure(View.MeasureSpec.makeMeasureSpec(sw - dp(this, 24), View.MeasureSpec.EXACTLY), View.MeasureSpec.makeMeasureSpec(maxCardH, View.MeasureSpec.AT_MOST));
         FrameLayout.LayoutParams clp = new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, Math.min(card.getMeasuredHeight(), maxCardH));
+        // Q92：浮起避手势条（原贴底 bottomMargin=0 被系统手势条压，用户点名）
         clp.gravity = Gravity.BOTTOM;
-        clp.leftMargin = dp(this, 12); clp.rightMargin = dp(this, 12); clp.bottomMargin = 0;
+        clp.leftMargin = dp(this, 12); clp.rightMargin = dp(this, 12); clp.bottomMargin = dp(this, 10) + navBarH();
         FrameLayout wrap = new FrameLayout(this);
         View glass = glassLayer(card, 22, false);
-        topSheetClip(glass, 22, this);
-        wrap.addView(glass, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, clp.height + dp(this, 22)));
+        roundClip(glass, 22, this);
+        wrap.addView(glass, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, clp.height));
         wrap.addView(card, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         sheet.addView(wrap, clp);
         content.addView(sheet);
@@ -12903,7 +13313,7 @@ public class MainActivity extends Activity {
     void closeExtendedSearchNow() {
         View sheet = extSheet;
         if (sheet == null) return;
-        extSheet = null; extResultBox = null; extMeta = null; extInput = null;
+        extSheet = null; extResultBox = null; extResScroll = null; extMeta = null; extInput = null;
         if (sheet.getParent() != null) ((ViewGroup) sheet.getParent()).removeView(sheet);
     }
 
@@ -13233,21 +13643,9 @@ public class MainActivity extends Activity {
         root.setOrientation(LinearLayout.VERTICAL);
         root.setBackgroundColor(colBg()); // Q72 语义底，整页素净排版、无玻璃垫底
 
-        LinearLayout head = new LinearLayout(this);
-        head.setOrientation(LinearLayout.HORIZONTAL);
-        head.setGravity(Gravity.CENTER_VERTICAL);
-        head.setPadding(dp(this, 14), pageTopPad(), dp(this, 14), dp(this, 6));
-        root.addView(head);
-        Button back = new Button(this);
-        back.setText("‹ 返回"); back.setTextSize(14); back.setAllCaps(false);
-        back.setBackground(roundRect(colSurface(), 12, this));
-        back.setTextColor(colText());
-        back.setOnClickListener(v -> { haptic(); closeAbout(); });
-        head.addView(back, new LinearLayout.LayoutParams(dp(this, 84), dp(this, 38)));
-        TextView ht = tv(this, S("about"), 17, colText(), true);
-        LinearLayout.LayoutParams htlp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
-        htlp.leftMargin = dp(this, 10);
-        head.addView(ht, htlp);
+        // Q92：全站二级页头（圆形细线返回钮 + 20/800 标题），废原生白药丸返回钮
+        root.addView(pageBackHead(S("about"), () -> { haptic(); closeAbout(); }),
+            new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
 
         aboutScroll = new ScrollView(this);
         thinScrollbar(aboutScroll);
@@ -13909,20 +14307,9 @@ public class MainActivity extends Activity {
         root.setOrientation(LinearLayout.VERTICAL);
         root.setBackgroundColor(colBg()); // Q72
 
-        LinearLayout head = new LinearLayout(this);
-        head.setOrientation(LinearLayout.HORIZONTAL);
-        head.setGravity(Gravity.CENTER_VERTICAL);
-        head.setPadding(dp(this, 14), pageTopPad(), dp(this, 14), dp(this, 6));
-        root.addView(head);
-        Button back = new Button(this);
-        back.setText("‹ 返回"); back.setTextSize(14); back.setAllCaps(false);
-        back.setBackground(roundRect(Color.WHITE, 12, this));
-        back.setOnClickListener(v -> { haptic(); closeChangelog(); });
-        head.addView(back, new LinearLayout.LayoutParams(dp(this, 84), dp(this, 38)));
-        TextView ht = tv(this, "更新日志", 17, Color.rgb(0x1C, 0x1C, 0x1E), true);
-        LinearLayout.LayoutParams htlp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
-        htlp.leftMargin = dp(this, 10);
-        head.addView(ht, htlp);
+        // Q92：全站二级页头（圆形细线返回钮 + 标题），废原生白药丸返回钮
+        root.addView(pageBackHead("更新日志", () -> { haptic(); closeChangelog(); }),
+            new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
 
         changelogScroll = new ScrollView(this);
         LinearLayout page = new LinearLayout(this);
@@ -14038,24 +14425,33 @@ public class MainActivity extends Activity {
         }
     }
 
-    View moreMenuRow(String label, final Runnable act) {
-        TextView t = tv(this, label, 14.5f, Color.rgb(0x1C, 0x1C, 0x1E), false);
-        t.setPadding(dp(this, 16), dp(this, 12), dp(this, 16), dp(this, 12));
-        t.setBackground(rippleBg(Color.TRANSPARENT, 10)); // Q73: row sits on menu glass, no opaque white
-        t.setClipToOutline(true);
-        t.setOnTouchListener((v, e) -> {
+    View moreMenuRow(String kind, String label, final Runnable act) {
+        LinearLayout rowL = new LinearLayout(this);
+        rowL.setOrientation(LinearLayout.HORIZONTAL);
+        rowL.setGravity(Gravity.CENTER_VERTICAL);
+        rowL.setPadding(dp(this, 14), dp(this, 11), dp(this, 14), dp(this, 11));
+        rowL.setBackground(rippleBg(Color.TRANSPARENT, 10)); // Q73: row sits on menu glass, no opaque white
+        rowL.setClipToOutline(true);
+        MenuIconView mi = new MenuIconView(this);
+        mi.kind = kind; mi.iconColor = colText();
+        rowL.addView(mi, new LinearLayout.LayoutParams(dp(this, 20), dp(this, 20)));
+        TextView t = tv(this, label, 14.5f, colText(), false);
+        LinearLayout.LayoutParams tlp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+        tlp.leftMargin = dp(this, 10);
+        rowL.addView(t, tlp);
+        rowL.setOnTouchListener((v, e) -> {
             if (e.getAction() == MotionEvent.ACTION_DOWN) pressBounce(v, true);
             else if (e.getAction() == MotionEvent.ACTION_UP || e.getAction() == MotionEvent.ACTION_CANCEL) pressBounce(v, false);
             return false;
         });
-        t.setOnClickListener(v -> {
+        rowL.setOnClickListener(v -> {
             haptic();
             closeMoreMenu();
             if (act != null) mainHandler.postDelayed(act, 150);
         });
         LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        t.setLayoutParams(lp);
-        return t;
+        rowL.setLayoutParams(lp);
+        return rowL;
     }
 
     void openMoreMenu(View anchor) {
@@ -14078,15 +14474,19 @@ public class MainActivity extends Activity {
         card.setOrientation(LinearLayout.VERTICAL);
         card.setBackground(glassTintDrawable(16, false));
         card.setPadding(dp(this, 6), dp(this, 6), dp(this, 6), dp(this, 6));
-        card.addView(moreMenuRow("情景选卡", () -> openWizard()));
-        card.addView(moreMenuRow("更新日志", () -> { settingsLogOpen = true; rebuildPages(); }));
-        card.addView(moreMenuRow("欢迎页", () -> showWelcome()));
-        card.addView(moreMenuRow("关于卡盒", () -> openAbout()));
-        cardWrap.addView(card, new FrameLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        card.addView(moreMenuRow("scene", "情景选卡", () -> openWizard()));
+        card.addView(moreMenuRow("log", "更新日志", () -> { settingsLogOpen = true; rebuildPages(); }));
+        card.addView(moreMenuRow("welcome", "欢迎页", () -> showWelcome()));
+        card.addView(moreMenuRow("about", "关于卡盒", () -> openAbout()));
+        int menuW = dp(this, 208);
+        // Q92：同糊层事故防线——cardWrap 先测 card 实高、钉死像素高，玻璃/wash 显式同高，
+        // 不让 WRAP_CONTENT + MATCH_PARENT 玻璃子层把菜单背板撑出卡外一片。
+        card.measure(View.MeasureSpec.makeMeasureSpec(menuW, View.MeasureSpec.EXACTLY),
+            View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED));
+        int menuH = card.getMeasuredHeight();
+        cardWrap.addView(card, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, menuH));
         card.setOnClickListener(v -> {});
-        int menuW = dp(this, 196);
-        FrameLayout.LayoutParams clp = new FrameLayout.LayoutParams(menuW, ViewGroup.LayoutParams.WRAP_CONTENT);
+        FrameLayout.LayoutParams clp = new FrameLayout.LayoutParams(menuW, menuH);
         int[] al = new int[2]; anchor.getLocationOnScreen(al);
         int[] cl = new int[2]; content.getLocationOnScreen(cl);
         int anchorRight = al[0] - cl[0] + anchor.getWidth();
@@ -14156,9 +14556,7 @@ public class MainActivity extends Activity {
                 page.addView(titleRow, 0);
             }
         } catch (Throwable ignored) {}
-        View wizEntry = settingRow("情景选卡", "出国留学 / 出境旅游 / 海淘网购 / 日常使用，按场景挑卡 ›");
-        wizEntry.setOnClickListener(v -> { haptic(); openWizard(); });
-        page.addView(wizEntry);
+        // Q92：情景选卡入口已收进 ⋯ 菜单（菜单行「情景选卡」），设置页不再重复长行。
 
         // 功能启用区（2026-10-04 06:33 钉版）：可选模块逐项登记在此，关掉入口与界面彻底不出现、不占位
         sectionHead(page, S("sec_features"));
@@ -14289,16 +14687,9 @@ public class MainActivity extends Activity {
             page.addView(settingRow("玻璃效果", "已自动停用（连续失败后回落半透，不影响使用）"));
         }
         page.addView(settingRow(S("version"), appVersion() + (isEn() ? " (Native)" : "（原生版）")));
-        View logRow = settingRow(S("changelog"), settingsLogOpen ? L("收起更新日志","Hide changelog") : L("每个版本改了什么 ›","What changed ›"));
-        logRow.setOnClickListener(v -> { haptic(); settingsLogOpen = !settingsLogOpen; rebuildPages(); });
-        page.addView(logRow);
+        // Q92 设置页瘦身：更新日志/欢迎页/关于卡盒/情景选卡四个次级入口已收进标题栏 ⋯ 菜单
+        // （细线图标行），此处不再重复长行；⋯「更新日志」仍靠 settingsLogOpen 就地展开内嵌日志。
         if (settingsLogOpen) page.addView(buildInlineLogBox());
-        View welRow = settingRow(S("welcome"), L("重新看一遍首次打开的介绍 ›","Replay the intro ›"));
-        welRow.setOnClickListener(v -> { haptic(); showWelcome(); });
-        page.addView(welRow);
-        View aboutRow = settingRow(S("about"), L("介绍与赞助 ›","Intro & support ›"));
-        aboutRow.setOnClickListener(v -> { haptic(); openAbout(); });
-        page.addView(aboutRow);
         page.addView(settingRow("迁移进度", "全部卡片 / 详情 / 我的卡片 / 学生推荐 / 筛选 / 资讯 / 情景选卡 / 自定义卡 / 拖动 / 字体与界面大小 / 高刷 / 触感 / 欢迎页 / 更新日志 / 数据 OTA 已迁移"));
         ScrollView sv = new ScrollView(this);
         thinScrollbar(sv);
@@ -14439,12 +14830,11 @@ public class MainActivity extends Activity {
         txt.addView(tv(this, label, 14, colText(), true));
         txt.addView(tv(this, desc, 11.5f, colText2(), false));
         row.addView(txt, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
-        TextView sw = tv(this, on ? "开" : "关", 12.5f, on ? Color.WHITE : colText2(), true);
-        sw.setGravity(Gravity.CENTER);
-        sw.setBackground(roundRect(on ? accentColor() : colChipOff(), 999, this));
-        sw.setPadding(dp(this, 16), dp(this, 7), dp(this, 16), dp(this, 7));
-        row.addView(sw);
-        row.setOnClickListener(v -> set.onSet(!on));
+        // Q92：换真开关（轨道+白拇指滑行），告别「开/关」文字药丸的原生脸
+        final ToggleView sw = new ToggleView(this);
+        sw.setOn(on, false);
+        row.addView(sw, new LinearLayout.LayoutParams(dp(this, 46), dp(this, 28)));
+        row.setOnClickListener(v -> { sw.setOn(!on, true); set.onSet(!on); });
         page.addView(row);
     }
 
