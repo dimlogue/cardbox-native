@@ -3090,6 +3090,12 @@ public class MainActivity extends Activity {
     TextView detailPrimaryBtn = null; // Q83：详情窗底部常驻主按钮（未加入=加入我的卡片，已加入=管理入口）
     LinearLayout detailVerInfoBox = null;
     java.util.List<View> detailDots = new java.util.ArrayList<>();
+    // Q100 热修：图廊视口高度按「当前 slide」实测高收紧（旧口径被最高 slide 顶住——竖版子版本
+    // 260dp 封顶会把横版 slide 下方空出一截、圆点被推到空地底）；每 slide 建成即离屏测高存表，
+    // 切子版本时视口高随目标 slide 走。
+    HorizontalScrollView detailHsv = null;
+    java.util.List<Integer> detailSlideHeights = new java.util.ArrayList<>();
+    ValueAnimator detailGalAnim = null;
     final java.util.ArrayDeque<Card> detailQueue = new java.util.ArrayDeque<>();
 
     // 情景选卡状态（Phase 3a，对照 app.js 的 wiz 全局状态）
@@ -8248,6 +8254,27 @@ public class MainActivity extends Activity {
             }
         }
         if (detailBinView != null) detailBinView.setText(variantBinText(c, idx));
+        // Q100：图廊视口高随当前 slide 收紧（圆点贴着当前图下沿，不再掉进最高 slide 撑出的空地）
+        if (detailHsv != null && idx >= 0 && idx < detailSlideHeights.size()) {
+            final int targetH = detailSlideHeights.get(idx);
+            ViewGroup.LayoutParams hlp = detailHsv.getLayoutParams();
+            if (hlp != null && hlp.height != targetH) {
+                if (detailGalAnim != null) detailGalAnim.cancel();
+                final int fromH = hlp.height > 0 ? hlp.height : targetH;
+                detailGalAnim = ValueAnimator.ofInt(fromH, targetH);
+                detailGalAnim.setDuration(200);
+                detailGalAnim.setInterpolator(ANIM_ENTER);
+                final HorizontalScrollView hsvRef = detailHsv;
+                detailGalAnim.addUpdateListener(a -> {
+                    if (detailHsv != hsvRef) return; // 已换下一张详情，旧动画不许碰新图廊
+                    ViewGroup.LayoutParams p = hsvRef.getLayoutParams();
+                    if (p == null) return;
+                    p.height = (Integer) a.getAnimatedValue();
+                    hsvRef.setLayoutParams(p);
+                });
+                detailGalAnim.start();
+            }
+        }
         if (detailVerInfoBox != null) {
             detailVerInfoBox.removeAllViews();
             fillVerInfo(detailVerInfoBox, c, idx);
@@ -8400,6 +8427,9 @@ public class MainActivity extends Activity {
         gal.addView(hsv);
         final int screenW = getResources().getDisplayMetrics().widthPixels;
         detailDots = new java.util.ArrayList<>();
+        detailHsv = hsv; // Q100：视口高按当前 slide 收紧（见 updateDetailVariant）
+        detailSlideHeights = new java.util.ArrayList<>();
+        if (detailGalAnim != null) { detailGalAnim.cancel(); detailGalAnim = null; }
         for (int i = 0; i < nSlides; i++) {
             String imgPath = c.image;
             String slideName = "";
@@ -8466,6 +8496,14 @@ public class MainActivity extends Activity {
                 snp.topMargin = dp(this, 10);
                 slide.addView(sn, snp);
             }
+            // Q100：slide 建成即离屏测高存表，图廊视口按当前 slide 收紧（不再被最高 slide 顶住）
+            slide.measure(View.MeasureSpec.makeMeasureSpec(screenW, View.MeasureSpec.EXACTLY),
+                View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED));
+            detailSlideHeights.add(slide.getMeasuredHeight());
+        }
+        if (!detailSlideHeights.isEmpty()) {
+            hsv.setLayoutParams(new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, detailSlideHeights.get(0)));
         }
         if (nSlides > 1) {
             LinearLayout dots = new LinearLayout(this);
