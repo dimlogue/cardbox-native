@@ -925,7 +925,7 @@ public class MainActivity extends Activity {
         // Q23：与 Q3 悬浮钮同款玻璃底（glassFabBg + applyGlassFabShadow + live 玻璃层），对照混合版 .qf-top/.qf-btn
         // 同语言：44dp 圆钮、白色 .5 描边、深色细线箭头；玻璃模糊由 glassLayer 垫底。
         fab.setBackground(glassFabBg());
-        fab.addView(glassLayer(fab, -1, true), new FrameLayout.LayoutParams(
+        fab.addView(glassLayerHw(fab, -1, true), new FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         // Q23 固定浅白染色托底（盖在模糊层之上、箭头之下）：对照混合版 .qf-top 的 background:rgba(255,255,255,.32)
         // Q53：改用与搜索/筛选钮同一 fabFrostWash() 提亮层，三钮黑底白底同一口径。
@@ -1898,8 +1898,9 @@ public class MainActivity extends Activity {
         return iv;
     }
 
-    /** Q108 试点件构造：与 glassLayer 同路同视觉，仅多打一个硬件试点标（底栏＋⋯
-     * 菜单）；硬件关/退/低版本时 onDraw 自动回落软件路，构造侧无需分叉。 */
+    /** Q108 试点件构造（2.22，底栏＋⋯菜单）；Q109（2.23）经用户真机验收试点后全面
+     * 铺开：全部玻璃件改走此构造。与 glassLayer 同路同视觉，仅多打一个硬件标；
+     * 硬件关/退/低版本时 onDraw 自动回落软件路，构造侧无需分叉。 */
     ImageView glassLayerHw(View host, float radiusDp, boolean live) {
         ImageView iv = glassLayer(host, radiusDp, live);
         if (iv instanceof GlassBackdropView) ((GlassBackdropView) iv).hwPilot = true;
@@ -2147,7 +2148,7 @@ public class MainActivity extends Activity {
      * Q99：live 件采样文档条带（按当前 scrollY 取文档行，同帧跟随）；frozen 件与
      * 条带无源时采样屏幕快照。两种取景共用同一组「平移→1/scale 放大」对位数学。 */
     class GlassBackdropView extends ImageView {
-        boolean hwPilot = false; // Q108：硬件玻璃实验试点件（底栏/⋯菜单），onDraw 首行分流
+        boolean hwPilot = false; // Q108 硬件玻璃实验标（2.22 试点两件，Q109 起全件），onDraw 首行分流
         final int[] rl2 = new int[2];
         final int[] ml2 = new int[2];
         final int[] sl2 = new int[2];
@@ -2234,12 +2235,17 @@ public class MainActivity extends Activity {
     // 底栏（live）＋设置 ⋯ 菜单（frozen），其余玻璃件与三档四轴数值（BACKDROP_BLUR_R /
     // BACKDROP_SAT / glassTintScale / glassWashScale）一律不动；硬件路模糊半径由软件档
     // 同源折算（0.20 采样 px → 全分辨率 σ → 节点采样 px），饱和用同一组 BACKDROP_SAT。
+    // Q109（2.23，用户 22:47 拍板「先备份、然后铺开、玻璃全面铺开」）：试点两件真机
+    // 未崩且质感获认，本版把全部 GlassBackdropView 件改走硬件通道（构造点统一经
+    // glassLayerHw 打标，清单与保留件见 PROGRESS Q109）。护栏/开关/录制策略原样扩面，
+    // 参数（BACKDROP_BLUR_R/BACKDROP_SAT/三档四轴/染色wash边光）逐字未动；窗口类
+    // frozen 语义不变（仍采样身后场景，⋯ 菜单 Q102 冻结闸保留），live 类仍同帧跟随。
     // 自退护栏（替代 catch，原生崩 Java 记不上账）：双标记法——首帧真正录制前同步写
     // glass_hw_armed=true＋glass_hw_stable=false（commit，必须赶在 HWUI 出事前落盘）；
     // 首帧 drawRenderNode 成功返回后写 glass_hw_stable=true。冷启 initHwGlassGuard 若见
     // armed && !stable，即认定上一会话死在硬件路上：置 glass_hw_dead、关实验开关、留
     // 时间戳 glass_hw_note（设置行可查），全程回落软件链——「崩一次、重开即愈」。
-    // 手动开关「硬件玻璃（实验）」（glass_hw_exp，默认开）随时可关：试点件 onDraw 逐帧
+    // 手动开关「硬件玻璃（实验）」（glass_hw_exp，默认开）随时可关：硬件件 onDraw 逐帧
     // 查开关，关掉下一帧即回软件路（即时生效）；自动退回后重新打开＝清 dead 再试一轮。
     static final float HW_BACKDROP_SCALE = 0.5f; // 节点录制缩放（软件链 0.20；硬件路取 0.5 换细腻度，仍非全分辨率）
     boolean hwGlassEnabled = false;   // 本进程硬件通道可用（启动护栏判定结果）
@@ -2355,7 +2361,7 @@ public class MainActivity extends Activity {
             hwNodeValid = true;
             if (!wasValid || effectChanged) invalidateHwPilots();
         } catch (Throwable t) {
-            hwNodeValid = false; // 只废这一帧：试点件回落软件背板/染色，不拖死全局（原生崩另有启动护栏）
+            hwNodeValid = false; // 只废这一帧：硬件件回落软件背板/染色，不拖死全局（原生崩另有启动护栏）
         } finally {
             for (java.util.Map.Entry<View, Integer> e : saved.entrySet()) {
                 try { e.getKey().setVisibility(e.getValue()); } catch (Throwable ignored) {}
@@ -2372,7 +2378,7 @@ public class MainActivity extends Activity {
         } catch (Throwable ignored) {}
     }
 
-    /** 实验开关即时落地：开→立刻录一帧并让试点件重绘；关→试点件下一帧 onDraw 自查
+    /** 实验开关即时落地：开→立刻录一帧并让硬件件重绘；关→各件下一帧 onDraw 自查
      * 开关自动回落软件路，本函数只需补一帧软件背板并令其重绘，不必重建任何页。 */
     void applyHwGlassChange() {
         if (hwGlassEnabled) {
@@ -2392,8 +2398,8 @@ public class MainActivity extends Activity {
             return isEn() ? "Crashed last time — auto-reverted to safe glass (" + hwGlassNote + "). Turn on to retry"
                           : "上次开启后闪退，已自动退回安全玻璃（" + hwGlassNote + "），重新打开可再试";
         }
-        if (hwGlassEnabled) return isEn() ? "Beta: dock & menus use system real-time blur. May crash; reverts automatically on relaunch"
-                                         : "实验中：底栏与菜单走系统硬件实时模糊，可能闪退，闪退后重开自动退回";
+        if (hwGlassEnabled) return isEn() ? "Beta: all glass uses system real-time blur. May crash; reverts automatically on relaunch"
+                                         : "实验中：全部玻璃件走系统硬件实时模糊，可能闪退，闪退后重开自动退回";
         return isEn() ? "Off — all glass uses the safe software blur"
                       : "已关闭，全部玻璃走安全软件磨砂";
     }
@@ -4367,7 +4373,7 @@ public class MainActivity extends Activity {
         // 旧实现底部色带渗出柔面圆角之外（用户实拍发脏），渗边源头就在那两层。
         FrameLayout toastWrap = new FrameLayout(this);
         glassClip(toastWrap, 20, false);
-        toastWrap.addView(glassLayer(toastWrap, 20, false), new FrameLayout.LayoutParams(
+        toastWrap.addView(glassLayerHw(toastWrap, 20, false), new FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         toastWrap.addView(bar, new FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
@@ -4591,7 +4597,7 @@ public class MainActivity extends Activity {
         clp.leftMargin = dp(this, 12); clp.rightMargin = dp(this, 12);
         clp.bottomMargin = dp(this, 10) + navBarH(); // Q92：浮起并避手势条，不顶到屏幕底
         FrameLayout wrap = new FrameLayout(this);
-        View glass = glassLayer(cardBox, 22, false);
+        View glass = glassLayerHw(cardBox, 22, false);
         roundClip(glass, 22, this);
         wrap.addView(glass, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, pickerH));
         wrap.addView(cardBox, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, pickerH));
@@ -4735,7 +4741,7 @@ public class MainActivity extends Activity {
         clp2.leftMargin = dp(this, 12); clp2.rightMargin = dp(this, 12);
         clp2.bottomMargin = dp(this, 10) + navBarH();
         FrameLayout wrap = new FrameLayout(this);
-        View glass = glassLayer(cardBox, 22, false);
+        View glass = glassLayerHw(cardBox, 22, false);
         roundClip(glass, 22, this);
         wrap.addView(glass, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, phH));
         wrap.addView(cardBox, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, phH));
@@ -5875,7 +5881,7 @@ public class MainActivity extends Activity {
         fab.setClipToPadding(false);
         int n0 = activeFilterCount();
         fab.setBackground(glassFabBg());
-        fab.addView(glassLayer(fab, -1, true), new FrameLayout.LayoutParams(
+        fab.addView(glassLayerHw(fab, -1, true), new FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         fab.addView(fabFrostWash(), new FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
@@ -5917,7 +5923,7 @@ public class MainActivity extends Activity {
     View buildSearchFab() {
         FrameLayout fab = new FrameLayout(this);
         fab.setBackground(glassFabBg());
-        fab.addView(glassLayer(fab, -1, true), new FrameLayout.LayoutParams(
+        fab.addView(glassLayerHw(fab, -1, true), new FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         fab.addView(fabFrostWash(), new FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
@@ -6905,7 +6911,7 @@ public class MainActivity extends Activity {
         final FrameLayout popWrap = new FrameLayout(this);
         glassClip(popWrap, 28, false);
         if (Build.VERSION.SDK_INT >= 21) popWrap.setElevation(dp(this, 24));
-        popWrap.addView(glassLayer(popWrap, 28, false), new FrameLayout.LayoutParams(
+        popWrap.addView(glassLayerHw(popWrap, 28, false), new FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         View popFace = new View(this);
         popFace.setBackground(glassWindowTint(28, false));
@@ -7247,7 +7253,7 @@ public class MainActivity extends Activity {
         FrameLayout inlineWrap = new FrameLayout(this);
         inlineWrap.setBackground(softSearchTint()); // Q94：内嵌搜索胶囊玻璃收淡（近白低饱和，不再一团蓝）
         if (Build.VERSION.SDK_INT >= 21) inlineWrap.setElevation(dp(this, 6));
-        inlineWrap.addView(glassLayer(inlineWrap, 28, true), new FrameLayout.LayoutParams(
+        inlineWrap.addView(glassLayerHw(inlineWrap, 28, true), new FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         LinearLayout inlineRow = new LinearLayout(this);
         inlineRow.setOrientation(LinearLayout.HORIZONTAL);
@@ -7307,7 +7313,7 @@ public class MainActivity extends Activity {
         FrameLayout floatWrap = new FrameLayout(this);
         floatWrap.setBackground(softSearchTint()); // Q94：悬浮搜索胶囊同口径收淡
         if (Build.VERSION.SDK_INT >= 21) floatWrap.setElevation(dp(this, 14));
-        floatWrap.addView(glassLayer(floatWrap, 28, true), new FrameLayout.LayoutParams(
+        floatWrap.addView(glassLayerHw(floatWrap, 28, true), new FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         LinearLayout floatRow = new LinearLayout(this);
         floatRow.setOrientation(LinearLayout.HORIZONTAL);
@@ -7833,7 +7839,7 @@ public class MainActivity extends Activity {
         FrameLayout wrap = new FrameLayout(this);
         glassClip(wrap, 24, false);
         if (Build.VERSION.SDK_INT >= 21) wrap.setElevation(dp(this, 24));
-        wrap.addView(glassLayer(card, 24, false), new FrameLayout.LayoutParams(
+        wrap.addView(glassLayerHw(card, 24, false), new FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         View wash = glassWashView(24, false);
         glassClip(wash, 24, false);
@@ -8436,7 +8442,7 @@ public class MainActivity extends Activity {
         clp.height = card.getMeasuredHeight();
         // Q11：贴底窗下垫冻结模糊层——玻璃层向下多延 26dp，让顶圆角对齐窗体、底圆角沉到屏外
         FrameLayout wizGlassWrap = new FrameLayout(this);
-        View wizGlass = glassLayer(card, 26, false);
+        View wizGlass = glassLayerHw(card, 26, false);
         topSheetClip(wizGlass, 26, this); // Q54：玻璃轮廓与窗体同（顶圆底直），不得在窗外露面发雾
         wizGlassWrap.addView(wizGlass, new FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, clp.height + dp(this, 26)));
@@ -8997,7 +9003,7 @@ public class MainActivity extends Activity {
         // 窗外由 wrap 裁掉，窗底两角只剩直角白窗贴齐屏底，不露玻璃/遮罩黑三角
         FrameLayout.LayoutParams detailGlassLp = new FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, sheetH + dp(this, 20));
-        View detailGlass = glassLayer(sheetCard, 20, false);
+        View detailGlass = glassLayerHw(sheetCard, 20, false);
         topSheetClip(detailGlass, 20, this); // Q54：玻璃轮廓与窗体同（顶圆底直），不得在窗外露面发雾
         wrap.addView(detailGlass, detailGlassLp);
         wrap.addView(sheetCard, new FrameLayout.LayoutParams(
@@ -9008,7 +9014,7 @@ public class MainActivity extends Activity {
         // （不用 WRAP_CONTENT+MATCH_PARENT 玻璃的模糊测量链），钮下贴安全距避手势条。
         FrameLayout pillWrap = new FrameLayout(this);
         int pillH = dp(this, 50);
-        pillWrap.addView(glassLayer(detailPrimaryBtn, 999, false),
+        pillWrap.addView(glassLayerHw(detailPrimaryBtn, 999, false),
             new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, pillH));
         pillWrap.addView(glassWashView(999, false),
             new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, pillH));
@@ -11263,7 +11269,7 @@ public class MainActivity extends Activity {
         clp.gravity = Gravity.BOTTOM;
         clp.leftMargin = dp(this, 12); clp.rightMargin = dp(this, 12); clp.bottomMargin = 0;
         FrameLayout wrap = new FrameLayout(this);
-        View glass = glassLayer(card, 22, false);
+        View glass = glassLayerHw(card, 22, false);
         topSheetClip(glass, 22, this); // Q54：玻璃轮廓与窗体同，不得在窗外露面
         wrap.addView(glass, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         wrap.addView(card, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
@@ -11366,7 +11372,7 @@ public class MainActivity extends Activity {
         // Q45：同详情窗——冻结玻璃层高出窗体 20dp，底圆角沉到窗外由 wrap 裁掉，窗底直角贴屏底
         FrameLayout.LayoutParams customDetailGlassLp = new FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, sheetH + dp(this, 20));
-        View customDetailGlass = glassLayer(sheetCard, 20, false);
+        View customDetailGlass = glassLayerHw(sheetCard, 20, false);
         topSheetClip(customDetailGlass, 20, this); // Q54：玻璃轮廓与窗体同（顶圆底直），不得在窗外露面发雾
         wrap.addView(customDetailGlass, customDetailGlassLp);
         wrap.addView(sheetCard, new FrameLayout.LayoutParams(
@@ -12393,7 +12399,7 @@ public class MainActivity extends Activity {
         // Q45：玻璃与窗体同装贴底容器，玻璃高出 22dp、底圆角沉出容器被裁，与窗体同升同降；
         // closeBinQuery 取最后一层即此容器，动画口径不变；Q43 结果变高时由 resizeBinSheetToFit 跟随重定高
         FrameLayout binWrap = new FrameLayout(this);
-        View binGlass = glassLayer(card, 22, false);
+        View binGlass = glassLayerHw(card, 22, false);
         topSheetClip(binGlass, 22, this); // Q54：玻璃轮廓与窗体同（顶圆底直），不得在窗外露面发雾
         binWrap.addView(binGlass, new FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, clp.height + dp(this, 22)));
@@ -12941,7 +12947,7 @@ public class MainActivity extends Activity {
         // Q45：玻璃与窗体同装贴底容器，玻璃高出 22dp、底圆角沉出容器被裁，与窗体同升同降；
         // closeCustomForm 取最后一层即此容器，动画口径不变
         FrameLayout formWrap = new FrameLayout(this);
-        View formGlass = glassLayer(card, 22, false);
+        View formGlass = glassLayerHw(card, 22, false);
         topSheetClip(formGlass, 22, this); // Q54：玻璃轮廓与窗体同（顶圆底直），不得在窗外露面发雾
         formWrap.addView(formGlass, new FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, clp.height + dp(this, 22))); // Q11 冻结玻璃垫底
@@ -13060,7 +13066,7 @@ public class MainActivity extends Activity {
         TextView ob=tv(this,okTxt,15,Color.WHITE,true); ob.setGravity(Gravity.CENTER); ob.setBackground(rippleBg(Color.rgb(0x0A,0x5C,0xD6),14));
         LinearLayout.LayoutParams olp=new LinearLayout.LayoutParams(0,dp(this,48),1f); olp.leftMargin=dp(this,10); btns.addView(ob,olp);
         FrameLayout.LayoutParams clp=new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,ViewGroup.LayoutParams.WRAP_CONTENT); clp.gravity=Gravity.BOTTOM; clp.leftMargin=dp(this,12); clp.rightMargin=dp(this,12);
-        FrameLayout wrap=new FrameLayout(this); View glass=glassLayer(card,22,false); topSheetClip(glass,22,this);
+        FrameLayout wrap=new FrameLayout(this); View glass=glassLayerHw(card,22,false); topSheetClip(glass,22,this);
         wrap.addView(glass,new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,ViewGroup.LayoutParams.MATCH_PARENT));
         wrap.addView(card,new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,ViewGroup.LayoutParams.MATCH_PARENT));
         sheet.addView(wrap,clp);
@@ -14217,7 +14223,7 @@ public class MainActivity extends Activity {
         // Q92：三表单窗改浮起——底部留 10dp+手势区安全距不再被手势条压，玻璃同高全圆
         clp.gravity = Gravity.BOTTOM; clp.leftMargin = dp(this, 12); clp.rightMargin = dp(this, 12); clp.bottomMargin = dp(this, 10) + navBarH();
         FrameLayout wrap = new FrameLayout(this);
-        View glass = glassLayer(card, 22, false); roundClip(glass, 22, this);
+        View glass = glassLayerHw(card, 22, false); roundClip(glass, 22, this);
         wrap.addView(glass, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, clp.height));
         wrap.addView(card, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         sheet.addView(wrap, clp);
@@ -14552,7 +14558,7 @@ public class MainActivity extends Activity {
         // Q92：三表单窗改浮起——底部留 10dp+手势区安全距不再被手势条压，玻璃同高全圆
         clp.gravity = Gravity.BOTTOM; clp.leftMargin = dp(this, 12); clp.rightMargin = dp(this, 12); clp.bottomMargin = dp(this, 10) + navBarH();
         FrameLayout wrap = new FrameLayout(this);
-        View glass = glassLayer(card, 22, false); roundClip(glass, 22, this);
+        View glass = glassLayerHw(card, 22, false); roundClip(glass, 22, this);
         wrap.addView(glass, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, clp.height));
         wrap.addView(card, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         sheet.addView(wrap, clp);
@@ -14892,7 +14898,7 @@ public class MainActivity extends Activity {
         // Q92：三表单窗改浮起——底部留 10dp+手势区安全距不再被手势条压，玻璃同高全圆
         clp.gravity = Gravity.BOTTOM; clp.leftMargin = dp(this, 12); clp.rightMargin = dp(this, 12); clp.bottomMargin = dp(this, 10) + navBarH();
         FrameLayout wrap = new FrameLayout(this);
-        View glass = glassLayer(card, 22, false); roundClip(glass, 22, this);
+        View glass = glassLayerHw(card, 22, false); roundClip(glass, 22, this);
         wrap.addView(glass, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, clp.height));
         wrap.addView(card, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         sheet.addView(wrap, clp);
@@ -15236,7 +15242,7 @@ public class MainActivity extends Activity {
         clp.gravity = Gravity.BOTTOM;
         clp.leftMargin = dp(this, 12); clp.rightMargin = dp(this, 12); clp.bottomMargin = dp(this, 10) + navBarH();
         FrameLayout wrap = new FrameLayout(this);
-        View glass = glassLayer(card, 22, false);
+        View glass = glassLayerHw(card, 22, false);
         roundClip(glass, 22, this);
         wrap.addView(glass, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, clp.height));
         wrap.addView(card, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
@@ -16452,8 +16458,8 @@ public class MainActivity extends Activity {
                 applyGlassEnabledChange();
                 rebuildPages();
             });
-        // Q108（2.22）：硬件玻璃实验开关——本版实验载体默认开；只试点底栏＋⋯菜单两
-        // 件，关掉即时回落软件链（试点件 onDraw 逐帧自查）。自动退回（hwGlassDead）
+        // Q108（2.22）硬件玻璃实验开关，Q109（2.23）起覆盖全部玻璃件——关掉即时全件
+        // 回落软件链（各件 onDraw 逐帧自查）。自动退回（hwGlassDead）
         // 时行副文案带时间戳留痕；重新打开＝清 dead＋重置双标记，再试一轮。
         switchRow(page, "硬件玻璃（实验）", hwGlassDesc(), hwGlassEnabled, on -> {
             if (on) {
