@@ -886,7 +886,7 @@ public class MainActivity extends Activity {
             p.setStyle(Paint.Style.STROKE);
             p.setStrokeCap(Paint.Cap.ROUND);
             p.setStrokeJoin(Paint.Join.ROUND);
-            p.setColor(Color.rgb(0x1C, 0x1C, 0x1E)); // 对照混合版 .qf-top 深色箭头
+            p.setColor(iconInk()); // 对照混合版 .qf-top 深色箭头
             float ox = getPaddingLeft(), oy = getPaddingTop();
             float sx = (getWidth() - getPaddingLeft() - getPaddingRight()) / 24f;
             float sy = (getHeight() - getPaddingTop() - getPaddingBottom()) / 24f;
@@ -1106,6 +1106,33 @@ public class MainActivity extends Activity {
     int colText3() { return darkEff() ? Color.argb(97,255,255,255) : Color.rgb(0xAE,0xAE,0xB2); }
     int colDivider() { return darkEff() ? Color.argb(26,255,255,255) : Color.argb(13,20,30,60); }
     int colChipOff() { return darkEff() ? Color.rgb(0x2A,0x2A,0x2E) : Color.rgb(0xEE,0xF1,0xF6); }
+    // Q103（2.17）深色对比度扫查口径：三档墨色与链接蓝的深档值。浅档逐字等于旧硬编码常量
+    // （正文 0x3A3A3C / 链接 0x0A5CD6，主字与次字直接复用 colText/colText2——其浅档即
+    // 0x1C1C1E / 0x8E8E93），故浅色模式像素不变，只补深色档；凡文字直接坐在语义面
+    // （softFaceBg/softSheetBg/深色页底）上的，禁止再写浅档常量。
+    int inkBody() { return darkEff() ? Color.argb(196, 255, 255, 255) : Color.rgb(0x3A, 0x3A, 0x3C); }
+    int inkLink() { return darkEff() ? Color.rgb(0x6E, 0xB3, 0xFF) : Color.rgb(0x0A, 0x5C, 0xD6); }
+    int iconInk() { return darkEff() ? Color.argb(238, 255, 255, 255) : Color.rgb(0x1C, 0x1C, 0x1E); }
+    /** Q103：窗级玻璃染色（⋯ 菜单与贴底大窗专用一档）——比贴身玻璃实：糊层透出隐隐
+     * 色意但看不清身后控件轮廓，边光仍在、仍是玻璃不是塑料。贴身小件（胶囊/悬浮钮/
+     * 底栏）继续走 glassTintDrawable 薄透档，不跟这档一起改浓。 */
+    GradientDrawable glassWindowTint(float radiusDp, boolean topOnly) {
+        GradientDrawable g;
+        if (darkEff()) {
+            g = new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
+                new int[]{Color.argb(238, 36, 44, 60), Color.argb(228, 26, 33, 48)});
+            g.setStroke(dp(this, 1), Color.argb(90, 255, 255, 255));
+        } else {
+            g = new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
+                new int[]{Color.argb(233, 253, 254, 255), Color.argb(223, 241, 247, 253)});
+            g.setStroke(dp(this, 1), Color.argb(190, 255, 255, 255));
+        }
+        if (topOnly) {
+            float r = dp(this, radiusDp);
+            g.setCornerRadii(new float[]{r, r, r, r, 0, 0, 0, 0});
+        } else g.setCornerRadius(dp(this, radiusDp));
+        return g;
+    }
     // Q94 试点视觉 token（Soft UI＋轻玻璃拟态，用户 2026-10-04 15:43 参照图定版、19:08 试点开闸、
     // 19:22 方向通过后铺开全 App）：雾蓝渐变页底、半透明浅蓝白柔面、20–28dp 大圆角、柔和外阴影＋
     // 极淡内高光（靠顶部提亮渐变与白色细描边近似）、图标落圆角胶囊底；主题色只作点缀不作大面。
@@ -1666,7 +1693,20 @@ public class MainActivity extends Activity {
         int bw = Math.max(1, Math.round(viewW * BACKDROP_SCALE));
         int bh = Math.max(1, Math.round(bandH * BACKDROP_SCALE));
         backdropCapturing = true; // 抓图期间玻璃件自排除（同屏幕背板口径）
+        // Q103（2.17）：与屏幕背板同口径把玻璃宿主整面让开——搜索胶囊本体就嵌在滚动
+        // 内容里，只让玻璃层自排除挡不住胶囊的文字/图标被拍进条带：糊化后又垫回真实
+        // 文字正下方，错开一两像素就是用户实拍的「你好」荧光晕边。隐藏只改可见性、
+        // 不动布局尺寸，finally 原样恢复。
+        java.util.Map<View, Integer> bandSavedVis = new java.util.HashMap<>();
         try {
+            for (ImageView iv : new java.util.ArrayList<>(glassViews)) {
+                View h = glassHosts.get(iv);
+                View t = h != null ? h : iv;
+                if (t != null && t.isAttachedToWindow() && !bandSavedVis.containsKey(t)) {
+                    bandSavedVis.put(t, t.getVisibility());
+                    t.setVisibility(View.INVISIBLE);
+                }
+            }
             if (bandBmp == null || bandBmp.isRecycled() || bandBmp.getWidth() != bw || bandBmp.getHeight() != bh) {
                 bandBmp = Bitmap.createBitmap(bw, bh, Bitmap.Config.ARGB_8888); // 旧图只解引用（Q21）
             }
@@ -1686,6 +1726,9 @@ public class MainActivity extends Activity {
         } catch (Throwable t) {
             noteBackdropFailure();
         } finally {
+            for (java.util.Map.Entry<View, Integer> e : bandSavedVis.entrySet()) {
+                try { e.getKey().setVisibility(e.getValue()); } catch (Throwable ignored) {}
+            }
             backdropCapturing = false;
         }
         try {
@@ -3126,8 +3169,6 @@ public class MainActivity extends Activity {
     View helloView = null;
     boolean helloFlat = false;
     ScrollView changelogScroll = null;
-    boolean settingsLogOpen = false;
-    ScrollView settingsLogScroll = null;
     // Q88：关于改整页（原 P-about 贴底弹窗退役，玻璃残影随弹窗一并消）
     boolean aboutPageOpen = false;
     ScrollView aboutScroll = null;
@@ -3792,7 +3833,7 @@ public class MainActivity extends Activity {
     }
 
     TextView acctOptionRow(String label, String desc) {
-        TextView t = tv(this, label, 15, Color.rgb(0x1C, 0x1C, 0x1E), true);
+        TextView t = tv(this, label, 15, colText(), true);
         t.setGravity(Gravity.CENTER_VERTICAL);
         t.setPadding(dp(this, 14), dp(this, 11), dp(this, 14), dp(this, 11));
         t.setBackground(rippleBg(Color.rgb(0xF2, 0xF3, 0xF7), 12));
@@ -3840,8 +3881,8 @@ public class MainActivity extends Activity {
         if (Build.VERSION.SDK_INT >= 21) { cardBox.setElevation(dp(this, 24)); roundClip(cardBox, 22, this); }
         cardBox.setOnClickListener(v -> {});
         cardBox.setPadding(dp(this, 18), dp(this, 18), dp(this, 18), dp(this, 14));
-        cardBox.addView(tv(this, title, 17, Color.rgb(0x1C, 0x1C, 0x1E), true));
-        TextView sub = tv(this, c.name, 12.5f, Color.rgb(0x8E, 0x8E, 0x93), false);
+        cardBox.addView(tv(this, title, 17, colText(), true));
+        TextView sub = tv(this, c.name, 12.5f, colText2(), false);
         LinearLayout.LayoutParams subLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         subLp.topMargin = dp(this, 4);
         cardBox.addView(sub, subLp);
@@ -3856,12 +3897,12 @@ public class MainActivity extends Activity {
             cardBox.addView(row, rlp);
             row.setOnClickListener(v -> { haptic(); closeAcctClassPicker(); addMineEntry(c, cls, uiRefresh); });
         }
-        TextView hint = tv(this, ACCT_CLASS_HINT, 12, Color.rgb(0x8E, 0x8E, 0x93), false);
+        TextView hint = tv(this, ACCT_CLASS_HINT, 12, colText2(), false);
         hint.setLineSpacing(0, 1.45f);
         LinearLayout.LayoutParams hlp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         hlp.topMargin = dp(this, 12);
         cardBox.addView(hint, hlp);
-        TextView glossLink = tv(this, "查看卡片常识 ›", 12.5f, Color.rgb(0x0A, 0x5C, 0xD6), true);
+        TextView glossLink = tv(this, "查看卡片常识 ›", 12.5f, inkLink(), true);
         LinearLayout.LayoutParams glp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         glp.topMargin = dp(this, 8);
         glossLink.setLayoutParams(glp);
@@ -3877,7 +3918,7 @@ public class MainActivity extends Activity {
             cardBox.addView(rm, rmlp);
             rm.setOnClickListener(v -> { haptic(); closeAcctClassPicker(); removeMineEntriesForCard(c, uiRefresh); });
         }
-        TextView cancel = tv(this, manage ? "取消" : "先不加", 14, Color.rgb(0x8E, 0x8E, 0x93), false);
+        TextView cancel = tv(this, manage ? "取消" : "先不加", 14, colText2(), false);
         cancel.setGravity(Gravity.CENTER);
         cancel.setPadding(0, dp(this, 11), 0, dp(this, 4));
         LinearLayout.LayoutParams canLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
@@ -3970,8 +4011,8 @@ public class MainActivity extends Activity {
         if (Build.VERSION.SDK_INT >= 21) { cardBox.setElevation(dp(this, 24)); roundClip(cardBox, 22, this); }
         cardBox.setOnClickListener(v -> {});
         cardBox.setPadding(dp(this, 18), dp(this, 18), dp(this, 18), dp(this, 14));
-        cardBox.addView(tv(this, "卡面颜色", 17, Color.rgb(0x1C, 0x1C, 0x1E), true));
-        TextView sub = tv(this, c.name + " · 只改无图占位面，真卡图不受影响", 12.5f, Color.rgb(0x8E, 0x8E, 0x93), false);
+        cardBox.addView(tv(this, "卡面颜色", 17, colText(), true));
+        TextView sub = tv(this, c.name + " · 只改无图占位面，真卡图不受影响", 12.5f, colText2(), false);
         LinearLayout.LayoutParams subLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         subLp.topMargin = dp(this, 4);
         cardBox.addView(sub, subLp);
@@ -4009,7 +4050,7 @@ public class MainActivity extends Activity {
                 });
             }
         }
-        TextView follow = tv(this, curCustom == null ? "当前跟随系统自动配色" : "跟随系统（清掉自选）", 14, Color.rgb(0x0A, 0x5C, 0xD6), true);
+        TextView follow = tv(this, curCustom == null ? "当前跟随系统自动配色" : "跟随系统（清掉自选）", 14, inkLink(), true);
         follow.setGravity(Gravity.CENTER);
         follow.setPadding(0, dp(this, 12), 0, dp(this, 6));
         LinearLayout.LayoutParams flp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
@@ -4024,7 +4065,7 @@ public class MainActivity extends Activity {
             refreshDetailPlaceholderBody(c);
             showFloatToast("已回到系统配色");
         });
-        TextView cancel = tv(this, "取消", 14, Color.rgb(0x8E, 0x8E, 0x93), false);
+        TextView cancel = tv(this, "取消", 14, colText2(), false);
         cancel.setGravity(Gravity.CENTER);
         cancel.setPadding(0, dp(this, 8), 0, dp(this, 4));
         cardBox.addView(cancel);
@@ -4431,6 +4472,17 @@ public class MainActivity extends Activity {
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
         root.addView(navWrap);
         navBar.post(() -> layoutNavIndicator(navOrder.indexOf(tab == null ? "home" : tab), false));
+        // Q103（2.17）：药丸「最终几何重钉」——冷启首帧页签是按临时字体度量/未落位窗口
+        // 量得的，药丸被钉在临时几何上（用户实测：冷启第一次点「我的卡片」胶囊偏移，
+        // 之后来回切就自愈——自愈正是因为后续切页的落位重钉用的是落定后的几何）。
+        // 此前全程没有任何布局回调再钉一遍，只能等下一次交互。改：navBar 每次全局
+        // 布局落定后（字体落定、insets 落位、深浅重建都算），非拖动/非弹簧飞行时按
+        // 当前实测中心把已落位页签重对一次；只写 translation 与变化了的尺寸参数，
+        // 值不变不触发新布局，不会自激空转。
+        navBar.getViewTreeObserver().addOnGlobalLayoutListener(() -> {
+            if (navIndicator == null || navDragging || navSpringRunning) return;
+            layoutNavIndicator(Math.max(0, Math.round(navPos)), false);
+        });
     }
 
     float navDownX = 0f; long navDownMs = 0;
@@ -4825,6 +4877,20 @@ public class MainActivity extends Activity {
     // argb 168→152 白提亮让黑底上钮面仍为浅灰白、深色细线图标可辨，白底上也不过曝（仍半透留糊感）。
     View fabFrostWash() {
         // Q73: same wash as every other glass piece (was a one-off argb168/152).
+        // Q103（2.17）：深色单档提亮——旧 wash 深档仅 argb34/22 白，压在深色背板上钮面
+        // 近黑、细线图标看不清（用户 20:52 点名）；深色改乳白提亮＋白边光，钮面成可辨的
+        // 深灰玻璃、图标转近白细线（iconInk）。浅色仍走原 glassWashView，像素不变。
+        if (darkEff()) {
+            View v = new View(this);
+            v.setClickable(false); v.setFocusable(false);
+            v.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
+            GradientDrawable g = new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
+                new int[]{Color.argb(96, 255, 255, 255), Color.argb(62, 238, 244, 252)});
+            g.setShape(GradientDrawable.OVAL);
+            g.setStroke(dp(this, 1), Color.argb(92, 255, 255, 255));
+            v.setBackground(g);
+            return v;
+        }
         return glassWashView(-1, true);
     }
     void applyGlassFabShadow(View v) {
@@ -4905,7 +4971,7 @@ public class MainActivity extends Activity {
             p.setStyle(Paint.Style.STROKE);
             p.setStrokeCap(Paint.Cap.ROUND);
             p.setStrokeJoin(Paint.Join.ROUND);
-            p.setColor(Color.rgb(0x1C, 0x1C, 0x1E));
+            p.setColor(iconInk());
             float ox = getPaddingLeft(), oy = getPaddingTop();
             float sx = (getWidth() - getPaddingLeft() - getPaddingRight()) / 24f;
             float sy = (getHeight() - getPaddingTop() - getPaddingBottom()) / 24f;
@@ -5062,7 +5128,7 @@ public class MainActivity extends Activity {
         clp.leftMargin = dp(this, 12); clp.rightMargin = dp(this, 12); clp.bottomMargin = 0;
         sheet.addView(card, clp);
         card.setOnClickListener(v -> {});
-        card.addView(tv(this, "\u6DFB\u52A0\u5361\u7247", 17, Color.rgb(0x1C, 0x1C, 0x1E), true));
+        card.addView(tv(this, "\u6DFB\u52A0\u5361\u7247", 17, colText(), true));
         TextView r1 = addSheetRow("\u81EA\u5B9A\u4E49\u5361\u7247", () -> { closeAddSheet(sheet); openCustomForm(null); });
         LinearLayout.LayoutParams r1lp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(this, 52));
         r1lp.topMargin = dp(this, 12);
@@ -5081,7 +5147,7 @@ public class MainActivity extends Activity {
         LinearLayout.LayoutParams r2lp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(this, 52));
         r2lp.topMargin = dp(this, 8);
         card.addView(r2, r2lp);
-        TextView cancel = tv(this, "\u53D6\u6D88", 15, Color.rgb(0x8E, 0x8E, 0x93), false);
+        TextView cancel = tv(this, "\u53D6\u6D88", 15, colText2(), false);
         cancel.setGravity(Gravity.CENTER);
         cancel.setPadding(0, dp(this, 10), 0, dp(this, 6));
         cancel.setOnClickListener(v -> closeAddSheet(sheet));
@@ -5095,7 +5161,7 @@ public class MainActivity extends Activity {
         sheet.setTag("addSheet");
     }
     TextView addSheetRow(String label, final Runnable act) {
-        TextView r = tv(this, label, 16, Color.rgb(0x1C, 0x1C, 0x1E), false);
+        TextView r = tv(this, label, 16, colText(), false);
         r.setGravity(Gravity.CENTER_VERTICAL);
         r.setPadding(dp(this, 14), 0, dp(this, 14), 0);
         r.setBackground(roundRect(Color.rgb(0xF2, 0xF3, 0xF7), 14, this));
@@ -5158,6 +5224,7 @@ public class MainActivity extends Activity {
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         applyGlassFabShadow(fab);
         FilterIconView icon = new FilterIconView(this);
+        icon.iconColor = iconInk(); // Q103：深档转近白细线（浅档=旧值）
         int pad = dp(this, 13); // 48 钮内 svg 本体 22dp：(48-22)/2
         icon.setPadding(pad, pad, pad, pad);
         fab.addView(icon, new FrameLayout.LayoutParams(
@@ -5199,6 +5266,7 @@ public class MainActivity extends Activity {
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         applyGlassFabShadow(fab);
         SearchIconView icon = new SearchIconView(this);
+        icon.iconColor = iconInk(); // Q103：深档转近白细线（浅档=旧值）
         int pad = dp(this, 13); // 48 钮内 svg 本体 22dp
         icon.setPadding(pad, pad, pad, pad);
         fab.addView(icon, new FrameLayout.LayoutParams(
@@ -5512,103 +5580,51 @@ public class MainActivity extends Activity {
             Paint.FontMetrics fm = p.getFontMetrics();
             return cy - (fm.ascent + fm.descent) / 2f;
         }
-        // Q102（2.16）：银联/Visa 共用浅底牌面——白色圆角标牌，柔影成形、白边、绝不黑描边
-        // （仅一条发丝级冷灰边光定边）；深色卡面上也先以这块浅底牌子呈现（用户 20:24 定调）。
-        void drawBadgePlate(Canvas cv, Paint p, float ux, float uy) {
-            float s = Math.min(ux, uy);
-            float rad = 16f * s;
-            RectF plate = new RectF(10 * ux, 14 * uy, 230 * ux, 106 * uy);
-            p.setStyle(Paint.Style.FILL);
-            p.setShadowLayer(4f * s, 0f, 2f * uy, Color.argb(64, 18, 30, 52));
-            p.setColor(Color.rgb(0xFC, 0xFE, 0xFF));
-            cv.drawRoundRect(plate, rad, rad, p);
-            p.setShadowLayer(0f, 0f, 0f, 0);
-            p.setStyle(Paint.Style.STROKE);
-            p.setStrokeWidth(Math.max(1f, 0.7f * s));
-            p.setColor(Color.argb(24, 24, 42, 70));
-            cv.drawRoundRect(plate, rad, rad, p);
-            p.setStyle(Paint.Style.FILL);
-        }
-        // Q102（2.16）：银联照参照图圆弧形态重画——浅底标牌内横向牌面，红/蓝/绿三段色带以两条
-        // 共用圆弧边界（同向缓弯）衔接，无直斜切尖角；「银联」白字在内。不再用斜切平行四边形。
+        // 银联（2.17 按用户 21:02 点名与 Visa 一同回退 2.16 浅底牌/圆弧版）：红 #E60012 / 蓝 #004B9B / 绿 #009944 三段等高平行四边形首尾无缝衔接、整体右倾，下配「银 联」小字
         void badgeUnionPay(Canvas cv, Paint p, int w, int h, float ux, float uy) {
-            drawBadgePlate(cv, p, ux, uy);
-            float s = Math.min(ux, uy);
-            RectF pl = new RectF(22 * ux, 24 * uy, 218 * ux, 96 * uy);
-            cv.save();
-            android.graphics.Path clip = new android.graphics.Path();
-            clip.addRoundRect(pl, 12f * s, 12f * s, android.graphics.Path.Direction.CW);
-            cv.clipPath(clip);
-            p.setColor(Color.rgb(0xE6, 0x00, 0x12));
-            cv.drawRect(pl, p);
-            // 绿带：右边界弧 B2 以右
-            android.graphics.Path g = new android.graphics.Path();
-            g.moveTo(150 * ux, 24 * uy);
-            g.quadTo(159 * ux, 60 * uy, 150 * ux, 96 * uy);
-            g.lineTo(218 * ux, 96 * uy);
-            g.lineTo(218 * ux, 24 * uy);
-            g.close();
-            p.setColor(Color.rgb(0x00, 0x99, 0x44));
-            cv.drawPath(g, p);
-            // 蓝带：左边界弧 B1 与右边界弧 B2 之间（与绿带共用 B2 曲线，严丝合缝无漏色）
-            android.graphics.Path b = new android.graphics.Path();
-            b.moveTo(88 * ux, 24 * uy);
-            b.quadTo(97 * ux, 60 * uy, 88 * ux, 96 * uy);
-            b.lineTo(150 * ux, 96 * uy);
-            b.quadTo(159 * ux, 60 * uy, 150 * ux, 24 * uy);
-            b.close();
-            p.setColor(Color.rgb(0x00, 0x4B, 0x9B));
-            cv.drawPath(b, p);
-            cv.restore();
-            p.setColor(Color.WHITE);
-            p.setTypeface(weightTypeface(getContext(), 800));
-            p.setTextSize(32 * uy);
+            float x0 = 8 * ux, y0 = 6 * uy, bh = 62 * uy, seg = 52 * ux, slant = 26 * ux;
+            int[] cols = { Color.rgb(0xE6, 0x00, 0x12), Color.rgb(0x00, 0x4B, 0x9B), Color.rgb(0x00, 0x99, 0x44) };
+            p.setStyle(Paint.Style.FILL);
+            for (int i = 0; i < 3; i++) {
+                float x = x0 + i * seg;
+                android.graphics.Path poly = new android.graphics.Path();
+                poly.moveTo(x, y0 + bh);
+                poly.lineTo(x + slant, y0);
+                poly.lineTo(x + slant + seg, y0);
+                poly.lineTo(x + seg, y0 + bh);
+                poly.close();
+                p.setColor(cols[i]);
+                cv.drawPath(poly, p);
+            }
+            p.setColor(darkBg ? Color.WHITE : Color.rgb(0x33, 0x38, 0x3F));
+            p.setTypeface(weightTypeface(getContext(), 700));
+            p.setTextSize(30 * uy);
             p.setTextAlign(Paint.Align.CENTER);
-            cv.drawText("银联", 120 * ux, centeredBaseline(p, 60 * uy), p);
+            Paint.FontMetrics fm = p.getFontMetrics();
+            cv.drawText("银 联", w / 2f, 76 * uy - fm.ascent, p);
         }
-        // Q102（2.16）：Visa 照现行官方蓝字标整标路径重绘——V/I/A 为填充轮廓多边形、S 为粗描
-        // 中心线路径，整组带 -0.20 斜切；深蓝 #1A1F71、无金旗、字身零黄色像素；收进浅底标牌，
-        // 深色卡面上亦以浅底牌子呈现（不再走字体套用＋金翼，也不再有深底反白默认）。
+        // Visa（2.17 按用户 20:49 点名回退 2.16 浅底牌版）：深蓝 #1A1F71 粗斜体 VISA、V 左上金色小翼；深底转白字版（翼保留金色）
         void badgeVisa(Canvas cv, Paint p, int w, int h, float ux, float uy) {
-            drawBadgePlate(cv, p, ux, uy);
-            float ls = Math.min(0.95f * ux, 0.85f * uy); // 字标本地坐标 176×56 → 牌面内尺寸
-            p.setColor(Color.rgb(0x1A, 0x1F, 0x71));
             p.setStyle(Paint.Style.FILL);
-            cv.save();
-            cv.translate(120 * ux, 60 * uy);
-            cv.skew(-0.20f, 0f);
-            cv.scale(ls, ls);
-            cv.translate(-88, -28);
-            // V（本地 1→45）
-            android.graphics.Path v = new android.graphics.Path();
-            v.moveTo(1, 0); v.lineTo(15, 0); v.lineTo(23, 34); v.lineTo(31, 0); v.lineTo(45, 0);
-            v.lineTo(30, 56); v.lineTo(16, 56); v.close();
-            cv.drawPath(v, p);
-            // I（本地 53→65）
-            android.graphics.Path i = new android.graphics.Path();
-            i.addRect(53, 0, 65, 56, android.graphics.Path.Direction.CW);
-            cv.drawPath(i, p);
-            // A（本地 120→164，镂空三角用 EVEN_ODD）
-            android.graphics.Path a = new android.graphics.Path();
-            a.moveTo(120, 56); a.lineTo(134, 0); a.lineTo(148, 0); a.lineTo(164, 56);
-            a.lineTo(151, 56); a.lineTo(147, 40); a.lineTo(131, 40); a.lineTo(127, 56); a.close();
-            a.moveTo(139, 15); a.lineTo(143.5f, 32); a.lineTo(134.5f, 32); a.close();
-            a.setFillType(android.graphics.Path.FillType.EVEN_ODD);
-            cv.drawPath(a, p);
-            // S（本地 72→112）：粗描中心线成字，端头平切
-            android.graphics.Path sp = new android.graphics.Path();
-            sp.moveTo(103, 13);
-            sp.cubicTo(97, 4, 81, 3.5f, 77.5f, 12.5f);
-            sp.cubicTo(74, 21.5f, 84, 26.5f, 92, 29.5f);
-            sp.cubicTo(100, 32.5f, 106, 36.5f, 104, 44.5f);
-            sp.cubicTo(102, 53, 88, 55.5f, 79, 49);
-            p.setStyle(Paint.Style.STROKE);
-            p.setStrokeWidth(10.5f);
-            p.setStrokeCap(Paint.Cap.BUTT);
-            p.setStrokeJoin(Paint.Join.ROUND);
-            cv.drawPath(sp, p);
-            p.setStyle(Paint.Style.FILL);
-            cv.restore();
+            p.setColor(darkBg ? Color.WHITE : Color.rgb(0x1A, 0x1F, 0x71));
+            p.setTypeface(weightTypeface(getContext(), 800));
+            p.setTextSkewX(-0.25f);
+            p.setTextSize(84 * uy);
+            p.setTextAlign(Paint.Align.CENTER);
+            float baseline = centeredBaseline(p, h / 2f - 6 * uy);
+            cv.drawText("VISA", w / 2f, baseline, p);
+            float tw = p.measureText("VISA");
+            p.setTextSkewX(0);
+            Paint.FontMetrics fm = p.getFontMetrics();
+            float gx = w / 2f - tw / 2f + 2 * ux, gy = baseline + fm.ascent + 2 * uy;
+            android.graphics.Path wing = new android.graphics.Path();
+            wing.moveTo(gx, gy + 16 * uy);
+            wing.lineTo(gx + 30 * ux, gy);
+            wing.lineTo(gx + 34 * ux, gy + 10 * uy);
+            wing.lineTo(gx + 6 * ux, gy + 20 * uy);
+            wing.close();
+            p.setColor(Color.rgb(0xF7, 0xB6, 0x00));
+            cv.drawPath(wing, p);
         }
         // 万事达/万事网联：红 #EB001B / 橙 #F79E1B 双等圆交叠、交叠区独立填 #FF5F00（不用半透叠色冒充）
         void badgeMastercard(Canvas cv, Paint p, int w, int h, float ux, float uy) {
@@ -6525,7 +6541,7 @@ public class MainActivity extends Activity {
         inlineWrap.addView(inlineRow, new FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
         SearchIconView sicon = new SearchIconView(this);
-        sicon.iconColor = Color.rgb(0x63, 0x63, 0x66);
+        sicon.iconColor = darkEff() ? Color.argb(190, 255, 255, 255) : Color.rgb(0x63, 0x63, 0x66);
         inlineRow.addView(sicon, new LinearLayout.LayoutParams(dp(this, 20), dp(this, 20)));
         searchBox = new EditText(this);
         applyUiFont(searchBox, 400);
@@ -6533,6 +6549,7 @@ public class MainActivity extends Activity {
         searchBox.setTextSize(15);
         searchBox.setSingleLine(true);
         searchBox.setBackground(null);
+        if (darkEff()) { searchBox.setTextColor(colText()); searchBox.setHintTextColor(colText2()); } searchBox.setShadowLayer(0, 0, 0, 0); // Q103
         searchBox.setPadding(dp(this, 8), dp(this, 7), dp(this, 4), dp(this, 7));
         if (query != null && !query.isEmpty()) searchBox.setText(query);
         inlineRow.addView(searchBox, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
@@ -6584,7 +6601,7 @@ public class MainActivity extends Activity {
         floatWrap.addView(floatRow, new FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
         SearchIconView ficon = new SearchIconView(this);
-        ficon.iconColor = Color.rgb(0x63, 0x63, 0x66);
+        ficon.iconColor = darkEff() ? Color.argb(190, 255, 255, 255) : Color.rgb(0x63, 0x63, 0x66);
         floatRow.addView(ficon, new LinearLayout.LayoutParams(dp(this, 20), dp(this, 20)));
         floatSearchBox = new EditText(this);
         applyUiFont(floatSearchBox, 400);
@@ -6594,13 +6611,14 @@ public class MainActivity extends Activity {
         floatSearchBox.setBackground(null);
         floatSearchBox.setPadding(dp(this, 8), dp(this, 7), dp(this, 4), dp(this, 7));
         floatRow.addView(floatSearchBox, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+        if (darkEff()) { floatSearchBox.setTextColor(colText()); floatSearchBox.setHintTextColor(colText2()); } floatSearchBox.setShadowLayer(0, 0, 0, 0); // Q103
         FrameLayout closeWrap = new FrameLayout(this);
         GradientDrawable xbg = new GradientDrawable();
         xbg.setShape(GradientDrawable.OVAL);
         xbg.setColor(Color.argb(46, 120, 120, 128));
         closeWrap.setBackground(xbg);
         CloseIconView closeIcon = new CloseIconView(this);
-        closeIcon.iconColor = Color.rgb(0x1C, 0x1C, 0x1E);
+        closeIcon.iconColor = darkEff() ? Color.argb(238, 255, 255, 255) : Color.rgb(0x1C, 0x1C, 0x1E);
         int xpad = dp(this, 8);
         closeIcon.setPadding(xpad, xpad, xpad, xpad);
         closeWrap.addView(closeIcon, new FrameLayout.LayoutParams(
@@ -6773,7 +6791,7 @@ public class MainActivity extends Activity {
             homeList.addView(emptyState("没有符合条件的卡\n换个筛选条件或清空筛选试试"));
             // Q68：本地搜不到时给扩展卡库入口，冷门卡走在线索引，不在本地硬编
             if (query != null && !query.trim().isEmpty()) {
-                TextView goExt = tv(this, "去扩展卡库搜「" + query.trim() + "」 ›", 13.5f, Color.rgb(0x0A, 0x5C, 0xD6), true);
+                TextView goExt = tv(this, "去扩展卡库搜「" + query.trim() + "」 ›", 13.5f, inkLink(), true);
                 goExt.setGravity(Gravity.CENTER);
                 goExt.setPadding(dp(this, 14), dp(this, 10), dp(this, 14), dp(this, 10));
                 goExt.setBackground(rippleBg(Color.rgb(0xE8, 0xF1, 0xFD), 999));
@@ -6901,13 +6919,13 @@ public class MainActivity extends Activity {
         LinearLayout.LayoutParams txlp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
         txlp.leftMargin = dp(this, 10);
         top.addView(tx, txlp);
-        tx.addView(tv(this, bank, 14.5f, open ? Color.rgb(0x0A, 0x5C, 0xD6) : Color.rgb(0x1C, 0x1C, 0x1E), true));
-        tx.addView(tv(this, "借记 " + nd + " · 信用 " + (cs.size() - nd), 11, Color.rgb(0x8E, 0x8E, 0x93), false));
+        tx.addView(tv(this, bank, 14.5f, open ? inkLink() : colText(), true));
+        tx.addView(tv(this, "借记 " + nd + " · 信用 " + (cs.size() - nd), 11, colText2(), false));
         TextView cnt = tv(this, cs.size() + " 张", 11, Color.rgb(0x0A, 0x5C, 0xD6), true);
         cnt.setBackground(roundRect(Color.rgb(0xE8, 0xF1, 0xFD), 999, this));
         cnt.setPadding(dp(this, 8), dp(this, 3), dp(this, 8), dp(this, 3));
         top.addView(cnt);
-        TextView arrow = tv(this, open ? " ▾" : " ▸", 14, Color.rgb(0x8E, 0x8E, 0x93), false);
+        TextView arrow = tv(this, open ? " ▾" : " ▸", 14, colText2(), false);
         top.addView(arrow);
         // 占比条：按本轮最大组归一（同混合版 bbar）
         LinearLayout bar = new LinearLayout(this);
@@ -7194,7 +7212,7 @@ public class MainActivity extends Activity {
         panel.addView(filterSectionTitle("只看这些评分（可多选）"));
         List<String> dims = availableScoreDims();
         if (dims.isEmpty()) {
-            TextView noDims = tv(this, "分项分随数据更新下发，当前卡库暂无可选维度", 11.5f, Color.rgb(0x8E, 0x8E, 0x93), false);
+            TextView noDims = tv(this, "分项分随数据更新下发，当前卡库暂无可选维度", 11.5f, colText2(), false);
             panel.addView(noDims);
         } else {
             List<View> dimChips = new ArrayList<>();
@@ -7283,7 +7301,7 @@ public class MainActivity extends Activity {
 
     // Q13 置灰禁用态：哑光灰底灰字、无点击无按压无震动；若为当前所选则以哑光蓝灰保留勾与选中可辨
     TextView filterChip(String label, boolean on, final Runnable act, boolean disabled) {
-        TextView t = tv(this, (on ? "\u2713 " : "") + label, 13, on ? Color.WHITE : Color.rgb(0x1C, 0x1C, 0x1E), on);
+        TextView t = tv(this, (on ? "\u2713 " : "") + label, 13, on ? Color.WHITE : colText(), on);
         t.setSingleLine(true);
         t.setEllipsize(android.text.TextUtils.TruncateAt.END);
         t.setGravity(Gravity.CENTER);
@@ -7652,7 +7670,7 @@ public class MainActivity extends Activity {
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         LinearLayout card = new LinearLayout(this);
         card.setOrientation(LinearLayout.VERTICAL);
-        GradientDrawable cg = softSheetTopBg(26); // Q94 铺开：窗身换 Soft 柔面（原 Q14/Q72 实底）
+        GradientDrawable cg = glassWindowTint(26, true); // Q103：窗身走窗级玻璃（下垫冻结糊层透色意、上层实一档染色定形），废近不透柔面实底（用户点名像白塑料）
         card.setBackground(cg);
         if (Build.VERSION.SDK_INT >= 21) {
             card.setElevation(dp(this, 24));
@@ -7822,7 +7840,7 @@ public class MainActivity extends Activity {
         back.setVisibility(wizSc == null ? View.GONE : View.VISIBLE);
         back.setOnClickListener(v -> { haptic(); wizGoBack(); });
         top.addView(back, new LinearLayout.LayoutParams(dp(this, 34), dp(this, 34)));
-        TextView ttl = tv(this, title, 16, Color.rgb(0x1C, 0x1C, 0x1E), true);
+        TextView ttl = tv(this, title, 16, colText(), true);
         ttl.setGravity(Gravity.CENTER);
         LinearLayout.LayoutParams ttlp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
         ttlp.leftMargin = dp(this, 8);
@@ -7840,7 +7858,7 @@ public class MainActivity extends Activity {
         top.addView(close, new LinearLayout.LayoutParams(dp(this, 34), dp(this, 34)));
 
         if (wizSc == null) {
-            TextView sub = tv(this, "打算拿卡做什么？选个场景往下答，每答完一题上面都会留一条，随时看清走到哪一步。", 12.5f, Color.rgb(0x8E, 0x8E, 0x93), false);
+            TextView sub = tv(this, "打算拿卡做什么？选个场景往下答，每答完一题上面都会留一条，随时看清走到哪一步。", 12.5f, colText2(), false);
             LinearLayout.LayoutParams subLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
             subLp.topMargin = dp(this, 12);
             page.addView(sub, subLp);
@@ -7863,7 +7881,7 @@ public class MainActivity extends Activity {
                     // 在底部两角露出灰楔（用户 16:47 实拍）；roundClip 给 18dp 圆角轮廓，
                     // 裁切与阴影同形（与 wizResultRow 外其他圆角卡同一口径）。
                     roundClip(tile, 18, this);
-                    if (Build.VERSION.SDK_INT >= 21) tile.setElevation(dp(this, 3));
+                    // Q103：不叠 elevation 投影——柔面描边＋投影两层轮廓叠出「两张纸」错位感（用户点名），只留单层柔面定形
                     tile.setPadding(dp(this, 14), dp(this, 15), dp(this, 14), dp(this, 15));
                     LinearLayout.LayoutParams tlp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
                     if (j > i) tlp.leftMargin = dp(this, 10);
@@ -7873,8 +7891,8 @@ public class MainActivity extends Activity {
                     LinearLayout.LayoutParams icLp = new LinearLayout.LayoutParams(dp(this, 26), dp(this, 26));
                     icLp.bottomMargin = dp(this, 6);
                     tile.addView(ic, icLp);
-                    tile.addView(tv(this, s.name, 16, Color.rgb(0x1C, 0x1C, 0x1E), true));
-                    TextView dsc = tv(this, s.desc, 12, Color.rgb(0x8E, 0x8E, 0x93), false);
+                    tile.addView(tv(this, s.name, 16, colText(), true));
+                    TextView dsc = tv(this, s.desc, 12, colText2(), false);
                     dsc.setLineSpacing(0, 1.45f);
                     LinearLayout.LayoutParams dsLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
                     dsLp.topMargin = dp(this, 4);
@@ -7902,17 +7920,17 @@ public class MainActivity extends Activity {
             tagWrap.setOrientation(LinearLayout.HORIZONTAL);
             tagWrap.addView(tag);
             qHead.addView(tagWrap);
-            TextView qt = tv(this, q.q, 16, Color.rgb(0x1C, 0x1C, 0x1E), true);
+            TextView qt = tv(this, q.q, 16, colText(), true);
             LinearLayout.LayoutParams qtLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
             qtLp.topMargin = dp(this, 8);
             qHead.addView(qt, qtLp);
             for (final String[] o : q.opts) {
-                TextView opt = tv(this, o[1], 14, Color.rgb(0x1C, 0x1C, 0x1E), false);
+                TextView opt = tv(this, o[1], 14, colText(), false);
                 // Q14：选项照混合版 .wiz-opt——#F4F5F9 浅底+rgba(20,30,60,.06) 描边、圆角 14、内边距 14/13
                 GradientDrawable optBgBase = new GradientDrawable();
-                optBgBase.setColor(Color.rgb(0xF4, 0xF5, 0xF9));
+                optBgBase.setColor(darkEff() ? Color.argb(44, 255, 255, 255) : Color.rgb(0xF4, 0xF5, 0xF9));
                 optBgBase.setCornerRadius(dp(this, 14));
-                optBgBase.setStroke(Math.max(1, dp(this, 1)), Color.argb(15, 20, 30, 60));
+                optBgBase.setStroke(Math.max(1, dp(this, 1)), darkEff() ? Color.argb(38, 255, 255, 255) : Color.argb(15, 20, 30, 60));
                 opt.setBackground(new RippleDrawable(
                     android.content.res.ColorStateList.valueOf(Color.argb(38, 10, 92, 214)), optBgBase, null));
                 opt.setClipToOutline(true);
@@ -7944,14 +7962,14 @@ public class MainActivity extends Activity {
         }
         if (list.size() > 6) list = new ArrayList<>(list.subList(0, 6));
 
-        TextView sub = tv(this, "从 " + pool.size() + " 张在发卡里按「" + sc.name + "」排的，点卡看详情，＋ 是加入我的卡片。", 12.5f, Color.rgb(0x8E, 0x8E, 0x93), false);
+        TextView sub = tv(this, "从 " + pool.size() + " 张在发卡里按「" + sc.name + "」排的，点卡看详情，＋ 是加入我的卡片。", 12.5f, colText2(), false);
         LinearLayout.LayoutParams subLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         subLp.topMargin = dp(this, 12);
         page.addView(sub, subLp);
 
         for (final WizResult r : list) page.addView(wizResultRow(r));
 
-        TextView redo = tv(this, "换个场景重新选", 14, Color.rgb(0x0A, 0x5C, 0xD6), true);
+        TextView redo = tv(this, "换个场景重新选", 14, inkLink(), true);
         redo.setGravity(Gravity.CENTER);
         redo.setPadding(dp(this, 8), dp(this, 8), dp(this, 8), dp(this, 8));
         LinearLayout.LayoutParams rlp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
@@ -7969,7 +7987,7 @@ public class MainActivity extends Activity {
         // Q14：结果行照混合版 .wiz-row——白卡圆角 16+rgba(20,30,60,.06) 描边+柔影、内边距 10、gap 11
         row.setBackground(rippleBg(Color.WHITE, 16));
         row.setClipToOutline(true);
-        if (Build.VERSION.SDK_INT >= 21) row.setElevation(dp(this, 3));
+        // Q103：同场景卡——去 elevation 叠影，只留单层柔面（与窗内其他卡同一口径）
         row.setPadding(dp(this, 10), dp(this, 10), dp(this, 10), dp(this, 10));
         LinearLayout.LayoutParams rlp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         rlp.topMargin = dp(this, 9);
@@ -7991,7 +8009,7 @@ public class MainActivity extends Activity {
         LinearLayout.LayoutParams ilp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
         ilp.leftMargin = dp(this, 11);
         row.addView(info, ilp);
-        TextView nm = tv(this, c.name, 14.5f, Color.rgb(0x1C, 0x1C, 0x1E), true);
+        TextView nm = tv(this, c.name, 14.5f, colText(), true);
         nm.setMaxLines(2);
         nm.setEllipsize(android.text.TextUtils.TruncateAt.END);
         // Q97：标题改软件层直绘——结果页经步进横滑动画显现时，硬件离屏层纹理在用户机
@@ -7999,7 +8017,7 @@ public class MainActivity extends Activity {
         nm.setLayerType(View.LAYER_TYPE_SOFTWARE, null);
         info.addView(nm);
         String orgTxt = (c.org == null || c.org.isEmpty()) ? "—" : orgLabel(c.org);
-        TextView meta = tv(this, c.bank + " · " + orgTxt + " · " + (c.isCredit() ? "信用卡" : "借记卡"), 11.5f, Color.rgb(0x8E, 0x8E, 0x93), false);
+        TextView meta = tv(this, c.bank + " · " + orgTxt + " · " + (c.isCredit() ? "信用卡" : "借记卡"), 11.5f, colText2(), false);
         meta.setSingleLine(true);
         meta.setEllipsize(android.text.TextUtils.TruncateAt.END);
         LinearLayout.LayoutParams metaLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
@@ -8042,7 +8060,7 @@ public class MainActivity extends Activity {
         }
         String limit = c.spec("发行情况");
         if (limit.contains("仅")) {
-            TextView note = tv(this, "⚠ " + limit, 11, Color.rgb(0xB2, 0x50, 0x00), false);
+            TextView note = tv(this, "⚠ " + limit, 11, darkEff() ? Color.rgb(0xFF, 0xB2, 0x6B) : Color.rgb(0xB2, 0x50, 0x00), false);
             LinearLayout.LayoutParams nlp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
             nlp.topMargin = dp(this, 5);
             info.addView(note, nlp);
@@ -8399,9 +8417,9 @@ public class MainActivity extends Activity {
             else if (mineOfCard.size() > 1) {
                 LinearLayout box = new LinearLayout(this);
                 box.setOrientation(LinearLayout.VERTICAL);
-                box.setBackground(roundRect(Color.rgb(0xF6, 0xF6, 0xF8), 12, this));
+                box.setBackground(roundRect(darkEff() ? Color.argb(38, 255, 255, 255) : Color.rgb(0xF6, 0xF6, 0xF8), 12, this));
                 box.setPadding(dp(this, 12), dp(this, 10), dp(this, 12), dp(this, 10));
-                box.addView(tv(this, "我的标记", 13, Color.rgb(0x1C, 0x1C, 0x1E), true));
+                box.addView(tv(this, "我的标记", 13, colText(), true));
                 StringBuilder sb = new StringBuilder("这张卡在我的卡片里有 " + mineOfCard.size() + " 张：");
                 for (int i = 0; i < mineOfCard.size(); i++) {
                     if (i > 0) sb.append("、");
@@ -8409,7 +8427,7 @@ public class MainActivity extends Activity {
                     sb.append(cl == null || cl.isEmpty() ? "未标" : cl);
                 }
                 sb.append("。去「我的卡片」点开对应那张改标记。");
-                TextView tx = tv(this, sb.toString(), 12, Color.rgb(0x8E, 0x8E, 0x93), false);
+                TextView tx = tv(this, sb.toString(), 12, colText2(), false);
                 tx.setLineSpacing(0, 1.45f);
                 LinearLayout.LayoutParams tlp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
                 tlp.topMargin = dp(this, 4);
@@ -8420,9 +8438,9 @@ public class MainActivity extends Activity {
         final MineEntry tgt = target;
         LinearLayout box = new LinearLayout(this);
         box.setOrientation(LinearLayout.VERTICAL);
-        box.setBackground(roundRect(Color.rgb(0xF6, 0xF6, 0xF8), 12, this));
+        box.setBackground(roundRect(darkEff() ? Color.argb(38, 255, 255, 255) : Color.rgb(0xF6, 0xF6, 0xF8), 12, this));
         box.setPadding(dp(this, 12), dp(this, 10), dp(this, 12), dp(this, 10));
-        box.addView(tv(this, "我的标记（这张）", 13, Color.rgb(0x1C, 0x1C, 0x1E), true));
+        box.addView(tv(this, "我的标记（这张）", 13, colText(), true));
         LinearLayout chipsRow = new LinearLayout(this);
         chipsRow.setOrientation(LinearLayout.HORIZONTAL);
         LinearLayout.LayoutParams crlp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
@@ -8457,7 +8475,7 @@ public class MainActivity extends Activity {
             chipsRow.addView(b);
         }
         paint[0].run();
-        TextView hint = tv(this, ACCT_CLASS_HINT, 11.5f, Color.rgb(0x8E, 0x8E, 0x93), false);
+        TextView hint = tv(this, ACCT_CLASS_HINT, 11.5f, colText2(), false);
         hint.setLineSpacing(0, 1.45f);
         LinearLayout.LayoutParams hlp2 = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         hlp2.topMargin = dp(this, 8);
@@ -8467,7 +8485,7 @@ public class MainActivity extends Activity {
         LinearLayout.LayoutParams alp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         alp.topMargin = dp(this, 10);
         box.addView(acts, alp);
-        TextView addMore = tv(this, "再加一张", 12.5f, Color.rgb(0x0A, 0x5C, 0xD6), true);
+        TextView addMore = tv(this, "再加一张", 12.5f, inkLink(), true);
         addMore.setGravity(Gravity.CENTER);
         addMore.setPadding(dp(this, 12), dp(this, 7), dp(this, 12), dp(this, 7));
         addMore.setBackground(rippleBg(Color.rgb(0xE8, 0xF1, 0xFD), 999));
@@ -8661,7 +8679,7 @@ public class MainActivity extends Activity {
 
         // Q71：无真实卡面图时可自选占位底色（仅本机保存，真图卡不出现）
         if (Img.get(this, c.image) == null) {
-            TextView colorBtn = tv(this, placeholderCustomEnabled ? "换卡面颜色 ›" : "换卡面颜色（先在设置开启自选） ›", 13.5f, Color.rgb(0x0A, 0x5C, 0xD6), true);
+            TextView colorBtn = tv(this, placeholderCustomEnabled ? "换卡面颜色 ›" : "换卡面颜色（先在设置开启自选） ›", 13.5f, inkLink(), true);
             colorBtn.setBackground(rippleBg(colSurface(), 10));
             colorBtn.setPadding(dp(this, 12), dp(this, 9), dp(this, 12), dp(this, 9));
             colorBtn.setGravity(Gravity.CENTER);
@@ -8941,7 +8959,7 @@ public class MainActivity extends Activity {
         col.setOrientation(LinearLayout.VERTICAL);
         col.setPadding(dp(this, 14), pageTopPad(), dp(this, 14), dockPad());
         sv.addView(col, new ScrollView.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
-        TextView stuTitle = tvW(this, "学生推荐", 24, Color.rgb(0x1C, 0x1C, 0x1E), 800);
+        TextView stuTitle = tvW(this, "学生推荐", 24, colText(), 800);
         stuTitle.setLetterSpacing(0.02f); stuTitle.setLineSpacing(0, 1.15f);
         col.addView(stuTitle);
         List<Card> stu = new ArrayList<>();
@@ -8971,8 +8989,8 @@ public class MainActivity extends Activity {
         LinearLayout left = new LinearLayout(this);
         left.setOrientation(LinearLayout.VERTICAL);
         hero.addView(left, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
-        left.addView(tv(this, stu.size() + " 张精选卡", 26, Color.rgb(0x1C, 0x1C, 0x1E), true));
-        TextView sub = tv(this, "学生精选 · 覆盖 " + banks.size() + " 家银行", 12, Color.rgb(0x8E, 0x8E, 0x93), false);
+        left.addView(tv(this, stu.size() + " 张精选卡", 26, colText(), true));
+        TextView sub = tv(this, "学生精选 · 覆盖 " + banks.size() + " 家银行", 12, colText2(), false);
         LinearLayout.LayoutParams subLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         subLp.topMargin = dp(this, 4);
         left.addView(sub, subLp);
@@ -8993,7 +9011,7 @@ public class MainActivity extends Activity {
         qlp.topMargin = dp(this, 10);
         col.addView(quote, qlp);
 
-        TextView sect = tv(this, "为什么推荐这些卡", 15, Color.rgb(0x1C, 0x1C, 0x1E), true);
+        TextView sect = tv(this, "为什么推荐这些卡", 15, colText(), true);
         LinearLayout.LayoutParams sectLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         sectLp.topMargin = dp(this, 14);
         col.addView(sect, sectLp);
@@ -9064,17 +9082,17 @@ public class MainActivity extends Activity {
             LinearLayout.LayoutParams txLp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
             txLp.leftMargin = dp(this, 10);
             top.addView(tx, txLp);
-            TextView nm = tv(this, c.name, 14, Color.rgb(0x1C, 0x1C, 0x1E), true);
+            TextView nm = tv(this, c.name, 14, colText(), true);
             nm.setMaxLines(2);
             tx.addView(nm);
-            tx.addView(tv(this, c.bank + " · " + (c.isCredit() ? "信用卡" : "借记卡"), 11, Color.rgb(0x8E, 0x8E, 0x93), false));
+            tx.addView(tv(this, c.bank + " · " + (c.isCredit() ? "信用卡" : "借记卡"), 11, colText2(), false));
             TextView sc = tv(this, c.score > 0 ? String.format(java.util.Locale.US, "%.1f分", c.score) : "新卡",
                 11, Color.rgb(0x0A, 0x5C, 0xD6), true);
             sc.setBackground(roundRect(Color.rgb(0xE8, 0xF1, 0xFD), 999, this));
             sc.setPadding(dp(this, 8), dp(this, 3), dp(this, 8), dp(this, 3));
             top.addView(sc);
 
-            TextView why = tv(this, "推荐理由：" + studentReason(c), 12.5f, Color.rgb(0x3A, 0x3A, 0x3C), false);
+            TextView why = tv(this, "推荐理由：" + studentReason(c), 12.5f, inkBody(), false);
             LinearLayout.LayoutParams wlp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
             wlp.topMargin = dp(this, 8);
             cardBox.addView(why, wlp);
@@ -9087,7 +9105,7 @@ public class MainActivity extends Activity {
                 LinearLayout.LayoutParams flp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
                 flp.topMargin = dp(this, 8);
                 cardBox.addView(fitRow, flp);
-                TextView fl = tv(this, "适合 ", 11.5f, Color.rgb(0x8E, 0x8E, 0x93), true);
+                TextView fl = tv(this, "适合 ", 11.5f, colText2(), true);
                 fitRow.addView(fl);
                 for (String f : fit) fitRow.addView(chip(f, Color.rgb(0xF5, 0xF6, 0xF8), Color.rgb(0x3A, 0x3A, 0x3C)));
             }
@@ -9135,7 +9153,7 @@ public class MainActivity extends Activity {
             }
         }
 
-        TextView note = tv(this, stuCols <= 1 ? "推荐理由按卡库资料整理，仅供参考" : "点卡进详情看完整推荐理由", 11, Color.rgb(0x8E, 0x8E, 0x93), false);
+        TextView note = tv(this, stuCols <= 1 ? "推荐理由按卡库资料整理，仅供参考" : "点卡进详情看完整推荐理由", 11, colText2(), false);
         note.setGravity(Gravity.CENTER);
         LinearLayout.LayoutParams nlp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         nlp.topMargin = dp(this, 12);
@@ -9152,7 +9170,7 @@ public class MainActivity extends Activity {
         lp.topMargin = dp(this, 2);
         row.setLayoutParams(lp);
         row.addView(tv(this, "●", 11, dotColor, true));
-        row.addView(tv(this, " " + label + "  " + n + " 张", 12, Color.rgb(0x3A, 0x3A, 0x3C), false));
+        row.addView(tv(this, " " + label + "  " + n + " 张", 12, inkBody(), false));
         return row;
     }
 
@@ -9268,7 +9286,7 @@ public class MainActivity extends Activity {
         }
 
         // 境外能力白卡（Q22 对照 .dash-sect/.dash-card/.drow：分节 1.02rem/700、白卡圆角 16 内边距 4/16/12、行内图标+不截断标签+渐变条）
-        TextView sect = tvW(this, "境外能力", 16, Color.rgb(0x1C, 0x1C, 0x1E), 700);
+        TextView sect = tvW(this, "境外能力", 16, colText(), 700);
         LinearLayout.LayoutParams sectLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         sectLp.topMargin = dp(this, 22);
         sectLp.leftMargin = dp(this, 2);
@@ -9294,12 +9312,12 @@ public class MainActivity extends Activity {
             card.addView(brow, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
             DrowIconView bic = new DrowIconView(this); bic.kind = "gem";
             brow.addView(bic, new LinearLayout.LayoutParams(dp(this, 22), dp(this, 22)));
-            TextView bk = tv(this, "最通用", 13.5f, Color.rgb(0x1C, 0x1C, 0x1E), false);
+            TextView bk = tv(this, "最通用", 13.5f, colText(), false);
             bk.setSingleLine(true);
             LinearLayout.LayoutParams bklp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
             bklp.leftMargin = dp(this, 10);
             brow.addView(bk, bklp);
-            TextView bn = tvW(this, best.name, 13.5f, Color.rgb(0x3A, 0x3A, 0x3C), 600);
+            TextView bn = tvW(this, best.name, 13.5f, inkBody(), 600);
             bn.setSingleLine(true);
             bn.setEllipsize(android.text.TextUtils.TruncateAt.END);
             bn.setGravity(Gravity.RIGHT);
@@ -9402,7 +9420,7 @@ public class MainActivity extends Activity {
         col.addView(row, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
         DrowIconView ic = new DrowIconView(this); ic.kind = icon;
         row.addView(ic, new LinearLayout.LayoutParams(dp(this, 22), dp(this, 22)));
-        TextView k = tv(this, label, 13.5f, Color.rgb(0x1C, 0x1C, 0x1E), false);
+        TextView k = tv(this, label, 13.5f, colText(), false);
         k.setSingleLine(true);
         LinearLayout.LayoutParams klp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         klp.leftMargin = dp(this, 10);
@@ -9422,7 +9440,7 @@ public class MainActivity extends Activity {
         bar.addView(fill, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, (float) Math.max(0, n)));
         View rest = new View(this);
         bar.addView(rest, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, (float) Math.max(0, total - n) + 0.0001f));
-        TextView v = tv(this, n + " / " + total, 12.5f, Color.rgb(0x8E, 0x8E, 0x93), false);
+        TextView v = tv(this, n + " / " + total, 12.5f, colText2(), false);
         v.setSingleLine(true);
         LinearLayout.LayoutParams vlp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         vlp.leftMargin = dp(this, 10);
@@ -9802,8 +9820,8 @@ public class MainActivity extends Activity {
         barLp.topMargin = dp(this, 22);
         barLp.bottomMargin = dp(this, 10);
         inner.addView(barRow, barLp);
-        barRow.addView(tvW(this, "我的卡片", 14.5f, Color.rgb(0x3A, 0x3A, 0x3C), 600));
-        TextView cnt = tv(this, mineRows.size() + " 张", 13, Color.rgb(0x8E, 0x8E, 0x93), false);
+        barRow.addView(tvW(this, "我的卡片", 14.5f, inkBody(), 600));
+        TextView cnt = tv(this, mineRows.size() + " 张", 13, colText2(), false);
         LinearLayout.LayoutParams cntLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         cntLp.leftMargin = dp(this, 8);
         barRow.addView(cnt, cntLp);
@@ -9841,7 +9859,7 @@ public class MainActivity extends Activity {
         LinearLayout.LayoutParams alp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         alp.topMargin = dp(this, 16);
         inner.addView(addRow, alp);
-        TextView addT = tvW(this, "＋ 添加卡片", 14.5f, Color.rgb(0x0A, 0x5C, 0xD6), 600);
+        TextView addT = tvW(this, "＋ 添加卡片", 14.5f, inkLink(), 600);
         addRow.addView(addT, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
         TextView addSub = tv(this, "自定义卡片 / 在线查卡 ›", 12, colText2(), false);
         addRow.addView(addSub);
@@ -9966,7 +9984,7 @@ public class MainActivity extends Activity {
         slp.topMargin = dp(this, 12);
         sec.setLayoutParams(slp);
         if (customCards.isEmpty()) {
-            TextView empty = tv(this, "还没有自定义卡片，点右下角 ＋ 添加。", 12, Color.rgb(0x8E, 0x8E, 0x93), false);
+            TextView empty = tv(this, "还没有自定义卡片，点右下角 ＋ 添加。", 12, colText2(), false);
             empty.setPadding(dp(this, 2), dp(this, 4), dp(this, 2), dp(this, 4));
             sec.addView(empty);
             return sec;
@@ -10002,10 +10020,10 @@ public class MainActivity extends Activity {
         LinearLayout.LayoutParams infoLp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
         infoLp.leftMargin = dp(this, 12);
         head.addView(info, infoLp);
-        info.addView(tv(this, "自定义卡片", 15, Color.rgb(0x1C, 0x1C, 0x1E), true));
-        TextView sub = tv(this, customCards.size() + " 张 · " + (customOpen ? "点开收起" : "点开展开"), 11.5f, Color.rgb(0x8E, 0x8E, 0x93), false);
+        info.addView(tv(this, "自定义卡片", 15, colText(), true));
+        TextView sub = tv(this, customCards.size() + " 张 · " + (customOpen ? "点开收起" : "点开展开"), 11.5f, colText2(), false);
         info.addView(sub);
-        TextView arrow = tv(this, "▸", 16, Color.rgb(0x8E, 0x8E, 0x93), false);
+        TextView arrow = tv(this, "▸", 16, colText2(), false);
         arrow.setGravity(Gravity.CENTER);
         arrow.setRotation(customOpen ? 90 : 0);
         head.addView(arrow, new LinearLayout.LayoutParams(dp(this, 24), dp(this, 24)));
@@ -10373,8 +10391,8 @@ public class MainActivity extends Activity {
         if (Build.VERSION.SDK_INT >= 21) { card.setElevation(dp(this, 24)); topSheetClip(card, 22, this); }
         card.setOnClickListener(v -> {}); // 窗体吃点击防穿透遮罩
         card.setPadding(dp(this, 18), dp(this, 18), dp(this, 18), dp(this, 14) + navBarH());
-        card.addView(tv(this, "删除这张自定义卡？", 17, Color.rgb(0x1C, 0x1C, 0x1E), true));
-        TextView msg = tv(this, "「" + c.name + "」删了就没了，备注也会一起清掉。", 13.5f, Color.rgb(0x8E, 0x8E, 0x93), false);
+        card.addView(tv(this, "删除这张自定义卡？", 17, colText(), true));
+        TextView msg = tv(this, "「" + c.name + "」删了就没了，备注也会一起清掉。", 13.5f, colText2(), false);
         LinearLayout.LayoutParams msgLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         msgLp.topMargin = dp(this, 8);
         card.addView(msg, msgLp);
@@ -10383,7 +10401,7 @@ public class MainActivity extends Activity {
         LinearLayout.LayoutParams btnsLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         btnsLp.topMargin = dp(this, 18);
         card.addView(btns, btnsLp);
-        TextView cancelB = tv(this, "取消", 15, Color.rgb(0x1C, 0x1C, 0x1E), false);
+        TextView cancelB = tv(this, "取消", 15, colText(), false);
         cancelB.setGravity(Gravity.CENTER);
         cancelB.setBackground(rippleBg(Color.rgb(0xF2, 0xF3, 0xF7), 14));
         cancelB.setOnClickListener(v -> { haptic(); closeDelConfirm(); });
@@ -10608,7 +10626,7 @@ public class MainActivity extends Activity {
         infoHead.setGravity(Gravity.CENTER_VERTICAL);
         infoHead.addView(detailSectionTitle("卡片信息"), new LinearLayout.LayoutParams(
             0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
-        TextView editBtn = tv(this, "编辑", 12.5f, Color.rgb(0x0A, 0x5C, 0xD6), true);
+        TextView editBtn = tv(this, "编辑", 12.5f, inkLink(), true);
         editBtn.setGravity(Gravity.CENTER);
         GradientDrawable eg = new GradientDrawable();
         eg.setColor(Color.WHITE);
@@ -10672,7 +10690,7 @@ public class MainActivity extends Activity {
         LinearLayout.LayoutParams tagLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         tagLp.topMargin = dp(this, 14);
         inner.addView(tagBox, tagLp);
-        tagBox.addView(tv(this, "我的标记", 13, Color.rgb(0x1C, 0x1C, 0x1E), true));
+        tagBox.addView(tv(this, "我的标记", 13, colText(), true));
         LinearLayout tagRow = new LinearLayout(this);
         tagRow.setOrientation(LinearLayout.HORIZONTAL);
         LinearLayout.LayoutParams trLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
@@ -10710,7 +10728,7 @@ public class MainActivity extends Activity {
             tagRow.addView(b);
         }
         tPaint[0].run();
-        TextView thint = tv(this, ACCT_CLASS_HINT, 11.5f, Color.rgb(0x8E, 0x8E, 0x93), false);
+        TextView thint = tv(this, ACCT_CLASS_HINT, 11.5f, colText2(), false);
         thint.setLineSpacing(0, 1.45f);
         LinearLayout.LayoutParams thLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         thLp.topMargin = dp(this, 8);
@@ -10847,9 +10865,9 @@ public class MainActivity extends Activity {
         row.setOrientation(LinearLayout.HORIZONTAL);
         row.setGravity(Gravity.TOP);
         row.setPadding(0, dp(this, 8), 0, dp(this, 8));
-        row.addView(tv(this, k, 13, Color.rgb(0x8E, 0x8E, 0x93), false),
+        row.addView(tv(this, k, 13, colText2(), false),
             new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT));
-        TextView vt = tvW(this, v == null ? "" : v, 13, Color.rgb(0x1C, 0x1C, 0x1E), 500);
+        TextView vt = tvW(this, v == null ? "" : v, 13, colText(), 500);
         vt.setGravity(Gravity.END);
         row.addView(vt, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
         return row;
@@ -10864,6 +10882,7 @@ public class MainActivity extends Activity {
         e.setText(value == null ? "" : value);
         e.setTextSize(15);
         e.setSingleLine(true);
+        if (darkEff()) { e.setTextColor(colText()); e.setHintTextColor(colText2()); } e.setShadowLayer(0, 0, 0, 0); // Q103：深档输入字/提示色适配＋去字影保锐利（浅档不设、像素不变）
         if (maxLen > 0) e.setFilters(new android.text.InputFilter[]{new android.text.InputFilter.LengthFilter(maxLen)});
         e.setPadding(dp(this, 12), dp(this, 11), dp(this, 12), dp(this, 11));
         Runnable paint = () -> {
@@ -11344,10 +11363,10 @@ public class MainActivity extends Activity {
         row.setOrientation(LinearLayout.HORIZONTAL);
         row.setGravity(Gravity.TOP);
         row.setPadding(0, dp(this, 8), 0, dp(this, 8));
-        TextView dk = tvW(this, k, 13, Color.rgb(0x8E, 0x8E, 0x93), 400);
+        TextView dk = tvW(this, k, 13, colText2(), 400);
         dk.setSingleLine(false);
         row.addView(dk, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT));
-        TextView dv = tvW(this, v == null ? "" : v, 13.5f, Color.rgb(0x1C, 0x1C, 0x1E), 500);
+        TextView dv = tvW(this, v == null ? "" : v, 13.5f, colText(), 500);
         dv.setGravity(Gravity.END);
         dv.setSingleLine(false);
         try { dv.setBreakStrategy(android.text.Layout.BREAK_STRATEGY_SIMPLE); } catch (Throwable ignored) {}
@@ -11493,8 +11512,8 @@ public class MainActivity extends Activity {
         final LinearLayout resultBox = new LinearLayout(this);
         resultBox.setOrientation(LinearLayout.VERTICAL);
         final TextView addBtn = softPrimaryBtn("加入我的卡片");
-        card.addView(tv(this, "在线查询卡信息", 17, Color.rgb(0x1C, 0x1C, 0x1E), true));
-        TextView hint = tv(this, "输入银行卡号前 6–8 位，在线查询卡组织、发卡行等信息，可一键加入我的卡片。", 12.5f, Color.rgb(0x8E, 0x8E, 0x93), false);
+        card.addView(tv(this, "在线查询卡信息", 17, colText(), true));
+        TextView hint = tv(this, "输入银行卡号前 6–8 位，在线查询卡组织、发卡行等信息，可一键加入我的卡片。", 12.5f, colText2(), false);
         LinearLayout.LayoutParams hintLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         hintLp.topMargin = dp(this, 6);
         card.addView(hint, hintLp);
@@ -11622,7 +11641,7 @@ public class MainActivity extends Activity {
     void lookupBinOnline(final String bin, final LinearLayout resultBox, final TextView addBtn) {
         if (bin == null || !bin.matches("[0-9]{6,8}")) { showFloatToast("请输入 6–8 位数字 BIN"); return; }
         resultBox.removeAllViews();
-        resultBox.addView(tv(this, "查询中…", 13.5f, Color.rgb(0x8E, 0x8E, 0x93), false));
+        resultBox.addView(tv(this, "查询中…", 13.5f, colText2(), false));
         addBtn.setVisibility(View.GONE);
         lastBin = null; lastBinLocalCard = null;
         new Thread(() -> {
@@ -11659,7 +11678,7 @@ public class MainActivity extends Activity {
             runOnUiThread(() -> {
                 resultBox.removeAllViews();
                 if (!fOk) {
-                    resultBox.addView(tv(MainActivity.this, "查不到这个 BIN 的信息，换个试试。", 13.5f, Color.rgb(0x8E, 0x8E, 0x93), false));
+                    resultBox.addView(tv(MainActivity.this, "查不到这个 BIN 的信息，换个试试。", 13.5f, colText2(), false));
                     addBtn.setVisibility(View.GONE);
                     resultBox.post(() -> resizeBinSheetToFit());
                     return;
@@ -12428,25 +12447,25 @@ public class MainActivity extends Activity {
             arrow.setGravity(Gravity.RIGHT);
             meta.addView(arrow, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
 
-            TextView ttl = tv(this, g.term == null ? "" : g.term, 15, Color.rgb(0x1C, 0x1C, 0x1E), true);
+            TextView ttl = tv(this, g.term == null ? "" : g.term, 15, colText(), true);
             LinearLayout.LayoutParams ttlp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
             ttlp.topMargin = dp(this, 7);
             card.addView(ttl, ttlp);
             if (g.aka != null && !g.aka.isEmpty()) {
-                TextView aka = tv(this, g.aka, 12, Color.rgb(0x8E, 0x8E, 0x93), false);
+                TextView aka = tv(this, g.aka, 12, colText2(), false);
                 LinearLayout.LayoutParams akp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
                 akp.topMargin = dp(this, 2);
                 card.addView(aka, akp);
             }
             if (g.body != null && !g.body.isEmpty()) {
-                TextView bd = tv(this, g.body, 13, Color.rgb(0x3A, 0x3A, 0x3C), false);
+                TextView bd = tv(this, g.body, 13, inkBody(), false);
                 bd.setLineSpacing(dp(this, 2), 1f);
                 LinearLayout.LayoutParams bdp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
                 bdp.topMargin = dp(this, 6);
                 card.addView(bd, bdp);
                 if (!open) { bd.setMaxLines(2); bd.setEllipsize(android.text.TextUtils.TruncateAt.END); }
                 else {
-                    TextView note = tv(this, "具体规则以发卡行与卡组织现行说明为准。", 11.5f, Color.rgb(0x8E, 0x8E, 0x93), false);
+                    TextView note = tv(this, "具体规则以发卡行与卡组织现行说明为准。", 11.5f, colText2(), false);
                     LinearLayout.LayoutParams nlp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
                     nlp.topMargin = dp(this, 8);
                     card.addView(note, nlp);
@@ -12613,7 +12632,7 @@ public class MainActivity extends Activity {
     // Q91：搜卡窗内分区标题（本地卡库 / 扩展卡库），与窗内既有灰字口径同档
     void addExtSectionHead(String s) {
         if (extResultBox == null) return;
-        TextView h = tv(this, s, 12.5f, Color.rgb(0x3A, 0x3A, 0x3C), true);
+        TextView h = tv(this, s, 12.5f, inkBody(), true);
         LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         lp.topMargin = dp(this, extResultBox.getChildCount() > 0 ? 14 : 2);
         extResultBox.addView(h, lp);
@@ -12681,14 +12700,14 @@ public class MainActivity extends Activity {
                 LinearLayout.LayoutParams lmlp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
                 lmlp.leftMargin = dp(this, 10);
                 lrow.addView(lmid, lmlp);
-                lmid.addView(tv(this, lc.name == null ? "" : lc.name, 15, Color.rgb(0x1C, 0x1C, 0x1E), true));
+                lmid.addView(tv(this, lc.name == null ? "" : lc.name, 15, colText(), true));
                 StringBuilder lsub = new StringBuilder();
                 if (lc.bank != null && !lc.bank.trim().isEmpty()) lsub.append(lc.bank.trim());
                 String lol = (lc.org == null || lc.org.trim().isEmpty()) ? "" : orgLabel(lc.org.trim());
                 if (!lol.isEmpty()) { if (lsub.length() > 0) lsub.append(" · "); lsub.append(lol); }
                 if (lsub.length() > 0) lsub.append(" · ");
                 lsub.append(lc.isCredit() ? "信用卡" : "借记卡").append(" · 本地卡库");
-                lmid.addView(tv(this, lsub.toString(), 12, Color.rgb(0x8E, 0x8E, 0x93), false));
+                lmid.addView(tv(this, lsub.toString(), 12, colText2(), false));
                 lrow.setOnClickListener(v -> { haptic(); closeExtendedSearchNow(); openDetail(lc); });
             }
         }
@@ -12700,7 +12719,7 @@ public class MainActivity extends Activity {
             else if (!q.isEmpty()) note = "扩展卡库里没找到「" + (extQuery == null ? "" : extQuery.trim()) + "」";
             if (note != null) {
                 noteShown = true;
-                TextView nt = tv(this, note, 12.5f, Color.rgb(0x8E, 0x8E, 0x93), false);
+                TextView nt = tv(this, note, 12.5f, colText2(), false);
                 LinearLayout.LayoutParams nlp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
                 nlp.topMargin = dp(this, 12);
                 extResultBox.addView(nt, nlp);
@@ -12739,7 +12758,7 @@ public class MainActivity extends Activity {
             LinearLayout.LayoutParams mlp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
             mlp.leftMargin = dp(this, 10);
             row.addView(mid, mlp);
-            mid.addView(tv(this, e.name == null ? "" : e.name, 15, Color.rgb(0x1C, 0x1C, 0x1E), true));
+            mid.addView(tv(this, e.name == null ? "" : e.name, 15, colText(), true));
             String typeTxt = "credit".equals(e.type) ? "信用卡" : ("debit".equals(e.type) ? "借记卡" : (e.type == null ? "" : e.type));
             StringBuilder sub = new StringBuilder();
             if (e.bank != null && !e.bank.trim().isEmpty()) sub.append(e.bank.trim());
@@ -12747,9 +12766,9 @@ public class MainActivity extends Activity {
             if (!ol2.isEmpty()) { if (sub.length() > 0) sub.append(" · "); sub.append(ol2); }
             if (!typeTxt.isEmpty()) { if (sub.length() > 0) sub.append(" · "); sub.append(typeTxt); }
             sub.append(" · 扩展卡库");
-            mid.addView(tv(this, sub.toString(), 12, Color.rgb(0x8E, 0x8E, 0x93), false));
+            mid.addView(tv(this, sub.toString(), 12, colText2(), false));
             if (e.url != null && !e.url.trim().isEmpty()) {
-                TextView link = tv(this, "发卡行官网 ›", 12, Color.rgb(0x0A, 0x5C, 0xD6), true);
+                TextView link = tv(this, "发卡行官网 ›", 12, inkLink(), true);
                 LinearLayout.LayoutParams llp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
                 llp.topMargin = dp(this, 3);
                 mid.addView(link, llp);
@@ -12787,7 +12806,7 @@ public class MainActivity extends Activity {
             else if (!q.isEmpty()) msg = "本地与扩展卡库都没找到「" + (extQuery == null ? "" : extQuery.trim()) + "」\n换个卡名或银行试试，冷门卡会随扩展索引持续增补。";
             else if (extFetchFailed) msg = "扩展卡库暂时拉不到\n检查网络后点下方「刷新索引」再试；本地卡库在首页照常可搜。";
             else msg = "扩展卡库暂无内容";
-            TextView em = tv(this, msg, 13.5f, Color.rgb(0x8E, 0x8E, 0x93), false);
+            TextView em = tv(this, msg, 13.5f, colText2(), false);
             em.setGravity(Gravity.CENTER);
             em.setPadding(dp(this, 16), dp(this, 28), dp(this, 16), dp(this, 28));
             extResultBox.addView(em);
@@ -14335,8 +14354,8 @@ public class MainActivity extends Activity {
         if (Build.VERSION.SDK_INT >= 21) { card.setElevation(dp(this, 24)); roundClip(card, 22, this); }
         card.setOnClickListener(v -> {});
         card.setPadding(dp(this, 18), dp(this, 18), dp(this, 18), dp(this, 14));
-        card.addView(tv(this, "在线搜卡 · 扩展卡库", 17, Color.rgb(0x1C, 0x1C, 0x1E), true));
-        TextView hint = tv(this, "搜冷门卡、地方银行与合作社卡。扩展索引只存文字、随数据更新增补，加入后只存本机；无图卡先用占位面，规格空缺会如实标注。", 12.5f, Color.rgb(0x8E, 0x8E, 0x93), false);
+        card.addView(tv(this, "在线搜卡 · 扩展卡库", 17, colText(), true));
+        TextView hint = tv(this, "搜冷门卡、地方银行与合作社卡。扩展索引只存文字、随数据更新增补，加入后只存本机；无图卡先用占位面，规格空缺会如实标注。", 12.5f, colText2(), false);
         hint.setLineSpacing(dp(this, 2), 1f);
         LinearLayout.LayoutParams hintLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         hintLp.topMargin = dp(this, 6);
@@ -14347,7 +14366,7 @@ public class MainActivity extends Activity {
         inLp.topMargin = dp(this, 6);
         card.addView(inQ, inLp);
         extInput = inQ;
-        extMeta = tv(this, "", 12, Color.rgb(0x8E, 0x8E, 0x93), false);
+        extMeta = tv(this, "", 12, colText2(), false);
         LinearLayout.LayoutParams metaLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         metaLp.topMargin = dp(this, 8);
         card.addView(extMeta, metaLp);
@@ -14530,11 +14549,11 @@ public class MainActivity extends Activity {
             tg.setBackground(roundRect(Color.rgb(0xE8, 0xF1, 0xFD), 999, this));
             tg.setPadding(dp(this, 8), dp(this, 3), dp(this, 8), dp(this, 3));
             meta.addView(tg);
-            TextView dt = tv(this, n.date == null ? "" : n.date, 11, Color.rgb(0x8E, 0x8E, 0x93), false);
+            TextView dt = tv(this, n.date == null ? "" : n.date, 11, colText2(), false);
             LinearLayout.LayoutParams dtlp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
             dtlp.leftMargin = dp(this, 8);
             meta.addView(dt, dtlp);
-            TextView sr = tv(this, n.source == null ? "" : n.source, 11, Color.rgb(0x8E, 0x8E, 0x93), false);
+            TextView sr = tv(this, n.source == null ? "" : n.source, 11, colText2(), false);
             LinearLayout.LayoutParams srlp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
             srlp.leftMargin = dp(this, 6);
             meta.addView(sr, srlp);
@@ -14542,14 +14561,14 @@ public class MainActivity extends Activity {
             arrow.setGravity(Gravity.RIGHT);
             meta.addView(arrow, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
 
-            TextView ttl = tv(this, n.title == null ? "" : n.title, 15, Color.rgb(0x1C, 0x1C, 0x1E), true);
+            TextView ttl = tv(this, n.title == null ? "" : n.title, 15, colText(), true);
             LinearLayout.LayoutParams ttlp2 = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
             ttlp2.topMargin = dp(this, 7);
             card.addView(ttl, ttlp2);
             if (!open) ttl.setMaxLines(2);
 
             if (n.summary != null && !n.summary.isEmpty()) {
-                TextView sm = tv(this, n.summary, 13, Color.rgb(0x3A, 0x3A, 0x3C), false);
+                TextView sm = tv(this, n.summary, 13, inkBody(), false);
                 sm.setLineSpacing(dp(this, 2), 1f);
                 LinearLayout.LayoutParams smlp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
                 smlp.topMargin = dp(this, 5);
@@ -14560,15 +14579,15 @@ public class MainActivity extends Activity {
             if (open) {
                 LinearLayout det = new LinearLayout(this);
                 det.setOrientation(LinearLayout.VERTICAL);
-                det.setBackground(roundRect(Color.rgb(0xF5, 0xF6, 0xF8), 10, this));
+                det.setBackground(roundRect(darkEff() ? Color.argb(42, 255, 255, 255) : Color.rgb(0xF5, 0xF6, 0xF8), 10, this));
                 det.setPadding(dp(this, 10), dp(this, 8), dp(this, 10), dp(this, 8));
                 LinearLayout.LayoutParams dlp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
                 dlp.topMargin = dp(this, 9);
                 card.addView(det, dlp);
                 det.addView(tv(this, "来源：" + (n.source == null || n.source.isEmpty() ? "—" : n.source)
-                    + " · 日期：" + (n.date == null || n.date.isEmpty() ? "—" : n.date), 11.5f, Color.rgb(0x3A, 0x3A, 0x3C), false));
+                    + " · 日期：" + (n.date == null || n.date.isEmpty() ? "—" : n.date), 11.5f, inkBody(), false));
                 if (n.url != null && !n.url.isEmpty()) {
-                    TextView link = tv(this, "查看原文 ›", 13, Color.rgb(0x0A, 0x5C, 0xD6), true);
+                    TextView link = tv(this, "查看原文 ›", 13, inkLink(), true);
                     LinearLayout.LayoutParams llp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
                     llp.topMargin = dp(this, 6);
                     det.addView(link, llp);
@@ -14578,7 +14597,7 @@ public class MainActivity extends Activity {
                         catch (Exception e) { showFloatToast("打不开这个链接"); }
                     });
                 } else {
-                    det.addView(tv(this, "暂无原文链接", 11.5f, Color.rgb(0x8E, 0x8E, 0x93), false));
+                    det.addView(tv(this, "暂无原文链接", 11.5f, colText2(), false));
                 }
             }
 
@@ -14633,12 +14652,12 @@ public class MainActivity extends Activity {
         LinearLayout.LayoutParams ghp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         ghp.topMargin = dp(this, 18);
         gHead.setLayoutParams(ghp);
-        gHead.addView(tvW(this, "卡片常识", 18, Color.rgb(0x1C, 0x1C, 0x1E), 800));
-        TextView gSub = tv(this, "账户分类、支付验证与费用等常见概念的简短说明", 12.5f, Color.rgb(0x8E, 0x8E, 0x93), false);
+        gHead.addView(tvW(this, "卡片常识", 18, colText(), 800));
+        TextView gSub = tv(this, "账户分类、支付验证与费用等常见概念的简短说明", 12.5f, colText2(), false);
         LinearLayout.LayoutParams gSubLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         gSubLp.topMargin = dp(this, 4);
         gHead.addView(gSub, gSubLp);
-        glossaryMeta = tv(this, "", 11.5f, Color.rgb(0x8E, 0x8E, 0x93), false);
+        glossaryMeta = tv(this, "", 11.5f, colText2(), false);
         LinearLayout.LayoutParams gmLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         gmLp.topMargin = dp(this, 6);
         gHead.addView(glossaryMeta, gmLp);
@@ -15316,7 +15335,7 @@ public class MainActivity extends Activity {
         actions.setOrientation(LinearLayout.HORIZONTAL);
         actions.setGravity(Gravity.CENTER);
         actions.setPadding(dp(this, 12), dp(this, 8), dp(this, 12), dp(this, 10));
-        TextView top = tvW(this, "↑ 回到顶部", 13.5f, Color.rgb(0x0A, 0x5C, 0xD6), 700);
+        TextView top = tvW(this, "↑ 回到顶部", 13.5f, inkLink(), 700);
         top.setGravity(Gravity.CENTER);
         top.setBackground(rippleBg(Color.rgb(0xEE, 0xF4, 0xFB), 999));
         top.setPadding(dp(this, 20), dp(this, 9), dp(this, 20), dp(this, 9));
@@ -15327,7 +15346,7 @@ public class MainActivity extends Activity {
         });
         top.setOnClickListener(v -> { haptic(); if (onTop != null) onTop.run(); });
         actions.addView(top, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT));
-        TextView fold = tvW(this, "收起日志", 13.5f, Color.rgb(0x0A, 0x5C, 0xD6), 700);
+        TextView fold = tvW(this, "收起日志", 13.5f, inkLink(), 700);
         fold.setGravity(Gravity.CENTER);
         fold.setBackground(rippleBg(Color.rgb(0xEE, 0xF4, 0xFB), 999));
         fold.setPadding(dp(this, 20), dp(this, 9), dp(this, 20), dp(this, 9));
@@ -15366,15 +15385,15 @@ public class MainActivity extends Activity {
 
         List<LogEntry> logs = loadChangelog();
         if (logs.isEmpty()) {
-            page.addView(tv(this, "更新日志读取失败", 13.5f, Color.rgb(0x8E, 0x8E, 0x93), false));
+            page.addView(tv(this, "更新日志读取失败", 13.5f, colText2(), false));
         }
         for (LogEntry e : logs) {
-            TextView ver = tv(this, "v" + e.v, 14.5f, Color.rgb(0x1C, 0x1C, 0x1E), true);
+            TextView ver = tv(this, "v" + e.v, 14.5f, colText(), true);
             LinearLayout.LayoutParams vlp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
             vlp.topMargin = dp(this, 14);
             page.addView(ver, vlp);
             for (String note : e.notes) {
-                TextView nt = tv(this, "•  " + note, 12.5f, Color.rgb(0x3A, 0x3A, 0x3C), false);
+                TextView nt = tv(this, "•  " + note, 12.5f, inkBody(), false);
                 nt.setLineSpacing(0, 1.45f);
                 LinearLayout.LayoutParams nlp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
                 nlp.topMargin = dp(this, 3); nlp.leftMargin = dp(this, 4);
@@ -15391,62 +15410,6 @@ public class MainActivity extends Activity {
         return root;
     }
 
-    // P-log：设置页内就地展开的更新日志框（对照混合版 .changelog：限高 52vh、右侧滑杆、底部收起/回顶常驻）
-    View buildInlineLogBox() {
-        LinearLayout box = new LinearLayout(this);
-        box.setOrientation(LinearLayout.VERTICAL);
-        box.setBackground(rippleBg(Color.WHITE, 14));
-        box.setClipToOutline(true);
-        box.setPadding(dp(this, 4), dp(this, 2), dp(this, 4), dp(this, 2));
-        LinearLayout.LayoutParams blp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        blp.topMargin = dp(this, 8);
-        box.setLayoutParams(blp);
-
-        settingsLogScroll = new ScrollView(this);
-        settingsLogScroll.setOverScrollMode(View.OVER_SCROLL_NEVER);
-        // Q50：框+钮一组——总高按 52vh 收，滚动区扣掉动作行高，两钮紧贴框底不被推出屏外半埋 dock
-        int totalH = (int) (getResources().getDisplayMetrics().heightPixels * 0.52f);
-        totalH = Math.max(dp(this, 280), Math.min(totalH, dp(this, 560)));
-        int h = Math.max(dp(this, 200), totalH - dp(this, 56));
-        LinearLayout inner = new LinearLayout(this);
-        inner.setOrientation(LinearLayout.VERTICAL);
-        inner.setPadding(dp(this, 10), dp(this, 2), dp(this, 10), dp(this, 6));
-        List<LogEntry> logs = loadChangelog();
-        if (logs.isEmpty()) {
-            inner.addView(tv(this, "更新日志读取失败", 13.5f, Color.rgb(0x8E, 0x8E, 0x93), false));
-        }
-        for (LogEntry e : logs) {
-            TextView ver = tv(this, "v" + e.v, 14.5f, Color.rgb(0x1C, 0x1C, 0x1E), true);
-            LinearLayout.LayoutParams vlp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-            vlp.topMargin = dp(this, 12);
-            inner.addView(ver, vlp);
-            for (String note : e.notes) {
-                TextView nt = tv(this, "•  " + note, 12.5f, Color.rgb(0x3A, 0x3A, 0x3C), false);
-                nt.setLineSpacing(0, 1.45f);
-                LinearLayout.LayoutParams nlp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-                nlp.topMargin = dp(this, 3); nlp.leftMargin = dp(this, 4);
-                inner.addView(nt, nlp);
-            }
-        }
-        settingsLogScroll.addView(inner);
-        settingsLogScroll.setOnTouchListener((v, ev) -> {
-            v.getParent().requestDisallowInterceptTouchEvent(true);
-            if (ev.getAction() == android.view.MotionEvent.ACTION_UP || ev.getAction() == android.view.MotionEvent.ACTION_CANCEL)
-                v.getParent().requestDisallowInterceptTouchEvent(false);
-            return false;
-        });
-        // Q49：设置页内嵌日志框同备可拖拽黑条（常显、按住拖快速拉动）
-        FrameLayout inlineLogWrap = new FrameLayout(this);
-        inlineLogWrap.addView(settingsLogScroll, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
-        attachDragBar(inlineLogWrap, settingsLogScroll, true, 6, 6);
-        box.addView(inlineLogWrap, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, h));
-
-        LinearLayout actions = changelogActions(
-            () -> { if (settingsLogScroll != null) settingsLogScroll.smoothScrollTo(0, 0); },
-            () -> { settingsLogOpen = false; rebuildPages(); });
-        box.addView(actions);
-        return box;
-    }
 
     // ── Q58 ⋯ 菜单丝滑展开（只学机制自写：缩放原点贴按钮角、缩放+淡入同步、轻回弹、点外部反向收回）──
     class MoreDotsView extends View {
@@ -15518,10 +15481,12 @@ public class MainActivity extends Activity {
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         final LinearLayout card = new LinearLayout(this);
         card.setOrientation(LinearLayout.VERTICAL);
-        card.setBackground(glassTintDrawable(16, false));
+        card.setBackground(glassWindowTint(16, false)); // Q103：菜单窗单独走窗级实一档玻璃（原薄透档能看清背后开关轮廓显脏）；贴身玻璃不动
         card.setPadding(dp(this, 6), dp(this, 6), dp(this, 6), dp(this, 6));
         card.addView(moreMenuRow("scene", "情景选卡", () -> openWizard()));
-        card.addView(moreMenuRow("log", "更新日志", () -> { settingsLogOpen = true; rebuildPages(); }));
+        // Q103（2.17）去重：⋯ 菜单不再放「更新日志」——与关于页「版本与更新日志 → 查看
+        // 更新日志」是重复入口，且旧实现把日志内嵌倾倒在设置页底部（用户点名「展开有
+        // 什么用」）。日志只留关于页一个入口，走 showChangelog 整页从顶部呈现。
         card.addView(moreMenuRow("welcome", "欢迎页", () -> showHello())); // Q93：旧欢迎页已删，入口直达「你好」页
         card.addView(moreMenuRow("about", "关于卡盒", () -> openAbout()));
         int menuW = dp(this, 208);
@@ -15737,9 +15702,9 @@ public class MainActivity extends Activity {
             page.addView(crashBox);
         }
         page.addView(settingRow(S("version"), appVersion() + (isEn() ? " (Native)" : "（原生版）")));
-        // Q92 设置页瘦身：更新日志/欢迎页/关于卡盒/情景选卡四个次级入口已收进标题栏 ⋯ 菜单
-        // （细线图标行），此处不再重复长行；⋯「更新日志」仍靠 settingsLogOpen 就地展开内嵌日志。
-        if (settingsLogOpen) page.addView(buildInlineLogBox());
+        // Q92 设置页瘦身：欢迎页/关于卡盒/情景选卡次级入口已收进标题栏 ⋯ 菜单（细线图标
+        // 行），此处不再重复长行。Q103（2.17）：更新日志内嵌展开框退役——日志只留关于页
+        // 「查看更新日志」一个入口（showChangelog 整页从顶部呈现），设置页不再倾倒日志。
         page.addView(settingRow("迁移进度", "全部卡片 / 详情 / 我的卡片 / 学生推荐 / 筛选 / 资讯 / 情景选卡 / 自定义卡 / 拖动 / 字体与界面大小 / 高刷 / 触感 / 欢迎页 / 更新日志 / 数据 OTA 已迁移"));
         ScrollView sv = new ScrollView(this);
         thinScrollbar(sv);
@@ -15991,7 +15956,6 @@ public class MainActivity extends Activity {
         if (aboutPageOpen) { closeAbout(); return; }
         if (helloOpen) { closeHello(); return; }
         if (changelogOpen) { closeChangelog(); return; }
-        if (settingsLogOpen && "settings".equals(tab)) { settingsLogOpen = false; rebuildPages(); return; }
         if (placeholderPickerView != null) { closePlaceholderPicker(); return; }
         if (customDetailSheet != null) { closeCustomDetail(); return; }
         if (detailCard != null) { closeDetail(); return; }
