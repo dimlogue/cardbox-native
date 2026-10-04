@@ -204,7 +204,7 @@ public class MainActivity extends Activity {
         return welcomeOpen || changelogOpen || wizardOpen || aboutOpen
             || filterSheet != null || detailCard != null || cardMenuPop != null
             || customFormSheet != null || customDetailSheet != null || binSheet != null || addSheetView != null
-            || extSheet != null || showcaseView != null
+            || extSheet != null || showcaseView != null || simkeepView != null || simkeepFormSheet != null
             || placeholderPickerView != null
             || delConfirmSheet != null || updateTipSheet != null || updateConfirmSheet != null;
     }
@@ -1661,6 +1661,17 @@ public class MainActivity extends Activity {
     boolean showcaseDragging = false;
     TextView showcaseStackChip = null, showcaseCanvasChip = null, showcaseGroupChip = null;
     View showcaseDensityRow = null;
+    // Q84 电话卡保号管家：模块自成一块（simkeep_ 前缀），设置「功能启用」可关，关掉入口与界面彻底不出现、不占位。
+    // 数据模板参考：GitHub 开源卡包类应用的电话卡保号模型（号码/运营商/到期日/动作/周期/提醒提前量），代码自写。
+    static class SimKeepItem {
+        String id, cardId, number, operator, country, nextDue, action, fee;
+        int cycleDays;
+    }
+    View simkeepView = null;
+    boolean simkeepClosing = false;
+    FrameLayout simkeepBody = null;
+    View simkeepFormSheet = null;
+    boolean simkeepFormClosing = false;
     boolean suppressNextChromeRestore = false; // Q12: chain open (menu->detail, addSheet->form) skips one restore to avoid dock flicker
     View addSheetView = null; // Q12: 添加卡片底表，浮窗退场名单内
     String lastBin = null, lastBinScheme = null, lastBinType = null, lastBinBrand = null, lastBinBank = null, lastBinCountry = null;
@@ -7647,6 +7658,20 @@ public class MainActivity extends Activity {
             scEntry.setOnClickListener(v -> { haptic(); openShowcase(); });
             inner.addView(scEntry);
         }
+        // Q84 保号管家入口（设置关掉不占位）：显示待保号数与最近到期
+        if (simkeepEnabled()) {
+            java.util.List<SimKeepItem> sk = simkeepSorted();
+            String sub;
+            if (sk.isEmpty()) sub = "电话卡 / eSIM 保号到期管理 ›";
+            else {
+                int left = simkeepDaysLeft(sk.get(0).nextDue);
+                String dl = left < 0 ? ("已逾期 " + (-left) + " 天") : (left == 0 ? "今天到期" : (left + " 天后到期"));
+                sub = sk.size() + " 张待保号 · 最近 " + dl + " ›";
+            }
+            View skEntry = settingRow("保号管家", sub);
+            skEntry.setOnClickListener(v -> { haptic(); openSimKeep(); });
+            inner.addView(skEntry);
+        }
         // Q22 页级构成对照混合版：自定义区在前（index.html #customSec 先于 #grid），其后卡包分析，再「我的卡片」折叠条+瓷砖
         inner.addView(buildCustomSection());
         if (!mineRows.isEmpty()) inner.addView(buildMineAnalysis(mineCards));
@@ -10707,6 +10732,353 @@ public class MainActivity extends Activity {
             .withEndAction(() -> { closeShowcaseNow(); restoreChrome(); }).start();
     }
 
+    // ---------- Q84 电话卡保号管家（模块键 simkeep_，设置可关、关掉不占位） ----------
+    static final String[] SIMKEEP_ACT_VALS = {"sms", "recharge", "call", "app", "other"};
+    static final String[] SIMKEEP_ACT_LABELS = {"发短信", "充值", "拨打", "登录App", "其他"};
+    static String simkeepActionLabel(String v) {
+        if (v == null) return "发短信";
+        for (int i = 0; i < SIMKEEP_ACT_VALS.length; i++) if (SIMKEEP_ACT_VALS[i].equals(v)) return SIMKEEP_ACT_LABELS[i];
+        return v;
+    }
+    boolean simkeepEnabled() { return prefs == null || prefs.getBoolean("simkeep_enabled", true); }
+    java.util.List<SimKeepItem> loadSimKeeps() {
+        java.util.List<SimKeepItem> out = new ArrayList<>();
+        if (prefs == null) return out;
+        try {
+            String raw = prefs.getString("simkeep_items", "[]");
+            JSONArray arr = new JSONArray(raw == null || raw.isEmpty() ? "[]" : raw);
+            for (int i = 0; i < arr.length(); i++) {
+                JSONObject o = arr.getJSONObject(i);
+                SimKeepItem it = new SimKeepItem();
+                it.id = o.optString("id"); it.cardId = o.optString("cardId");
+                it.number = o.optString("number"); it.operator = o.optString("operator");
+                it.country = o.optString("country"); it.nextDue = o.optString("nextDue");
+                it.action = o.optString("action", "sms"); it.fee = o.optString("fee");
+                it.cycleDays = o.optInt("cycleDays", 30);
+                if (it.id == null || it.id.isEmpty()) it.id = "sim-" + i;
+                if (it.cycleDays <= 0) it.cycleDays = 30;
+                out.add(it);
+            }
+        } catch (Throwable ignored) {}
+        return out;
+    }
+    void saveSimKeeps(java.util.List<SimKeepItem> items) {
+        if (prefs == null) return;
+        try {
+            JSONArray arr = new JSONArray();
+            for (SimKeepItem it : items) {
+                JSONObject o = new JSONObject();
+                o.put("id", it.id == null ? "" : it.id); o.put("cardId", it.cardId == null ? "" : it.cardId);
+                o.put("number", it.number == null ? "" : it.number); o.put("operator", it.operator == null ? "" : it.operator);
+                o.put("country", it.country == null ? "" : it.country); o.put("nextDue", it.nextDue == null ? "" : it.nextDue);
+                o.put("action", it.action == null ? "sms" : it.action); o.put("fee", it.fee == null ? "" : it.fee);
+                o.put("cycleDays", it.cycleDays);
+                arr.put(o);
+            }
+            prefs.edit().putString("simkeep_items", arr.toString()).commit();
+        } catch (Throwable ignored) {}
+    }
+    static String simkeepTodayStr() {
+        try { return new java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US).format(new java.util.Date()); }
+        catch (Throwable t) { return ""; }
+    }
+    static java.util.Date simkeepParseDate(String s) {
+        if (s == null) return null;
+        try { return new java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US).parse(s.trim()); }
+        catch (Throwable t) { return null; }
+    }
+    static int simkeepDaysLeft(String due) {
+        java.util.Date d = simkeepParseDate(due);
+        if (d == null) return 9999;
+        long today = 0, target = 0;
+        try {
+            java.text.SimpleDateFormat f = new java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US);
+            today = f.parse(f.format(new java.util.Date())).getTime();
+            target = f.parse(due.trim()).getTime();
+        } catch (Throwable t) { return 9999; }
+        return (int) Math.round((target - today) / 86400000.0);
+    }
+    static String simkeepAddDays(String due, int days) {
+        java.util.Date d = simkeepParseDate(due);
+        if (d == null) d = new java.util.Date();
+        java.util.Calendar c = java.util.Calendar.getInstance();
+        c.setTime(d); c.add(java.util.Calendar.DAY_OF_MONTH, days);
+        try { return new java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US).format(c.getTime()); }
+        catch (Throwable t) { return due; }
+    }
+    java.util.List<SimKeepItem> simkeepSorted() {
+        java.util.List<SimKeepItem> items = loadSimKeeps();
+        java.util.Collections.sort(items, (a, b) -> Integer.compare(simkeepDaysLeft(a.nextDue), simkeepDaysLeft(b.nextDue)));
+        return items;
+    }
+    void openSimKeep() {
+        if (simkeepView != null) return;
+        captureCurrentPageScroll();
+        hideChrome();
+        simkeepClosing = false;
+        final FrameLayout overlay = new FrameLayout(this);
+        overlay.setBackgroundColor(colBg());
+        LinearLayout col = new LinearLayout(this);
+        col.setOrientation(LinearLayout.VERTICAL);
+        overlay.addView(col, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        LinearLayout head = new LinearLayout(this);
+        head.setOrientation(LinearLayout.HORIZONTAL); head.setGravity(Gravity.CENTER_VERTICAL);
+        head.setPadding(dp(this, 16), pageTopPad(), dp(this, 12), dp(this, 8));
+        col.addView(head, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        head.addView(tvW(this, "保号管家", 20, colText(), 800), new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+        FrameLayout closeBtn = new FrameLayout(this);
+        closeBtn.setBackground(roundRect(colSurface(), 999, this)); closeBtn.setClipToOutline(true);
+        CloseIconView civ = new CloseIconView(this); civ.iconColor = colText();
+        closeBtn.addView(civ, new FrameLayout.LayoutParams(dp(this, 18), dp(this, 18), Gravity.CENTER));
+        LinearLayout.LayoutParams cbLp = new LinearLayout.LayoutParams(dp(this, 36), dp(this, 36)); cbLp.leftMargin = dp(this, 8);
+        closeBtn.setLayoutParams(cbLp);
+        closeBtn.setOnClickListener(v -> { haptic(); closeSimKeep(); });
+        head.addView(closeBtn);
+        simkeepBody = new FrameLayout(this);
+        col.addView(simkeepBody, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
+        content.addView(overlay, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        simkeepView = overlay;
+        buildSimKeepBody();
+        overlay.setAlpha(0f);
+        overlay.animate().alpha(1f).setDuration(ANIM_DUR_FADE).setInterpolator(ANIM_ENTER).start();
+    }
+    void closeSimKeepNow() {
+        View v = simkeepView; simkeepView = null; simkeepBody = null; simkeepClosing = false;
+        if (v != null && v.getParent() != null) ((ViewGroup) v.getParent()).removeView(v);
+    }
+    void closeSimKeep() {
+        final View v = simkeepView;
+        if (v == null || simkeepClosing) return;
+        if (simkeepFormSheet != null) { closeSimKeepForm(); return; }
+        simkeepClosing = true;
+        v.animate().alpha(0f).setDuration(ANIM_DUR_SHEET_OUT).setInterpolator(ANIM_EXIT)
+            .withEndAction(() -> { closeSimKeepNow(); restoreChrome(); }).start();
+    }
+    void buildSimKeepBody() {
+        if (simkeepBody == null) return;
+        simkeepBody.removeAllViews();
+        ScrollView sv = new ScrollView(this); thinScrollbar(sv); sv.setClipToPadding(false);
+        LinearLayout inner = new LinearLayout(this); inner.setOrientation(LinearLayout.VERTICAL);
+        inner.setPadding(dp(this, 14), dp(this, 6), dp(this, 14), dockPad());
+        sv.addView(inner, new ScrollView.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        simkeepBody.addView(sv, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        // 提醒设置（提前天数 + 时刻，本机保存；列表内以徽标呈现，系统通知后续再接）
+        LinearLayout remindCard = new LinearLayout(this); remindCard.setOrientation(LinearLayout.VERTICAL);
+        remindCard.setBackground(roundRect(colSurface(), 14, this)); remindCard.setClipToOutline(true);
+        remindCard.setPadding(dp(this, 14), dp(this, 12), dp(this, 14), dp(this, 12));
+        inner.addView(remindCard, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        remindCard.addView(tvW(this, "到期提醒", 14, colText(), 600));
+        final int remindDays = prefs == null ? 3 : prefs.getInt("simkeep_remind_days", 3);
+        final String remindTime = prefs == null ? "09:00" : prefs.getString("simkeep_remind_time", "09:00");
+        remindCard.addView(tv(this, "提前 " + remindDays + " 天 · 每天 " + remindTime + " 提醒（先在本页标急展示，系统通知后续接）", 11.5f, colText2(), false));
+        LinearLayout rdRow = new LinearLayout(this); rdRow.setOrientation(LinearLayout.HORIZONTAL);
+        LinearLayout.LayoutParams rdLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT); rdLp.topMargin = dp(this, 8);
+        remindCard.addView(rdRow, rdLp);
+        final int[] rdOpts = {0, 1, 3, 7};
+        for (final int dv : rdOpts) {
+            final boolean on = dv == remindDays;
+            TextView chip = tv(this, dv == 0 ? "当天" : (dv + "天前"), 12.5f, on ? Color.WHITE : colText(), on);
+            chip.setGravity(Gravity.CENTER); chip.setPadding(dp(this, 12), dp(this, 7), dp(this, 12), dp(this, 7));
+            chip.setBackground(roundRect(on ? accentColor() : colChipOff(), 999, this));
+            LinearLayout.LayoutParams clp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT); if (rdRow.getChildCount() > 0) clp.leftMargin = dp(this, 6);
+            chip.setLayoutParams(clp);
+            chip.setOnClickListener(v -> { haptic(); if (prefs != null) prefs.edit().putInt("simkeep_remind_days", dv).apply(); buildSimKeepBody(); });
+            rdRow.addView(chip);
+        }
+        TextView addBtn = tv(this, "+ 添加保号卡", 14, Color.WHITE, true); addBtn.setGravity(Gravity.CENTER);
+        addBtn.setPadding(0, dp(this, 12), 0, dp(this, 12)); addBtn.setBackground(roundRect(accentColor(), 12, this));
+        LinearLayout.LayoutParams abLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT); abLp.topMargin = dp(this, 12);
+        inner.addView(addBtn, abLp);
+        addBtn.setOnClickListener(v -> { haptic(); openSimKeepForm(null); });
+        java.util.List<SimKeepItem> items = simkeepSorted();
+        TextView sec = tvW(this, "待保号 · " + items.size() + " 张", 13, colText2(), 600);
+        LinearLayout.LayoutParams secLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT); secLp.topMargin = dp(this, 16); secLp.bottomMargin = dp(this, 4);
+        inner.addView(sec, secLp);
+        if (items.isEmpty()) {
+            LinearLayout em = new LinearLayout(this); em.setOrientation(LinearLayout.VERTICAL);
+            em.setBackground(roundRect(colSurface(), 14, this)); em.setPadding(dp(this, 16), dp(this, 22), dp(this, 16), dp(this, 22));
+            em.addView(tv(this, "还没有保号卡。点上方添加，填号码、运营商和下次保号日期。", 13, colText2(), false));
+            inner.addView(em, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+            return;
+        }
+        for (final SimKeepItem it : items) {
+            final int left = simkeepDaysLeft(it.nextDue);
+            final boolean urgent = left <= remindDays;
+            LinearLayout card = new LinearLayout(this); card.setOrientation(LinearLayout.VERTICAL);
+            // Q73/Q84：高斯玻璃面口径——冻结模糊垫底 + 薄染色 + 提亮层（glassTintDrawable/glassClip 同规范）
+            card.setBackground(glassTintDrawable(16, false)); card.setClipToOutline(true); glassClip(card, 16, false);
+            try { if (Build.VERSION.SDK_INT >= 21) card.setElevation(dp(this, 4)); } catch (Throwable ignored) {}
+            card.setPadding(dp(this, 14), dp(this, 12), dp(this, 14), dp(this, 12));
+            LinearLayout.LayoutParams cardLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT); cardLp.topMargin = dp(this, 10);
+            inner.addView(card, cardLp);
+            LinearLayout top = new LinearLayout(this); top.setOrientation(LinearLayout.HORIZONTAL); top.setGravity(Gravity.CENTER_VERTICAL);
+            card.addView(top);
+            String title = (it.operator == null || it.operator.isEmpty() ? "电话卡" : it.operator) + (it.number == null || it.number.isEmpty() ? "" : (" · " + it.number));
+            top.addView(tvW(this, title, 15, colText(), 700), new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+            String badge = left < 0 ? ("逾期 " + (-left) + " 天") : (left == 0 ? "今天到期" : (left + " 天后"));
+            TextView bd = tv(this, (urgent ? "急 · " : "") + badge, 11.5f, urgent ? Color.WHITE : colText2(), true);
+            bd.setGravity(Gravity.CENTER); bd.setPadding(dp(this, 9), dp(this, 5), dp(this, 9), dp(this, 5));
+            bd.setBackground(roundRect(urgent ? Color.rgb(0xE0, 0x31, 0x31) : colChipOff(), 999, this));
+            top.addView(bd);
+            StringBuilder meta = new StringBuilder();
+            if (it.country != null && !it.country.isEmpty()) meta.append(it.country).append(" · ");
+            meta.append("下次 ").append(it.nextDue == null || it.nextDue.isEmpty() ? "未设日期" : it.nextDue);
+            meta.append(" · ").append(simkeepActionLabel(it.action));
+            if (it.fee != null && !it.fee.isEmpty()) meta.append(" · ").append(it.fee);
+            meta.append(" · 每 ").append(it.cycleDays).append(" 天");
+            TextView mv = tv(this, meta.toString(), 12, colText2(), false); bodyLH(mv);
+            LinearLayout.LayoutParams mvLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT); mvLp.topMargin = dp(this, 6);
+            card.addView(mv, mvLp);
+            LinearLayout acts = new LinearLayout(this); acts.setOrientation(LinearLayout.HORIZONTAL);
+            LinearLayout.LayoutParams actLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT); actLp.topMargin = dp(this, 10);
+            card.addView(acts, actLp);
+            TextView done = tv(this, "已保号 · 顺延", 13, Color.WHITE, true); done.setGravity(Gravity.CENTER);
+            done.setPadding(0, dp(this, 9), 0, dp(this, 9)); done.setBackground(roundRect(accentColor(), 10, this));
+            acts.addView(done, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+            done.setOnClickListener(v -> { haptic(); markSimKeepDone(it); });
+            TextView edit = tv(this, "编辑", 13, colText(), true); edit.setGravity(Gravity.CENTER);
+            edit.setPadding(0, dp(this, 9), 0, dp(this, 9)); edit.setBackground(roundRect(colChipOff(), 10, this));
+            LinearLayout.LayoutParams edLp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f); edLp.leftMargin = dp(this, 8);
+            acts.addView(edit, edLp);
+            edit.setOnClickListener(v -> { haptic(); openSimKeepForm(it); });
+        }
+        TextView hint = tv(this, "点「已保号」会按周期自动顺延下次日期；号码与费用只存本机。", 11, colText3(), false);
+        LinearLayout.LayoutParams hLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT); hLp.topMargin = dp(this, 12);
+        inner.addView(hint, hLp);
+    }
+    void markSimKeepDone(final SimKeepItem it) {
+        java.util.List<SimKeepItem> items = loadSimKeeps();
+        for (SimKeepItem x : items) if (x.id.equals(it.id)) { x.nextDue = simkeepAddDays(x.nextDue, x.cycleDays <= 0 ? 30 : x.cycleDays); break; }
+        saveSimKeeps(items);
+        showFloatToast("已顺延到 " + it.nextDue);
+        buildSimKeepBody();
+    }
+    void openSimKeepForm(final SimKeepItem edit) {
+        closeSimKeepFormNow();
+        final boolean isNew = edit == null;
+        final SimKeepItem draft = new SimKeepItem();
+        if (isNew) { draft.id = null; draft.cardId = ""; draft.number = ""; draft.operator = ""; draft.country = ""; draft.nextDue = simkeepTodayStr(); draft.action = "sms"; draft.fee = ""; draft.cycleDays = 30; }
+        else { draft.id = edit.id; draft.cardId = edit.cardId; draft.number = edit.number; draft.operator = edit.operator; draft.country = edit.country; draft.nextDue = edit.nextDue; draft.action = edit.action; draft.fee = edit.fee; draft.cycleDays = edit.cycleDays; }
+        final String[] actSel = {draft.action == null || draft.action.isEmpty() ? "sms" : draft.action};
+        hideChrome();
+        final FrameLayout sheet = new FrameLayout(this);
+        View shade = new View(this); shade.setBackgroundColor(Color.argb(102, 0, 0, 0));
+        shade.setOnClickListener(v -> closeSimKeepForm());
+        sheet.addView(shade, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        LinearLayout card = new LinearLayout(this); card.setOrientation(LinearLayout.VERTICAL);
+        GradientDrawable cg = new GradientDrawable(); cg.setColor(colSheet()); cg.setStroke(dp(this, 1), Color.argb(140, 255, 255, 255));
+        float formR = dp(this, 22); cg.setCornerRadii(new float[]{formR, formR, formR, formR, 0, 0, 0, 0});
+        card.setBackground(cg);
+        if (Build.VERSION.SDK_INT >= 21) { card.setElevation(dp(this, 24)); topSheetClip(card, 22, this); }
+        card.setOnClickListener(v -> {});
+        ScrollView sv = new ScrollView(this); thinScrollbar(sv);
+        LinearLayout form = new LinearLayout(this); form.setOrientation(LinearLayout.VERTICAL);
+        form.setPadding(dp(this, 18), dp(this, 18), dp(this, 18), dp(this, 18) + navBarH());
+        sv.addView(form); card.addView(sv, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        form.addView(tv(this, isNew ? "添加保号卡" : "编辑保号卡", 17, colText(), true));
+        form.addView(customFormLabel("手机号码"));
+        final EditText inNum = customInput("如：+86 138…", draft.number, 24); form.addView(inNum);
+        form.addView(customFormLabel("运营商"));
+        final EditText inOp = customInput("如：中国移动 / csl / Digi", draft.operator, 24); form.addView(inOp);
+        form.addView(customFormLabel("国家 / 地区"));
+        final EditText inCountry = customInput("如：中国 / 香港 / 马来西亚", draft.country, 20); form.addView(inCountry);
+        form.addView(customFormLabel("下次保号日期（yyyy-MM-dd）"));
+        final EditText inDue = customInput("2026-11-01", draft.nextDue, 10); form.addView(inDue);
+        form.addView(customFormLabel("保号动作"));
+        LinearLayout actRow = new LinearLayout(this); actRow.setOrientation(LinearLayout.HORIZONTAL); form.addView(actRow);
+        final java.util.List<TextView> actChips = new ArrayList<>();
+        final Runnable[] paintActs = new Runnable[1];
+        paintActs[0] = () -> { for (int i = 0; i < actChips.size(); i++) paintChoiceChip(actChips.get(i), SIMKEEP_ACT_VALS[i].equals(actSel[0])); };
+        for (int i = 0; i < SIMKEEP_ACT_VALS.length; i++) {
+            final String av = SIMKEEP_ACT_VALS[i];
+            TextView b = formOrgChip(SIMKEEP_ACT_LABELS[i]);
+            b.setOnClickListener(v -> { haptic(); actSel[0] = av; paintActs[0].run(); });
+            LinearLayout.LayoutParams blp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT); if (i > 0) blp.leftMargin = dp(this, 6);
+            b.setLayoutParams(blp); actChips.add(b); actRow.addView(b);
+        }
+        paintActs[0].run();
+        form.addView(customFormLabel("费用（可空）"));
+        final EditText inFee = customInput("如：¥10 / 免费", draft.fee, 20); form.addView(inFee);
+        form.addView(customFormLabel("周期（天）"));
+        final EditText inCycle = customInput("30", String.valueOf(draft.cycleDays), 4); form.addView(inCycle);
+        LinearLayout acts = new LinearLayout(this); acts.setOrientation(LinearLayout.HORIZONTAL);
+        LinearLayout.LayoutParams actLp2 = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT); actLp2.topMargin = dp(this, 16);
+        form.addView(acts, actLp2);
+        Button cancel = new Button(this); cancel.setText("取消"); cancel.setTextSize(15); cancel.setAllCaps(false);
+        cancel.setBackground(roundRect(Color.rgb(0xF2, 0xF3, 0xF7), 14, this));
+        cancel.setOnClickListener(v -> { haptic(); closeSimKeepForm(); });
+        acts.addView(cancel, new LinearLayout.LayoutParams(0, dp(this, 48), 1f));
+        Button save = new Button(this); save.setText("保存"); save.setTextSize(15); save.setAllCaps(false); save.setTextColor(Color.WHITE);
+        GradientDrawable saveBg = new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM, new int[]{Color.rgb(0x0A, 0x84, 0xFF), Color.rgb(0x00, 0x66, 0xE6)}); saveBg.setCornerRadius(dp(this, 14)); save.setBackground(saveBg);
+        LinearLayout.LayoutParams saveLp = new LinearLayout.LayoutParams(0, dp(this, 48), 2f); saveLp.leftMargin = dp(this, 10);
+        acts.addView(save, saveLp);
+        save.setOnClickListener(v -> {
+            haptic();
+            String num = inNum.getText().toString().trim(); String op = inOp.getText().toString().trim();
+            String due = inDue.getText().toString().trim();
+            if (num.isEmpty() && op.isEmpty()) { showFloatToast("请至少填号码或运营商"); return; }
+            if (simkeepParseDate(due) == null) { showFloatToast("日期请用 yyyy-MM-dd"); inDue.requestFocus(); return; }
+            int cyc = 30; try { cyc = Integer.parseInt(inCycle.getText().toString().trim()); } catch (Throwable ignored) {}
+            if (cyc <= 0) cyc = 30;
+            java.util.List<SimKeepItem> items = loadSimKeeps();
+            if (isNew) {
+                SimKeepItem ni = new SimKeepItem(); ni.id = "sim-" + System.currentTimeMillis();
+                ni.cardId = ""; ni.number = num; ni.operator = op; ni.country = inCountry.getText().toString().trim();
+                ni.nextDue = due; ni.action = actSel[0]; ni.fee = inFee.getText().toString().trim(); ni.cycleDays = cyc;
+                items.add(ni); showFloatToast("已添加保号卡");
+            } else {
+                for (SimKeepItem x : items) if (x.id.equals(edit.id)) { x.number = num; x.operator = op; x.country = inCountry.getText().toString().trim(); x.nextDue = due; x.action = actSel[0]; x.fee = inFee.getText().toString().trim(); x.cycleDays = cyc; break; }
+                showFloatToast("已保存");
+            }
+            saveSimKeeps(items); closeSimKeepForm(); buildSimKeepBody();
+        });
+        if (!isNew) {
+            TextView del = tv(this, "删除这张保号卡", 13, Color.rgb(0xE0, 0x31, 0x31), true); del.setGravity(Gravity.CENTER);
+            LinearLayout.LayoutParams delLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT); delLp.topMargin = dp(this, 12);
+            form.addView(del, delLp);
+            del.setOnClickListener(v -> {
+                haptic();
+                java.util.List<SimKeepItem> items = loadSimKeeps();
+                SimKeepItem rm = null; for (SimKeepItem x : items) if (x.id.equals(edit.id)) { rm = x; break; }
+                if (rm != null) { items.remove(rm); saveSimKeeps(items); }
+                closeSimKeepForm(); buildSimKeepBody(); showFloatToast("已删除");
+            });
+        }
+        int sw = getResources().getDisplayMetrics().widthPixels;
+        int maxH = (int) (getResources().getDisplayMetrics().heightPixels * 0.82);
+        card.measure(View.MeasureSpec.makeMeasureSpec(sw - dp(this, 24), View.MeasureSpec.EXACTLY), View.MeasureSpec.makeMeasureSpec(maxH, View.MeasureSpec.AT_MOST));
+        FrameLayout.LayoutParams clp = new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, Math.min(card.getMeasuredHeight(), maxH));
+        clp.gravity = Gravity.BOTTOM; clp.leftMargin = dp(this, 12); clp.rightMargin = dp(this, 12); clp.bottomMargin = 0;
+        FrameLayout wrap = new FrameLayout(this);
+        View glass = glassLayer(card, 22, false); topSheetClip(glass, 22, this);
+        wrap.addView(glass, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, clp.height + dp(this, 22)));
+        wrap.addView(card, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        sheet.addView(wrap, clp);
+        content.addView(sheet, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        simkeepFormSheet = sheet;
+        animShadeIn(shade); animSheetIn(wrap);
+    }
+    void closeSimKeepFormNow() {
+        View s = simkeepFormSheet; simkeepFormSheet = null; simkeepFormClosing = false;
+        if (s != null && s.getParent() != null) ((ViewGroup) s.getParent()).removeView(s);
+    }
+    void closeSimKeepForm() {
+        final View sheet = simkeepFormSheet;
+        if (sheet == null || simkeepFormClosing) return;
+        simkeepFormClosing = true; hideKeyboardNow();
+        if (sheet.getParent() != null) {
+            View wrap = sheet instanceof ViewGroup && ((ViewGroup) sheet).getChildCount() > 1 ? ((ViewGroup) sheet).getChildAt(((ViewGroup) sheet).getChildCount() - 1) : null;
+            if (wrap != null) {
+                animSheetOut(wrap, () -> { closeSimKeepFormNow(); if (simkeepView == null) restoreChrome(); });
+                if (sheet instanceof ViewGroup && ((ViewGroup) sheet).getChildCount() > 0) animShadeOut(((ViewGroup) sheet).getChildAt(0));
+                return;
+            }
+            ((ViewGroup) sheet.getParent()).removeView(sheet);
+        }
+        simkeepFormSheet = null; simkeepFormClosing = false;
+        if (simkeepView == null) restoreChrome();
+    }
+
     void stopShowcaseDrift() {
         if (showcaseDriftTask != null && mainHandler != null) mainHandler.removeCallbacks(showcaseDriftTask);
         showcaseDriftTask = null;
@@ -12087,6 +12459,9 @@ public class MainActivity extends Activity {
         switchRow(page, "展柜", "我的卡片页的纯卡面展示（堆叠 / 平放自由画布）", prefs == null || prefs.getBoolean("showcase_enabled", true), on -> {
             if (prefs != null) prefs.edit().putBoolean("showcase_enabled", on).apply(); haptic(); rebuildPages();
         });
+        switchRow(page, "保号管家", "电话卡 / eSIM 保号到期管理，关掉后入口不出现", prefs == null || prefs.getBoolean("simkeep_enabled", true), on -> {
+            if (prefs != null) prefs.edit().putBoolean("simkeep_enabled", on).apply(); haptic(); rebuildPages();
+        });
 
         // Q72 外观分区：深色模式/主题色/卡面配色三件事各管各、互不染指（卡面配色只管无图占位底色）
         sectionHead(page, "外观");
@@ -12381,6 +12756,8 @@ public class MainActivity extends Activity {
     @Override
     public void onBackPressed() {
         if (acctPickerView != null) { closeAcctClassPicker(); return; }
+        if (simkeepFormSheet != null) { closeSimKeepForm(); return; }
+        if (simkeepView != null) { closeSimKeep(); return; }
         if (showcaseView != null) { closeShowcase(); return; }
         if (moreMenuOverlay != null) { closeMoreMenu(); return; }
         if (floatSearchOpen) { closeFloatSearch(); return; }
