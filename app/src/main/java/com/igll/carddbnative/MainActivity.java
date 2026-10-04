@@ -5324,30 +5324,33 @@ public class MainActivity extends Activity {
         // P2e/P2c：右下双钮退场，不与筛选窗叠压
         hideChrome(); // Q12
         final FrameLayout sheet = new FrameLayout(this);
-        sheet.setBackgroundColor(Color.argb(38, 18, 22, 36)); // 轻遮罩（混合版 .dlg-backdrop.light）
+        sheet.setBackgroundColor(Color.argb(88, 15, 20, 40)); // Q77：窗外统一压暗一档，与玻璃窗体明暗分明
         sheet.setOnClickListener(v -> closeFilterSheet());
-        // 窗框：真正浮起的卡片——固定不滚，四角完整圆角+描边，滚动只在窗内
+        // Q77 定版：B 真玻璃悬浮窗（与卡面 +/✓ 钮、底栏同一套 Q73 玻璃语言）——冻结模糊垫底 +
+        // 薄染色 tint + 提亮 wash，禁止实白板；窗放大、排版放呼吸，chips 点选仍即时 refreshHome。
         LinearLayout card = new LinearLayout(this);
         card.setOrientation(LinearLayout.VERTICAL);
-        GradientDrawable cg = new GradientDrawable();
-        cg.setColor(colSheet()); // Q52 近实白口径 + Q72 深色浮层 #232323
-        cg.setCornerRadius(dp(this, 24));
-        cg.setStroke(dp(this, 1), colDivider());
-        card.setBackground(cg);
+        card.setBackground(glassTintDrawable(24, false));
         if (Build.VERSION.SDK_INT >= 21) {
             card.setElevation(dp(this, 24));
-            card.setClipToOutline(true);
         }
+        glassClip(card, 24, false);
         card.setOnClickListener(v -> {});
-        // 头部固定（标题+清空/完成），不随内容滚动
+        // 头部固定（标题+清空/完成），不随内容滚动；Q77：标题 17sp、动作改有分量的药丸钮
         LinearLayout chead = new LinearLayout(this);
         chead.setOrientation(LinearLayout.HORIZONTAL);
         chead.setGravity(Gravity.CENTER_VERTICAL);
-        chead.setPadding(dp(this, 16), dp(this, 12), dp(this, 10), dp(this, 4));
-        TextView cttl = tv(this, "\u7b5b\u9009", 16, colText(), true);
+        chead.setPadding(dp(this, 18), dp(this, 14), dp(this, 14), dp(this, 10));
+        TextView cttl = tv(this, "\u7b5b\u9009", 17, colText(), true);
         chead.addView(cttl, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
-        TextView clearT = tv(this, "\u6e05\u7a7a", 13, colText2(), false);
-        clearT.setPadding(dp(this, 8), dp(this, 6), dp(this, 8), dp(this, 6));
+        TextView clearT = tv(this, "\u6e05\u7a7a", 13, colText(), false);
+        clearT.setGravity(Gravity.CENTER);
+        GradientDrawable clearBg = new GradientDrawable();
+        clearBg.setColor(colChipOff()); clearBg.setCornerRadius(dp(this, 999));
+        clearBg.setStroke(dp(this, 1), colDivider());
+        clearT.setBackground(clearBg);
+        clearT.setMinWidth(dp(this, 62)); clearT.setMinHeight(dp(this, 34));
+        clearT.setPadding(dp(this, 14), dp(this, 7), dp(this, 14), dp(this, 7));
         clearT.setOnClickListener(v -> {
             haptic();
             final String sType = filterType, sOrg = filterOrg, sStatus = filterStatus, sBank = filterBank, sSort = sortMode, sScoreStatus = filterScoreStatus;
@@ -5370,35 +5373,58 @@ public class MainActivity extends Activity {
             });
         });
         chead.addView(clearT);
-        TextView doneT = tv(this, "\u5b8c\u6210", 13, accentColor(), true);
-        doneT.setPadding(dp(this, 8), dp(this, 6), dp(this, 10), dp(this, 6));
-        doneT.setOnClickListener(v -> { haptic(); closeFilterSheet(); });
+        TextView doneT = tv(this, "\u5b8c\u6210", 13.5f, Color.WHITE, true);
+        doneT.setGravity(Gravity.CENTER);
+        GradientDrawable doneBg = new GradientDrawable(GradientDrawable.Orientation.LEFT_RIGHT,
+            new int[]{Color.rgb(0x0A, 0x84, 0xFF), Color.rgb(0x00, 0x66, 0xE6)});
+        doneBg.setCornerRadius(dp(this, 999));
+        doneT.setBackground(doneBg);
+        doneT.setMinWidth(dp(this, 68)); doneT.setMinHeight(dp(this, 34));
+        doneT.setPadding(dp(this, 16), dp(this, 7), dp(this, 16), dp(this, 7));
+        LinearLayout.LayoutParams dlp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        dlp.leftMargin = dp(this, 8);
+        doneT.setLayoutParams(dlp);
+        doneT.setOnTouchListener((v, e) -> {
+            if (e.getAction() == MotionEvent.ACTION_DOWN) pressBounce(v, true);
+            else if (e.getAction() == MotionEvent.ACTION_UP || e.getAction() == MotionEvent.ACTION_CANCEL) pressBounce(v, false);
+            return false;
+        });
+        clearT.setOnTouchListener((v, e) -> {
+            if (e.getAction() == MotionEvent.ACTION_DOWN) pressBounce(v, true);
+            else if (e.getAction() == MotionEvent.ACTION_UP || e.getAction() == MotionEvent.ACTION_CANCEL) pressBounce(v, false);
+            return false;
+        });
+        doneT.setOnClickListener(v -> { haptic(); closeFilterSheet(); }); // Q77：「完成」只关窗，刷新已在点选时即时发生
         chead.addView(doneT);
+        View headDiv = new View(this);
+        headDiv.setBackgroundColor(colDivider());
         card.addView(chead);
+        card.addView(headDiv, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, Math.max(1, dp(this, 1))));
         ScrollView sc = new ScrollView(this);
         thinScrollbar(sc);
         sc.setBackgroundColor(Color.TRANSPARENT);
         LinearLayout panel = new LinearLayout(this);
         panel.setOrientation(LinearLayout.VERTICAL);
-        panel.setPadding(dp(this, 14), dp(this, 2), dp(this, 14), dp(this, 14));
+        panel.setPadding(dp(this, 18), dp(this, 6), dp(this, 18), dp(this, 18));
         sc.addView(panel, new ScrollView.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
         card.addView(sc, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
         filterScroll = sc;
         filterPanelRef = panel;
         rebuildFilterPanel(panel);
         int sw = getResources().getDisplayMetrics().widthPixels;
-        int cardW = Math.min(sw - dp(this, 28), dp(this, 368));
-        int maxH = (int) (getResources().getDisplayMetrics().heightPixels * 0.60);
+        int cardW = Math.min(sw - dp(this, 24), dp(this, 480)); // Q77：窗放大，不再 368dp 挤成一团
+        filterCardW = cardW;
+        int maxH = (int) (getResources().getDisplayMetrics().heightPixels * 0.78);
         FrameLayout.LayoutParams clp = new FrameLayout.LayoutParams(cardW, ViewGroup.LayoutParams.WRAP_CONTENT);
-        clp.gravity = Gravity.END | Gravity.BOTTOM;
-        clp.rightMargin = dp(this, 14);
-        clp.bottomMargin = dp(this, 104) + navBarH(); // 浮在 dock 之上（混合版 bottom:104px）；Q26 再加导航栏避让
+        clp.gravity = Gravity.CENTER_HORIZONTAL | Gravity.BOTTOM;
+        clp.leftMargin = dp(this, 12); clp.rightMargin = dp(this, 12);
+        clp.bottomMargin = dp(this, 100) + navBarH(); // 浮在 dock 之上；Q26 再加导航栏避让
         card.measure(View.MeasureSpec.makeMeasureSpec(cardW, View.MeasureSpec.EXACTLY),
             View.MeasureSpec.makeMeasureSpec(maxH, View.MeasureSpec.AT_MOST));
         clp.height = card.getMeasuredHeight();
         // Q11：窗下垫冻结模糊快照（升起前抓的底层画面），与窗同位同尺寸
         FrameLayout.LayoutParams fglp = new FrameLayout.LayoutParams(clp.width, clp.height);
-        fglp.gravity = clp.gravity; fglp.rightMargin = clp.rightMargin; fglp.bottomMargin = clp.bottomMargin;
+        fglp.gravity = clp.gravity; fglp.leftMargin = clp.leftMargin; fglp.rightMargin = clp.rightMargin; fglp.bottomMargin = clp.bottomMargin;
         sheet.addView(glassLayer(card, 24, false), fglp);
         sheet.addView(card, clp);
         content.addView(sheet);
@@ -5414,6 +5440,7 @@ public class MainActivity extends Activity {
     }
 
     LinearLayout filterPanelRef = null;
+    int filterCardW = 0; // Q77：筛选窗实际宽，chips 流式排版按此算可用宽
 
     void closeFilterSheet() {
         final View sheet = filterSheet;
@@ -5439,7 +5466,7 @@ public class MainActivity extends Activity {
         if (sheet != null && sheet.getParent() != null)
             ((ViewGroup) sheet.getParent()).removeView(sheet);
         if (sheet == filterSheet) filterSheet = null;
-        if (sheet != null) { filterScroll = null; filterPanelRef = null; }
+        if (sheet != null) { filterScroll = null; filterPanelRef = null; filterCardW = 0; }
     }
 
     void rebuildFilterPanel(final LinearLayout panel) {
@@ -5612,7 +5639,7 @@ public class MainActivity extends Activity {
             t.setAlpha(0.75f);
             t.setEnabled(false);
             t.setClickable(false);
-            t.setPadding(dp(this, 11), dp(this, 6), dp(this, 11), dp(this, 6));
+            t.setPadding(dp(this, 13), dp(this, 8), dp(this, 13), dp(this, 8));
             return t;
         }
         if (on) {
@@ -5623,12 +5650,12 @@ public class MainActivity extends Activity {
             if (Build.VERSION.SDK_INT >= 21) t.setElevation(dp(this, 2));
         } else {
             GradientDrawable g = new GradientDrawable();
-            g.setColor(Color.rgb(0xF2, 0xF3, 0xF7));
+            g.setColor(colChipOff());
             g.setCornerRadius(dp(this, 999));
-            g.setStroke(dp(this, 1), Color.argb(13, 20, 30, 60));
+            g.setStroke(dp(this, 1), colDivider());
             t.setBackground(g);
         }
-        t.setPadding(dp(this, 11), dp(this, 6), dp(this, 11), dp(this, 6));
+        t.setPadding(dp(this, 13), dp(this, 8), dp(this, 13), dp(this, 8));
         t.setOnClickListener(v -> { haptic(); act.run(); });
         t.setOnTouchListener((v, e) -> {
             if (e.getAction() == MotionEvent.ACTION_DOWN) pressBounce(v, true);
@@ -5640,26 +5667,27 @@ public class MainActivity extends Activity {
     }
 
     void addChipFlow(LinearLayout panel, List<View> chips) {
-        int avail = Math.min(getResources().getDisplayMetrics().widthPixels - dp(this, 28), dp(this, 368)) - dp(this, 28);
+        int avail = (filterCardW > 0 ? filterCardW
+            : Math.min(getResources().getDisplayMetrics().widthPixels - dp(this, 24), dp(this, 480))) - dp(this, 36);
         Paint mp = new Paint();
         mp.setTextSize(13f * uiScale * getResources().getDisplayMetrics().scaledDensity);
         LinearLayout row = null;
         int rowW = 0;
         for (View chip : chips) {
             String txt = ((TextView) chip).getText().toString();
-            int w = (int) mp.measureText(txt) + dp(this, 24);
-            if (row == null || (rowW > 0 && rowW + dp(this, 6) + w > avail)) {
+            int w = (int) mp.measureText(txt) + dp(this, 28);
+            if (row == null || (rowW > 0 && rowW + dp(this, 8) + w > avail)) {
                 row = new LinearLayout(this);
                 row.setOrientation(LinearLayout.HORIZONTAL);
                 LinearLayout.LayoutParams rlp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-                rlp.topMargin = dp(this, 6);
+                rlp.topMargin = dp(this, 8);
                 row.setLayoutParams(rlp);
                 panel.addView(row);
                 rowW = 0;
             }
-            if (rowW > 0) rowW += dp(this, 6);
+            if (rowW > 0) rowW += dp(this, 8);
             LinearLayout.LayoutParams clp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-            if (rowW > 0) clp.leftMargin = dp(this, 6);
+            if (rowW > 0) clp.leftMargin = dp(this, 8);
             chip.setLayoutParams(clp);
             row.addView(chip);
             rowW += w;
@@ -5671,12 +5699,12 @@ public class MainActivity extends Activity {
             LinearLayout row = new LinearLayout(this);
             row.setOrientation(LinearLayout.HORIZONTAL);
             LinearLayout.LayoutParams rlp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-            rlp.topMargin = dp(this, 6);
+            rlp.topMargin = dp(this, 8);
             row.setLayoutParams(rlp);
             for (int j = 0; j < 3; j++) {
                 int idx = i + j;
                 LinearLayout.LayoutParams clp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
-                if (j > 0) clp.leftMargin = dp(this, 6);
+                if (j > 0) clp.leftMargin = dp(this, 8);
                 if (idx < banks.size()) {
                     final String bankName = banks.get(idx);
                     View chip = filterChip(bankName, bankName.equals(filterBank), () -> {
@@ -5693,9 +5721,9 @@ public class MainActivity extends Activity {
     }
 
     TextView filterSectionTitle(String s) {
-        TextView t = tv(this, s, 12, Color.rgb(0x8E, 0x8E, 0x93), true);
+        TextView t = tv(this, s, 12.5f, colText2(), true);
         LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        lp.topMargin = dp(this, 10);
+        lp.topMargin = dp(this, 16);
         t.setLayoutParams(lp);
         return t;
     }
