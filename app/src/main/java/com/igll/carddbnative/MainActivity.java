@@ -1433,13 +1433,27 @@ public class MainActivity extends Activity {
     // 也不重建——旧 refreshNavLabels 只改文字不重套 Typeface，是「底栏字体
     // 不跟随」的直接落点。改：按当前 fontMode 给五标签重套 Typeface，再走
     // tintNavTo 在新字体上重派选中态粗细（BOLD/NORMAL 基于当前字体派生）。
-    // 行高钉（pinFixedText125）是独立属性、随 setTypeface 不丢，此处不重复钉。
+    // Q128（2.40）补字号一面：标签字号在 buildNav 时按当时的归一系数烤死，
+    // 只换 Typeface 会留下「字体变了、大小停在旧档」的半截跟随。用建签时记下
+    // 的基准像素字号与系数（navBaseTextPx128/navBaseComp128），按 基准÷旧
+    // 系数×新系数 重设现行字号；切回默认时新旧系数同为恒 1.0，目标值落在
+    // 0.5px 容差内不触发重设——默认档底栏与改前逐位相同。字号变了才需按新
+    // 字号重钉角色行高（pinFixedText125 同值重钉无副作用），故此处补钉。
     void refreshNavFonts125() {
         try {
             if (navLabels == null || navLabels.isEmpty()) return;
+            float comp128 = fontComp128(this);
             for (Map.Entry<String, TextView> e : navLabels.entrySet()) {
                 TextView lb = e.getValue();
-                if (lb != null) lb.setTypeface(weightTypeface(this, 400));
+                if (lb == null) continue;
+                lb.setTypeface(weightTypeface(this, 400));
+                if (navBaseTextPx128 > 0 && navBaseComp128 > 0) {
+                    float target128 = navBaseTextPx128 / navBaseComp128 * comp128;
+                    if (Math.abs(target128 - lb.getTextSize()) > 0.5f) {
+                        lb.setTextSize(android.util.TypedValue.COMPLEX_UNIT_PX, target128);
+                    }
+                }
+                pinFixedText125(lb);
             }
             tintNavTo(Math.max(0, navTintIdx));
         } catch (Throwable ignored) {}
@@ -3346,6 +3360,8 @@ public class MainActivity extends Activity {
         customTf = null; customLoadTried = false;
         // Q125（字体件，研报 A4）：字重合成缓存按基字体身份存键——导入/删除
         // 自定义字体后旧基字体的派生结果不许被新字体误命中，整表一并清。
+        // Q128（2.40）：大小归一系数缓存同理清键（文件指纹命键之外再加双保险）。
+        fontCompKey128 = ""; fontCompCache128 = -1f;
         try { tfWCache.clear(); } catch (Throwable ignored) {}
     }
 
@@ -3370,6 +3386,58 @@ public class MainActivity extends Activity {
         }
         return weight >= 600 ? android.graphics.Typeface.create(base, android.graphics.Typeface.BOLD)
             : android.graphics.Typeface.create(base, android.graphics.Typeface.NORMAL);
+    }
+
+    // Q128（2.40，字体大小归一）：参考字墨迹高——同一 Paint 口径（100px 字号）
+    // 量一组常用全墨汉字的并集墨迹框高。量墨迹不量行盒：两套内置字体行盒比
+    // 几乎同值（研报实测 hhea 1.448/1.437），但墨迹在 em 框里的大小/位置不同，
+    // 正是「换宋体字面变大」的来源。参考字取「国人中天大永」——常用全墨汉字，
+    // 内置黑/宋子集（同 3937 码位集）内必有；缺字字体量到的是 .notdef 框，
+    // 仍为近 em 高、且最终系数有钳幅兜底。
+    static float glyphInkH128(android.graphics.Typeface tf) {
+        if (tf == null) return 0f;
+        try {
+            android.graphics.Paint p = new android.graphics.Paint();
+            p.setTypeface(tf);
+            p.setTextSize(100f);
+            String ref = "国人中天大永";
+            android.graphics.Rect r = new android.graphics.Rect();
+            p.getTextBounds(ref, 0, ref.length(), r);
+            return r.height();
+        } catch (Throwable e) { return 0f; }
+    }
+
+    static float fontCompCache128 = -1f;
+    static String fontCompKey128 = "";
+    static float builtinInk128 = -1f; // 内置黑体基准墨迹高：字体文件随包恒定，进程内量一次
+
+    // Q128（2.40）：字体大小归一系数＝内置黑体墨迹高 ÷ 当前字体（400 基字）墨迹高。
+    // 墨迹偏大的字体系数 <1、字号按比例收，视觉字面拉回与默认一致；反之放大。
+    // builtin 档在此字面返回 1.0f、不进量测——默认字体下 tvW 的 setTextSize
+    // 入参为 sp*uiScale*1.0f，与改前逐位相同（浮点乘 1.0 为恒等），渲染路径
+    // 零变化。系数钳 [0.85, 1.15]：病字体（量测失灵/墨迹极端）最多收放 15%，
+    // 不许把字缩没或撑爆。缓存按（fontMode＋custom 文件长/mtime 指纹）命键：
+    // 设置切档、导入换文件、删除回退都会自动换键失效，无需在切换点手动清；
+    // resetCustomFontCache 另顺手清键双保险。仅主线程构建期调用。
+    static float fontComp128(Context c) {
+        if (!"system".equals(fontMode) && !"serif".equals(fontMode) && !"custom".equals(fontMode)) return 1.0f;
+        String key = fontMode;
+        if ("custom".equals(fontMode)) {
+            try { java.io.File f = customFontFile(c); key += ":" + f.length() + ":" + f.lastModified(); }
+            catch (Throwable ignored) { key += ":?"; }
+        }
+        if (key.equals(fontCompKey128) && fontCompCache128 > 0) return fontCompCache128;
+        if (builtinInk128 <= 0) builtinInk128 = glyphInkH128(builtinSansTypeface(c, 400));
+        float cur = glyphInkH128(weightTypeface(c, 400));
+        float f = 1.0f;
+        if (cur > 0 && builtinInk128 > 0) {
+            f = builtinInk128 / cur;
+            if (f < 0.85f) f = 0.85f;
+            if (f > 1.15f) f = 1.15f;
+        }
+        fontCompKey128 = key;
+        fontCompCache128 = f;
+        return f;
     }
 
     static TextView tv(Context c, String s, float sp, int color, boolean bold) {
@@ -3398,11 +3466,18 @@ public class MainActivity extends Activity {
     // 同一 TextPaint 天然同度量），includeFontPadding 关（靠控件 padding 呼吸）、
     // 单行行高按字号 1.45 倍钉死、回退行距关、最小高＝上下 padding＋行高。
     // 换字体时框高不跳、hint 与输入后文字基线不打架。
+    // 换字体时框高不跳、hint 与输入后文字基线不打架。Q128（2.40）补：三处新建
+    // 点都在 setTextSize(15) 之后必经此一处，字号补偿收在这里一并缩放现像素
+    // 字号再钉行高，与正文 tvW 同一把尺；默认字体系数恒 1.0、直接跳过不设值。
     void pinInputRole125(EditText e) {
         if (e == null) return;
         try {
             e.setIncludeFontPadding(false);
             e.setGravity(Gravity.CENTER_VERTICAL);
+            float comp128 = fontComp128(e.getContext());
+            if (comp128 != 1.0f && e.getTextSize() > 0) {
+                e.setTextSize(android.util.TypedValue.COMPLEX_UNIT_PX, e.getTextSize() * comp128);
+            }
             if (Build.VERSION.SDK_INT >= 28) {
                 e.setFallbackLineSpacing(false);
                 float ts125 = e.getTextSize();
@@ -3418,7 +3493,9 @@ public class MainActivity extends Activity {
         // Q106（2.20）：EN 模式下纯展示串走 EN_TXT 精确替换（数据值不在表中、原样直出）
         if (EN_MODE && s != null) { String t = EN_TXT.get(s); if (t != null) s = t; }
         TextView t = new TextView(c);
-        t.setText(s); t.setTextSize(sp * uiScale); t.setTextColor(color);
+        // Q128（2.40）：字号在工厂一处套字体大小归一系数（fontComp128）；默认
+        // 内置黑体系数恒 1.0f，此入参逐位等于改前的 sp * uiScale。
+        t.setText(s); t.setTextSize(sp * uiScale * fontComp128(c)); t.setTextColor(color);
         t.setTypeface(weightTypeface(c, weight));
         t.setIncludeFontPadding(false);
         return t;
@@ -4448,6 +4525,10 @@ public class MainActivity extends Activity {
     Map<String, LinearLayout> navItems = new HashMap<>();
     Map<String, NavIconView> navIcons = new HashMap<>();
     Map<String, TextView> navLabels = new HashMap<>();
+    // Q128（2.40）：buildNav 建签时记下的基准像素字号与当时归一系数，换字体时
+    // refreshNavFonts125 按 基准÷旧系数×新系数 重设长寿命标签字号（五签同口径记一次）
+    float navBaseTextPx128 = 0f;
+    float navBaseComp128 = 0f;
 
     // 首页控件（切页回来保持搜索词）
     EditText searchBox;
@@ -5810,6 +5891,8 @@ public class MainActivity extends Activity {
             TextView label = tv(this, t[1], 10f, navOffColor(), false);
             label.setGravity(Gravity.CENTER);
             pinFixedText125(label); // Q125：底栏标签钉角色行高（字体件）
+            // Q128（2.40）：记首签的像素字号与建签当时系数作重设基准（五签同 10sp 同口径）
+            if (navBaseTextPx128 <= 0) { navBaseTextPx128 = label.getTextSize(); navBaseComp128 = fontComp128(this); }
             LinearLayout.LayoutParams llp = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
             llp.topMargin = dp(this, 3); // Q106（2.20）：图标与文字间距 2→3dp，基线不再贴死图标
