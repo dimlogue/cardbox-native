@@ -201,7 +201,7 @@ public class MainActivity extends Activity {
     // 原生等价：navWrap（dock）+searchFab/filterFab/addFab/topFab 同退同回；关窗恢复走 sync* 的
     // ANIM_ENTER 淡入缩放（P4-fix 曲线），dock 本身 180ms 淡入，不再各处散写 navWrap VISIBLE。
     boolean isChromeCovered() {
-        return welcomeOpen || helloOpen || changelogOpen || wizardOpen || aboutOpen
+        return welcomeOpen || helloOpen || changelogOpen || wizardOpen || aboutPageOpen
             || filterSheet != null || detailCard != null || cardMenuPop != null
             || customFormSheet != null || customDetailSheet != null || binSheet != null || addSheetView != null
             || extSheet != null || showcaseView != null || simkeepView != null || simkeepFormSheet != null
@@ -434,6 +434,7 @@ public class MainActivity extends Activity {
     // P-scroll：当前长列表（回顶钮指向它）——详情/更新日志为覆盖层时优先于底下主页
     ScrollView activeLongScroll() {
         if (changelogOpen && changelogScroll != null) return changelogScroll;
+        if (aboutPageOpen && aboutScroll != null) return aboutScroll;
         if (detailScroll != null && detailCard != null) return detailScroll;
         switch (tab) {
             case "mine": return mineScrollView;
@@ -1205,7 +1206,7 @@ public class MainActivity extends Activity {
         if (glassSnapStale && android.os.SystemClock.uptimeMillis() - glassTabSwitchMs < 280) return;
         // Q21 ③：底栏拖动/弹簧进行中不做整屏抓图——capture 是全树 draw，正是滑动发卡与 MOVE 被饿死的主因之一；落稳后防抖任务会补上最终帧。
         if (navDragging || navSpringRunning) return;
-        if (cardMenuPop != null || filterSheet != null || wizardOpen || aboutOpen
+        if (cardMenuPop != null || filterSheet != null || wizardOpen || aboutPageOpen
             || detailCard != null || welcomeOpen || helloOpen || changelogOpen) return;
         captureGlassSnapshot();
         rebuildBand(); // Q41：停稳/切页帧顺带生成条带，滚动期靠它平移跟随（失败自动回落静态帧）
@@ -2156,9 +2157,9 @@ public class MainActivity extends Activity {
     ScrollView changelogScroll = null;
     boolean settingsLogOpen = false;
     ScrollView settingsLogScroll = null;
-    // P-about：关于卡盒悬浮窗（对照混合版 aboutDlg）
-    boolean aboutOpen = false;
-    View aboutSheet = null;
+    // Q88：关于改整页（原 P-about 贴底弹窗退役，玻璃残影随弹窗一并消）
+    boolean aboutPageOpen = false;
+    ScrollView aboutScroll = null;
     View aboutSponsorBody = null;
     TextView aboutSponsorArrow = null;
     boolean aboutSponsorOpen = false;
@@ -3526,6 +3527,8 @@ public class MainActivity extends Activity {
         dismissCardMenu();
         closeShowcaseNow(); // Q78：切页先摘展柜浮层，引用与漂移任务不许残留到新页
         dismissMoreMenuNow(); // Q58：切页前菜单即刻退场，不许残留到新页
+        // Q88：整页关于随切页退场，清标记防 isChromeCovered 误判悬浮件退场（dock 由 showTab 后段恢复逻辑接管）
+        if (aboutPageOpen) { aboutPageOpen = false; aboutScroll = null; aboutSponsorBody = null; aboutSponsorArrow = null; }
         clearLiveGlassForTabSwitch(); // Q63：切页瞬间清 live 玻璃旧帧，不许旧页文字在新页玻璃面糊出残影
         tab = key;
         sCrashTab = key;
@@ -12838,106 +12841,79 @@ public class MainActivity extends Activity {
         } catch (Exception e) { return null; }
     }
 
+    // Q88：关于改整页详情（原贴底弹窗+冻结玻璃退役——弹窗正文糊着旧页残影字，用户 06:38 点名；
+    // 整页无玻璃垫底，残影随弹窗一并消）。入口仍在设置底部关于区与设置 ⋯ 菜单，点进整页、返回回原页。
     void openAbout() {
         captureCurrentPageScroll();
-        aboutOpen = true;
+        aboutPageOpen = true;
         aboutSponsorOpen = false;
-        hideChrome(); // Q12
-        if (aboutSheet != null && aboutSheet.getParent() != null)
-            ((ViewGroup) aboutSheet.getParent()).removeView(aboutSheet);
-        final FrameLayout sheet = new FrameLayout(this);
-        View shade = new View(this);
-        shade.setBackgroundColor(Color.argb(102, 0, 0, 0));
-        shade.setOnClickListener(v -> closeAbout());
-        sheet.addView(shade, new FrameLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
-
-        LinearLayout card = new LinearLayout(this);
-        card.setOrientation(LinearLayout.VERTICAL);
-        GradientDrawable cg = new GradientDrawable();
-        cg.setColor(colSheet()); // Q54 实底口径 + Q72 深色浮层，玻璃退为纯垫底
-        cg.setStroke(dp(this, 1), Color.argb(140, 255, 255, 255));
-        // Q45：仅顶部圆角、底部直角——原四角同圆时底部两角把暗遮罩露成黑三角（用户 22:21 截图）
-        float aboutR = dp(this, 22);
-        cg.setCornerRadii(new float[]{aboutR, aboutR, aboutR, aboutR, 0, 0, 0, 0});
-        card.setBackground(cg);
-        if (Build.VERSION.SDK_INT >= 21) {
-            card.setElevation(dp(this, 24));
-            topSheetClip(card, 22, this); // Q45 顶圆底直轮廓
-        }
-        card.setOnClickListener(v -> {}); // 窗体吃掉点击，防穿透遮罩误关
-        ScrollView sv = new ScrollView(this);
-        thinScrollbar(sv);
-        sv.setFillViewport(false);
-        LinearLayout body = buildAboutBody();
-        sv.addView(body);
-        card.addView(sv, new LinearLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
-
-        int sw = getResources().getDisplayMetrics().widthPixels;
-        int maxH = (int) (getResources().getDisplayMetrics().heightPixels * 0.88);
-        card.measure(View.MeasureSpec.makeMeasureSpec(sw - dp(this, 24), View.MeasureSpec.EXACTLY),
-            View.MeasureSpec.makeMeasureSpec(maxH, View.MeasureSpec.AT_MOST));
-        FrameLayout.LayoutParams clp = new FrameLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT, Math.min(card.getMeasuredHeight(), maxH));
-        clp.gravity = Gravity.BOTTOM;
-        clp.leftMargin = dp(this, 12); clp.rightMargin = dp(this, 12);
-        clp.bottomMargin = 0; // Q45：窗底直达屏底（手势区靠窗内底部留白避让，沿 Q26 口径），不再悬空露角
-        // Q45：玻璃与窗体装进同一贴底容器——玻璃高出窗体 22dp、底圆角沉到容器外被裁掉，
-        // 与窗体同升同降；关窗时 closeAbout 取到的最后一层即此容器，动画口径不变
-        FrameLayout aboutWrap = new FrameLayout(this);
-        View aboutGlass = glassLayer(card, 22, false);
-        topSheetClip(aboutGlass, 22, this); // Q54：玻璃轮廓与窗体同（顶圆底直），不得在窗外露面发雾
-        aboutWrap.addView(aboutGlass, new FrameLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT, clp.height + dp(this, 22)));
-        aboutWrap.addView(card, new FrameLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
-        sheet.addView(aboutWrap, clp);
-        content.addView(sheet);
-        aboutSheet = sheet;
-        sheet.setAlpha(0f);
-        sheet.animate().alpha(1f).setDuration(ANIM_DUR_SHADE_IN).setInterpolator(ANIM_ENTER).start();
-        aboutWrap.setTranslationY(dp(this, 42));
-        aboutWrap.animate().translationY(0f).setDuration(ANIM_DUR_SHEET_IN)
-            .setInterpolator(ANIM_ENTER).start();
+        if (navWrap != null) navWrap.setVisibility(View.GONE); // 同更新日志整页口径：藏整条 dock（含玻璃层，防 Q32 白杠）
+        content.removeAllViews();
+        content.addView(buildAboutPage());
+        syncTopFab();
     }
 
     void closeAbout() {
-        aboutOpen = false;
-        final View sheet = aboutSheet;
-        aboutSheet = null; aboutSponsorBody = null; aboutSponsorArrow = null;
-        if (sheet != null && sheet.getParent() != null) {
-            View card = sheet instanceof ViewGroup && ((ViewGroup) sheet).getChildCount() > 1
-                ? ((ViewGroup) sheet).getChildAt(((ViewGroup) sheet).getChildCount() - 1) : null; // Q11：玻璃层垫在窗下，窗体是最后一层
-            if (card != null) {
-                card.animate().translationY(dp(this, 42)).alpha(0f)
-                    .setDuration(ANIM_DUR_SHEET_OUT).setInterpolator(ANIM_EXIT)
-                    .withEndAction(() -> {
-                        if (sheet.getParent() != null) ((ViewGroup) sheet.getParent()).removeView(sheet);
-                        restoreChrome(); // Q12
-                    }).start();
-                sheet.animate().alpha(0f).setDuration(ANIM_DUR_SHADE_OUT).setInterpolator(ANIM_EXIT).start();
-                return;
-            }
-            ((ViewGroup) sheet.getParent()).removeView(sheet);
-        }
-        restoreChrome(); // Q12
+        aboutPageOpen = false;
+        aboutSponsorBody = null; aboutSponsorArrow = null; aboutScroll = null;
+        if (navWrap != null) navWrap.setVisibility(View.VISIBLE); // Q32
+        showTab(tab);
+    }
+
+    View buildAboutPage() {
+        LinearLayout root = new LinearLayout(this);
+        root.setOrientation(LinearLayout.VERTICAL);
+        root.setBackgroundColor(colBg()); // Q72 语义底，整页素净排版、无玻璃垫底
+
+        LinearLayout head = new LinearLayout(this);
+        head.setOrientation(LinearLayout.HORIZONTAL);
+        head.setGravity(Gravity.CENTER_VERTICAL);
+        head.setPadding(dp(this, 14), pageTopPad(), dp(this, 14), dp(this, 6));
+        root.addView(head);
+        Button back = new Button(this);
+        back.setText("‹ 返回"); back.setTextSize(14); back.setAllCaps(false);
+        back.setBackground(roundRect(colSurface(), 12, this));
+        back.setTextColor(colText());
+        back.setOnClickListener(v -> { haptic(); closeAbout(); });
+        head.addView(back, new LinearLayout.LayoutParams(dp(this, 84), dp(this, 38)));
+        TextView ht = tv(this, S("about"), 17, colText(), true);
+        LinearLayout.LayoutParams htlp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+        htlp.leftMargin = dp(this, 10);
+        head.addView(ht, htlp);
+
+        aboutScroll = new ScrollView(this);
+        thinScrollbar(aboutScroll);
+        LinearLayout body = buildAboutBody();
+        aboutScroll.addView(body);
+        if (Build.VERSION.SDK_INT >= 23) aboutScroll.setOnScrollChangeListener((v, sx, sy, ox, oy) -> updateTopFabVisibility(sy));
+        FrameLayout wrap = new FrameLayout(this);
+        wrap.addView(aboutScroll, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        attachDragBar(wrap, aboutScroll, false, 8, 8);
+        root.addView(wrap, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
+        // Q64 同口径轻入场：淡入+轻上移，不抓图不采样
+        root.setAlpha(0f); root.setTranslationY(dp(this, 4));
+        root.animate().alpha(1f).translationY(0f).setDuration(ANIM_DUR_FADE).setInterpolator(ANIM_ENTER).start();
+        return root;
     }
 
     LinearLayout buildAboutBody() {
         LinearLayout page = new LinearLayout(this);
         page.setOrientation(LinearLayout.VERTICAL);
-        page.setPadding(dp(this, 18), dp(this, 18), dp(this, 18), dp(this, 18) + navBarH()); // Q45：关于窗贴底后关闭钮靠底部留白避开手势条
+        page.setPadding(dp(this, 16), dp(this, 10), dp(this, 16), dp(this, 24) + navBarH()); // Q88 整页：底部留白避手势条，dock 已藏
 
-        // hero：图标 + 卡盒 + 版本（对照 .about-hero）
+        // hero：图标 + 卡盒 + 版本（对照 .about-hero；Q88 整页后深色走语义面，不再写死浅底）
         LinearLayout hero = new LinearLayout(this);
         hero.setOrientation(LinearLayout.HORIZONTAL);
         hero.setGravity(Gravity.CENTER_VERTICAL);
-        GradientDrawable hg = new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
-            new int[]{Color.rgb(0xF7, 0xFA, 0xFD), Color.rgb(0xEE, 0xF4, 0xFA)});
-        hg.setCornerRadius(dp(this, 16));
-        hg.setStroke(dp(this, 1), Color.rgb(0xDB, 0xE7, 0xF3));
-        hero.setBackground(hg);
+        if (darkEff()) {
+            hero.setBackground(roundRect(colSurface(), 16, this));
+        } else {
+            GradientDrawable hg = new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
+                new int[]{Color.rgb(0xF7, 0xFA, 0xFD), Color.rgb(0xEE, 0xF4, 0xFA)});
+            hg.setCornerRadius(dp(this, 16));
+            hg.setStroke(dp(this, 1), Color.rgb(0xDB, 0xE7, 0xF3));
+            hero.setBackground(hg);
+        }
         hero.setPadding(dp(this, 16), dp(this, 14), dp(this, 16), dp(this, 14));
         page.addView(hero, new LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
@@ -12950,43 +12926,89 @@ public class MainActivity extends Activity {
         LinearLayout.LayoutParams htlp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
         htlp.leftMargin = dp(this, 14);
         hero.addView(heroTx, htlp);
-        heroTx.addView(tv(this, "卡盒", 19, Color.rgb(0x1C, 0x1C, 0x1E), true));
-        TextView ver = tv(this, "版本 " + appVersion(), 12.5f, Color.rgb(0x8E, 0x8E, 0x93), false);
+        heroTx.addView(tv(this, "卡盒", 19, colText(), true));
+        TextView ver = tv(this, "版本 " + appVersion(), 12.5f, colText2(), false);
         LinearLayout.LayoutParams vlp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         vlp.topMargin = dp(this, 2);
         heroTx.addView(ver, vlp);
 
-        TextView desc = tv(this, "银行借记卡资料库：收录国内主要银行发行的借记卡，支持按卡组织、发卡行、特点筛选，数据内置、离线可用。你也可以收藏「我的卡片」，或添加自定义卡片。", 14.5f, Color.rgb(0x1C, 0x1C, 0x1E), false);
+        // Q88 分区一：应用简介（文案逐字照混合版 .about-desc）
+        TextView secIntro = tvW(this, "应用简介", 15, colText(), 700);
+        LinearLayout.LayoutParams siLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        siLp.topMargin = dp(this, 18);
+        page.addView(secIntro, siLp);
+        TextView desc = tv(this, "银行借记卡资料库：收录国内主要银行发行的借记卡，支持按卡组织、发卡行、特点筛选，数据内置、离线可用。你也可以收藏「我的卡片」，或添加自定义卡片。", 14.5f, colText(), false);
         desc.setLineSpacing(0, 1.45f);
         LinearLayout.LayoutParams dlp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        dlp.topMargin = dp(this, 10);
+        dlp.topMargin = dp(this, 8);
         page.addView(desc, dlp);
 
-        TextView src = tv(this, "数据来源为各银行公开资料整理，部分字段标注「待核实」，仅供参考，不构成办卡建议。", 12, Color.rgb(0x8E, 0x8E, 0x93), false);
+        // Q88 分区二：数据来源与参考来源（只文字注记、不跳转，承 06:38 口径；文案首句逐字照混合版）
+        TextView secSrc = tvW(this, "数据来源与参考来源", 15, colText(), 700);
+        LinearLayout.LayoutParams ssLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        ssLp.topMargin = dp(this, 18);
+        page.addView(secSrc, ssLp);
+        TextView src = tv(this, "数据来源为各银行公开资料整理，部分字段标注「待核实」，仅供参考，不构成办卡建议。", 12.5f, colText2(), false);
         src.setLineSpacing(0, 1.45f);
         LinearLayout.LayoutParams slp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         slp.topMargin = dp(this, 8);
         page.addView(src, slp);
+        String[] srcLines = {
+            "· 各银行官网公开的产品页、收费标准与权益说明（卡面、费率与权益以发卡行最新公布为准）",
+            "· 银联、Visa、Mastercard、American Express、JCB 等卡组织公开资料",
+            "· 卡盒数据仓（cards.json）随版本经 OTA 更新，更新前会先提示、经确认才应用",
+            "· 版式与字段结构研读参考：公开卡片资料站与开源卡包类应用（仅研读结构与口径，代码全部手写，未抄录）"
+        };
+        for (String ln : srcLines) {
+            TextView lt = tv(this, ln, 12.5f, colText2(), false);
+            lt.setLineSpacing(0, 1.45f);
+            LinearLayout.LayoutParams llp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            llp.topMargin = dp(this, 5); llp.leftMargin = dp(this, 2);
+            page.addView(lt, llp);
+        }
 
-        // 赞助展开行（对照 #sponsorToggle）
+        // Q88 分区三：版本与更新日志（版本号实时读安装包与数据版本，日志走既有整页）
+        TextView secVer = tvW(this, "版本与更新日志", 15, colText(), 700);
+        LinearLayout.LayoutParams svLp2 = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        svLp2.topMargin = dp(this, 18);
+        page.addView(secVer, svLp2);
+        TextView verInfo = tv(this, "应用版本 " + appVersion() + " · 数据版本 v" + Store.dataVersion + " · " + Store.all.size() + " 张卡", 12.5f, colText2(), false);
+        LinearLayout.LayoutParams viLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        viLp.topMargin = dp(this, 8);
+        page.addView(verInfo, viLp);
+        TextView logLink = tvW(this, "查看更新日志 ›", 13.5f, accentColor(), 700);
+        logLink.setBackground(rippleBg(colSurface(), 12));
+        logLink.setPadding(dp(this, 14), dp(this, 11), dp(this, 14), dp(this, 11));
+        LinearLayout.LayoutParams lgLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        lgLp.topMargin = dp(this, 8);
+        page.addView(logLink, lgLp);
+        logLink.setOnClickListener(v -> { haptic(); aboutPageOpen = false; aboutScroll = null; showChangelog(); });
+
+        // Q88 分区四：请作者喝咖啡（展开与真码沿 Q46，未改保存链）
+        TextView secCoffee = tvW(this, "支持作者", 15, colText(), 700);
+        LinearLayout.LayoutParams scLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        scLp.topMargin = dp(this, 18);
+        page.addView(secCoffee, scLp);
+
+        // 赞助展开行（对照 #sponsorToggle；Q88 整页后底色走语义面）
         LinearLayout toggle = new LinearLayout(this);
         toggle.setOrientation(LinearLayout.HORIZONTAL);
         toggle.setGravity(Gravity.CENTER_VERTICAL);
         toggle.setClipToOutline(true);
         GradientDrawable tg = new GradientDrawable();
-        tg.setColor(Color.rgb(0xF7, 0xF8, 0xFA)); tg.setCornerRadius(dp(this, 14));
-        tg.setStroke(dp(this, 1), Color.argb(18, 20, 30, 60));
+        tg.setColor(colSurface()); tg.setCornerRadius(dp(this, 14));
+        tg.setStroke(dp(this, 1), colDivider());
         toggle.setBackground(new RippleDrawable(ColorStateList.valueOf(Color.argb(38, 10, 92, 214)), tg, null));
         toggle.setPadding(dp(this, 16), dp(this, 13), dp(this, 16), dp(this, 13));
         LinearLayout.LayoutParams tolp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        tolp.topMargin = dp(this, 14);
+        tolp.topMargin = dp(this, 10);
         page.addView(toggle, tolp);
         toggle.addView(new CoffeeIconView(this), new LinearLayout.LayoutParams(dp(this, 19), dp(this, 19)));
-        TextView sponsorTx = tv(this, "请作者喝杯咖啡", 13.5f, Color.rgb(0x1C, 0x1C, 0x1E), true);
+        TextView sponsorTx = tv(this, "请作者喝杯咖啡", 13.5f, colText(), true);
         LinearLayout.LayoutParams stlp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
         stlp.leftMargin = dp(this, 8);
         toggle.addView(sponsorTx, stlp);
-        aboutSponsorArrow = tv(this, "›", 18, Color.rgb(0x8E, 0x8E, 0x93), false);
+        aboutSponsorArrow = tv(this, "›", 18, colText2(), false);
         aboutSponsorArrow.setGravity(Gravity.CENTER);
         toggle.addView(aboutSponsorArrow, new LinearLayout.LayoutParams(dp(this, 20), dp(this, 20)));
 
@@ -12994,7 +13016,7 @@ public class MainActivity extends Activity {
         final LinearLayout sponsor = new LinearLayout(this);
         sponsor.setOrientation(LinearLayout.VERTICAL);
         sponsor.setGravity(Gravity.CENTER_HORIZONTAL);
-        sponsor.setBackground(roundRect(Color.rgb(0xF7, 0xF8, 0xFA), 14, this));
+        sponsor.setBackground(roundRect(colSurface(), 14, this));
         sponsor.setPadding(dp(this, 14), dp(this, 14), dp(this, 14), dp(this, 14));
         LinearLayout.LayoutParams splp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         splp.topMargin = dp(this, 10);
@@ -13002,7 +13024,7 @@ public class MainActivity extends Activity {
         sponsor.setVisibility(View.GONE);
         page.addView(sponsor);
         aboutSponsorBody = sponsor;
-        TextView spTx = tv(this, "如果卡盒对你有用，欢迎赞助支持开发～", 12, Color.rgb(0x8E, 0x8E, 0x93), false);
+        TextView spTx = tv(this, "如果卡盒对你有用，欢迎赞助支持开发～", 12, colText2(), false);
         spTx.setGravity(Gravity.CENTER);
         sponsor.addView(spTx, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
 
@@ -13027,7 +13049,7 @@ public class MainActivity extends Activity {
             qlp.gravity = Gravity.CENTER_HORIZONTAL;
             sponsor.addView(qrCard, qlp);
         } else {
-            TextView ph = tv(this, "收款码加载失败", 12, Color.rgb(0x8E, 0x8E, 0x93), false);
+            TextView ph = tv(this, "收款码加载失败", 12, colText2(), false);
             ph.setGravity(Gravity.CENTER);
             LinearLayout.LayoutParams qlp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
             qlp.topMargin = dp(this, 10); qlp.bottomMargin = dp(this, 12);
@@ -13058,18 +13080,6 @@ public class MainActivity extends Activity {
             }
         });
 
-        Button close = new Button(this);
-        close.setText("关闭"); close.setTextSize(15); close.setAllCaps(false);
-        close.setTextColor(Color.rgb(0x00, 0x7A, 0xFF));
-        try { close.setTypeface(close.getTypeface(), android.graphics.Typeface.BOLD); } catch (Exception e) {}
-        GradientDrawable cbg = new GradientDrawable();
-        cbg.setColor(Color.argb(140, 255, 255, 255)); cbg.setCornerRadius(dp(this, 14));
-        cbg.setStroke(dp(this, 1), Color.argb(140, 255, 255, 255));
-        close.setBackground(cbg);
-        close.setOnClickListener(v -> { haptic(); closeAbout(); });
-        LinearLayout.LayoutParams clp2 = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(this, 50));
-        clp2.topMargin = dp(this, 14);
-        page.addView(close, clp2);
         return page;
     }
 
@@ -14109,7 +14119,7 @@ public class MainActivity extends Activity {
         if (moreMenuOverlay != null) { closeMoreMenu(); return; }
         if (floatSearchOpen) { closeFloatSearch(); return; }
         if (cardMenuPop != null) { closeCardMenu(); return; }
-        if (aboutOpen) { closeAbout(); return; }
+        if (aboutPageOpen) { closeAbout(); return; }
         if (helloOpen) { closeHello(); return; }
         if (welcomeOpen) { closeWelcome(); return; }
         if (changelogOpen) { closeChangelog(); return; }
