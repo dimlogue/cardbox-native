@@ -1285,9 +1285,18 @@ public class MainActivity extends Activity {
     // dark thin tint. Pieces: float toast/undo bar, more-menu, detail close, card +/check (Q47),
     // search/filter fabs, top fab, dock, search capsules. Sampling stays Q29/Q41 static-band:
     // refresh on settle/tab-switch only, zero capture while scrolling, no Bitmap.recycle (Q21).
-    // Q97：透明程度三档的染色浓淡倍率——薄透更清透、毛玻璃为现行基准（1.0 不动旧观感）。
-    // 只缩放填充 alpha，描边高光不参与（那是边缘顺滑，不是染色）。
-    float glassTintScale() { return glassLevel <= 0 ? 0.70f : glassLevel == 1 ? 0.88f : 1.0f; }
+    // Q97：透明程度三档的染色浓淡倍率——只缩放填充 alpha，描边高光不参与（那是边缘顺滑，不是染色）。
+    // Q105 改档距（2.19，用户 21:36 点名「选了没什么改变」）：旧三档 0.70/0.88/1.0 步距
+    // 太小、且只有染色一轴在动，1 与 2 档肉眼几乎无差。改四轴联动拉开：染色本系数
+    // 0.45/0.72/1.00、wash 独立系数 glassWashScale 0.30/0.62/1.00、模糊半径
+    // BACKDROP_BLUR_R 2/4/6、饱和 BACKDROP_SAT 1.20/1.55/1.90。0=薄透：染色与 wash
+    // 只剩小半、糊最轻，背后内容最清楚但仍隔一层带色雾面（不是清玻璃、更不是白
+    // 塑料）；2=毛玻璃（默认）：染色满格、糊度较旧默认（半径 5）微升一档，守住 Q97
+    // 以来用户认过的浓档观感。糊层 bitmap 自身的 alpha 不分档——frozen/过期帧与
+    // 真实页面叠加会透出重影，清晰度差改由模糊＋饱和承担。窗级玻璃 glassWindowTint
+    // 不跟档：Q103 按用户点名定的近实档（菜单透出背后开关显脏），不许薄透请回来。
+    float glassTintScale() { return glassLevel <= 0 ? 0.45f : glassLevel == 1 ? 0.72f : 1.0f; }
+    float glassWashScale() { return glassLevel <= 0 ? 0.30f : glassLevel == 1 ? 0.62f : 1.0f; }
     static int scaleColorAlpha(int color, float scale) {
         int a = Math.round(Color.alpha(color) * scale);
         if (a < 0) a = 0; if (a > 255) a = 255;
@@ -1309,7 +1318,7 @@ public class MainActivity extends Activity {
     }
     GradientDrawable glassWashDrawable(float radiusDp, boolean oval) {
         GradientDrawable g;
-        float ts = glassTintScale();
+        float ts = glassWashScale(); // Q105：wash 独立档距（旧实现与染色同系数，1/2 档差被染色盖住）
         if (darkEff()) {
             g = new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
                 new int[]{scaleColorAlpha(Color.argb(34, 255, 255, 255), ts), scaleColorAlpha(Color.argb(22, 255, 255, 255), ts)});
@@ -1635,14 +1644,14 @@ public class MainActivity extends Activity {
     // ColorMatrixColorFilter 施加。每件玻璃层 onDraw 只把这张共享背板按自身与根视图
     // 的屏幕位差对位绘出（与 Q90 同一组对位数学），故糊层跟随身后内容滚动。
     // 抓图节流 50ms（preDraw 只在有重绘时触发，静止零开销）；模糊半径已按
-    // 「等效全分辨率 σ≈28px」在 0.20 降采样下折算，强度三档由设置页「透明程度」
+    // 「等效全分辨率 σ≈34px（浓档）」在 0.20 降采样下折算，强度三档由设置页「透明程度」
     // 成套映射（半径/饱和/染色 alpha，见 BACKDROP_BLUR_R / BACKDROP_SAT / glassTintScale）。
     // 自检降级：抓图/模糊/绘制任一环抛 Throwable → disableGlassNow 一次性持久关停
     // （Java 层记账、写 pref），玻璃件整面隐藏回静态染色兜底，绝不重试、不带走进程。
     // 位图纪律同 Q21：背板图只复用/解引用，绝不主动 Bitmap.recycle()。
     static final float BACKDROP_SCALE = 0.20f;
-    static final int[] BACKDROP_BLUR_R = {2, 3, 5};        // 薄透≈10px / 标准≈18px / 毛玻璃≈28px（全分辨率 σ 折算）
-    static final float[] BACKDROP_SAT = {1.35f, 1.6f, 1.9f};
+    static final int[] BACKDROP_BLUR_R = {2, 4, 6};        // Q105 拉档距（旧 2/3/5）：薄透≈10px / 标准≈22px / 毛玻璃≈34px（全分辨率 σ 折算）
+    static final float[] BACKDROP_SAT = {1.20f, 1.55f, 1.9f}; // Q105 拉档距（旧 1.35/1.6/1.9）：薄透近原色、浓档仍是 Q99 基准 1.9
     static final long BACKDROP_MIN_INTERVAL_MS = 50;
     Bitmap backdropBmp = null;
     boolean backdropCapturing = false;
@@ -1902,9 +1911,8 @@ public class MainActivity extends Activity {
     }
 
     /** 手写盒式模糊（三遍滑动窗均值近似高斯，边缘钳制取样）；直接在像素数组上原地进行。 */
-    static void boxBlurPass(int[] px, int w, int h, int r) {
+    static void boxBlurPass(int[] px, int w, int h, int r, int[] tmp) {
         if (r < 1 || w <= 0 || h <= 0) return;
-        int[] tmp = new int[px.length];
         int win = 2 * r + 1;
         // 横向
         for (int y = 0; y < h; y++) {
@@ -1943,14 +1951,21 @@ public class MainActivity extends Activity {
         }
     }
 
+    // Q105（2.19）：模糊暂存数组跨次复用——旧实现每遍 boxBlurPass 都 new 一块与整带
+    // 等大的 int[]（一张带约 37 万像素≈1.5MB），一帧抓图三遍、甩动中约每 500ms 一帧，
+    // 主线程上稳定制造 GC 压力。算法与产出像素逐字不变，只换暂存来源（抓图只在主
+    // 线程跑，静态复用无并发问题）；px 本身仍每帧新取（位图内容在变，不复用）。
+    static int[] blurScratch = null;
+
     static void stackBlur(Bitmap bmp, int radius) {
         int w = bmp.getWidth(), h = bmp.getHeight();
         if (w <= 0 || h <= 0 || radius < 1) return;
         int[] px = new int[w * h];
         bmp.getPixels(px, 0, w, 0, 0, w, h);
-        boxBlurPass(px, w, h, radius);
-        boxBlurPass(px, w, h, radius);
-        boxBlurPass(px, w, h, radius);
+        if (blurScratch == null || blurScratch.length < px.length) blurScratch = new int[px.length];
+        boxBlurPass(px, w, h, radius, blurScratch);
+        boxBlurPass(px, w, h, radius, blurScratch);
+        boxBlurPass(px, w, h, radius, blurScratch);
         bmp.setPixels(px, 0, w, 0, 0, w, h);
     }
 
@@ -2364,13 +2379,31 @@ public class MainActivity extends Activity {
         try { sansBoldTf = android.graphics.Typeface.createFromAsset(c.getAssets(), "fonts/sans-bold.ttf"); } catch (Throwable e) { sansBoldTf = null; }
     }
 
+    // Q105（2.19）：字重合成结果缓存——旧实现每个 TextView 取字都新建一个 Typeface
+    // （create(base, w)），一页列表几百个文本视图、整页重建（切页/换深色/切档）时
+    // 逐个新建又逐个弃置。Typeface 不可变、可安全共享，按（基字体身份＋字重＋斜体）
+    // 缓存合成结果，产出与逐次新建逐字等价；基字体只有内置三档/宋体/自定义/系统
+    // 寥寥数个，缓存天然有界。取字全在主线程，预解码线程不碰字体，普通 HashMap 够用。
+    static final java.util.Map<String, android.graphics.Typeface> tfWCache = new java.util.HashMap<>();
+
+    static android.graphics.Typeface tfWeight(android.graphics.Typeface base, int weight) {
+        if (base == null) return null;
+        int w = Math.max(100, Math.min(1000, weight));
+        String k = System.identityHashCode(base) + ":" + w;
+        android.graphics.Typeface hit = tfWCache.get(k);
+        if (hit != null) return hit;
+        android.graphics.Typeface t;
+        try { t = android.graphics.Typeface.create(base, w, false); } catch (Throwable e) { t = base; }
+        if (t != null) tfWCache.put(k, t);
+        return t;
+    }
+
     static android.graphics.Typeface builtinSansTypeface(Context c, int weight) {
         ensureSansLoaded(c);
         android.graphics.Typeface base = weight >= 600 ? sansBoldTf : (weight >= 450 ? sansMediumTf : sansRegularTf);
         if (base == null) base = sansRegularTf != null ? sansRegularTf : android.graphics.Typeface.SANS_SERIF;
         if (android.os.Build.VERSION.SDK_INT >= 28) {
-            int w = Math.max(100, Math.min(1000, weight));
-            try { return android.graphics.Typeface.create(base, w, false); } catch (Throwable e) { return base; }
+            return tfWeight(base, weight);
         }
         return weight >= 600 ? android.graphics.Typeface.create(base, android.graphics.Typeface.BOLD) : base;
     }
@@ -2390,8 +2423,7 @@ public class MainActivity extends Activity {
         if (base == null) base = serifRegularTf != null ? serifRegularTf : serifBoldTf;
         if (base == null) return builtinSansTypeface(c, weight);
         if (android.os.Build.VERSION.SDK_INT >= 28) {
-            int w = Math.max(100, Math.min(1000, weight));
-            try { return android.graphics.Typeface.create(base, w, false); } catch (Throwable e) { return base; }
+            return tfWeight(base, weight); // Q105：合成结果缓存（同 builtinSansTypeface 口径）
         }
         return weight >= 600 ? android.graphics.Typeface.create(base, android.graphics.Typeface.BOLD) : base;
     }
@@ -2430,8 +2462,7 @@ public class MainActivity extends Activity {
         try { base = ensureCustomLoaded(c); } catch (Throwable ignored) { base = null; }
         if (base == null) return builtinSansTypeface(c, weight); // 回退链：自定义→软件字体（其内部再回落系统无衬线）
         if (android.os.Build.VERSION.SDK_INT >= 28) {
-            int w = Math.max(100, Math.min(1000, weight));
-            try { return android.graphics.Typeface.create(base, w, false); } catch (Throwable e) { return base; }
+            return tfWeight(base, weight); // Q105：合成结果缓存（同 builtinSansTypeface 口径）
         }
         return weight >= 600 ? android.graphics.Typeface.create(base, android.graphics.Typeface.BOLD) : base;
     }
@@ -2443,8 +2474,7 @@ public class MainActivity extends Activity {
         if (!"system".equals(fontMode)) return builtinSansTypeface(c, weight);
         android.graphics.Typeface base = android.graphics.Typeface.SANS_SERIF;
         if (android.os.Build.VERSION.SDK_INT >= 28) {
-            int w = Math.max(100, Math.min(1000, weight));
-            return android.graphics.Typeface.create(base, w, false);
+            return tfWeight(base, weight); // Q105：合成结果缓存（同 builtinSansTypeface 口径）
         }
         return weight >= 600 ? android.graphics.Typeface.create(base, android.graphics.Typeface.BOLD)
             : android.graphics.Typeface.create(base, android.graphics.Typeface.NORMAL);
@@ -2515,6 +2545,11 @@ public class MainActivity extends Activity {
         static List<Card> all = new ArrayList<>();
         static Map<String, Card> byId = new HashMap<>();
         static int dataVersion = 0;
+        // Q105（2.19）：包内资产自带数据的版本（与 dataVersion=当前生效数据版本分开记）——
+        // 生效版本高于它时说明在跑 OTA 新数据，同名卡图应优先远程新图（Img.preferRemote），
+        // 否则包内旧图会永久压住远端新图（v37 旋转新图真机仍旧图即此病）。只在 load() 里
+        // 由资产 JSON 自身版本落定，OTA 应用不改它（资产不可变）。
+        static int bundledVersion = -1;
 
         static String readAll(InputStream in) throws Exception {
             ByteArrayOutputStream bos = new ByteArrayOutputStream();
@@ -2580,6 +2615,7 @@ public class MainActivity extends Activity {
             if (!all.isEmpty()) return;
             String assetJson = null;
             try { assetJson = readAll(c.getAssets().open("data/cards.json")); } catch (Exception e) { /* 读不到走空 */ }
+            if (assetJson != null) bundledVersion = versionOf(assetJson); // Q105：包内资产版本落定（Img 取源优先级依据）
             // OTA 文件（filesDir/cards-ota.json）比内置新才优先用它（对照混合版 boot 的 OTA 优先逻辑）
             String otaJson = null;
             try {
@@ -2643,66 +2679,127 @@ public class MainActivity extends Activity {
             return new File(new File(c.getFilesDir(), "ota-images"), "v" + Math.max(0, v));
         }
 
+        // Q105（2.19）取源优先级修正：旧实现无条件资产优先——包里有的图永远用包里的，
+        // OTA 数据升版后同名新图（v37 的 15 张旋转填满）被旧合成图永久压住，用户更新了
+        // 数据真机仍看旧图。改：生效数据版本高于包内资产版本时，远程（版本化缓存目录）
+        // 优先；远程文件还没下到时先用包内图顶着（不入缓存，落盘后下次构建自动接管），
+        // 两源都解码失败才回占位。2.15 的版本化目录（remoteCacheDir 按 dataVersion 分）
+        // 原样保留，磁盘口径零变化；数据应用成功时另由 applyPendingUpdate 清内存缓存，
+        // 保证同进程内更新即刻换图。
+        static boolean preferRemote() {
+            return Store.bundledVersion >= 0 && Store.dataVersion > Store.bundledVersion;
+        }
+
+        static boolean remoteFileExists(Context c, String path) {
+            try { return new File(remoteCacheDir(c), new File(path).getName()).exists(); }
+            catch (Exception e) { return false; }
+        }
+
+        /** 按取源优先级开一条图流：remoteFirst 时远程文件优先（缺失触发后台拉取后回落资产），
+         *  否则资产优先（缺失回落远程文件，再缺失触发拉取并抛异常让调用方回占位）。 */
+        static InputStream openImageStream(Context c, String path, boolean remoteFirst) throws Exception {
+            File f = new File(remoteCacheDir(c), new File(path).getName());
+            if (remoteFirst) {
+                if (f.exists()) return new FileInputStream(f);
+                fetchRemote(c.getApplicationContext(), path, f);
+                return c.getAssets().open(path);
+            }
+            try { return c.getAssets().open(path); }
+            catch (Exception e) {
+                if (f.exists()) return new FileInputStream(f);
+                fetchRemote(c.getApplicationContext(), path, f);
+                throw e;
+            }
+        }
+
+        static int bucketFor(int targetW) { return Math.max(64, (targetW + 63) / 64 * 64); }
+
         static Bitmap get(Context c, String path) {
             if (path == null || path.isEmpty()) return null;
             Bitmap hit = cache.get(path);
             if (hit != null) return hit;
-            try {
-                Bitmap b = decode(c.getAssets().open(path));
-                if (b != null) { cache.put(path, b); return b; }
-            } catch (Exception e) { /* 内置没有（OTA 新卡图）走远程兜底 */ }
-            // OTA 新卡的图不在安装包里：先读已缓存的远程图，没有就后台拉一次（数据仓 images/ 同步自 publish-data）
-            try {
-                File f = new File(remoteCacheDir(c), new File(path).getName());
-                if (f.exists()) {
-                    Bitmap b = decode(new FileInputStream(f));
-                    if (b != null) { cache.put(path, b); return b; }
-                }
-                fetchRemote(c.getApplicationContext(), path, f);
-            } catch (Exception e) { /* 拿不到图就占位，不崩 */ }
+            boolean remoteFirst = preferRemote();
+            // 远程优先但新图未落盘时包内图只是过渡帧，不入缓存——免得刚下到的新图被它顶住
+            boolean provisional = remoteFirst && !remoteFileExists(c, path);
+            Bitmap b = null;
+            try { b = decode(openImageStream(c, path, remoteFirst)); } catch (Exception e) { /* 换另一源再试 */ }
+            if (b == null) {
+                try { b = decode(openImageStream(c, path, !remoteFirst)); } catch (Exception e) { /* 拿不到图就占位，不崩 */ }
+            }
+            if (b != null) { if (!provisional) cache.put(path, b); return b; }
             return null;
         }
 
         // Q99：按显示尺寸解码——先探边界算采样率，解码结果落在目标宽最近的一档（2 的幂），
         // 缓存键带尺寸桶，不同列数瓷砖各取所需；详情大图/展柜仍走 get() 全量解码。
+        // Q105（2.19）：解码端再叠密度缩放——2 的幂采样后仍可达近 2 倍桶宽（如 2160 源在
+        // 576 桶下采样到 1080），像素数约 4 倍于显示所需，列表构建逐张在主线程白付这笔
+        // 解码/上传/合成。用 inDensity/inTargetDensity 让解码器在解码期就缩到桶宽，产出
+        // 像素与旧实现同构图、同裁切（insetFaceCrop 照旧），个别机型忽略密度缩放时自然
+        // 回落采样结果（旧行为）。取源走 openImageStream（远程优先口径同 get()）。
         static Bitmap getSized(Context c, String path, int targetW) {
             if (path == null || path.isEmpty() || targetW <= 0) return get(c, path);
-            int bucket = Math.max(64, (targetW + 63) / 64 * 64);
+            int bucket = bucketFor(targetW);
             String key = path + "@" + bucket;
             Bitmap hit = cache.get(key);
             if (hit != null) return hit;
-            Bitmap b = null;
-            try { b = decodeSized(c.getAssets().open(path), c, path, bucket); }
-            catch (Exception e) { /* 内置没有走 OTA 文件兜底 */ }
-            if (b == null) {
-                try {
-                    File f = new File(remoteCacheDir(c), new File(path).getName());
-                    if (f.exists()) b = decodeSized(new FileInputStream(f), c, path, bucket);
-                    else fetchRemote(c.getApplicationContext(), path, f);
-                } catch (Exception e) { /* 拿不到图就占位，不崩 */ }
-            }
-            if (b != null) { cache.put(key, b); return b; }
+            boolean remoteFirst = preferRemote();
+            boolean provisional = remoteFirst && !remoteFileExists(c, path);
+            Bitmap b = decodeSized(c, path, bucket, remoteFirst);
+            if (b == null) b = decodeSized(c, path, bucket, !remoteFirst); // 主源解码失败换另一源（旧版双源兜底同语义）
+            if (b != null) { if (!provisional) cache.put(key, b); return b; }
             return null;
         }
 
-        static Bitmap decodeSized(InputStream probe, Context c, String path, int bucket) {
+        static Bitmap decodeSized(Context c, String path, int bucket, boolean remoteFirst) {
             Bitmap b = null;
             try {
                 BitmapFactory.Options bo = new BitmapFactory.Options();
                 bo.inJustDecodeBounds = true;
+                InputStream probe = openImageStream(c, path, remoteFirst);
                 BitmapFactory.decodeStream(probe, null, bo);
                 try { probe.close(); } catch (Exception ignored) {}
+                if (bo.outWidth <= 0) return null;
                 int ss = 1;
-                if (bo.outWidth > 0) { while (ss < 16 && bo.outWidth / (ss * 2) >= bucket) ss *= 2; }
+                while (ss < 16 && bo.outWidth / (ss * 2) >= bucket) ss *= 2;
+                int sampledW = Math.max(1, bo.outWidth / ss);
                 BitmapFactory.Options op = new BitmapFactory.Options();
                 op.inSampleSize = ss;
-                InputStream in2;
-                try { in2 = c.getAssets().open(path); }
-                catch (Exception e) { in2 = new FileInputStream(new File(remoteCacheDir(c), new File(path).getName())); }
+                if (sampledW > bucket) { // Q105：解码期缩到桶宽（源宽恒 ≥ 显示宽，桶已向上取整到 64）
+                    op.inScaled = true;
+                    op.inDensity = sampledW;
+                    op.inTargetDensity = bucket;
+                }
+                InputStream in2 = openImageStream(c, path, remoteFirst);
                 b = BitmapFactory.decodeStream(in2, null, op);
                 try { in2.close(); } catch (Exception ignored) {}
             } catch (Exception e) { /* 解码失败回落占位 */ }
             return insetFaceCrop(b);
+        }
+
+        // Q105（2.19）：后台预解码——分帧构建列表时，下一帧的卡图先在单线程后台解进
+        // 同一 LruCache（同键同桶同产出），构建到那帧时直接命中，主线程不再逐张付解码。
+        // 只提前不改产出：图还是同一张图、同一桶位；预解码没赶上时构建照旧同步解码。
+        static final java.util.concurrent.ExecutorService decodePool =
+            java.util.concurrent.Executors.newSingleThreadExecutor(r -> {
+                Thread t = new Thread(r, "cardimg-decode");
+                t.setDaemon(true);
+                return t;
+            });
+        static final java.util.Set<String> decodeBusy = java.util.Collections.synchronizedSet(new java.util.HashSet<>());
+
+        static void prefetchSized(final Context c, final String path, final int targetW) {
+            if (path == null || path.isEmpty() || targetW <= 0) return;
+            final String key = path + "@" + bucketFor(targetW);
+            if (cache.get(key) != null) return;
+            if (!decodeBusy.add(key)) return;
+            final Context app = c.getApplicationContext();
+            try {
+                decodePool.execute(() -> {
+                    try { getSized(app, path, targetW); } catch (Throwable ignored) { /* 预热失败构建时同步解码兜底 */ }
+                    finally { decodeBusy.remove(key); }
+                });
+            } catch (Throwable t) { decodeBusy.remove(key); }
         }
 
         static void fetchRemote(final Context ctx, final String path, final File dest) {
@@ -5765,11 +5862,23 @@ public class MainActivity extends Activity {
     class MineAddBtn extends View {
         boolean on = false;
         MineFrost frost = null;
+        // Q105（2.19）：onDraw 零分配——旧实现每次绘制 new 2 个 Paint＋2 条 Path＋1 个
+        // LinearGradient；玻璃条带抓图是软件 Canvas 重跑整棵可见瓷砖树（甩动中约每
+        // 500ms 一次），这些分配按可见瓷砖数成倍落在抓图帧里。画笔/路径提为字段复用，
+        // 渐变按（顶,底）坐标缓存。绘制指令与产出像素逐字不变。
+        final Paint btnP = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.FILTER_BITMAP_FLAG);
+        final Paint btnSheen = new Paint(Paint.ANTI_ALIAS_FLAG);
+        final android.graphics.Path btnCircle = new android.graphics.Path();
+        final android.graphics.Path btnCheck = new android.graphics.Path();
+        final RectF btnRect = new RectF();
+        float btnSheenTop = Float.NaN, btnSheenBot = Float.NaN;
         MineAddBtn(Context ctx) { super(ctx); setClickable(true); setFocusable(false); }
         void setOn(boolean v) { on = v; invalidate(); }
         void setCardImage(Bitmap src, String key) { frost = makeMineFrost(src, key == null ? null : "minefrost:" + key); }
         @Override protected void onDraw(Canvas cv) {
-            Paint p = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.FILTER_BITMAP_FLAG);
+            Paint p = btnP;
+            p.setShader(null);
+            p.clearShadowLayer();
             float cx = getWidth() / 2f, cy = getHeight() / 2f;
             float r = Math.min(getWidth(), getHeight()) / 2f;
             if (r <= 0) return;
@@ -5783,11 +5892,12 @@ public class MainActivity extends Activity {
             cv.drawCircle(cx, cy + r * 0.07f, r * 0.99f, p);
             // 圆形裁切内铺磨砂片（钮身下卡图的低清高斯），无卡图时浅白提亮兜底
             cv.save();
-            android.graphics.Path circle = new android.graphics.Path();
-            circle.addCircle(cx, cy, r, android.graphics.Path.Direction.CW);
-            cv.clipPath(circle);
+            btnCircle.reset();
+            btnCircle.addCircle(cx, cy, r, android.graphics.Path.Direction.CW);
+            cv.clipPath(btnCircle);
             if (frost != null && frost.bmp != null && !frost.bmp.isRecycled()) {
-                cv.drawBitmap(frost.bmp, null, new RectF(cx - r, cy - r, cx + r, cy + r), p);
+                btnRect.set(cx - r, cy - r, cx + r, cy + r);
+                cv.drawBitmap(frost.bmp, null, btnRect, p);
             } else {
                 p.setStyle(Paint.Style.FILL);
                 p.setColor(Color.argb(205, 246, 247, 250));
@@ -5798,11 +5908,16 @@ public class MainActivity extends Activity {
             p.setColor(on ? Color.argb(92, 0, 122, 255) : Color.argb(88, 255, 255, 255));
             cv.drawCircle(cx, cy, r, p);
             // Q102：顶部边光——上亮下无的竖向渐变压出玻璃受光面（仍在圆形裁切内）
-            Paint sheen = new Paint(Paint.ANTI_ALIAS_FLAG);
-            sheen.setShader(new android.graphics.LinearGradient(0, cy - r, 0, cy + r * 0.3f,
-                Color.argb(115, 255, 255, 255), Color.argb(0, 255, 255, 255),
-                android.graphics.Shader.TileMode.CLAMP));
+            Paint sheen = btnSheen;
+            float sheenTop = cy - r, sheenBot = cy + r * 0.3f;
+            if (sheenTop != btnSheenTop || sheenBot != btnSheenBot) {
+                sheen.setShader(new android.graphics.LinearGradient(0, sheenTop, 0, sheenBot,
+                    Color.argb(115, 255, 255, 255), Color.argb(0, 255, 255, 255),
+                    android.graphics.Shader.TileMode.CLAMP));
+                btnSheenTop = sheenTop; btnSheenBot = sheenBot;
+            }
             cv.drawCircle(cx, cy, r, sheen);
+            sheen.setShader(null);
             cv.restore();
             // 1dp 细描边（白色半透，玻璃边缘口径）
             p.setStyle(Paint.Style.STROKE);
@@ -5821,11 +5936,11 @@ public class MainActivity extends Activity {
             else p.clearShadowLayer();
             float s = r * 0.42f;
             if (on) {
-                android.graphics.Path path = new android.graphics.Path();
-                path.moveTo(cx - s, cy + s * 0.05f);
-                path.lineTo(cx - s * 0.25f, cy + s * 0.72f);
-                path.lineTo(cx + s * 1.05f, cy - s * 0.62f);
-                cv.drawPath(path, p);
+                btnCheck.reset();
+                btnCheck.moveTo(cx - s, cy + s * 0.05f);
+                btnCheck.lineTo(cx - s * 0.25f, cy + s * 0.72f);
+                btnCheck.lineTo(cx + s * 1.05f, cy - s * 0.62f);
+                cv.drawPath(btnCheck, p);
             } else {
                 cv.drawLine(cx - s, cy, cx + s, cy, p);
                 cv.drawLine(cx, cy - s, cx, cy + s, p);
@@ -5905,6 +6020,29 @@ public class MainActivity extends Activity {
     }
 
     // Q94 试点：softFace=true 仅首页瓷砖走 Soft 柔面（浅蓝白柔面＋22dp 大圆角＋柔影）；
+    // Q105（2.19）：瓷砖显示宽的单一口径——cardTile 解码与后台预解码必须算出同一桶位，
+    // 预热才命中、构建才免解码。公式与 Q75 原内联式逐字一致（可用宽÷列数）。
+    int tileWidthForCols(int nCols) {
+        int nc = (nCols >= 1 && nCols <= 4) ? nCols : 2;
+        int gapDp = nc >= 4 ? 8 : 10;
+        return (getResources().getDisplayMetrics().widthPixels - dp(this, 28) - (nc - 1) * dp(this, gapDp)) / nc;
+    }
+
+    // Q105（2.19）：给尚未构建的行提前在后台解卡图（进 Img 同一缓存同桶）；构建到时
+    // 直接命中。只提前、不改产出，第一帧同步构建的首屏节奏不动。
+    void prefetchCardRows(List<Card> list, int fromRow, int toRowExclusive) {
+        int tw = tileWidthForCols(cols);
+        int rows = (list.size() + cols - 1) / cols;
+        for (int r = Math.max(0, fromRow); r < Math.min(rows, toRowExclusive); r++) {
+            for (int k = 0; k < cols; k++) {
+                int i = r * cols + k;
+                if (i >= list.size()) break;
+                Card cc = list.get(i);
+                if (cc != null) Img.prefetchSized(this, cc.image, tw);
+            }
+        }
+    }
+
     // 其余页面（学生/我的卡片等）一律 softFace=false 不动形制，铺开须用户点头后另起一段。
     View cardTile(final Card c, ViewGroup parent, int nCols, final String acctClass, final boolean mineTile, final boolean showScoreDims, final boolean softFace) {
         LinearLayout box = new LinearLayout(this);
@@ -5916,8 +6054,7 @@ public class MainActivity extends Activity {
         // Q75：列数放行 1–4；四列列间距收至 8dp 给瓷砖让宽（行构建处同口径），图宽按真实列宽算
         int nc = (nCols >= 1 && nCols <= 4) ? nCols : 2;
         int gapDp = nc >= 4 ? 8 : 10;
-        int availW = getResources().getDisplayMetrics().widthPixels - dp(this, 28) - (nc - 1) * dp(this, gapDp);
-        int tileW = availW / nc;
+        int tileW = tileWidthForCols(nCols); // Q105：与预解码共用同一瓷砖宽口径（分桶一致才命中）
         // Q33：瓷砖圆角随图宽缩放（图宽 4% 量级），且不低于原固定 14dp——只许更圆润不许回退变尖；
         // 顶图 cover 铺满不变（Q24 优先级：铺满第一、圆角第二），四角靠外框同半径裁切、无图占位同半径。
         // Q94：首页柔面圆角下限抬到 22dp（Soft 语言 20–28 档），图区裁切同半径自动跟随。
@@ -6840,7 +6977,29 @@ public class MainActivity extends Activity {
         renderHomeList(list);
         homeRenderSig = sig;
         updateFilterFabBadge();
+        warmStudentImages(); // Q105：首页建成后顺手把学生专区卡图在后台解好，进学生页不再逐张同步解码
         if (keepY > 0 && homeScroll != null) homeScroll.post(() -> homeScroll.scrollTo(0, keepY));
+    }
+
+    // Q105（2.19）：学生页 25 张卡旧实现进页时一个同步循环里逐张解码搭完，进页瞬间
+    // 就是一记主线程重击。改为进程内首次首页渲染后在后台按学生页两种显示口径
+    // （网格瓷砖宽＋列表 72dp 拇指）预解进缓存，进页构建直接命中。只做一次，
+    // 列数设置变更后新桶位由构建时同步解码兜底（一次性，不成常态）。
+    boolean stuWarmDone = false;
+    void warmStudentImages() {
+        if (stuWarmDone) return;
+        stuWarmDone = true;
+        try {
+            int sc = Math.max(1, Math.min(3, prefs == null ? 1 : prefs.getInt("student_cols", 1)));
+            int tw = tileWidthForCols(sc);
+            int thumbW = dp(this, 72);
+            for (Card c : Store.all) {
+                if (c != null && c.studentPick) {
+                    Img.prefetchSized(this, c.image, tw);
+                    Img.prefetchSized(this, c.image, thumbW);
+                }
+            }
+        } catch (Throwable ignored) { /* 预热失败不影响任何页面 */ }
     }
 
     void renderHomeList(List<Card> list) {
@@ -6903,6 +7062,7 @@ public class MainActivity extends Activity {
         final int firstRows = Math.min(rows, 4);
         for (int r = 0; r < firstRows; r++) addCardRowAt(container, list, r, insertAt);
         if (rows <= firstRows) return;
+        prefetchCardRows(list, firstRows, firstRows + 4); // Q105：下一帧的行先在后台解图
         final int[] next = { firstRows };
         final Runnable[] step = new Runnable[1];
         step[0] = () -> {
@@ -6910,6 +7070,7 @@ public class MainActivity extends Activity {
             int end = Math.min(rows, next[0] + 4);
             for (int r = next[0]; r < end; r++) addCardRowAt(container, list, r, insertAt);
             next[0] = end;
+            if (next[0] < rows) prefetchCardRows(list, next[0], next[0] + 4); // Q105：始终领先一帧预热
             // Q95 热修（2.07）：续搭不许投给 container 自身——首页容器会被欢迎页/覆盖层摘除，
             // View.post 在未 attach 时会 park 进该视图的 RunQueue，等重挂瞬间才集中 flush，
             // 与切页淡入、玻璃背板重录挤在同一帧（清数据首启点「开始使用」闪退的 virgin 独有链路）。
@@ -8061,7 +8222,7 @@ public class MainActivity extends Activity {
         roundClip(iv, 9, this); // Q27 同机制：缩略图自身圆角裁切，不靠父行轮廓
         wizThumb.addView(iv, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         roundClip(wizThumb, 9, this);
-        Bitmap b = Img.get(this, c.image);
+        Bitmap b = Img.getSized(this, c.image, dp(this, 76)); // Q105：76dp 拇指按显示尺寸解码（旧 Img.get 全量解 2160 源，选卡窗逐行白付大解码）
         if (b != null) iv.setImageBitmap(b); // Q104/2.18：卡面组织小标全撤（同 cardTile 口径）
 
         LinearLayout info = new LinearLayout(this);
@@ -9135,7 +9296,7 @@ public class MainActivity extends Activity {
             roundClip(iv, 9, this); // Q27 同机制：缩略图自身圆角裁切，不靠父卡轮廓
             stuThumb.addView(iv, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
             roundClip(stuThumb, 9, this);
-            Bitmap b = Img.get(this, c.image);
+            Bitmap b = Img.getSized(this, c.image, dp(this, 72)); // Q105：72dp 拇指按显示尺寸解码（旧 Img.get 全量解码）
             if (b != null) iv.setImageBitmap(b); // Q104/2.18：卡面组织小标全撤（学生瓷砖同口径）
             LinearLayout tx = new LinearLayout(this);
             tx.setOrientation(LinearLayout.VERTICAL);
@@ -12267,6 +12428,11 @@ public class MainActivity extends Activity {
                 pendingUpdateJson = null; pendingUpdateVer = -1;
                 // Q98：确认应用成功才落标记——Store.load 凭此标记（且须与文件版本一致）才认 OTA 文件
                 if (prefs != null) prefs.edit().remove("pending_update_version").putInt("ota_applied_version", Store.dataVersion).apply();
+                // Q105（2.19）：数据已换版——内存图缓存仍按路径键存着旧版位图，同进程内不
+                // 清就会继续顶住新图（2.15 只做了磁盘按版本分目录，内存这层漏了）。只解除
+                // 引用交系统回收，不 recycle（Q21）；磨砂裁片缓存同清（源自旧位图派生）。
+                try { Img.cache.evictAll(); } catch (Throwable ignored) {}
+                try { mineFrostCache.evictAll(); } catch (Throwable ignored) {}
                 showFloatToast("卡片数据已更新到 v" + Store.dataVersion + "（" + Store.all.size() + " 张）");
                 pages.clear(); if (detailCard == null) rebuildPages();
             });
@@ -12960,7 +13126,7 @@ public class MainActivity extends Activity {
             face.setBackground(placeholderGradFor(it.card.id, r, this));
             ImageView iv = new ImageView(this);
             iv.setScaleType(ImageView.ScaleType.CENTER_CROP);
-            Bitmap b = Img.get(this, it.card.image);
+            Bitmap b = Img.getSized(this, it.card.image, Math.max(64, wPx)); // Q105：展柜面按实际显示宽解码（旧全量解码；源宽恒 ≥ 显示宽，画面不变）
             if (b != null) { iv.setImageBitmap(b); if (darkEff()) iv.setAlpha(0.92f); }
             face.addView(iv, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
             // Q104/2.18：卡面组织小标全撤（展柜库内卡同口径）
@@ -15870,7 +16036,8 @@ public class MainActivity extends Activity {
     }
 
     // Q97：「透明程度」三档行（与 segRow 同形制）——玻璃关时整行置灰不可点；
-    // 档位成套映射新背板三参数：模糊半径（BACKDROP_BLUR_R）/饱和（BACKDROP_SAT）/染色浓淡（glassTintScale）。
+    // 档位成套映射四参数：模糊半径（BACKDROP_BLUR_R）/饱和（BACKDROP_SAT）/染色浓淡
+    // （glassTintScale）/提亮（glassWashScale），Q105 起四轴同动拉开档距。
     void glassLevelRow(LinearLayout page) {
         final boolean enabled = !glassDisabled;
         LinearLayout box = new LinearLayout(this);
@@ -15882,7 +16049,7 @@ public class MainActivity extends Activity {
         box.setLayoutParams(blp);
         if (!enabled) box.setAlpha(0.45f);
         box.addView(tv(this, "透明程度", 14, enabled ? colText() : colText2(), true));
-        TextView dsc = tv(this, enabled ? "模糊强度、饱和与染色浓淡成套调节，默认毛玻璃" : "玻璃效果已关闭，开启后可调", 11.5f, colText2(), false);
+        TextView dsc = tv(this, enabled ? "模糊、饱和、染色与提亮成套调节，默认毛玻璃" : "玻璃效果已关闭，开启后可调", 11.5f, colText2(), false);
         LinearLayout.LayoutParams dlp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         dlp.topMargin = dp(this, 2);
         box.addView(dsc, dlp);
