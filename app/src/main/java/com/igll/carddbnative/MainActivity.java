@@ -1557,6 +1557,23 @@ public class MainActivity extends Activity {
     /** Q94 dock 染色去花：比通用玻璃染色更白更匀，糊色不抢眼（用户 19:08 点名）。 */
     GradientDrawable dockBarBg() {
         GradientDrawable g;
+        if (glassDisabled) {
+            // Q117（2.30）：玻璃关停时 GlassBackdropView 整面不画（onDraw 首行即退），dock
+            // 只剩本层染色——旧 178/166 半透压不住下层正文，「还没有自定义卡片，点＋添加」
+            // 直穿与页签字叠读（用户 00:12 图证）。关态按悬浮钮关态口径（glassFabBg）
+            // 提至近不透明作实色兜底；开态数值一字不动，仍是糊层之上的薄染色。
+            if (darkEff()) {
+                g = new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
+                    new int[]{Color.argb(232, 46, 54, 70), Color.argb(226, 36, 42, 56)});
+                g.setStroke(dp(this, 1), Color.argb(72, 255, 255, 255));
+            } else {
+                g = new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
+                    new int[]{Color.argb(238, 255, 255, 255), Color.argb(232, 247, 249, 253)});
+                g.setStroke(dp(this, 1), Color.argb(120, 255, 255, 255));
+            }
+            g.setCornerRadius(dp(this, 26));
+            return g;
+        }
         if (darkEff()) {
             g = new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
                 new int[]{Color.argb(150, 42, 50, 66), Color.argb(140, 32, 38, 52)});
@@ -1807,6 +1824,7 @@ public class MainActivity extends Activity {
         glassFailCount++;
         if (glassFailCount >= 3 && !glassDisabled) {
             glassDisabled = true;
+            refreshDockBg(); // Q117：自动关停同为关态，dock 兜底同步换上
             try { if (prefs != null) prefs.edit().putBoolean("glass_disabled", true).apply(); } catch (Throwable ignored) {}
             // clear all live glass images/effects so tint fallback shows, never drag the page down
             try {
@@ -2155,6 +2173,7 @@ public class MainActivity extends Activity {
     void disableGlassNow() {
         glassDisabled = true;
         glassAutoOff = true;
+        refreshDockBg(); // Q117：自动停用同为关态，dock 兜底同步换上
         backdropFailStreak = 0; // Q98：关停落盘后计数归零，设置页重新打开即从干净状态重试
         try { if (prefs != null) prefs.edit().putBoolean("glass_disabled", true).putBoolean("glass_auto_off", true).apply(); } catch (Throwable ignored) {}
         try {
@@ -4055,6 +4074,114 @@ public class MainActivity extends Activity {
     void refreshMineKeepScroll() {
         if (mineScrollView != null) mineScrollSaveY = mineScrollView.getScrollY();
         showTab("mine");
+    }
+
+    // Q117（2.30）：我的卡片网格就地开合——只补间行块自身高度（展开先装行再量高、
+    // 收起从当前高收 0 后清行藏起），落定回 WRAP_CONTENT；不摘页、不重抓背板、
+    // 不回滚滚动位。连点以最新一次为准（旧补间先取消，按当时高度接续）。
+    ValueAnimator mineFoldAnim = null;
+    void toggleMineRowsBox(final LinearLayout box, final List<MineRow> rows, final ScrollView sv, final boolean open) {
+        if (mineFoldAnim != null) { mineFoldAnim.cancel(); mineFoldAnim = null; }
+        final ViewGroup.LayoutParams lp = box.getLayoutParams();
+        if (open) {
+            box.removeAllViews();
+            addMineCardRows(box, rows, sv);
+            box.setVisibility(View.VISIBLE);
+            int w = box.getWidth();
+            if (w <= 0) w = getResources().getDisplayMetrics().widthPixels - dp(this, 28);
+            box.measure(View.MeasureSpec.makeMeasureSpec(w, View.MeasureSpec.EXACTLY),
+                View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED));
+            final int toH = box.getMeasuredHeight();
+            final int fromH = (lp.height > 0) ? lp.height : 0;
+            if (toH <= 0) { lp.height = ViewGroup.LayoutParams.WRAP_CONTENT; box.setLayoutParams(lp); return; }
+            lp.height = fromH; box.setLayoutParams(lp);
+            mineFoldAnim = ValueAnimator.ofInt(fromH, toH);
+            mineFoldAnim.setDuration(240);
+            mineFoldAnim.setInterpolator(ANIM_ENTER);
+            mineFoldAnim.addUpdateListener(a -> {
+                int h = (Integer) a.getAnimatedValue();
+                if (lp.height != h) { lp.height = h; box.setLayoutParams(lp); }
+            });
+            mineFoldAnim.addListener(new android.animation.AnimatorListenerAdapter() {
+                @Override public void onAnimationEnd(android.animation.Animator a) {
+                    lp.height = ViewGroup.LayoutParams.WRAP_CONTENT; box.setLayoutParams(lp);
+                    if (mineFoldAnim == a) mineFoldAnim = null;
+                }
+                @Override public void onAnimationCancel(android.animation.Animator a) {
+                    if (mineFoldAnim == a) mineFoldAnim = null;
+                }
+            });
+            mineFoldAnim.start();
+        } else {
+            final int fromH = (lp.height > 0) ? lp.height : box.getHeight();
+            if (fromH <= 0) {
+                box.removeAllViews();
+                box.setVisibility(View.GONE);
+                lp.height = ViewGroup.LayoutParams.WRAP_CONTENT; box.setLayoutParams(lp);
+                return;
+            }
+            lp.height = fromH; box.setLayoutParams(lp);
+            mineFoldAnim = ValueAnimator.ofInt(fromH, 0);
+            mineFoldAnim.setDuration(200);
+            mineFoldAnim.setInterpolator(ANIM_EXIT);
+            mineFoldAnim.addUpdateListener(a -> {
+                int h = (Integer) a.getAnimatedValue();
+                if (lp.height != h) { lp.height = h; box.setLayoutParams(lp); }
+            });
+            mineFoldAnim.addListener(new android.animation.AnimatorListenerAdapter() {
+                @Override public void onAnimationEnd(android.animation.Animator a) {
+                    box.removeAllViews();
+                    box.setVisibility(View.GONE);
+                    lp.height = ViewGroup.LayoutParams.WRAP_CONTENT; box.setLayoutParams(lp);
+                    if (mineFoldAnim == a) mineFoldAnim = null;
+                }
+                @Override public void onAnimationCancel(android.animation.Animator a) {
+                    if (mineFoldAnim == a) mineFoldAnim = null;
+                }
+            });
+            mineFoldAnim.start();
+        }
+    }
+
+    // Q117（2.30）：自定义区头部就地开合——原地换一节新构建的区＋高度补间到新高，
+    // 同折叠条口径不整页重建。新节头部点击仍回本函数，连点按当时高度接续。
+    ValueAnimator customFoldAnim = null;
+    void toggleCustomSection(final LinearLayout sec) {
+        customOpen = !customOpen;
+        final ViewGroup parent = (ViewGroup) sec.getParent();
+        if (parent == null) { refreshMineKeepScroll(); return; }
+        if (customFoldAnim != null) { customFoldAnim.cancel(); customFoldAnim = null; }
+        final int idx = parent.indexOfChild(sec);
+        final int fromH = sec.getHeight();
+        final LinearLayout fresh = (LinearLayout) buildCustomSection();
+        parent.removeView(sec);
+        parent.addView(fresh, idx);
+        mineBuiltSig = computeMineSig(); // Q116 签名与就地态对齐（customOpen 在签名内）
+        int w = parent.getWidth() - parent.getPaddingLeft() - parent.getPaddingRight();
+        if (w <= 0) w = getResources().getDisplayMetrics().widthPixels - dp(this, 28);
+        fresh.measure(View.MeasureSpec.makeMeasureSpec(w, View.MeasureSpec.EXACTLY),
+            View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED));
+        final int toH = fresh.getMeasuredHeight();
+        final ViewGroup.LayoutParams lp = fresh.getLayoutParams();
+        if (fromH <= 0 || toH <= 0) return; // 没旧高可接（异常路径）就静态换节，不硬补间
+        lp.height = fromH; fresh.setLayoutParams(lp);
+        customFoldAnim = ValueAnimator.ofInt(fromH, toH);
+        customFoldAnim.setDuration(240);
+        customFoldAnim.setInterpolator(ANIM_ENTER);
+        customFoldAnim.addUpdateListener(a -> {
+            int h = (Integer) a.getAnimatedValue();
+            if (lp.height != h) { lp.height = h; fresh.setLayoutParams(lp); }
+        });
+        customFoldAnim.addListener(new android.animation.AnimatorListenerAdapter() {
+            @Override public void onAnimationEnd(android.animation.Animator a) {
+                lp.height = ViewGroup.LayoutParams.WRAP_CONTENT; fresh.setLayoutParams(lp);
+                if (customFoldAnim == a) customFoldAnim = null;
+            }
+            @Override public void onAnimationCancel(android.animation.Animator a) {
+                if (customFoldAnim == a) customFoldAnim = null;
+            }
+        });
+        customFoldAnim.start();
     }
 
     // ---------- 全局状态 ----------
@@ -11088,13 +11215,24 @@ public class MainActivity extends Activity {
         chev.setGravity(Gravity.CENTER);
         chev.setRotation(mineOpen ? 90 : 0);
         barRow.addView(chev, new LinearLayout.LayoutParams(dp(this, 24), dp(this, 24)));
+        // Q117（2.30）：折叠改就地开合——行块装进专属容器，点头只动这块自身的高度
+        // 补间＋箭头旋转，不再 refreshMineKeepScroll 整页重建（旧页摘除→同步重建→
+        // alpha 淡入＋post 回滚，三段叠出肉眼一闪，用户 00:12 点名）。签名随手对齐，
+        // 离页回来仍复用本页、不为对齐状态再重建一次。
+        final LinearLayout mineRowsBox = new LinearLayout(this);
+        mineRowsBox.setOrientation(LinearLayout.VERTICAL);
+        inner.addView(mineRowsBox, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        if (mineOpen) addMineCardRows(mineRowsBox, mineRows, sv);
+        else mineRowsBox.setVisibility(View.GONE);
         barRow.setOnClickListener(v -> {
             haptic();
             mineOpen = !mineOpen;
             try { prefs.edit().putBoolean("mine_open", mineOpen).commit(); } catch (Throwable ignored) {}
-            refreshMineKeepScroll();
+            chev.animate().cancel();
+            chev.animate().rotation(mineOpen ? 90 : 0).setDuration(200).setInterpolator(ANIM_ENTER).start();
+            toggleMineRowsBox(mineRowsBox, mineRows, sv, mineOpen);
+            mineBuiltSig = computeMineSig(); // Q116 签名与就地态对齐
         });
-        if (mineOpen) addMineCardRows(inner, mineRows, sv);
         }
         // Q92 阅读顺序后段：工具宫格 → 自定义卡片 → 境外能力与短板（殿后，不再重复统计）
         inner.addView(buildMineToolGrid(mineRows));
@@ -11289,7 +11427,7 @@ public class MainActivity extends Activity {
         arrow.setGravity(Gravity.CENTER);
         arrow.setRotation(customOpen ? 90 : 0);
         head.addView(arrow, new LinearLayout.LayoutParams(dp(this, 24), dp(this, 24)));
-        head.setOnClickListener(v -> { haptic(); customOpen = !customOpen; refreshMineKeepScroll(); });
+        head.setOnClickListener(v -> { haptic(); toggleCustomSection(sec); }); // Q117：就地开合，不整页重建
         if (!customOpen) return sec;
         // 展开教学只弹一次首次 toast（混合版 __ccDragHint 口径），不留常驻行
         try {
@@ -17249,12 +17387,18 @@ public class MainActivity extends Activity {
     interface SwitchSet { void onSet(boolean on); }
 
     /** 玻璃开关状态变更即时落地：关→全部背板层整面隐藏回静态染色；开→恢复并强制重抓一帧。 */
+    /** Q117（2.30）：玻璃开/关切换后 dock 底图即时换口径（关＝近不透明兜底、开＝薄染色），不等下次建页。 */
+    void refreshDockBg() {
+        try { if (navBar != null) navBar.setBackground(dockBarBg()); } catch (Throwable ignored) {}
+    }
+
     void applyGlassEnabledChange() {
         try {
             for (ImageView iv : new java.util.ArrayList<>(glassViews)) {
                 if (iv instanceof GlassBackdropView) iv.setVisibility(glassDisabled ? View.INVISIBLE : View.VISIBLE);
             }
         } catch (Throwable ignored) {}
+        refreshDockBg(); // Q117：玻璃刚关时 dock 不许继续半透直穿
         if (!glassDisabled) { backdropLastCapMs = 0; captureBackdrop(); }
     }
 
