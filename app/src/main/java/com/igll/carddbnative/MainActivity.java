@@ -2061,7 +2061,26 @@ public class MainActivity extends Activity {
             op.inSampleSize = 2;
             Bitmap b = BitmapFactory.decodeStream(in, null, op);
             try { in.close(); } catch (Exception e) {}
-            return b;
+            return insetFaceCrop(b);
+        }
+
+        // Q93：卡面图黑边治理（用户 15:14 定法「把图片放大，填充四个角」，有图处全改）。
+        // Img.get/decode 是全 App 真实卡面图的唯一解码收口——瓷砖/详情英雄/学生/选卡/展柜双模式/我的卡片
+        // 全部经此，故只在此处把源图四边各内收 2.5%（等比内裁、宽高比不变），各显示处再以 CENTER_CROP/
+        // 圆角框放大铺满，源图自带黑尖/细黑框即被吃掉；占位面是程序绘制无源图，不走这里。
+        // 注意：不 recycle 原图（Q21 铁律，缓存与磨砂裁片共用同一位图引用）；裁切失败回落原图不冒崩点。
+        // 个别粗黑框图内裁后仍有残留的，只记录卡 id 回报，不在此逐张改数据图。
+        static Bitmap insetFaceCrop(Bitmap b) {
+            if (b == null) return null;
+            try {
+                int w = b.getWidth(), h = b.getHeight();
+                if (w < 24 || h < 24) return b;
+                int ix = Math.max(1, Math.round(w * 0.025f));
+                int iy = Math.max(1, Math.round(h * 0.025f));
+                if (w - 2 * ix < 8 || h - 2 * iy < 8) return b;
+                Bitmap c = Bitmap.createBitmap(b, ix, iy, w - 2 * ix, h - 2 * iy);
+                return c != null ? c : b;
+            } catch (Throwable t) { return b; }
         }
 
         static Bitmap get(Context c, String path) {
