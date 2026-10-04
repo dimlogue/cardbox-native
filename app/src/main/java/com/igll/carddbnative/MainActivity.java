@@ -925,7 +925,7 @@ public class MainActivity extends Activity {
         // Q23：与 Q3 悬浮钮同款玻璃底（glassFabBg + applyGlassFabShadow + live 玻璃层），对照混合版 .qf-top/.qf-btn
         // 同语言：44dp 圆钮、白色 .5 描边、深色细线箭头；玻璃模糊由 glassLayer 垫底。
         fab.setBackground(glassFabBg());
-        fab.addView(glassLayerHw(fab, -1, true, "topfab"), new FrameLayout.LayoutParams(
+        fab.addView(glassLayer(fab, -1, true), new FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         // Q23 固定浅白染色托底（盖在模糊层之上、箭头之下）：对照混合版 .qf-top 的 background:rgba(255,255,255,.32)
         // Q53：改用与搜索/筛选钮同一 fabFrostWash() 提亮层，三钮黑底白底同一口径。
@@ -1898,9 +1898,10 @@ public class MainActivity extends Activity {
         return iv;
     }
 
-    /** Q108 试点件构造（2.22，底栏＋⋯菜单）；Q109（2.23）经用户真机验收试点后全面
-     * 铺开：全部玻璃件改走此构造。与 glassLayer 同路同视觉，仅多打一个硬件标；
-     * 硬件关/退/低版本时 onDraw 自动回落软件路，构造侧无需分叉。
+    /** Q108 试点件构造（2.22，底栏＋⋯菜单）；Q109（2.23）曾全面铺开，Q112（2.25）
+     * 收敛：只有窗件与底栏走此构造进硬件名册，live 常驻件（搜索胶囊/悬浮钮）与
+     * 详情主钮已改回 glassLayer 永远软件（同帧单 live 消费者不变量）。与 glassLayer
+     * 同路同视觉，仅多打一个硬件标；硬件关/退/低版本时 onDraw 自动回落软件路。
      * Q111（2.24）：每件带稳定 key（金丝雀逐件记账的身份，见 HW_PIECE_ORDER 与
      * GlassBackdropView.hwDrawGate）——key 只作记账标识，不影响任何视觉参数。 */
     ImageView glassLayerHw(View host, float radiusDp, boolean live, String key) {
@@ -2160,27 +2161,32 @@ public class MainActivity extends Activity {
         final int[] sl2 = new int[2];
         GlassBackdropView(Context c) { super(c); }
 
-        /** Q111 金丝雀闸门（本件本帧是否准走硬件路）：已证→准；已退→拒；未证→本进程
-         * 试验位未被申领、且同屏没有更靠前（HW_PIECE_ORDER 顺序）的未证件在场时才准，
-         * 申领瞬间把件名同步落盘（glass_hw_trial）——绘制紧随其后，若原生崩死在本帧，
-         * 试验标记永不被清，下次冷启由 initHwGlassGuard 判定该件单独退软件。附带退化
-         * 守卫：未挂载或宽高 ≤2 的件（首帧未落位/动画近零缩放）一律走软件兜底，不拿
-         * 退化尺寸去碰 drawRenderNode。Java 级判定全程不抛。 */
+        /** Q111 金丝雀闸门（本件本帧是否准走硬件路）：已证→准；已退→拒；未证→须
+         * 已挣资格＋本进程满 3 秒＋试验位空着（Q112 延迟资格），且同屏没有更靠前
+         * 的有资格未证件在场时才准，申领瞬间把件名同步落盘（glass_hw_trial）——
+         * 绘制紧随其后，若原生崩死在本帧，试验标记永不被清，下次冷启由
+         * initHwGlassGuard 判定该件单独退软件。名册外一律拒（Q112 不变量）。
+         * 附带退化守卫：未挂载或宽高 ≤2 的件（首帧未落位/动画近零缩放）一律走
+         * 软件兜底，不拿退化尺寸去碰 drawRenderNode。Java 级判定全程不抛。 */
         boolean hwDrawGate() {
             String k = hwKey;
             if (k == null || !isAttachedToWindow() || getWidth() <= 2 || getHeight() <= 2) return false;
+            if (hwOrderIdx(k) < 0) return false; // Q112：名册外（live 常驻件/详情主钮）永远软件
             if (hwProven.contains(k)) return true;
             if (hwDeadPieces.contains(k)) return false;
+            // Q112 延迟资格：未证件须已在往期会话挣得资格，且本进程已满 3 秒（首帧
+            // 永不做试验场）；没资格的件在本进程画一万次也只走软件链。
+            if (!hwEligible.contains(k)) return false;
+            if (android.os.SystemClock.uptimeMillis() - hwSessionStartMs < 3000) return false;
             if (hwTrialClaimedBy != null) return k.equals(hwTrialClaimedBy);
             int myIdx = hwOrderIdx(k);
-            if (myIdx < 0) return false;
             for (ImageView iv2 : glassViews) {
                 if (iv2 == this || !(iv2 instanceof GlassBackdropView)) continue;
                 String k2 = ((GlassBackdropView) iv2).hwKey;
                 if (k2 == null || k2.equals(k)) continue;
                 int i2 = hwOrderIdx(k2);
-                if (i2 >= 0 && i2 < myIdx && !hwProven.contains(k2) && !hwDeadPieces.contains(k2)
-                    && iv2.isAttachedToWindow() && iv2.isShown()) return false; // 让更靠前的未证件先试
+                if (i2 >= 0 && i2 < myIdx && hwEligible.contains(k2) && !hwProven.contains(k2) && !hwDeadPieces.contains(k2)
+                    && iv2.isAttachedToWindow() && iv2.isShown()) return false; // 让更靠前的有资格未证件先试
             }
             hwTrialClaimedBy = k;
             hwArmTrial(k); // 必须赶在 drawRenderNode 之前 commit 落盘（原生崩 Java 记不上账）
@@ -2192,6 +2198,7 @@ public class MainActivity extends Activity {
             String k = hwKey;
             if (k == null || hwProven.contains(k)) return;
             hwProven.add(k);
+            hwEligible.remove(k); // Q112：已证即摘资格集（hwPersistPieces 一并落盘）
             hwPersistPieces();
         }
         @Override protected void onDraw(Canvas canvas) {
@@ -2319,28 +2326,40 @@ public class MainActivity extends Activity {
     // 标记；若进程死在该帧，标记残留下次冷启被判「该件崩」→ 单独进已退集走软件链，
     // 换下一件继续试，全程不再出现全 App 必崩。全局 armed/stable 与实验开关保留为
     // 最后防线（仅当崩点不在任何在试件绘制内——如录制本身——才由全局口径整体自退）。
+    // Q112（2.25）事故再修订：2.24 真机清数据后仍「欢迎页点开始使用进主页必崩」。
+    // 验真（读码）：2.22 主页同帧硬件消费者只有底栏一件（⋯菜单不在主页），不崩；
+    // 2.23/2.24 主页首帧同帧多件（底栏＋内嵌搜索胶囊＋搜索/筛选悬浮钮）对同一个共享
+    // RenderNode 并发 drawRenderNode——崩点在「同帧多消费者」形态而非单独某件，金丝雀
+    // 逐件放行救不了（放行第二件 live 件的那一帧就崩，且逐件标记归因不到组合）。
+    // 不变量（本版起写死）：live 常驻场景硬件消费者只许底栏一件；内嵌/悬浮搜索胶囊、
+    // 搜索/筛选/回顶钮、详情主钮（与详情窗同帧）永远走软件背板链（构造已改回
+    // glassLayer，不进本名册）。窗件同屏至多一件在画（详情开窗 hideChrome 藏底栏、
+    // 向导下开详情为窗＋窗的双消费者，与 2.22「底栏＋菜单」已证的双消费者同级），
+    // 维持金丝雀逐件记账，另叠延迟资格：未证件须先在往期会话「主页稳定 3 秒」挣得
+    // 资格（glass_hw_eligible），试验只从其后冷启、进程满 3 秒后的开窗路径开始，
+    // 首帧永不做试验场。出厂态＝默认软件，硬件是挣来的资格。
     static final String[] HW_PIECE_ORDER = {
-        "dock", "moremenu", "inlinesearch", "searchfab", "filterfab", "floatsearch",
-        "topfab", "toast", "filterwin", "wizard", "detail", "detailpill", "cardmenu",
+        "dock", "moremenu", "toast", "filterwin", "wizard", "detail", "cardmenu",
         "binwin", "customform", "customdetail", "acctpicker", "colorpicker",
         "delconfirm", "updatewin", "simkeep", "subfollow", "footprint", "extsearch"
     };
     static final String[] HW_PIECE_NAME_ZH = {
-        "底栏", "设置菜单", "内嵌搜索胶囊", "搜索钮", "筛选钮", "悬浮搜索胶囊",
-        "回顶钮", "悬浮提示条", "筛选窗", "情景选卡窗", "详情窗", "详情主钮", "长按菜单",
+        "底栏", "设置菜单", "悬浮提示条", "筛选窗", "情景选卡窗", "详情窗", "长按菜单",
         "BIN 查询窗", "自定义卡表单", "自定义卡详情", "账户分类选择窗", "占位配色选择窗",
         "删除确认窗", "数据更新窗", "保号表单", "订阅表单", "足迹表单", "扩展搜卡窗"
     };
     static final String[] HW_PIECE_NAME_EN = {
-        "Dock", "Settings menu", "Inline search", "Search button", "Filter button", "Floating search",
-        "Top button", "Toast bar", "Filter sheet", "Wizard sheet", "Detail sheet", "Detail action", "Card menu",
+        "Dock", "Settings menu", "Toast bar", "Filter sheet", "Wizard sheet", "Detail sheet", "Card menu",
         "BIN lookup", "Custom card form", "Custom card detail", "Account class picker", "Color picker",
         "Delete confirm", "Data update sheet", "SIM keep form", "Subscription form", "Footprint form", "Extended search"
     };
     final java.util.Set<String> hwProven = new java.util.HashSet<>();
     final java.util.Set<String> hwDeadPieces = new java.util.HashSet<>();
+    final java.util.Set<String> hwEligible = new java.util.HashSet<>(); // Q112：已挣得试验资格（往期会话主页稳定 3 秒后落）
     String hwTrialClaimedBy = null;   // 本进程试验位已被哪件申领（每冷启至多一件）
     boolean hwPiecesLoaded = false;
+    long hwSessionStartMs = 0;        // Q112：本进程起点（initHwGlassGuard 落），试验须待进程满 3 秒
+    boolean hwEligibilityScheduled = false; // Q112：本进程已排过资格挣取计时
 
     int hwOrderIdx(String k) {
         if (k == null) return -1;
@@ -2363,7 +2382,9 @@ public class MainActivity extends Activity {
         for (String k : HW_PIECE_ORDER) if (s.contains(k)) { if (sb.length() > 0) sb.append(','); sb.append(k); }
         return sb.toString();
     }
-    /** 新账装载（只跑一次）：已证/已退集读盘；已证集缺失＝首次启用新账，播种 2.22 两件。 */
+    /** 新账装载（只跑一次）：已证/已退/资格集读盘；已证集缺失＝首次启用新账，播种 2.22 两件。
+     * Q112：读盘一律按名册过滤——旧账里已移出名册的件（内嵌搜索胶囊等 live 件）自动
+     * 作废回软件链，不许残留资格把它们再放回硬件。 */
     void loadHwPieces() {
         if (hwPiecesLoaded) return;
         hwPiecesLoaded = true;
@@ -2374,26 +2395,63 @@ public class MainActivity extends Activity {
                 prefs.edit().putString("glass_hw_proven", hwJoinCsv(hwProven)).apply();
             } else {
                 String csv = prefs.getString("glass_hw_proven", "");
-                if (csv != null) for (String k : csv.split(",")) if (!k.trim().isEmpty()) hwProven.add(k.trim());
+                if (csv != null) for (String k : csv.split(",")) { String t = k.trim(); if (!t.isEmpty() && hwOrderIdx(t) >= 0) hwProven.add(t); }
             }
             String dead = prefs.getString("glass_hw_deadpieces", "");
-            if (dead != null) for (String k : dead.split(",")) if (!k.trim().isEmpty()) hwDeadPieces.add(k.trim());
+            if (dead != null) for (String k : dead.split(",")) { String t = k.trim(); if (!t.isEmpty() && hwOrderIdx(t) >= 0) hwDeadPieces.add(t); }
+            String elig = prefs.getString("glass_hw_eligible", "");
+            if (elig != null) for (String k : elig.split(",")) { String t = k.trim(); if (!t.isEmpty() && hwOrderIdx(t) >= 0 && !hwProven.contains(t) && !hwDeadPieces.contains(t)) hwEligible.add(t); }
         } catch (Throwable ignored) {}
     }
     /** 试验位落盘：绘制前申领（commit）——崩在本帧即留证，下次冷启据此判该件退软件。 */
     void hwArmTrial(String k) {
         try { if (prefs != null) prefs.edit().putString("glass_hw_trial", k).commit(); } catch (Throwable ignored) {}
     }
-    /** 已证/已退集落盘并清在试标记（入证与判死共用，commit 同步）。 */
+    /** 已证/已退/资格集落盘并清在试标记（入证与判死共用，commit 同步）。 */
     void hwPersistPieces() {
         try {
             if (prefs == null) return;
             prefs.edit()
                 .putString("glass_hw_proven", hwJoinCsv(hwProven))
                 .putString("glass_hw_deadpieces", hwJoinCsv(hwDeadPieces))
+                .putString("glass_hw_eligible", hwJoinCsv(hwEligible))
                 .putString("glass_hw_trial", "")
                 .commit();
         } catch (Throwable ignored) {}
+    }
+
+    /** Q112 资格集单独落盘：不碰在试标记（挣资格与某件正在试验可同会话交错，
+     * 清掉试验标记会让崩后归因失效，故与 hwPersistPieces 分开）。 */
+    void hwPersistEligible() {
+        try {
+            if (prefs == null) return;
+            prefs.edit().putString("glass_hw_eligible", hwJoinCsv(hwEligible)).commit();
+        } catch (Throwable ignored) {}
+    }
+
+    /** Q112 资格挣取（每会话至多挣一件）：主页已稳定渲染满约 3 秒、进程还活着，
+     * 才把定序里第一个未证/未退/未有资格的窗件落「下次可试」标记（commit）。
+     * 由 showTab 首调后 postDelayed 3s 触发；欢迎页还没进主页（helloOpen）时每秒
+     * 重排，直到主页真出来——首帧与欢迎页停留期永远挣不到资格。试验本身只在
+     * 其后冷启、进程满 3 秒后的开窗绘制里发生（见 hwDrawGate），首帧不做试验场。 */
+    void earnHwEligibility() {
+        if (!hwGlassEnabled || hwGlassDead || glassDisabled) return;
+        if (helloOpen) { mainHandler.postDelayed(this::earnHwEligibility, 1000); return; }
+        try {
+            loadHwPieces();
+            for (String k : HW_PIECE_ORDER) {
+                if (!hwProven.contains(k) && !hwDeadPieces.contains(k) && !hwEligible.contains(k)) {
+                    hwEligible.add(k);
+                    hwPersistEligible();
+                    return;
+                }
+            }
+        } catch (Throwable ignored) {}
+    }
+    void scheduleHwEligibility() {
+        if (hwEligibilityScheduled) return;
+        hwEligibilityScheduled = true;
+        mainHandler.postDelayed(this::earnHwEligibility, 3000);
     }
 
     /** 冷启护栏（onCreate 读完玻璃 prefs 后调用，先于任何页面构建）：
@@ -2405,6 +2463,7 @@ public class MainActivity extends Activity {
      * 本全局双标记退为最后防线，仅当试验标记干净时才按 armed&&!stable 整体自退。 */
     void initHwGlassGuard() {
         hwGlassEnabled = false;
+        hwSessionStartMs = android.os.SystemClock.uptimeMillis(); // Q112：试验 3 秒门槛的计时起点
         try { hwGlassNote = prefs == null ? "" : prefs.getString("glass_hw_note", ""); } catch (Throwable ignored) { hwGlassNote = ""; }
         if (Build.VERSION.SDK_INT < 31 || prefs == null) { hwGlassDead = true; return; }
         try {
@@ -2418,7 +2477,8 @@ public class MainActivity extends Activity {
             String trial = prefs.getString("glass_hw_trial", "");
             if (trial != null && !trial.isEmpty()) {
                 trialResolved = true;
-                if (hwProven.contains(trial)) {
+                if (hwProven.contains(trial) || hwOrderIdx(trial) < 0) {
+                    // 已入证的残留、或 Q112 移出名册的旧件残留：只清标记，不判死
                     try { prefs.edit().putString("glass_hw_trial", "").commit(); } catch (Throwable ignored) {}
                 } else {
                     hwDeadPieces.add(trial);
@@ -2579,8 +2639,8 @@ public class MainActivity extends Activity {
             return isEn() ? "Crashed last time — auto-reverted to safe glass (" + hwGlassNote + "). Turn on to retry"
                           : "上次开启后闪退，已自动退回安全玻璃（" + hwGlassNote + "），重新打开可再试";
         }
-        if (hwGlassEnabled) return (isEn() ? "Beta: all glass uses system real-time blur. May crash; reverts automatically on relaunch"
-                                         : "实验中：全部玻璃件走系统硬件实时模糊，可能闪退，闪退后重开自动退回") + hwPieceStatus();
+        if (hwGlassEnabled) return (isEn() ? "Beta: dock plus piece-by-piece verified sheets use hardware real-time blur; the rest stays software. May crash; reverts automatically on relaunch"
+                                         : "实验中：底栏与逐件验证通过的窗件走硬件实时模糊，其余软件磨砂；可能闪退，闪退后重开自动退回") + hwPieceStatus();
         return (isEn() ? "Off — all glass uses the safe software blur"
                       : "已关闭，全部玻璃走安全软件磨砂") + hwPieceStatus();
     }
@@ -5589,6 +5649,7 @@ public class MainActivity extends Activity {
     }
 
     void showTab(String key) {
+        scheduleHwEligibility(); // Q112：主页稳定 3 秒后挣一件试验资格（内部只排一次）
         // Q25: tab switch is a dismiss path too - close the float capsule and the IME
         // before content.removeAllViews() detaches the page that owns the EditText,
         // otherwise the keyboard is orphaned on the next tab.
@@ -6062,7 +6123,7 @@ public class MainActivity extends Activity {
         fab.setClipToPadding(false);
         int n0 = activeFilterCount();
         fab.setBackground(glassFabBg());
-        fab.addView(glassLayerHw(fab, -1, true, "filterfab"), new FrameLayout.LayoutParams(
+        fab.addView(glassLayer(fab, -1, true), new FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         fab.addView(fabFrostWash(), new FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
@@ -6104,7 +6165,7 @@ public class MainActivity extends Activity {
     View buildSearchFab() {
         FrameLayout fab = new FrameLayout(this);
         fab.setBackground(glassFabBg());
-        fab.addView(glassLayerHw(fab, -1, true, "searchfab"), new FrameLayout.LayoutParams(
+        fab.addView(glassLayer(fab, -1, true), new FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         fab.addView(fabFrostWash(), new FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
@@ -7434,7 +7495,7 @@ public class MainActivity extends Activity {
         FrameLayout inlineWrap = new FrameLayout(this);
         inlineWrap.setBackground(softSearchTint()); // Q94：内嵌搜索胶囊玻璃收淡（近白低饱和，不再一团蓝）
         if (Build.VERSION.SDK_INT >= 21) inlineWrap.setElevation(dp(this, 6));
-        inlineWrap.addView(glassLayerHw(inlineWrap, 28, true, "inlinesearch"), new FrameLayout.LayoutParams(
+        inlineWrap.addView(glassLayer(inlineWrap, 28, true), new FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         LinearLayout inlineRow = new LinearLayout(this);
         inlineRow.setOrientation(LinearLayout.HORIZONTAL);
@@ -7494,7 +7555,7 @@ public class MainActivity extends Activity {
         FrameLayout floatWrap = new FrameLayout(this);
         floatWrap.setBackground(softSearchTint()); // Q94：悬浮搜索胶囊同口径收淡
         if (Build.VERSION.SDK_INT >= 21) floatWrap.setElevation(dp(this, 14));
-        floatWrap.addView(glassLayerHw(floatWrap, 28, true, "floatsearch"), new FrameLayout.LayoutParams(
+        floatWrap.addView(glassLayer(floatWrap, 28, true), new FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         LinearLayout floatRow = new LinearLayout(this);
         floatRow.setOrientation(LinearLayout.HORIZONTAL);
@@ -9195,7 +9256,7 @@ public class MainActivity extends Activity {
         // （不用 WRAP_CONTENT+MATCH_PARENT 玻璃的模糊测量链），钮下贴安全距避手势条。
         FrameLayout pillWrap = new FrameLayout(this);
         int pillH = dp(this, 50);
-        pillWrap.addView(glassLayerHw(detailPrimaryBtn, 999, false, "detailpill"),
+        pillWrap.addView(glassLayer(detailPrimaryBtn, 999, false),
             new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, pillH));
         pillWrap.addView(glassWashView(999, false),
             new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, pillH));
