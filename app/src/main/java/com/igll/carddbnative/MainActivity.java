@@ -5324,16 +5324,13 @@ public class MainActivity extends Activity {
         // P2e/P2c：右下双钮退场，不与筛选窗叠压
         hideChrome(); // Q12
         final FrameLayout sheet = new FrameLayout(this);
-        sheet.setBackgroundColor(Color.argb(88, 15, 20, 40)); // Q77：窗外统一压暗一档，与玻璃窗体明暗分明
+        sheet.setBackgroundColor(Color.argb(102, 15, 20, 40)); // Q77b：窗外再压暗一档（对齐混合版 .dlg-backdrop rgba(0,0,0,.4)），与玻璃窗体明暗分明
         sheet.setOnClickListener(v -> closeFilterSheet());
         // Q77 定版：B 真玻璃悬浮窗（与卡面 +/✓ 钮、底栏同一套 Q73 玻璃语言）——冻结模糊垫底 +
         // 薄染色 tint + 提亮 wash，禁止实白板；窗放大、排版放呼吸，chips 点选仍即时 refreshHome。
         LinearLayout card = new LinearLayout(this);
         card.setOrientation(LinearLayout.VERTICAL);
         card.setBackground(glassTintDrawable(24, false));
-        if (Build.VERSION.SDK_INT >= 21) {
-            card.setElevation(dp(this, 24));
-        }
         glassClip(card, 24, false);
         card.setOnClickListener(v -> {});
         // 头部固定（标题+清空/完成），不随内容滚动；Q77：标题 17sp、动作改有分量的药丸钮
@@ -5341,6 +5338,16 @@ public class MainActivity extends Activity {
         chead.setOrientation(LinearLayout.HORIZONTAL);
         chead.setGravity(Gravity.CENTER_VERTICAL);
         chead.setPadding(dp(this, 18), dp(this, 14), dp(this, 14), dp(this, 10));
+        // Q77b header lift: near-solid wash over the frozen glass at the title band only, so a
+        // strong card colour behind the sheet cannot soak the title; body stays Q73 thin glass.
+        try {
+            GradientDrawable headLift = new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
+                darkEff() ? new int[]{Color.argb(232, 52, 52, 58), Color.argb(214, 40, 40, 46)}
+                          : new int[]{Color.argb(238, 255, 255, 255), Color.argb(220, 248, 250, 253)});
+            float hr = dp(this, 24);
+            headLift.setCornerRadii(new float[]{hr, hr, hr, hr, 0, 0, 0, 0});
+            chead.setBackground(headLift);
+        } catch (Throwable ignored) {}
         TextView cttl = tv(this, "\u7b5b\u9009", 17, colText(), true);
         chead.addView(cttl, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
         TextView clearT = tv(this, "\u6e05\u7a7a", 13, colText(), false);
@@ -5422,20 +5429,28 @@ public class MainActivity extends Activity {
         card.measure(View.MeasureSpec.makeMeasureSpec(cardW, View.MeasureSpec.EXACTLY),
             View.MeasureSpec.makeMeasureSpec(maxH, View.MeasureSpec.AT_MOST));
         clp.height = card.getMeasuredHeight();
-        // Q11：窗下垫冻结模糊快照（升起前抓的底层画面），与窗同位同尺寸
-        FrameLayout.LayoutParams fglp = new FrameLayout.LayoutParams(clp.width, clp.height);
-        fglp.gravity = clp.gravity; fglp.leftMargin = clp.leftMargin; fglp.rightMargin = clp.rightMargin; fglp.bottomMargin = clp.bottomMargin;
-        sheet.addView(glassLayer(card, 24, false), fglp);
-        sheet.addView(card, clp);
+        // Q77b: glass + wash + card share one clipped wrap so the three layers move/scale as one
+        // body (Q74 entry/exit) and the 24dp rim stays aligned; wash is the Q73 light lift.
+        FrameLayout wrap = new FrameLayout(this);
+        glassClip(wrap, 24, false);
+        if (Build.VERSION.SDK_INT >= 21) wrap.setElevation(dp(this, 24));
+        wrap.addView(glassLayer(card, 24, false), new FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        View wash = glassWashView(24, false);
+        glassClip(wash, 24, false);
+        wrap.addView(wash, new FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        wrap.addView(card, new FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        sheet.addView(wrap, clp);
         content.addView(sheet);
         filterSheet = sheet;
-        // 开场：淡入+放大+上浮，减速曲线（P4-fix 统一手感方向，220–320ms 档）
         sheet.setAlpha(0f);
         sheet.animate().alpha(1f).setDuration(ANIM_DUR_SHADE_IN).setInterpolator(ANIM_ENTER).start();
-        card.setAlpha(0f);
-        card.setScaleX(0.94f); card.setScaleY(0.94f);
-        card.setTranslationY(dp(this, 14));
-        card.animate().alpha(1f).scaleX(1f).scaleY(1f).translationY(0f)
+        wrap.setAlpha(0f);
+        wrap.setScaleX(0.94f); wrap.setScaleY(0.94f);
+        wrap.setTranslationY(dp(this, 14));
+        wrap.animate().alpha(1f).scaleX(1f).scaleY(1f).translationY(0f)
             .setDuration(ANIM_DUR_SHEET_IN).setInterpolator(ANIM_ENTER).start();
     }
 
