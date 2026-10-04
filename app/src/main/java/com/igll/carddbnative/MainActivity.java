@@ -1569,6 +1569,9 @@ public class MainActivity extends Activity {
         String acctClass = ""; // Q65：用户自有账户标记（""/"一类"/"二类"），纯手填，未设不显示
         String kind = "bank"; // Q82：卡种扩展位（bank 银行卡/phone 电话卡/other 其他），旧卡默认 bank，字段按卡种收窄
         int style;
+        String pan = ""; // Q79：完整卡号，只存本机，默认掩码显示
+        long limitYuan = 0; // Q79：信用额度（元），0=未填
+        int billDay = 0, dueDay = 0; // Q79：账单日/还款日（1-31，0=未填）
     }
     static final String[] CARD_KIND_VALS = {"bank", "phone", "other"};
     static final String[] CARD_KIND_LABELS = {"银行卡", "电话卡", "其他卡"};
@@ -1592,6 +1595,9 @@ public class MainActivity extends Activity {
     // Q65 我的卡片条目（一张库卡可有多条，分别标一类/二类）：标记只存本机 mine_entries，不写回卡库/OTA
     static class MineEntry {
         String key, cardId, acctClass;
+        String pan = "";
+        long limitYuan = 0;
+        int billDay = 0, dueDay = 0;
         MineEntry(String k, String id, String cls) { key = k; cardId = id; acctClass = cls == null ? "" : cls; }
     }
     static class MineRow {
@@ -1733,6 +1739,41 @@ public class MainActivity extends Activity {
         }
     }
 
+    // Q79 helpers: PAN masking (per-card eye resets each open; PAN only on device)
+    static String maskPan(String pan) {
+        if (pan == null) return "";
+        String d = pan.replaceAll("[^0-9]", "");
+        if (d.length() <= 4) return d;
+        return "**** **** **** " + d.substring(d.length() - 4);
+    }
+    static String fmtPan(String pan) {
+        if (pan == null) return "";
+        String d = pan.replaceAll("[^0-9]", "");
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < d.length(); i++) { if (i > 0 && i % 4 == 0) sb.append(' '); sb.append(d.charAt(i)); }
+        return sb.toString();
+    }
+    static long parseYuan(String t) { try { return Math.round(Double.parseDouble(t.replaceAll("[^0-9.]", ""))); } catch (Throwable e) { return 0; } }
+    static int parseDay(String t) { try { int v = Integer.parseInt(t.replaceAll("[^0-9]", "")); return (v >= 1 && v <= 31) ? v : 0; } catch (Throwable e) { return 0; } }
+    static String fmtMoney(long y) { return y >= 10000 ? String.format("%.1f万", y / 10000.0) : String.valueOf(y); }
+    static class OwnActItem {
+        String id, title, cardName, type, period;
+        int target = 0, done = 0;
+        boolean finished = false;
+    }
+    java.util.List<OwnActItem> ownActs = new ArrayList<>();
+    void loadOwnActs() {
+        ownActs = new ArrayList<>();
+        try {
+            String raw = prefs.getString("ownact_items", "[]");
+            JSONArray a = new JSONArray(raw == null || raw.isEmpty() ? "[]" : raw);
+            for (int i = 0; i < a.length(); i++) { JSONObject o = a.getJSONObject(i); OwnActItem it = new OwnActItem(); it.id = o.optString("id"); it.title = o.optString("title"); it.cardName = o.optString("card", ""); it.type = o.optString("type", "刷卡"); it.period = o.optString("period", ""); it.target = o.optInt("target", 0); it.done = o.optInt("done", 0); it.finished = o.optBoolean("fin", false); if (it.id == null || it.id.isEmpty()) it.id = "act-" + i; ownActs.add(it); }
+        } catch (Throwable ignored) { ownActs = new ArrayList<>(); }
+    }
+    void saveOwnActs() {
+        try { JSONArray a = new JSONArray(); for (OwnActItem it : ownActs) { JSONObject o = new JSONObject(); o.put("id", it.id == null ? "" : it.id); o.put("title", it.title == null ? "" : it.title); o.put("card", it.cardName == null ? "" : it.cardName); o.put("type", it.type == null ? "" : it.type); o.put("period", it.period == null ? "" : it.period); o.put("target", it.target); o.put("done", it.done); o.put("fin", it.finished); a.put(o); } prefs.edit().putString("ownact_items", a.toString()).commit(); } catch (Throwable ignored) {}
+    }
+
     void loadCustomCards() {
         customCards = new ArrayList<>();
         try {
@@ -1748,6 +1789,7 @@ public class MainActivity extends Activity {
                 c.note = o.optString("note");
                 c.acctClass = normAcctClass(o.optString("cls", ""));
                 c.kind = normCardKind(o.optString("kind", "bank"));
+                c.pan = o.optString("pan", ""); c.limitYuan = o.optLong("limit", 0); c.billDay = o.optInt("bill", 0); c.dueDay = o.optInt("due", 0);
                 c.style = o.optInt("style", 0);
                 if (c.id == null || c.id.isEmpty()) c.id = "custom-" + i;
                 if (c.style < 0 || c.style >= CUSTOM_STYLES.length) c.style = 0;
@@ -1770,6 +1812,7 @@ public class MainActivity extends Activity {
                         c.note = o.optString("note");
                         c.acctClass = normAcctClass(o.optString("cls", ""));
                         c.kind = normCardKind(o.optString("kind", "bank"));
+                        c.pan = o.optString("pan", ""); c.limitYuan = o.optLong("limit", 0); c.billDay = o.optInt("bill", 0); c.dueDay = o.optInt("due", 0);
                         c.style = o.optInt("style", 0);
                         if (c.id == null || c.id.isEmpty()) c.id = "custom-" + i;
                         if (c.style < 0 || c.style >= CUSTOM_STYLES.length) c.style = 0;
@@ -1792,6 +1835,7 @@ public class MainActivity extends Activity {
                 o.put("note", c.note == null ? "" : c.note);
                 o.put("cls", c.acctClass == null ? "" : c.acctClass);
                 o.put("kind", c.kind == null ? "bank" : c.kind);
+                o.put("pan", c.pan == null ? "" : c.pan); o.put("limit", c.limitYuan); o.put("bill", c.billDay); o.put("due", c.dueDay);
                 o.put("style", c.style);
                 arr.put(o);
             }
@@ -1838,6 +1882,7 @@ public class MainActivity extends Activity {
                 o.put("key", e.key == null ? "" : e.key);
                 o.put("id", e.cardId == null ? "" : e.cardId);
                 o.put("cls", e.acctClass == null ? "" : e.acctClass);
+                o.put("pan", e.pan == null ? "" : e.pan); o.put("limit", e.limitYuan); o.put("bill", e.billDay); o.put("due", e.dueDay);
                 arr.put(o);
             }
             syncMineProjection();
@@ -1858,7 +1903,7 @@ public class MainActivity extends Activity {
                     if (id.isEmpty()) continue;
                     String key = o.optString("key", "");
                     if (key.isEmpty()) key = id + "#m" + i;
-                    mineEntries.add(new MineEntry(key, id, normAcctClass(o.optString("cls", ""))));
+                    { MineEntry _e = new MineEntry(key, id, normAcctClass(o.optString("cls", ""))); _e.pan = o.optString("pan", ""); _e.limitYuan = o.optLong("limit", 0); _e.billDay = o.optInt("bill", 0); _e.dueDay = o.optInt("due", 0); mineEntries.add(_e); }
                 }
                 syncMineProjection();
                 return;
