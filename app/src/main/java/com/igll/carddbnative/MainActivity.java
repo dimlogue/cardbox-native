@@ -1718,6 +1718,7 @@ public class MainActivity extends Activity {
      * 设置变更）走 captureBackdrop() 直调，不受冻结影响。 */
     void captureBackdropTick() {
         if (helloOpen) return; // Q99：你好页入场动画全程冻结背板采样，不与飞入抢主线程
+        if (moreMenuBackdropFrozen) return; // Q102：⋯ 菜单开窗期间背板冻结（开窗瞬间已同步抓存静止帧），不许动画期逐帧整屏重抓＋三遍模糊抖背景
         if (android.os.SystemClock.uptimeMillis() - lastScrollEventMs < 200) return;
         // Q99：屏上只有 live 玻璃且文档条带有效时，屏幕快照不必逐帧重抓——live 玻璃走
         // 条带按 scrollY 同帧取景；重抓整根只剩抢主线程。有 frozen 玻璃（底表/弹层）
@@ -3250,6 +3251,7 @@ public class MainActivity extends Activity {
     View cardMenuPop = null;
     View cardMenuGlass = null; // Q11：长按菜单下的冻结模糊层
     View moreMenuOverlay = null; // Q58：设置页 ⋯ 菜单（从按钮角长出、点外部收回）
+    boolean moreMenuBackdropFrozen = false; // Q102：⋯ 菜单开窗期间冻结背板重抓，开窗那刻已同步抓存一帧
 
     // 筛选状态（Phase 2a-1：与混合版 chipRow 相同的单选切换语义，点已选项再点一次取消）
     String filterType = null;   // "debit" / "credit" / null
@@ -4060,6 +4062,17 @@ public class MainActivity extends Activity {
         if (content != null) content.removeAllViews();
         showTab(tab);
         refreshNavLabels(); // Q85
+    }
+
+    // Q102（2.16）：功能开关拨动专用轻失效——只清其他页缓存（下次切到才重建），当前设置页
+    // 原地不动、不走切页动画、不重抓玻璃。旧口径整页 rebuildPages（removeAllViews 重走
+    // showTab＋玻璃重抓）正是拨开关时背景闪烁/「像重新打开一页」的来源。
+    void invalidatePagesSoft() {
+        View cur = currentPageView;
+        String curTab = tab;
+        pages.clear();
+        if (cur != null && curTab != null) pages.put(curTab, cur);
+        homeList = null;
     }
 
     // Q55 自定义字体导入：系统文件选择 .ttf/.otf，先下到临时文件校验（大小+文件头+试加载），成功才替换正式文件并即时启用
@@ -5499,51 +5512,103 @@ public class MainActivity extends Activity {
             Paint.FontMetrics fm = p.getFontMetrics();
             return cy - (fm.ascent + fm.descent) / 2f;
         }
-        // 银联：红 #E60012 / 蓝 #004B9B / 绿 #009944 三段等高平行四边形首尾无缝衔接、整体右倾，下配「银 联」小字
-        void badgeUnionPay(Canvas cv, Paint p, int w, int h, float ux, float uy) {
-            float x0 = 8 * ux, y0 = 6 * uy, bh = 62 * uy, seg = 52 * ux, slant = 26 * ux;
-            int[] cols = { Color.rgb(0xE6, 0x00, 0x12), Color.rgb(0x00, 0x4B, 0x9B), Color.rgb(0x00, 0x99, 0x44) };
+        // Q102（2.16）：银联/Visa 共用浅底牌面——白色圆角标牌，柔影成形、白边、绝不黑描边
+        // （仅一条发丝级冷灰边光定边）；深色卡面上也先以这块浅底牌子呈现（用户 20:24 定调）。
+        void drawBadgePlate(Canvas cv, Paint p, float ux, float uy) {
+            float s = Math.min(ux, uy);
+            float rad = 16f * s;
+            RectF plate = new RectF(10 * ux, 14 * uy, 230 * ux, 106 * uy);
             p.setStyle(Paint.Style.FILL);
-            for (int i = 0; i < 3; i++) {
-                float x = x0 + i * seg;
-                android.graphics.Path poly = new android.graphics.Path();
-                poly.moveTo(x, y0 + bh);
-                poly.lineTo(x + slant, y0);
-                poly.lineTo(x + slant + seg, y0);
-                poly.lineTo(x + seg, y0 + bh);
-                poly.close();
-                p.setColor(cols[i]);
-                cv.drawPath(poly, p);
-            }
-            p.setColor(darkBg ? Color.WHITE : Color.rgb(0x33, 0x38, 0x3F));
-            p.setTypeface(weightTypeface(getContext(), 700));
-            p.setTextSize(30 * uy);
-            p.setTextAlign(Paint.Align.CENTER);
-            Paint.FontMetrics fm = p.getFontMetrics();
-            cv.drawText("银 联", w / 2f, 76 * uy - fm.ascent, p);
+            p.setShadowLayer(4f * s, 0f, 2f * uy, Color.argb(64, 18, 30, 52));
+            p.setColor(Color.rgb(0xFC, 0xFE, 0xFF));
+            cv.drawRoundRect(plate, rad, rad, p);
+            p.setShadowLayer(0f, 0f, 0f, 0);
+            p.setStyle(Paint.Style.STROKE);
+            p.setStrokeWidth(Math.max(1f, 0.7f * s));
+            p.setColor(Color.argb(24, 24, 42, 70));
+            cv.drawRoundRect(plate, rad, rad, p);
+            p.setStyle(Paint.Style.FILL);
         }
-        // Visa：深蓝 #1A1F71 粗斜体 VISA、V 左上金色小翼；深底转白字版（翼保留金色）
-        void badgeVisa(Canvas cv, Paint p, int w, int h, float ux, float uy) {
-            p.setStyle(Paint.Style.FILL);
-            p.setColor(darkBg ? Color.WHITE : Color.rgb(0x1A, 0x1F, 0x71));
+        // Q102（2.16）：银联照参照图圆弧形态重画——浅底标牌内横向牌面，红/蓝/绿三段色带以两条
+        // 共用圆弧边界（同向缓弯）衔接，无直斜切尖角；「银联」白字在内。不再用斜切平行四边形。
+        void badgeUnionPay(Canvas cv, Paint p, int w, int h, float ux, float uy) {
+            drawBadgePlate(cv, p, ux, uy);
+            float s = Math.min(ux, uy);
+            RectF pl = new RectF(22 * ux, 24 * uy, 218 * ux, 96 * uy);
+            cv.save();
+            android.graphics.Path clip = new android.graphics.Path();
+            clip.addRoundRect(pl, 12f * s, 12f * s, android.graphics.Path.Direction.CW);
+            cv.clipPath(clip);
+            p.setColor(Color.rgb(0xE6, 0x00, 0x12));
+            cv.drawRect(pl, p);
+            // 绿带：右边界弧 B2 以右
+            android.graphics.Path g = new android.graphics.Path();
+            g.moveTo(150 * ux, 24 * uy);
+            g.quadTo(159 * ux, 60 * uy, 150 * ux, 96 * uy);
+            g.lineTo(218 * ux, 96 * uy);
+            g.lineTo(218 * ux, 24 * uy);
+            g.close();
+            p.setColor(Color.rgb(0x00, 0x99, 0x44));
+            cv.drawPath(g, p);
+            // 蓝带：左边界弧 B1 与右边界弧 B2 之间（与绿带共用 B2 曲线，严丝合缝无漏色）
+            android.graphics.Path b = new android.graphics.Path();
+            b.moveTo(88 * ux, 24 * uy);
+            b.quadTo(97 * ux, 60 * uy, 88 * ux, 96 * uy);
+            b.lineTo(150 * ux, 96 * uy);
+            b.quadTo(159 * ux, 60 * uy, 150 * ux, 24 * uy);
+            b.close();
+            p.setColor(Color.rgb(0x00, 0x4B, 0x9B));
+            cv.drawPath(b, p);
+            cv.restore();
+            p.setColor(Color.WHITE);
             p.setTypeface(weightTypeface(getContext(), 800));
-            p.setTextSkewX(-0.25f);
-            p.setTextSize(84 * uy);
+            p.setTextSize(32 * uy);
             p.setTextAlign(Paint.Align.CENTER);
-            float baseline = centeredBaseline(p, h / 2f - 6 * uy);
-            cv.drawText("VISA", w / 2f, baseline, p);
-            float tw = p.measureText("VISA");
-            p.setTextSkewX(0);
-            Paint.FontMetrics fm = p.getFontMetrics();
-            float gx = w / 2f - tw / 2f + 2 * ux, gy = baseline + fm.ascent + 2 * uy;
-            android.graphics.Path wing = new android.graphics.Path();
-            wing.moveTo(gx, gy + 16 * uy);
-            wing.lineTo(gx + 30 * ux, gy);
-            wing.lineTo(gx + 34 * ux, gy + 10 * uy);
-            wing.lineTo(gx + 6 * ux, gy + 20 * uy);
-            wing.close();
-            p.setColor(Color.rgb(0xF7, 0xB6, 0x00));
-            cv.drawPath(wing, p);
+            cv.drawText("银联", 120 * ux, centeredBaseline(p, 60 * uy), p);
+        }
+        // Q102（2.16）：Visa 照现行官方蓝字标整标路径重绘——V/I/A 为填充轮廓多边形、S 为粗描
+        // 中心线路径，整组带 -0.20 斜切；深蓝 #1A1F71、无金旗、字身零黄色像素；收进浅底标牌，
+        // 深色卡面上亦以浅底牌子呈现（不再走字体套用＋金翼，也不再有深底反白默认）。
+        void badgeVisa(Canvas cv, Paint p, int w, int h, float ux, float uy) {
+            drawBadgePlate(cv, p, ux, uy);
+            float ls = Math.min(0.95f * ux, 0.85f * uy); // 字标本地坐标 176×56 → 牌面内尺寸
+            p.setColor(Color.rgb(0x1A, 0x1F, 0x71));
+            p.setStyle(Paint.Style.FILL);
+            cv.save();
+            cv.translate(120 * ux, 60 * uy);
+            cv.skew(-0.20f, 0f);
+            cv.scale(ls, ls);
+            cv.translate(-88, -28);
+            // V（本地 1→45）
+            android.graphics.Path v = new android.graphics.Path();
+            v.moveTo(1, 0); v.lineTo(15, 0); v.lineTo(23, 34); v.lineTo(31, 0); v.lineTo(45, 0);
+            v.lineTo(30, 56); v.lineTo(16, 56); v.close();
+            cv.drawPath(v, p);
+            // I（本地 53→65）
+            android.graphics.Path i = new android.graphics.Path();
+            i.addRect(53, 0, 65, 56, android.graphics.Path.Direction.CW);
+            cv.drawPath(i, p);
+            // A（本地 120→164，镂空三角用 EVEN_ODD）
+            android.graphics.Path a = new android.graphics.Path();
+            a.moveTo(120, 56); a.lineTo(134, 0); a.lineTo(148, 0); a.lineTo(164, 56);
+            a.lineTo(151, 56); a.lineTo(147, 40); a.lineTo(131, 40); a.lineTo(127, 56); a.close();
+            a.moveTo(139, 15); a.lineTo(143.5f, 32); a.lineTo(134.5f, 32); a.close();
+            a.setFillType(android.graphics.Path.FillType.EVEN_ODD);
+            cv.drawPath(a, p);
+            // S（本地 72→112）：粗描中心线成字，端头平切
+            android.graphics.Path sp = new android.graphics.Path();
+            sp.moveTo(103, 13);
+            sp.cubicTo(97, 4, 81, 3.5f, 77.5f, 12.5f);
+            sp.cubicTo(74, 21.5f, 84, 26.5f, 92, 29.5f);
+            sp.cubicTo(100, 32.5f, 106, 36.5f, 104, 44.5f);
+            sp.cubicTo(102, 53, 88, 55.5f, 79, 49);
+            p.setStyle(Paint.Style.STROKE);
+            p.setStrokeWidth(10.5f);
+            p.setStrokeCap(Paint.Cap.BUTT);
+            p.setStrokeJoin(Paint.Join.ROUND);
+            cv.drawPath(sp, p);
+            p.setStyle(Paint.Style.FILL);
+            cv.restore();
         }
         // 万事达/万事网联：红 #EB001B / 橙 #F79E1B 双等圆交叠、交叠区独立填 #FF5F00（不用半透叠色冒充）
         void badgeMastercard(Canvas cv, Paint p, int w, int h, float ux, float uy) {
@@ -5637,6 +5702,14 @@ public class MainActivity extends Activity {
             float cx = getWidth() / 2f, cy = getHeight() / 2f;
             float r = Math.min(getWidth(), getHeight()) / 2f;
             if (r <= 0) return;
+            // Q102（2.16）：柔投影先垫一层——两道低透深色圆错位叠出软影，钮身不再贴面平飘；
+            // 纯色占位面无卡图可糊，原先只有平填圆片＋平光，看着像白塑料片，靠这道影与
+            // 下面的顶部边光补回与有图卡面钮同一套玻璃光影。
+            p.setStyle(Paint.Style.FILL);
+            p.setColor(Color.argb(22, 16, 26, 48));
+            cv.drawCircle(cx, cy + r * 0.13f, r * 0.99f, p);
+            p.setColor(Color.argb(38, 16, 26, 48));
+            cv.drawCircle(cx, cy + r * 0.07f, r * 0.99f, p);
             // 圆形裁切内铺磨砂片（钮身下卡图的低清高斯），无卡图时浅白提亮兜底
             cv.save();
             android.graphics.Path circle = new android.graphics.Path();
@@ -5653,6 +5726,12 @@ public class MainActivity extends Activity {
             p.setStyle(Paint.Style.FILL);
             p.setColor(on ? Color.argb(92, 0, 122, 255) : Color.argb(88, 255, 255, 255));
             cv.drawCircle(cx, cy, r, p);
+            // Q102：顶部边光——上亮下无的竖向渐变压出玻璃受光面（仍在圆形裁切内）
+            Paint sheen = new Paint(Paint.ANTI_ALIAS_FLAG);
+            sheen.setShader(new android.graphics.LinearGradient(0, cy - r, 0, cy + r * 0.3f,
+                Color.argb(115, 255, 255, 255), Color.argb(0, 255, 255, 255),
+                android.graphics.Shader.TileMode.CLAMP));
+            cv.drawCircle(cx, cy, r, sheen);
             cv.restore();
             // 1dp 细描边（白色半透，玻璃边缘口径）
             p.setStyle(Paint.Style.STROKE);
@@ -8050,15 +8129,16 @@ public class MainActivity extends Activity {
         if (Build.VERSION.SDK_INT >= 21) { sheetCard.setElevation(dp(this, 24)); topSheetClip(sheetCard, 20, this); } // Q45 顶圆底直轮廓
         sheetCard.setOnClickListener(v -> {}); // 窗体吃点击防穿透遮罩
 
-        // 内容滚动区（窗内延续，不随内容滚走）；底部浮钮已悬浮在窗外（Q92），
-        // 正文末尾留 76dp 让最后一行能滚出浮钮之上不被遮。
+        // 内容滚动区（窗内延续，不随内容滚走）；底部浮钮悬浮在窗下缘之上（Q92），
+        // 正文底部留白按浮钮实占高算：50dp 钮＋12dp 底距＋手势条＋16dp 余量，
+        // 保证末尾「再加一张 / 移除这张」能完整滚到浮钮上方不被压（Q102）。
         ScrollView sc = new ScrollView(this);
         thinScrollbar(sc);
         sc.setBackgroundColor(Color.TRANSPARENT);
         sc.setFillViewport(false);
         detailScroll = sc;
         LinearLayout body = buildDetailSheetBody(c);
-        body.setPadding(0, 0, 0, dp(this, 76));
+        body.setPadding(0, 0, 0, dp(this, 78) + navBarH());
         sc.addView(body);
         sheetCard.addView(sc, new LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
@@ -8726,8 +8806,12 @@ public class MainActivity extends Activity {
         if (joined) {
             detailPrimaryBtn.setText(S("added_manage"));
             detailPrimaryBtn.setTextColor(colText());
-            // Q92 悬浮玻璃态：钮身半透染色贴在 pillWrap 的实时玻璃之上，胶囊全圆
-            detailPrimaryBtn.setBackground(glassTintDrawable(999, darkEff()));
+            // Q102（2.16）：回干净悬浮胶囊——近实白 Soft 柔面＋白边，不再叠半透玻璃染色
+            // （旧口径 glassTintDrawable(999, darkEff()) 把 darkEff 误传 oval 形参，浅色下
+            // 三层玻璃叠出灰雾胶囊）；钮下 pillWrap 玻璃层只作外圈光晕，不再染钮身。
+            GradientDrawable joinedBg = softSheetBg();
+            joinedBg.setCornerRadius(dp(this, 999));
+            detailPrimaryBtn.setBackground(joinedBg);
         } else {
             detailPrimaryBtn.setText(S("add_to_mine"));
             detailPrimaryBtn.setTextColor(Color.WHITE);
@@ -15415,6 +15499,11 @@ public class MainActivity extends Activity {
         if (moreMenuOverlay != null) { closeMoreMenu(); return; }
         if (anchor == null || content == null) return;
         haptic();
+        // Q102：趁菜单未上屏、画面静止先同步抓一帧背板存档，随后开窗全程冻结重抓——旧链在
+        // 菜单缩放动画期间按 preDraw 反复整屏重抓＋隐藏/恢复全部玻璃宿主，背景随之抽搐闪烁。
+        backdropLastCapMs = 0L;
+        try { captureBackdrop(); } catch (Throwable ignored) {}
+        moreMenuBackdropFrozen = true;
         final FrameLayout overlay = new FrameLayout(this);
         overlay.setBackgroundColor(Color.TRANSPARENT);
         overlay.setOnClickListener(v -> closeMoreMenu());
@@ -15464,6 +15553,7 @@ public class MainActivity extends Activity {
     void closeMoreMenu() {
         final View ov = moreMenuOverlay;
         if (ov == null) return;
+        moreMenuBackdropFrozen = false; // Q102：关菜单即解冻背板重抓（淡出 190ms 内背板静止无碍）
         moreMenuOverlay = null;
         if (ov instanceof FrameLayout && ((FrameLayout) ov).getChildCount() > 0) {
             View card = ((FrameLayout) ov).getChildAt(0);
@@ -15480,6 +15570,7 @@ public class MainActivity extends Activity {
     }
 
     void dismissMoreMenuNow() {
+        moreMenuBackdropFrozen = false; // Q102：菜单退场即解冻背板重抓
         View ov = moreMenuOverlay;
         moreMenuOverlay = null;
         if (ov != null) {
@@ -15520,22 +15611,22 @@ public class MainActivity extends Activity {
         // 功能启用区（2026-10-04 06:33 钉版）：可选模块逐项登记在此，关掉入口与界面彻底不出现、不占位
         sectionHead(page, S("sec_features"));
         switchRow(page, "展柜", "我的卡片页的纯卡面展示（堆叠 / 平放自由画布）", prefs == null || prefs.getBoolean("showcase_enabled", true), on -> {
-            if (prefs != null) prefs.edit().putBoolean("showcase_enabled", on).apply(); haptic(); rebuildPages();
+            if (prefs != null) prefs.edit().putBoolean("showcase_enabled", on).apply(); haptic(); invalidatePagesSoft();
         });
         switchRow(page, "保号管家", "电话卡 / eSIM 保号到期管理，关掉后入口不出现", prefs == null || prefs.getBoolean("simkeep_enabled", true), on -> {
-            if (prefs != null) prefs.edit().putBoolean("simkeep_enabled", on).apply(); haptic(); rebuildPages();
+            if (prefs != null) prefs.edit().putBoolean("simkeep_enabled", on).apply(); haptic(); invalidatePagesSoft();
         });
         switchRow(page, "订阅跟随", "订阅扣款日与金额跟随，关掉后入口不出现", prefs == null || prefs.getBoolean("subfollow_enabled", true), on -> {
-            if (prefs != null) prefs.edit().putBoolean("subfollow_enabled", on).apply(); haptic(); rebuildPages();
+            if (prefs != null) prefs.edit().putBoolean("subfollow_enabled", on).apply(); haptic(); invalidatePagesSoft();
         });
         switchRow(page, "玩卡足迹", "申请 / 开卡 / 提额等持卡事件时间线，关掉后入口不出现", prefs == null || prefs.getBoolean("footprint_enabled", true), on -> {
-            if (prefs != null) prefs.edit().putBoolean("footprint_enabled", on).apply(); haptic(); rebuildPages();
+            if (prefs != null) prefs.edit().putBoolean("footprint_enabled", on).apply(); haptic(); invalidatePagesSoft();
         });
         switchRow(page, "持卡总览", "我的卡片页的额度汇总与还款日历", prefs == null || prefs.getBoolean("owncard_enabled", true), on -> {
-            if (prefs != null) prefs.edit().putBoolean("owncard_enabled", on).apply(); haptic(); rebuildPages();
+            if (prefs != null) prefs.edit().putBoolean("owncard_enabled", on).apply(); haptic(); invalidatePagesSoft();
         });
         switchRow(page, "活动追踪", "开卡任务与刷卡达标登记，关掉后入口不出现", prefs == null || prefs.getBoolean("ownact_enabled", true), on -> {
-            if (prefs != null) prefs.edit().putBoolean("ownact_enabled", on).apply(); haptic(); rebuildPages();
+            if (prefs != null) prefs.edit().putBoolean("ownact_enabled", on).apply(); haptic(); invalidatePagesSoft();
         });
 
         // Q72 外观分区：深色模式/主题色/卡面配色三件事各管各、互不染指（卡面配色只管无图占位底色）
@@ -15551,7 +15642,7 @@ public class MainActivity extends Activity {
             placeholderStyle = v; prefs.edit().putString("placeholder_style", v).apply(); haptic(); rebuildPages();
         });
         switchRow(page, "自选卡面配色", "开启后在无图卡详情里逐张换颜色；关闭用自动配色", placeholderCustomEnabled, on -> {
-            placeholderCustomEnabled = on; prefs.edit().putBoolean("placeholder_custom_enabled", on).apply(); haptic(); rebuildPages();
+            placeholderCustomEnabled = on; prefs.edit().putBoolean("placeholder_custom_enabled", on).apply(); haptic(); invalidatePagesSoft();
         });
 
         sectionHead(page, S("sec_display"));
