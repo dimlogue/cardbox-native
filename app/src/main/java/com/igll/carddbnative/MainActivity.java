@@ -634,6 +634,7 @@ public class MainActivity extends Activity {
         STR.put("nav_mine", new String[]{"我的卡片","My Cards"});
         STR.put("nav_news", new String[]{"资讯","News"});
         STR.put("nav_settings", new String[]{"设置","Settings"});
+        STR.put("doubt", new String[]{"存疑","Unverified"});
         STR.put("settings_title", new String[]{"设置","Settings"});
         STR.put("language", new String[]{"语言","Language"});
         STR.put("lang_system", new String[]{"跟随系统","Follow System"});
@@ -1521,6 +1522,18 @@ public class MainActivity extends Activity {
             return v == null ? "" : v;
         }
         boolean isCredit() { return "credit".equals(type); }
+        // Q89：未核实判定（纯数据驱动）——org 空/待核实，或 specs 任一字段值恰为「待核实」；
+        // variants_note 等散文字样不算。核实后字段落值，标记随之自动消失，不落本机状态。
+        boolean hasUnverified() {
+            if (org == null || org.isEmpty() || "待核实".equals(org)) return true;
+            if (specs != null) {
+                java.util.Iterator<String> ks = specs.keys();
+                while (ks.hasNext()) {
+                    if ("待核实".equals(specs.optString(ks.next(), ""))) return true;
+                }
+            }
+            return false;
+        }
     }
 
     static class Store {
@@ -4255,6 +4268,44 @@ public class MainActivity extends Activity {
         }
     }
 
+    // Q89：存疑标身后卡图左上裁片磨砂（与 makeMineFrost 同口径：小图放大+饱和 1.5 的高斯柔糊，
+    // 只解引用交系统回收，绝不主动 Bitmap.recycle()——Q21 纪律）；裁片取左上与标的落位对应。
+    static MineFrost makeDoubtFrost(Bitmap src, String key) {
+        if (src == null || src.isRecycled() || src.getWidth() <= 0 || src.getHeight() <= 0) return null;
+        if (key != null) {
+            MineFrost hit = mineFrostCache.get(key);
+            if (hit != null) return hit;
+        }
+        try {
+            int sw = src.getWidth(), sh = src.getHeight();
+            int cw = Math.max(2, Math.round(sw * 0.34f));
+            int ch = Math.max(2, Math.round(sh * 0.45f));
+            Bitmap crop = Bitmap.createBitmap(src, 0, 0, Math.min(cw, sw), Math.min(ch, sh));
+            Bitmap small = Bitmap.createScaledBitmap(crop, 14, 14, true);
+            Bitmap out = Bitmap.createBitmap(28, 28, Bitmap.Config.ARGB_8888);
+            Canvas oc = new Canvas(out);
+            Paint sp = new Paint(Paint.FILTER_BITMAP_FLAG | Paint.ANTI_ALIAS_FLAG);
+            ColorMatrix cm = new ColorMatrix();
+            cm.setSaturation(1.5f);
+            sp.setColorFilter(new ColorMatrixColorFilter(cm));
+            oc.drawBitmap(small, null, new RectF(0, 0, 28, 28), sp);
+            long sum = 0;
+            for (int y = 0; y < small.getHeight(); y++) {
+                for (int x = 0; x < small.getWidth(); x++) {
+                    int px = small.getPixel(x, y);
+                    sum += Math.round(0.2126f * Color.red(px) + 0.7152f * Color.green(px) + 0.0722f * Color.blue(px));
+                }
+            }
+            MineFrost f = new MineFrost();
+            f.bmp = out;
+            f.lum = (int) (sum / Math.max(1, small.getWidth() * small.getHeight()));
+            if (key != null) mineFrostCache.put(key, f);
+            return f;
+        } catch (Throwable t) {
+            return null; // 生成失败回落仅染色玻璃，不为标底冒崩点
+        }
+    }
+
     // Q70：占位卡面右下角卡组织小标——按 org 自绘，禁用 emoji、绝不用万事达双圆充一切；org 空/未知不画
     class OrgBadgeView extends View {
         final String org;
@@ -4429,6 +4480,52 @@ public class MainActivity extends Activity {
         }
     }
 
+    // Q89：无图占位面在标落位处的明暗（与 placeholderGradFor 同色板同下标），供存疑标定字色
+    boolean placeholderLightBg(String id) {
+        int idx = placeholderIdxFor(id);
+        int[] pair;
+        if (placeholderCustomEnabled && id != null && placeholderCustom.containsKey(id)) pair = PLACEHOLDER_PALETTE[idx];
+        else pair = ("dark".equals(placeholderStyle) ? PLACEHOLDER_PALETTE : PLACEHOLDER_PALETTE_LIGHT)[idx];
+        int lum = 0;
+        for (int c : pair) lum += Math.round(0.2126f * Color.red(c) + 0.7152f * Color.green(c) + 0.0722f * Color.blue(c));
+        return (lum / Math.max(1, pair.length)) > 168;
+    }
+
+    // Q89「存疑」毛玻璃标：用户 2026-10-04 点名——没证实的数据给卡加个标签式记号放卡面左上角，
+    // 必须是高斯模糊毛玻璃（同 Q47 ＋/✓ 磨砂钮、Q73 统一玻璃规范：身后卡图裁片磨砂 + 薄染色 +
+    // 浅提亮 + 白色柔边，深色模式同规范换深色档），不许实白塑料块。纯展示层：数据核实后自动消失。
+    View doubtBadge(final Card c, Bitmap bmp, float textSp, int padH, int padV) {
+        FrameLayout badge = new FrameLayout(this);
+        badge.setClickable(false); badge.setFocusable(false);
+        badge.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
+        MineFrost frost = bmp != null ? makeDoubtFrost(bmp, "doubtfrost:" + c.image) : null;
+        if (frost != null && frost.bmp != null && !frost.bmp.isRecycled()) {
+            ImageView fiv = new ImageView(this);
+            fiv.setScaleType(ImageView.ScaleType.CENTER_CROP);
+            fiv.setImageBitmap(frost.bmp);
+            fiv.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
+            badge.addView(fiv, new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        }
+        View tint = new View(this);
+        tint.setBackground(glassTintDrawable(999, false));
+        tint.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
+        badge.addView(tint, new FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        badge.addView(glassWashView(999, false), new FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        // 字色按底明暗取（同 Q47 字形口径）：亮底深字、暗底或深色档白字带轻影压图
+        boolean lightBg = !darkEff() && (frost != null ? frost.lum > 168 : placeholderLightBg(c.id));
+        TextView t = tv(this, S("doubt"), textSp, lightBg ? Color.rgb(0x1C, 0x1C, 0x1E) : Color.WHITE, true);
+        t.setGravity(Gravity.CENTER);
+        t.setPadding(dp(this, padH), dp(this, padV), dp(this, padH), dp(this, padV));
+        if (!lightBg) t.setShadowLayer(dp(this, 1.5f), 0, dp(this, 0.5f), Color.argb(110, 0, 0, 0));
+        badge.addView(t, new FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        glassClip(badge, 999, false);
+        return badge;
+    }
+
     // P-grid：瓷砖规格统一——图区按 1.586 卡面比例定高（同列同宽同高）、卡名预留两行、行内等高拉伸，底边齐平
     // Q24：卡图改全幅 cover 铺满图区（对照混合版 .art/.art-img object-fit:cover，图区贴瓷砖顶边满宽、不留白、
     // 不拉伸；圆角靠瓷砖外框 clipToOutline 平滑裁切，冲突时保铺满）+ 图右上半透圆加卡钮（.mine-btn）。
@@ -4557,6 +4654,14 @@ public class MainActivity extends Activity {
         blp2.gravity = Gravity.TOP | Gravity.RIGHT;
         blp2.topMargin = btnEdge; blp2.rightMargin = btnEdge;
         art.addView(mineBtn, blp2);
+        // Q89：未核实卡在卡图左上角压一枚「存疑」毛玻璃标（与右上加卡钮对角分工、不遮卡名）
+        if (c.hasUnverified()) {
+            FrameLayout.LayoutParams dlp = new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            dlp.gravity = Gravity.TOP | Gravity.LEFT;
+            dlp.topMargin = btnEdge; dlp.leftMargin = btnEdge;
+            art.addView(doubtBadge(c, b, nc >= 4 ? 7.5f : 8.5f, nc >= 4 ? 5 : 7, nc >= 4 ? 2 : 3), dlp);
+        }
         mineBtn.setOnTouchListener((v, e) -> {
             if (e.getAction() == MotionEvent.ACTION_DOWN) pressBounce(v, true);
             else if (e.getAction() == MotionEvent.ACTION_UP || e.getAction() == MotionEvent.ACTION_CANCEL) pressBounce(v, false);
@@ -7090,6 +7195,14 @@ public class MainActivity extends Activity {
             LinearLayout.LayoutParams ilp = new LinearLayout.LayoutParams(imgW, imgH);
             ilp.gravity = Gravity.CENTER_HORIZONTAL;
             slide.addView(imgFrame, ilp);
+            // Q89：详情英雄图左上角同压一枚「存疑」毛玻璃标（口径同瓷砖，略放大）
+            if (c.hasUnverified()) {
+                FrameLayout.LayoutParams dlp = new FrameLayout.LayoutParams(
+                    ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+                dlp.gravity = Gravity.TOP | Gravity.LEFT;
+                dlp.leftMargin = dp(this, 8); dlp.topMargin = dp(this, 8);
+                imgFrame.addView(doubtBadge(c, b, 10.5f, 9, 4), dlp);
+            }
             if (b == null) { iv.setBackground(placeholderGradFor(c.id, cardR, this)); addOrgBadge(imgFrame, c.org, 1.5f);
                 if (placeholderCustomEnabled) imgFrame.setOnLongClickListener(v -> { haptic(); openPlaceholderColorPicker(c); return true; });
             }
