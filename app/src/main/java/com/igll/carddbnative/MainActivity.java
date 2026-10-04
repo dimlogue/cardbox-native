@@ -7403,19 +7403,14 @@ public class MainActivity extends Activity {
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         // Q118（2.31）：同 ⋯ 菜单病同治——popFace 旧 glassWindowTint α≈233 近不透明白面
         // 改玻璃＋轻 wash 唯一面（关停态才回落实面保可读），行直接浮在磨砂上。
-        if (glassDisabled) {
-            View popFace = new View(this);
-            popFace.setBackground(glassWindowTint(28, false));
-            popFace.setClickable(false);
-            popFace.setFocusable(false);
-            popWrap.addView(popFace, new FrameLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
-        } else {
-            View popWash = glassWashView(28, false);
-            glassClip(popWash, 28, false);
-            popWrap.addView(popWash, new FrameLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
-        }
+        // Q119（2.32）：同 ⋯ 菜单返工同改——wash 薄面不是白源（背板内容才是），收回窗
+        // 级单面：糊层＋glassWindowTint(28) 唯一面、两态同面同圆角，不留第二层。
+        View popFace = new View(this);
+        popFace.setBackground(glassWindowTint(28, false));
+        popFace.setClickable(false);
+        popFace.setFocusable(false);
+        popWrap.addView(popFace, new FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         FrameLayout.LayoutParams popInWrap = new FrameLayout.LayoutParams(popW, popH);
         popInWrap.leftMargin = cmPad; popInWrap.topMargin = cmPad;
         popWrap.addView(pop, popInWrap);
@@ -17040,6 +17035,20 @@ public class MainActivity extends Activity {
         final FrameLayout overlay = new FrameLayout(this);
         overlay.setBackgroundColor(Color.TRANSPARENT);
         overlay.setOnClickListener(v -> closeMoreMenu());
+        // Q119（2.32 返工，用户 00:54 确认装 2.31 后仍在）：⋯ 菜单原先独缺其他窗都有的
+        // 轻遮罩——全亮页面不压暗，面层再薄也压不住：毛玻璃档背板把近白的设置页（满
+        // 页白卡）强糊＋饱和 1.9 后本就 ≈250 亮度、近不透明，页里白卡的直边透过磨砂
+        // 直读成「面板里垫了块方形白底」（2.31 删的 α233 menuFace 不是这块白的来源，
+        // 白来自背板内容本身，故删面无感）。补与情景/筛选等大窗同口径遮罩（117 档，
+        // 落进 overlay 首子，点遮罩仍走 overlay 原关菜单监听）；背板抓帧含遮罩与大窗
+        // 「快照含轻暗遮罩之下的页面」口径一致（Q11）。
+        View menuShade = new View(this);
+        menuShade.setBackgroundColor(Color.argb(117, 15, 20, 40));
+        menuShade.setAlpha(0f);
+        menuShade.setClickable(false);
+        menuShade.setFocusable(false);
+        overlay.addView(menuShade, new FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         // Q73: more-menu joins the same true-glass family (frozen blur + thin tint + wash),
         // was a solid white card. Rows keep their ripple over the glass.
         // Q104（2.17 真机回图）：菜单玻璃恰好止于 cardWrap 边界，右沿阴影带/圆角外的
@@ -17061,19 +17070,19 @@ public class MainActivity extends Activity {
         // 白板」（2.20 删掉的是内嵌小白板，这块整面白留了下来）。改与筛选窗同口径：玻璃
         // ＋轻 wash（α58/44）作唯一面，行直接浮在磨砂上；仅玻璃关停态（糊层整面不画）
         // 才回落 glassWindowTint 实面保可读——那是静态染色语境，不成双层观感。
-        if (glassDisabled) {
-            View menuFace = new View(this);
-            menuFace.setBackground(glassWindowTint(32, false));
-            menuFace.setClickable(false);
-            menuFace.setFocusable(false);
-            cardWrap.addView(menuFace, new FrameLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
-        } else {
-            View menuWash = glassWashView(32, false);
-            glassClip(menuWash, 32, false);
-            cardWrap.addView(menuWash, new FrameLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
-        }
+        // Q119（2.32 返工）：真机复验洗层没命中——删 α233 面后白原样还在（量图：内层
+        // 亮区 ≈250 与三行内容架范围吻合、外圈 241–247，是设置页白卡经背板强糊后的
+        // 本色，wash α58 只再添约 3 档亮，根本不是白的来源）。根治改回窗级单面：糊层
+        // ＋glassWindowTint(32) 唯一面（与情景/筛选窗同一口径，用户已认），配合本版新
+        // 补的遮罩压暗页面——面有自己的定形色、不再随身后页面明暗读成白板；wash 删
+        // 除，不留第二层。两态（玻璃开/关停）同此一面：关停时糊层整面不画、此面即实
+        // 面兜底，圆角同为 32、不出方圆套娃。
+        View menuFace = new View(this);
+        menuFace.setBackground(glassWindowTint(32, false));
+        menuFace.setClickable(false);
+        menuFace.setFocusable(false);
+        cardWrap.addView(menuFace, new FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         final LinearLayout card = new LinearLayout(this);
         card.setOrientation(LinearLayout.VERTICAL);
         card.setPadding(dp(this, 6), dp(this, 6), dp(this, 6), dp(this, 6));
@@ -17115,6 +17124,7 @@ public class MainActivity extends Activity {
         overlay.addView(cardWrap, clp);
         content.addView(overlay, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         moreMenuOverlay = overlay;
+        animShadeIn(menuShade); // Q119：遮罩随菜单入场淡入（与大窗 animShadeIn 同口径）
         // Q104：落位落定后再同步重抓一帧冻结背板——开窗瞬间的预抓帧若与菜单最终几何
         // 有任何时序差（页面未停稳/字体落定），按最终落位重采样对齐；抓图时宿主整面
         // 让开（captureBackdrop 既有机制），画面上不会闪没。关窗后 overlay 已换则跳过。
@@ -17139,7 +17149,18 @@ public class MainActivity extends Activity {
         moreMenuBackdropFrozen = false; // Q102：关菜单即解冻背板重抓（淡出 190ms 内背板静止无碍）
         moreMenuOverlay = null;
         if (ov instanceof FrameLayout && ((FrameLayout) ov).getChildCount() > 0) {
-            View card = ((FrameLayout) ov).getChildAt(0);
+            // Q119：overlay 首子已是遮罩（plain View）、菜单框是 FrameLayout 子——逐子
+            // 分拣：框走原缩放淡出，遮罩走 animShadeOut 同步淡出（旧 getChildAt(0) 会
+            // 错把遮罩当菜单框缩放）。
+            View card = null;
+            for (int i = 0; i < ((FrameLayout) ov).getChildCount(); i++) {
+                View ch = ((FrameLayout) ov).getChildAt(i);
+                if (ch instanceof FrameLayout) card = ch; else animShadeOut(ch);
+            }
+            if (card == null) {
+                if (ov.getParent() != null) ((ViewGroup) ov.getParent()).removeView(ov);
+                return;
+            }
             card.animate().cancel();
             card.animate().scaleX(0.78f).scaleY(0.78f).alpha(0f)
                 .setDuration(ANIM_DUR_MENU_OUT).setInterpolator(ANIM_EXIT)
