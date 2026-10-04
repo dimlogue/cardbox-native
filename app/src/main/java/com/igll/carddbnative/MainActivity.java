@@ -2295,7 +2295,7 @@ public class MainActivity extends Activity {
     // 首帧 drawRenderNode 成功返回后写 glass_hw_stable=true。冷启 initHwGlassGuard 若见
     // armed && !stable，即认定上一会话死在硬件路上：置 glass_hw_dead、关实验开关、留
     // 时间戳 glass_hw_note（设置行可查），全程回落软件链——「崩一次、重开即愈」。
-    // 手动开关「硬件玻璃（实验）」（glass_hw_exp，默认开）随时可关：硬件件 onDraw 逐帧
+    // 手动开关「硬件玻璃（实验）」（glass_hw_exp，Q113 起默认关＝止损停用）随时可关：硬件件 onDraw 逐帧
     // 查开关，关掉下一帧即回软件路（即时生效）；自动退回后重新打开＝清 dead 再试一轮。
     // Q111（2.24）事故修订：2.23 真机进主页首帧必崩且重开不愈——全局 stable 被先进场
     // 的已证/无害件先行写下，后崩的件永远被信任。护栏改逐件金丝雀记账（见下方
@@ -2468,8 +2468,23 @@ public class MainActivity extends Activity {
         if (Build.VERSION.SDK_INT < 31 || prefs == null) { hwGlassDead = true; return; }
         try {
             loadHwPieces(); // Q111：逐件账本先行装载（首次新账播种 2.22 实证两件）
+            // Q113（2.26）止损一次性复位：用户 23:47 拍板「玻璃通通关掉先……最后再
+            // 设置这个毛玻璃」。存量设备上 glass_hw_exp 可能已被 2.22–2.25 试开并落盘
+            // 为 true，仅改默认值救不了升级用户——故以版本标记做一次性强制复位：
+            // 实验关、武装/稳定/在试标记全清，本次冷启硬件恒关；之后用户仍可在设置
+            // 里手动重开（副文案带「可能闪退」提示），金丝雀/资格/双标记代码保留停用。
+            if (prefs.getInt("glass_hw_pause_ver", 0) < 226) {
+                prefs.edit().putInt("glass_hw_pause_ver", 226)
+                    .putBoolean("glass_hw_exp", false)
+                    .putBoolean("glass_hw_armed", false)
+                    .putBoolean("glass_hw_stable", false)
+                    .putString("glass_hw_trial", "")
+                    .commit(); // 同步落盘：止损决定不许丢
+                hwGlassDead = prefs.getBoolean("glass_hw_dead", false);
+                return; // hwGlassEnabled 保持 false：全件本启走软件链
+            }
             hwGlassDead = prefs.getBoolean("glass_hw_dead", false);
-            boolean exp = prefs.getBoolean("glass_hw_exp", true); // 2.22 实验载体：默认开
+            boolean exp = prefs.getBoolean("glass_hw_exp", false); // Q113：默认关（止损），须用户在设置里手动重开
             if (hwGlassDead || !exp) return;
             // Q111 逐件判死（先于全局兜底）：上次进程残留在试标记且该件未入证＝进程死在
             // 该件首帧硬件绘制内——只判该件退软件（留时间戳、换下一件），全局不牵连。
@@ -2641,8 +2656,8 @@ public class MainActivity extends Activity {
         }
         if (hwGlassEnabled) return (isEn() ? "Beta: dock plus piece-by-piece verified sheets use hardware real-time blur; the rest stays software. May crash; reverts automatically on relaunch"
                                          : "实验中：底栏与逐件验证通过的窗件走硬件实时模糊，其余软件磨砂；可能闪退，闪退后重开自动退回") + hwPieceStatus();
-        return (isEn() ? "Off — all glass uses the safe software blur"
-                      : "已关闭，全部玻璃走安全软件磨砂") + hwPieceStatus();
+        return (isEn() ? "Paused — all glass uses the safe software blur; hardware glass is scheduled last, after features and UI are done. Turning it on may crash"
+                      : "已暂停（排期最后）：全部玻璃走安全软件磨砂；功能与 UI 收官后再议。手动打开可能闪退，闪退后重开自动退回") + hwPieceStatus();
     }
 
     /** 手写盒式模糊（三遍滑动窗均值近似高斯，边缘钳制取样）；直接在像素数组上原地进行。 */
