@@ -2980,6 +2980,11 @@ public class MainActivity extends Activity {
                 }
             } catch (Throwable ignored) {}
         }
+        // 2.08 定位版（隔离 S2）：无条件硬关玻璃——在上面 Q90 重置逻辑之后压住，
+        // glassDisabled=true 时 GlassBackdropView 不创建、recordBackdrop/refreshLiveGlass 直接返回，
+        // RenderNode 背板零录制零绘制，全部玻璃件走既有静态染色兜底。若真机此版可用即定案玻璃原生崩。
+        glassDisabled = true;
+        try { prefs.edit().putBoolean("glass_disabled", true).apply(); } catch (Throwable ignored) {}
         loadCrashLog();
         installCrashHandler();
         fontMode = prefs.getString("font_mode", "builtin");
