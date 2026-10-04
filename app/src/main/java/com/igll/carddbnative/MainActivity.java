@@ -1032,6 +1032,76 @@ public class MainActivity extends Activity {
     int colText3() { return darkEff() ? Color.argb(97,255,255,255) : Color.rgb(0xAE,0xAE,0xB2); }
     int colDivider() { return darkEff() ? Color.argb(26,255,255,255) : Color.argb(13,20,30,60); }
     int colChipOff() { return darkEff() ? Color.rgb(0x2A,0x2A,0x2E) : Color.rgb(0xEE,0xF1,0xF6); }
+    // Q94 试点视觉 token（Soft UI＋轻玻璃拟态，用户 2026-10-04 15:43 参照图定版）：
+    // 雾蓝渐变页底、半透明浅蓝白柔面、20–28dp 大圆角、柔和外阴影＋极淡内高光（靠顶部提亮渐变与白色细描边近似）、
+    // 图标落圆角胶囊底；主题色只作点缀不作大面。本段只供首页与自有卡编辑弹层试点调用，
+    // 其余页面不许擅自接入——铺全页须用户看过试点点头后另起一段。深色档给深雾蓝等值，不许深色下亮底。
+    GradientDrawable softPageBg() {
+        GradientDrawable g;
+        if (darkEff()) {
+            g = new GradientDrawable(GradientDrawable.Orientation.TL_BR,
+                new int[]{Color.rgb(0x15, 0x1E, 0x2E), Color.rgb(0x10, 0x17, 0x25), Color.rgb(0x0C, 0x12, 0x1E)});
+        } else {
+            g = new GradientDrawable(GradientDrawable.Orientation.TL_BR,
+                new int[]{Color.rgb(0xD7, 0xE7, 0xF8), Color.rgb(0xE8, 0xF1, 0xFB), Color.rgb(0xF6, 0xF9, 0xFD)});
+        }
+        return g;
+    }
+    /** 半透明浅蓝白柔面：顶部更白（内高光近似）＋白色细描边收口；radiusDp 取 20–28 档。 */
+    GradientDrawable softFaceBg(float radiusDp) {
+        GradientDrawable g;
+        if (darkEff()) {
+            g = new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
+                new int[]{Color.argb(240, 34, 45, 63), Color.argb(232, 25, 34, 50)});
+            g.setStroke(dp(this, 1), Color.argb(70, 255, 255, 255));
+        } else {
+            g = new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
+                new int[]{Color.argb(243, 255, 255, 255), Color.argb(233, 238, 245, 253)});
+            g.setStroke(dp(this, 1), Color.argb(160, 255, 255, 255));
+        }
+        g.setCornerRadius(dp(this, radiusDp));
+        return g;
+    }
+    /** 柔面＋按压涟漪（涟漪色随主题色，与 rippleBg 同口径）。 */
+    Drawable softFaceRipple(float radiusDp) {
+        int ac = accentColor();
+        return new RippleDrawable(ColorStateList.valueOf(Color.argb(38, Color.red(ac), Color.green(ac), Color.blue(ac))), softFaceBg(radiusDp), null);
+    }
+    /** 弹层柔面：比卡面再透一档，让遮罩与身后内容隐隐透出（轻玻璃），圆角由调用方按窗形覆盖。 */
+    GradientDrawable softSheetBg() {
+        GradientDrawable g;
+        if (darkEff()) {
+            g = new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
+                new int[]{Color.argb(243, 30, 39, 56), Color.argb(236, 22, 30, 45)});
+            g.setStroke(dp(this, 1), Color.argb(80, 255, 255, 255));
+        } else {
+            g = new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
+                new int[]{Color.argb(246, 253, 254, 255), Color.argb(238, 240, 246, 252)});
+            g.setStroke(dp(this, 1), Color.argb(170, 255, 255, 255));
+        }
+        g.setCornerRadius(dp(this, 26));
+        return g;
+    }
+    /** 图标胶囊底：柔蓝小托盘，图标坐进去（参照图口径）。 */
+    GradientDrawable softCapsuleBg(float radiusDp) {
+        GradientDrawable g = new GradientDrawable();
+        g.setColor(darkEff() ? Color.rgb(0x2B, 0x3D, 0x5E) : Color.rgb(0xD3, 0xE4, 0xF8));
+        g.setCornerRadius(dp(this, radiusDp));
+        return g;
+    }
+    /** 柔影：低 elevation＋蓝灰色影（API 28+），影子散而不黑；须视图已有圆角 outline（roundClip 等）才成形。 */
+    void softShadow(View v, float elevDp) {
+        try {
+            if (Build.VERSION.SDK_INT >= 21) v.setElevation(dp(this, elevDp));
+            if (Build.VERSION.SDK_INT >= 28) {
+                v.setOutlineAmbientShadowColor(darkEff() ? Color.argb(90, 0, 0, 0) : Color.argb(46, 58, 84, 120));
+                v.setOutlineSpotShadowColor(darkEff() ? Color.argb(110, 0, 0, 0) : Color.argb(64, 58, 84, 120));
+            }
+        } catch (Throwable ignored) { /* 个别机型阴影色异常时保留默认影，不为柔影冒崩点 */ }
+    }
+    /** Soft 面上的墨色：浅档深蓝墨、深档回白系（与 heroTile/英雄卡共用）。 */
+    int softInk() { return darkEff() ? Color.WHITE : Color.rgb(0x14, 0x31, 0x52); }
+    int softInk2() { return darkEff() ? Color.argb(224, 255, 255, 255) : Color.rgb(0x4A, 0x64, 0x84); }
     // Q73 unified true-glass spec (all floating pieces share this): frozen/live snapshot blur
     // (applyGlass blur13 + saturate1.65, aligned to the tile +/check frost the user approved in Q47)
     // + ONLY a thin tint over it + a fixed light wash + a soft 1dp edge. Tint must stay thin and
@@ -5055,18 +5125,19 @@ public class MainActivity extends Activity {
     // Q24：卡图改全幅 cover 铺满图区（对照混合版 .art/.art-img object-fit:cover，图区贴瓷砖顶边满宽、不留白、
     // 不拉伸；圆角靠瓷砖外框 clipToOutline 平滑裁切，冲突时保铺满）+ 图右上半透圆加卡钮（.mine-btn）。
     View cardTile(final Card c, ViewGroup parent, int nCols) {
-        return cardTile(c, parent, nCols, "", false, true);
+        // Q94 试点：首页瓷砖走 Soft 柔面（softFace=true），其余调用面（我的卡片等）暂不跟，等试点过审再铺
+        return cardTile(c, parent, nCols, "", false, true, true);
     }
 
     View cardTile(final Card c, ViewGroup parent, int nCols, final String acctClass) {
-        return cardTile(c, parent, nCols, acctClass, true, false);
+        return cardTile(c, parent, nCols, acctClass, true, false, false);
     }
 
     View cardTile(final Card c, ViewGroup parent, int nCols, final String acctClass, final boolean mineTile) {
-        return cardTile(c, parent, nCols, acctClass, mineTile, false);
+        return cardTile(c, parent, nCols, acctClass, mineTile, false, false);
     }
 
-    View cardTile(final Card c, ViewGroup parent, int nCols, final String acctClass, final boolean mineTile, final boolean showScoreDims) {
+    View cardTile(final Card c, ViewGroup parent, int nCols, final String acctClass, final boolean mineTile, final boolean showScoreDims, final boolean softFace) {
         LinearLayout box = new LinearLayout(this);
         box.setOrientation(LinearLayout.VERTICAL);
         box.setClipToOutline(true);
