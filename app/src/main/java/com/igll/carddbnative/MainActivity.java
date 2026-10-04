@@ -4085,70 +4085,14 @@ public class MainActivity extends Activity {
     // Q117（2.30）：我的卡片网格就地开合——只补间行块自身高度（展开先装行再量高、
     // 收起从当前高收 0 后清行藏起），落定回 WRAP_CONTENT；不摘页、不重抓背板、
     // 不回滚滚动位。连点以最新一次为准（旧补间先取消，按当时高度接续）。
-    ValueAnimator mineFoldAnim = null;
+    // Q120（2.33）：改走全站共用弹簧高度驱动（foldHeightSpring），与玻璃从属块、功能
+    // 启用同一支劲；语义不变：展开先装行再量高、收起落定才清行。
     void toggleMineRowsBox(final LinearLayout box, final List<MineRow> rows, final ScrollView sv, final boolean open) {
-        if (mineFoldAnim != null) { mineFoldAnim.cancel(); mineFoldAnim = null; }
-        final ViewGroup.LayoutParams lp = box.getLayoutParams();
-        if (open) {
-            box.removeAllViews();
-            addMineCardRows(box, rows, sv);
-            box.setVisibility(View.VISIBLE);
-            int w = box.getWidth();
-            if (w <= 0) w = getResources().getDisplayMetrics().widthPixels - dp(this, 28);
-            box.measure(View.MeasureSpec.makeMeasureSpec(w, View.MeasureSpec.EXACTLY),
-                View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED));
-            final int toH = box.getMeasuredHeight();
-            final int fromH = (lp.height > 0) ? lp.height : 0;
-            if (toH <= 0) { lp.height = ViewGroup.LayoutParams.WRAP_CONTENT; box.setLayoutParams(lp); return; }
-            lp.height = fromH; box.setLayoutParams(lp);
-            mineFoldAnim = ValueAnimator.ofInt(fromH, toH);
-            mineFoldAnim.setDuration(240);
-            mineFoldAnim.setInterpolator(ANIM_ENTER);
-            mineFoldAnim.addUpdateListener(a -> {
-                int h = (Integer) a.getAnimatedValue();
-                if (lp.height != h) { lp.height = h; box.setLayoutParams(lp); }
-            });
-            mineFoldAnim.addListener(new android.animation.AnimatorListenerAdapter() {
-                @Override public void onAnimationEnd(android.animation.Animator a) {
-                    lp.height = ViewGroup.LayoutParams.WRAP_CONTENT; box.setLayoutParams(lp);
-                    if (mineFoldAnim == a) mineFoldAnim = null;
-                }
-                @Override public void onAnimationCancel(android.animation.Animator a) {
-                    if (mineFoldAnim == a) mineFoldAnim = null;
-                }
-            });
-            mineFoldAnim.start();
-        } else {
-            final int fromH = (lp.height > 0) ? lp.height : box.getHeight();
-            if (fromH <= 0) {
-                box.removeAllViews();
-                box.setVisibility(View.GONE);
-                lp.height = ViewGroup.LayoutParams.WRAP_CONTENT; box.setLayoutParams(lp);
-                return;
-            }
-            lp.height = fromH; box.setLayoutParams(lp);
-            mineFoldAnim = ValueAnimator.ofInt(fromH, 0);
-            mineFoldAnim.setDuration(200);
-            mineFoldAnim.setInterpolator(ANIM_EXIT);
-            mineFoldAnim.addUpdateListener(a -> {
-                int h = (Integer) a.getAnimatedValue();
-                if (lp.height != h) { lp.height = h; box.setLayoutParams(lp); }
-            });
-            mineFoldAnim.addListener(new android.animation.AnimatorListenerAdapter() {
-                @Override public void onAnimationEnd(android.animation.Animator a) {
-                    box.removeAllViews();
-                    box.setVisibility(View.GONE);
-                    lp.height = ViewGroup.LayoutParams.WRAP_CONTENT; box.setLayoutParams(lp);
-                    if (mineFoldAnim == a) mineFoldAnim = null;
-                }
-                @Override public void onAnimationCancel(android.animation.Animator a) {
-                    if (mineFoldAnim == a) mineFoldAnim = null;
-                }
-            });
-            mineFoldAnim.start();
-        }
+        foldHeightSpring(box, open,
+            () -> { box.removeAllViews(); addMineCardRows(box, rows, sv); },
+            () -> box.removeAllViews(),
+            mineFoldSpring);
     }
-
     // Q117（2.30）：自定义区头部就地开合——原地换一节新构建的区＋高度补间到新高，
     // 同折叠条口径不整页重建。新节头部点击仍回本函数，连点按当时高度接续。
     ValueAnimator customFoldAnim = null;
@@ -4207,6 +4151,10 @@ public class MainActivity extends Activity {
     int detailVariantIdx = 0;
     TextView detailBinView = null;
     TextView detailPrimaryBtn = null; // Q83：详情窗底部常驻主按钮（未加入=加入我的卡片，已加入=管理入口）
+    View detailPillWrap = null;     // Q120（2.33）：详情主钮浮层（pillWrap），随窗内滚动弹簧淡出/停稳淡入
+    final SpringDriver detailPillDriver = new SpringDriver(); // Q120：主钮淡入淡出弹簧驱动
+    final Spring1D detailPillSpring = new Spring1D(1f);        // Q120：主钮不透明度弹簧态 1=全显
+    int detailPillRestGen = 0;                               // Q120：滚动停稳计时代次
     LinearLayout detailVerInfoBox = null;
     java.util.List<View> detailDots = new java.util.ArrayList<>();
     // Q100 热修：图廊视口高度按「当前 slide」实测高收紧（旧口径被最高 slide 顶住——竖版子版本
@@ -4308,6 +4256,11 @@ public class MainActivity extends Activity {
     int navTintIdx = 0;             // Q38: tab index currently tinted as "under the lens" (icon+label follow the lens, not only the settled page)
     int navIndicatorRetry = 0;      // Q98: layoutNavIndicator 在底栏未落位时的自投递重试计数（有上限，防无界空转）
     View currentPageView;           // Q38: currently displayed page view - only pages crossfade on switch; FABs/sheets in content keep removeAll semantics
+    FrameLayout pageHost;           // Q120（2.33）：五页签常驻宿主（content 首层）——建好只显隐、切走不拆、切回不重建
+    View fullScreenPage;            // Q120：全屏二级页（关于/你好/更新日志）在 content 上的当前实例，showTab 先摘它再切页
+    final SpringDriver tabAnim = new SpringDriver();       // Q120：切页过渡弹簧驱动（单回路）
+    final Spring1D tabSpring = new Spring1D(1f);            // Q120：切页过渡进度 0→1
+    View tabAnimOut;                                       // Q120：过渡中正在退场的旧页（连切时强制收尾它）
     int lastTabIdx = 0;             // Q64: last settled tab index for directional slide
     int tabAnimGen = 0;             // Q64: generation token to cancel stale page animators on rapid taps
     boolean navDragging = false;
@@ -4699,6 +4652,11 @@ public class MainActivity extends Activity {
         content.setPadding(0, 0, 0, 0);
         content.setClipToPadding(false);
         root.addView(content, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        // Q120（2.33）：五页签常驻宿主——页面只建一次挂在这里，切换只显隐＋绘制层过渡，
+        // 切走不拆、切回不重建（首页 365 张全量行双向切零重搭）。FAB/窗/浮层仍挂
+        // content 在宿主之上，与旧 removeAllViews 时代的层叠次序一致。
+        pageHost = new FrameLayout(this);
+        content.addView(pageHost, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         buildNav(root);
         setContentView(root);
         applyAppearanceChrome(); // Q72：先套色再显页，切深色不闪白
@@ -4707,7 +4665,12 @@ public class MainActivity extends Activity {
         root.getViewTreeObserver().addOnScrollChangedListener(() -> { lastScrollEventMs = android.os.SystemClock.uptimeMillis(); scheduleGlassRefresh(); followBandScroll(); invalidateLiveGlass(); }); // Q98 打点供背板滚动冻结判定；Q99 live 玻璃同帧重采样
 
         showTab("home");
-        if (prefs == null || prefs.getBoolean("auto_check_update", true)) checkDataUpdate(false); // Q62: auto only detects
+        // Q121（2.33 插队，站规矩复犯纠正）：「启动时自动检测更新」旧默认 true——
+        // 打开 App 即自动联网检测，用户多次立规矩「不许打开就自动更、默认关」。
+        // 默认改 false；从未手动拨过（prefs 无此键）即按关生效，手动开过（键=true）
+        // 的保持其选择不动。检测发起再延到首帧落定后（见 scheduleAutoDataCheck），
+        // 绝不堵首帧。手动检查入口（设置页数据行/下拉）不受此限、口径不变。
+        if (prefs != null && prefs.getBoolean("auto_check_update", false)) scheduleAutoDataCheck();
         if (!prefs.getBoolean("welcomed", false) && !prefs.getBoolean("hello_done", false)) showHello(); // Q93：旧欢迎页已删，首启直达「你好」
         if (hwJustRetreated) {
             // Q108：本次冷启刚把硬件玻璃自退回安全链——等欢迎页散场后提示一次，
@@ -4972,11 +4935,19 @@ public class MainActivity extends Activity {
         View shade = ((ViewGroup) v).getChildAt(0);
         if (shade != null) animShadeOut(shade);
         if (wrap != null) {
+            // Q120（2.33）：收起同走弹簧（自现位下沉＋淡出），落定摘除；兜底沿 Q98
+            // 主线程通道，弹簧被连点打断时也不许残窗。
             wrap.animate().cancel();
-            wrap.animate().alpha(0f).translationY(dp(this, SHEET_RISE_DP))
-                .setDuration(ANIM_DUR_SHEET_OUT).setInterpolator(ANIM_EXIT)
-                .withEndAction(() -> { if (v.getParent() instanceof ViewGroup) ((ViewGroup) v.getParent()).removeView(v); }).start();
-            mainHandler.postDelayed(() -> { if (v.getParent() instanceof ViewGroup) ((ViewGroup) v.getParent()).removeView(v); }, ANIM_DUR_SHEET_OUT + 40); // Q98：兜底改投主线程（view.postDelayed 在视图被摘时 park 走丢）
+            final float rise120 = dp(this, SHEET_RISE_DP);
+            final float fromY120 = wrap.getTranslationY();
+            final Spring1D pkOut120 = new Spring1D(1f);
+            acctPickerSpring.drive(pkOut120, 0f, SPRING_SHEET_K, SPRING_SHEET_Z,
+                p -> {
+                    wrap.setTranslationY(fromY120 + (rise120 - fromY120) * (1f - p));
+                    wrap.setAlpha(Math.max(0f, Math.min(1f, p)));
+                },
+                () -> { if (v.getParent() instanceof ViewGroup) ((ViewGroup) v.getParent()).removeView(v); });
+            mainHandler.postDelayed(() -> { if (v.getParent() instanceof ViewGroup) ((ViewGroup) v.getParent()).removeView(v); }, 420); // Q98：兜底改投主线程（view.postDelayed 在视图被摘时 park 走丢）
         } else if (v.getParent() instanceof ViewGroup) ((ViewGroup) v.getParent()).removeView(v);
     }
 
@@ -4995,6 +4966,12 @@ public class MainActivity extends Activity {
         cardBox.setOrientation(LinearLayout.VERTICAL);
         GradientDrawable cg = glassWindowTint(22, false); // Q104/2.18：窗级玻璃（同 BIN 窗口径，替 Soft 近实白面）
         cg.setCornerRadius(dp(this, 22)); // Q92：四角全圆（窗改浮起式，不再贴底直角）
+        // Q120（2.33）：本窗单独提实——原 233/223 半透面压在详情窗上时，底下规格字
+        // 直接透出与本窗正文叠成重影（用户 01:04 点名）。只本窗 alpha 顶到近实面
+        // （同族雾白、描边不动），glassWindowTint 本体与玻璃三档一字不改；
+        // 开窗时底下就是干净的自家遮罩＋近实面，不再双层透字。
+        if (darkEff()) cg.setColors(new int[]{Color.argb(248, 38, 46, 62), Color.argb(242, 28, 35, 50)});
+        else cg.setColors(new int[]{Color.argb(250, 253, 254, 255), Color.argb(244, 243, 248, 253)});
         cardBox.setBackground(cg);
         if (Build.VERSION.SDK_INT >= 21) { cardBox.setElevation(dp(this, 24)); roundClip(cardBox, 22, this); }
         cardBox.setOnClickListener(v -> {});
@@ -5062,11 +5039,18 @@ public class MainActivity extends Activity {
         overlay.addView(wrap, clp);
         rootView.addView(overlay, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         acctPickerView = overlay;
-        overlay.setAlpha(0f);
-        overlay.animate().alpha(1f).setDuration(ANIM_DUR_SHADE_IN).setInterpolator(ANIM_ENTER).start();
+        // Q120（2.33）：升起换全站共用弹簧（acctPickerSpring）——自 42dp 处带弹簧
+        // 收尾、可打断，与切页/折叠同一支劲，不再定长曲线硬着陆（用户 01:05 点名
+        // 开合生硬）；遮罩淡入沿用 SHEET_IN 家族，与窗体同起。
         shade.animate().alpha(1f).setDuration(ANIM_DUR_SHADE_IN).setInterpolator(ANIM_ENTER).start();
-        wrap.setTranslationY(dp(this, 42));
-        wrap.animate().translationY(0f).setDuration(ANIM_DUR_SHEET_IN).setInterpolator(ANIM_ENTER).start();
+        final float rise120 = dp(this, SHEET_RISE_DP);
+        wrap.setTranslationY(rise120);
+        final Spring1D pkIn120 = new Spring1D(0f);
+        acctPickerSpring.drive(pkIn120, 1f, SPRING_SHEET_K, SPRING_SHEET_Z,
+            p -> {
+                wrap.setTranslationY(rise120 * (1f - p));
+                wrap.setAlpha(Math.max(0f, Math.min(1f, p)));
+            }, null);
     }
 
     // Q71 占位卡面自选配色：10 色色板贴底窗，按卡 id 存本机偏好，OTA 不冲掉；真图卡不走此路
@@ -5218,7 +5202,11 @@ public class MainActivity extends Activity {
     void rebuildPages() {
         captureCurrentPageScroll(); // P-keepscroll：整页重建（字体/界面大小等）前先记下各页滚动位置
         pages.clear();
-        if (content != null) content.removeAllViews();
+        // Q120（2.33）：常驻改造后只摘页宿主里的驻留页（FAB/浮层挂 content 本体不受牵连），
+        // 再走 showTab 按现页重建；过渡弹簧一并作废防旧回路碰新页。
+        if (pageHost != null) pageHost.removeAllViews();
+        tabAnim.cancel();
+        currentPageView = null;
         showTab(tab);
         refreshNavLabels(); // Q85
     }
@@ -5230,6 +5218,14 @@ public class MainActivity extends Activity {
         View cur = currentPageView;
         String curTab = tab;
         pages.clear();
+        // Q120（2.33）：驻留页同清——宿主里非当前页一并摘除，下次切到按新口径重建，
+        // 不许旧页视图留作孤儿在宿主里占位（显隐切换会误显旧树）。
+        if (pageHost != null) {
+            for (int i = pageHost.getChildCount() - 1; i >= 0; i--) {
+                View ch = pageHost.getChildAt(i);
+                if (ch != cur) pageHost.removeViewAt(i);
+            }
+        }
         if (cur != null && curTab != null) pages.put(curTab, cur);
         homeList = null;
     }
@@ -5842,6 +5838,113 @@ public class MainActivity extends Activity {
         showTab(key);
     }
 
+    // ── Q120（2.33）全站共用手写弹簧（积分式、零引库）──
+    // 与底栏 Q38 液滴同机制（半隐式欧拉积分＋阻尼弹簧），但独立实例互不相扰：底栏
+    // navPos 的刚度 210／阻尼比 0.68 是手感定版，本批只许接入不许改值——下列常量是
+    // 切页/折叠/浮钮/选择窗各自的新参数，任何一处改值不得串到其他处。
+    static final float SPRING_PAGE_K = 200f, SPRING_PAGE_Z = 0.95f;   // 切页过渡进度
+    static final float SPRING_FOLD_K = 230f, SPRING_FOLD_Z = 0.88f;   // 折叠高度收展
+    static final float SPRING_PILL_K = 300f, SPRING_PILL_Z = 0.92f;   // 详情主钮淡入淡出
+    static final float SPRING_SHEET_K = 210f, SPRING_SHEET_Z = 0.86f; // 选择窗升降（与底栏同刚度族）
+
+    interface FloatApply { void apply(float x); }
+
+    /** 一维阻尼弹簧态：位置 x＋速度 v；step 返回是否已落稳（落稳即钳到目标清速）。
+     * 带初速：中途反向/改目标不清 v，靠弹簧自己把速度吃掉（FClash 式可打断）。 */
+    static class Spring1D {
+        float x, v;
+        Spring1D(float x0) { x = x0; v = 0f; }
+        boolean step(float target, float k, float zeta, float dt, float epsX, float epsV) {
+            float c = 2f * zeta * (float) Math.sqrt(k);
+            float a = -k * (x - target) - c * v;
+            v += a * dt;
+            x += v * dt;
+            if (Math.abs(x - target) < epsX && Math.abs(v) < epsV) { x = target; v = 0f; return true; }
+            return false;
+        }
+    }
+
+    /** 弹簧单回路驱动（与 navSpring 同纪律：代次令牌＋摘旧任务，旧回路当帧自尽）。 */
+    class SpringDriver {
+        int gen = 0;
+        Runnable task = null;
+        void drive(final Spring1D s, final float target, final float k, final float zeta,
+                   final FloatApply apply, final Runnable onDone) {
+            final int g = ++gen;
+            if (task != null) mainHandler.removeCallbacks(task);
+            final long[] last = { android.os.SystemClock.uptimeMillis() };
+            task = new Runnable() {
+                public void run() {
+                    if (g != gen) return;
+                    long now = android.os.SystemClock.uptimeMillis();
+                    float dt = Math.min(0.032f, Math.max(0.001f, (now - last[0]) / 1000f)); last[0] = now;
+                    // 落稳阈值按量程取：归一化进度（0..1）细、像素高度粗
+                    float range = Math.max(1f, Math.abs(target - s.x));
+                    boolean done = s.step(target, k, zeta, dt, Math.max(0.002f, range * 0.0015f), Math.max(0.01f, range * 0.02f));
+                    if (apply != null) apply.apply(s.x);
+                    if (done) { task = null; if (onDone != null) onDone.run(); return; }
+                    mainHandler.postDelayed(this, 16);
+                }
+            };
+            mainHandler.post(task);
+        }
+        void cancel() {
+            gen++;
+            if (task != null) mainHandler.removeCallbacks(task);
+            task = null;
+        }
+    }
+
+    final SpringDriver glassSubSpring = new SpringDriver();  // Q120：玻璃从属块折叠驱动
+    final SpringDriver mineFoldSpring = new SpringDriver();  // Q120：我的卡片折叠行驱动
+    final SpringDriver featureFoldSpring = new SpringDriver(); // Q120：功能启用折叠驱动
+    final SpringDriver acctPickerSpring = new SpringDriver();  // Q120：加入选择窗升降驱动
+
+    /** Q120：全站折叠共用高度弹簧——玻璃从属块（2.31）/我的卡片折叠行（2.30）/功能启用
+     * （本批）三处同一支驱动同一组参数，不许再各写一套 ValueAnimator 两套劲。
+     * open：beforeOpen 先重搭内容→量高→弹簧展开，落定回 WRAP_CONTENT；
+     * close：弹簧收至 0→GONE 不占位→afterHidden（清行等收尾）。连点以最新一次为准：
+     * 新驱动自当前高度接续（drive 摘旧任务），位置不跳。 */
+    void foldHeightSpring(final LinearLayout box, final boolean open,
+                          final Runnable beforeOpen, final Runnable afterHidden,
+                          final SpringDriver driver) {
+        if (box == null) return;
+        final ViewGroup.LayoutParams lp = box.getLayoutParams();
+        if (lp == null) { box.setVisibility(open ? View.VISIBLE : View.GONE); return; }
+        if (open) {
+            if (beforeOpen != null) beforeOpen.run();
+            box.setVisibility(View.VISIBLE);
+            int w = box.getWidth();
+            if (w <= 0) w = getResources().getDisplayMetrics().widthPixels - dp(this, 28);
+            box.measure(View.MeasureSpec.makeMeasureSpec(w, View.MeasureSpec.EXACTLY),
+                View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED));
+            final int toH = box.getMeasuredHeight();
+            if (toH <= 0) { lp.height = ViewGroup.LayoutParams.WRAP_CONTENT; box.setLayoutParams(lp); return; }
+            final Spring1D s = new Spring1D(lp.height > 0 ? lp.height : 0f);
+            lp.height = Math.round(s.x); box.setLayoutParams(lp);
+            driver.drive(s, toH, SPRING_FOLD_K, SPRING_FOLD_Z,
+                x -> { int h = Math.round(x); if (lp.height != h) { lp.height = h; box.setLayoutParams(lp); } },
+                () -> { lp.height = ViewGroup.LayoutParams.WRAP_CONTENT; box.setLayoutParams(lp); });
+        } else {
+            driver.cancel();
+            final Spring1D s = new Spring1D(lp.height > 0 ? lp.height : box.getHeight());
+            if (s.x <= 0f) {
+                box.setVisibility(View.GONE);
+                lp.height = ViewGroup.LayoutParams.WRAP_CONTENT; box.setLayoutParams(lp);
+                if (afterHidden != null) afterHidden.run();
+                return;
+            }
+            lp.height = Math.round(s.x); box.setLayoutParams(lp);
+            driver.drive(s, 0f, SPRING_FOLD_K, SPRING_FOLD_Z,
+                x -> { int h = Math.max(0, Math.round(x)); if (lp.height != h) { lp.height = h; box.setLayoutParams(lp); } },
+                () -> {
+                    box.setVisibility(View.GONE);
+                    lp.height = ViewGroup.LayoutParams.WRAP_CONTENT; box.setLayoutParams(lp);
+                    if (afterHidden != null) afterHidden.run();
+                });
+        }
+    }
+
     // hand-written damped spring (no libs), Q38 tuning: stiffness 210, damping ratio ~0.68 -> about 500ms
     // settle with a slight overshoot; retargeting mid-flight KEEPS the current velocity (FClash-style lens).
     // Q21 ①：全程只许一条回路——启动时摘除旧任务并自增代次，帧内先验代次再推进；取消/新弹簧/手指接管任一发生，旧回路当帧自尽。
@@ -5898,6 +6001,21 @@ public class MainActivity extends Activity {
         clearLiveGlassForTabSwitch(); // Q63：切页瞬间清 live 玻璃旧帧，不许旧页文字在新页玻璃面糊出残影
         tab = key;
         sCrashTab = key;
+        // Q120（2.33）：页面常驻——旧页不再 removeAllViews 摘除，改宿主内显隐；全屏
+        // 二级页（关于/你好/更新日志）若在场先摘除并复位宿主可见。过渡弹簧先作废旧
+        // 回路，连切时上一段未落定的退场页在下方一并强制收尾，不许半透明旧页残留。
+        tabAnim.cancel();
+        if (fullScreenPage != null) {
+            if (fullScreenPage.getParent() == content) content.removeView(fullScreenPage);
+            fullScreenPage = null;
+        }
+        if (pageHost != null) pageHost.setVisibility(View.VISIBLE);
+        final View oldPage120 = currentPageView;
+        if (tabAnimOut != null && tabAnimOut != oldPage120) {
+            tabAnimOut.setVisibility(View.GONE);
+            tabAnimOut.setAlpha(1f); tabAnimOut.setTranslationX(0f); tabAnimOut.setTranslationY(0f);
+            tabAnimOut = null;
+        }
         // Q64：页间切换过渡（FClash 节奏学机制自写）——旧页直接退场不叠在新页底下透出，
         // 新页按标签方向轻横移+淡入 220ms 一条 ANIM_ENTER 曲线走完；重活（refreshHome 的
         // 签名校验与分帧续搭）让一帧再跑，不堵点击瞬间。快速连点以 tabAnimGen 代次作废旧动画。
@@ -5905,8 +6023,6 @@ public class MainActivity extends Activity {
         final int dir64 = (newIdx64 >= 0) ? Integer.signum(newIdx64 - lastTabIdx) : 0;
         if (newIdx64 >= 0) lastTabIdx = newIdx64;
         final int gen64 = ++tabAnimGen;
-        if (currentPageView != null) currentPageView.animate().cancel();
-        content.removeAllViews();
         View page = null;
         try {
             page = pages.get(key);
@@ -5948,7 +6064,13 @@ public class MainActivity extends Activity {
             }
             try { showFloatToast("页面打开失败，已回到首页"); } catch (Throwable ignored) {}
         }
-        content.addView(page);
+        // Q120（2.33）：页只挂进常驻宿主一次（已挂的原地显隐），不再每次切换摘/挂整树；
+        // attach/detach 引发的整树重测与 RunQueue 冲刷（旧「切页顿一下」一节）随之退场。
+        if (pageHost != null && page != null && page.getParent() != pageHost) {
+            if (page.getParent() instanceof ViewGroup) ((ViewGroup) page.getParent()).removeView(page);
+            pageHost.addView(page, new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        }
         currentPageView = page;
         // 19:37 定点②：切页条带立刻重抓，不等 280ms 淡入落定那一发——条带只画新页滚动
         // 子树本身，页面淡入的 alpha/位移不污染取样；一帧后页面已落位即可出带，新页首建
@@ -5967,13 +6089,52 @@ public class MainActivity extends Activity {
             mainHandler.postDelayed(() -> { if (gen63 == glassTabGen) refreshLiveGlass(); }, 280);
         }
         // Q64：新页方向轻移+淡入——从目标标签方向滑入（右移页自右轻入、左移页自左轻入），
-        // 220ms ANIM_ENTER 与底栏液滴「落位才切页」时序对齐；只动绘制层（alpha/translation），不抓图不采样。
-        page.animate().cancel();
-        page.setAlpha(0f);
-        page.setTranslationX(dir64 * dp(this, 18));
-        page.setTranslationY(dp(this, 4));
-        page.animate().alpha(1f).translationX(0f).translationY(0f)
-            .setDuration(ANIM_DUR_FADE).setInterpolator(ANIM_ENTER).start();
+        // 只动绘制层（alpha/translation），不抓图不采样。
+        // Q120（2.33）：曲线换全站共用弹簧（SPRING_PAGE）——进度一支弹簧同驱新页淡入
+        // 轻移与旧页反向轻移淡出，旧页落定后 GONE（不再当场摘除）；中途连切时弹簧
+        // 由 tabAnim 代次作废、新一段自 showTab 开头强制收尾旧退场页，不排队不等待
+        // （用户 00:56–00:58 点名「切页加载约一秒才出画面」——首因是整树摘挂重测，
+        // 常驻已解；此处保证过渡本身也不再是定长曲线播完才落定）。
+        if (page != null) {
+            if (oldPage120 != null && oldPage120 != page && oldPage120.getParent() == pageHost) {
+                final View out120 = oldPage120;
+                final View in120 = page;
+                final float outDx120 = -dir64 * dp(this, 12);
+                final float inDx120 = dir64 * dp(this, 18);
+                final float inDy120 = dp(this, 4);
+                tabAnimOut = out120;
+                tabSpring.x = 0f; tabSpring.v = 0f;
+                in120.setVisibility(View.VISIBLE);
+                in120.setAlpha(0f);
+                in120.setTranslationX(inDx120);
+                in120.setTranslationY(inDy120);
+                tabAnim.drive(tabSpring, 1f, SPRING_PAGE_K, SPRING_PAGE_Z,
+                    p -> {
+                        in120.setAlpha(Math.max(0f, Math.min(1f, p)));
+                        in120.setTranslationX(inDx120 * (1f - p));
+                        in120.setTranslationY(inDy120 * (1f - p));
+                        if (out120.getParent() != null) {
+                            out120.setAlpha(Math.max(0f, 1f - p));
+                            out120.setTranslationX(outDx120 * p);
+                        }
+                    },
+                    () -> {
+                        in120.setAlpha(1f); in120.setTranslationX(0f); in120.setTranslationY(0f);
+                        if (out120 != currentPageView) {
+                            out120.setVisibility(View.GONE);
+                            out120.setAlpha(1f); out120.setTranslationX(0f); out120.setTranslationY(0f);
+                        }
+                        if (tabAnimOut == out120) tabAnimOut = null;
+                    });
+            } else {
+                page.setVisibility(View.VISIBLE);
+                page.setAlpha(1f); page.setTranslationX(0f); page.setTranslationY(0f);
+                if (oldPage120 != null && oldPage120 != page) {
+                    oldPage120.setVisibility(View.GONE);
+                    oldPage120.setAlpha(1f); oldPage120.setTranslationX(0f); oldPage120.setTranslationY(0f);
+                }
+            }
+        }
         // Q64：首页重活让一帧——先让过渡首帧出去，再做签名校验/分帧续搭，避免 213 张校验堵在点击瞬间掉帧。
         if ("home".equals(key) && homeList != null) {
             final View pg64 = page;
@@ -9448,6 +9609,27 @@ public class MainActivity extends Activity {
         openDetail(c, false);
     }
 
+    /** Q120（2.33）：详情主钮（蓝钮）随窗内滚动让路——旧口径死钉窗底压住滚动正文
+     * （用户 01:04 点名：滑动时应淡出消失、停下回来）。滚动一动即弹簧淡出并撤点击，
+     * 停稳约 280ms 弹簧淡入回位；弹簧带速可打断，狂滚中途停下不闪。 */
+    void fadeDetailPill(final boolean show) {
+        final View pill = detailPillWrap;
+        if (pill == null) return;
+        if (show) {
+            pill.setVisibility(View.VISIBLE);
+            if (detailPrimaryBtn != null) detailPrimaryBtn.setClickable(true);
+        } else {
+            if (detailPrimaryBtn != null) detailPrimaryBtn.setClickable(false);
+        }
+        detailPillDriver.drive(detailPillSpring, show ? 1f : 0f, SPRING_PILL_K, SPRING_PILL_Z,
+            x -> pill.setAlpha(Math.max(0f, Math.min(1f, x))),
+            () -> {
+                if (detailPillWrap != pill) return; // 已换下一张详情，旧落定不碰新钮
+                pill.setAlpha(show ? 1f : 0f);
+                if (!show) pill.setVisibility(View.INVISIBLE);
+            });
+    }
+
     void openDetail(Card c, boolean fromWiz) {
         if (c == null) return;
         if (detailClosing) return; // 收窗途中再点既不重开也不入队（关窗意图已生效）
@@ -9540,6 +9722,23 @@ public class MainActivity extends Activity {
         pillLp.leftMargin = dp(this, 18); pillLp.rightMargin = dp(this, 18);
         pillLp.bottomMargin = dp(this, 12) + navBarH();
         overlay.addView(pillWrap, pillLp);
+        // Q120（2.33）：主钮滚动让路接线——窗内滚动一动就淡出，停稳 280ms 淡入；
+        // 代次守卫防连滚时旧「停稳」任务提前把钮召回。钮态每窗重置为全显。
+        detailPillWrap = pillWrap;
+        detailPillDriver.cancel();
+        detailPillSpring.x = 1f; detailPillSpring.v = 0f;
+        pillWrap.setAlpha(1f);
+        pillWrap.setVisibility(View.VISIBLE);
+        if (Build.VERSION.SDK_INT >= 23) {
+            sc.setOnScrollChangeListener((v, sx, sy, ox, oy) -> {
+                if (detailClosing || detailView == null || sy == oy) return;
+                fadeDetailPill(false);
+                final int g120 = ++detailPillRestGen;
+                mainHandler.postDelayed(() -> {
+                    if (g120 == detailPillRestGen && !detailClosing && detailView != null) fadeDetailPill(true);
+                }, 280);
+            });
+        }
 
         // Q30 关闭钮：长在窗体内部，随窗同升同降同销毁。对照混合版 .p-close 数值——
         // 34dp 半透圆、top/right 12dp 浮在图廊右上；48dp 只是触控框，圆心对齐靠框边距 5dp+居中 7dp=12dp。
@@ -9652,6 +9851,7 @@ public class MainActivity extends Activity {
             if (overlay != null && overlay.getParent() instanceof ViewGroup)
                 ((ViewGroup) overlay.getParent()).removeView(overlay);
             detailView = null; detailSheetWrap = null; detailShade = null; detailCloseGlyph = null; detailPrimaryBtn = null;
+            detailPillWrap = null; detailPillDriver.cancel(); detailPillRestGen++; // Q120：钮弹簧回路随窗销毁
             detailScroll = null; detailBinView = null; detailVerInfoBox = null;
             detailDots = new java.util.ArrayList<>();
             detailCard = null; detailClosing = false; detailFromWiz = false; detailEntryKey = null;
@@ -13556,6 +13756,20 @@ public class MainActivity extends Activity {
 
     // 启动自动查一次；设置页手动查 manual=true 给 toast 反馈。
     // Q59 修：双线都取，以 data_version 高者为准（jsDelivr 200 但回旧缓存时不被其骗成「已是最新」）。
+    // Q121（2.33）：启动自动检测的发起口——延到首帧之后再发，你好页在场时顺延到
+    // 散场（与 hwJustRetreated 提示同款自投递守卫），不和首帧渲染/欢迎页抢主线程；
+    // 真正的拉取与全量比对在 checkDataUpdate 内部的后台线程（双线取高版本），
+    // 结果回主线程只弹提示（红点/确认窗走 showUpdateTip/showUpdateConfirm 既有口径：
+    // 只检测不自动应用，应用须确认且不动用户自有卡片）。
+    void scheduleAutoDataCheck() {
+        mainHandler.postDelayed(new Runnable() {
+            @Override public void run() {
+                if (helloOpen) { mainHandler.postDelayed(this, 1200); return; }
+                checkDataUpdate(false);
+            }
+        }, 1500);
+    }
+
     void checkDataUpdate(final boolean manual) { checkDataUpdate(manual, false, null); }
     // Q62: check = detect only (never applies). Apply happens in applyPendingUpdate after confirm.
     void checkDataUpdate(final boolean manual, final boolean fromPull, final Runnable onDone) {
@@ -16304,8 +16518,12 @@ public class MainActivity extends Activity {
         aboutPageOpen = true;
         aboutSponsorOpen = false;
         if (navWrap != null) navWrap.setVisibility(View.GONE); // 同更新日志整页口径：藏整条 dock（含玻璃层，防 Q32 白杠）
-        content.removeAllViews();
-        content.addView(buildAboutPage());
+        // Q120（2.33）：不再 removeAllViews 掀掉驻留页——宿主整组隐藏、全屏页单挂 content，
+        // 关闭走 showTab 时由其摘除并复位宿主，五页驻留树不陪葬。
+        if (fullScreenPage != null && fullScreenPage.getParent() == content) content.removeView(fullScreenPage);
+        if (pageHost != null) pageHost.setVisibility(View.GONE);
+        fullScreenPage = buildAboutPage();
+        content.addView(fullScreenPage);
         syncTopFab();
     }
 
@@ -16624,8 +16842,11 @@ public class MainActivity extends Activity {
         helloClosing = false;
         helloFlat = false;
         if (navWrap != null) navWrap.setVisibility(View.GONE); // Q32
-        content.removeAllViews();
+        // Q120（2.33）：同 openAbout 口径——宿主隐藏、全屏页单挂，驻留页不陪葬。
+        if (fullScreenPage != null && fullScreenPage.getParent() == content) content.removeView(fullScreenPage);
+        if (pageHost != null) pageHost.setVisibility(View.GONE);
         helloView = buildHelloPage();
+        fullScreenPage = helloView;
         content.addView(helloView);
         // Q95 热修（2.07）：首启时首页首次渲染原本从未在欢迎页停留期间跑过——触发它的
         // refreshHome 投在被 removeAllViews 摘掉的首页视图上（View.post 未 attach 即 park），
@@ -16866,8 +17087,11 @@ public class MainActivity extends Activity {
         captureCurrentPageScroll();
         changelogOpen = true;
         if (navWrap != null) navWrap.setVisibility(View.GONE); // Q32: hide whole dock incl. glass layer - hiding navBar alone leaks a glass strip at screen bottom
-        content.removeAllViews();
-        content.addView(buildChangelogPage());
+        // Q120（2.33）：同 openAbout 口径——宿主隐藏、全屏页单挂，驻留页不陪葬。
+        if (fullScreenPage != null && fullScreenPage.getParent() == content) content.removeView(fullScreenPage);
+        if (pageHost != null) pageHost.setVisibility(View.GONE);
+        fullScreenPage = buildChangelogPage();
+        content.addView(fullScreenPage);
         syncTopFab();
     }
 
@@ -17263,7 +17487,7 @@ public class MainActivity extends Activity {
         final int pendFinal = pendVer;
         updRow.setOnClickListener(v -> { haptic(); if (pendFinal > 0 && pendingUpdateJson != null) showUpdateConfirm(); else { showFloatToast("正在检查数据更新…"); checkDataUpdate(true); } });
         page.addView(updRow);
-        switchRow(page, "启动时自动检测更新", "开启只检测并提示，不自动应用；关闭则仅手动检查", prefs == null || prefs.getBoolean("auto_check_update", true), on -> { if(prefs!=null) prefs.edit().putBoolean("auto_check_update", on).apply(); haptic(); rebuildPages(); });
+        switchRow(page, "启动时自动检测更新", "开启只检测并提示，不自动应用；关闭则仅手动检查", prefs != null && prefs.getBoolean("auto_check_update", false), on -> { if(prefs!=null) prefs.edit().putBoolean("auto_check_update", on).apply(); haptic(); rebuildPages(); }); // Q121：默认关（站规矩）
 
         sectionHead(page, S("sec_about"));
         // Q18: last-crash trace at top of About (copyable / clearable); empty when no crash recorded
@@ -17494,73 +17718,12 @@ public class MainActivity extends Activity {
     /** Q118（2.31）：玻璃从属块就地收展——与 2.30 toggleMineRowsBox 同口径：收起高度
      * 补间至 0 后 GONE 不占位；展开先重搭内容、量高后补间展开，落定回 WRAP_CONTENT。
      * 连点以最新一次为准（旧补间先取消，按当时高度接续）。 */
-    ValueAnimator glassSubAnim = null;
+    // Q120（2.33）：改走全站共用弹簧高度驱动（foldHeightSpring），与我的卡片折叠、
+    // 功能启用同一支劲；语义不变：展开前按现态重搭两块再量高，收起落定 GONE 不占位。
     void animateGlassSub(final boolean open) {
-        final LinearLayout box = glassSubBox;
-        if (box == null) return;
-        if (glassSubAnim != null) { glassSubAnim.cancel(); glassSubAnim = null; }
-        final ViewGroup.LayoutParams lp = box.getLayoutParams();
-        if (lp == null) { box.setVisibility(open ? View.VISIBLE : View.GONE); return; }
-        if (open) {
-            rebuildGlassSub();
-            box.setVisibility(View.VISIBLE);
-            int w = box.getWidth();
-            if (w <= 0) w = getResources().getDisplayMetrics().widthPixels - dp(this, 28);
-            box.measure(View.MeasureSpec.makeMeasureSpec(w, View.MeasureSpec.EXACTLY),
-                View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED));
-            final int toH = box.getMeasuredHeight();
-            final int fromH = lp.height > 0 ? lp.height : 0;
-            if (toH <= 0) { lp.height = ViewGroup.LayoutParams.WRAP_CONTENT; box.setLayoutParams(lp); return; }
-            lp.height = fromH; box.setLayoutParams(lp);
-            glassSubAnim = ValueAnimator.ofInt(fromH, toH);
-            glassSubAnim.setDuration(240);
-            glassSubAnim.setInterpolator(ANIM_ENTER);
-            glassSubAnim.addUpdateListener(a -> {
-                int h = (Integer) a.getAnimatedValue();
-                if (lp.height != h) { lp.height = h; box.setLayoutParams(lp); }
-            });
-            glassSubAnim.addListener(new android.animation.AnimatorListenerAdapter() {
-                @Override public void onAnimationEnd(android.animation.Animator a) {
-                    lp.height = ViewGroup.LayoutParams.WRAP_CONTENT; box.setLayoutParams(lp);
-                    if (glassSubAnim == a) glassSubAnim = null;
-                }
-                @Override public void onAnimationCancel(android.animation.Animator a) {
-                    if (glassSubAnim == a) glassSubAnim = null;
-                }
-            });
-            glassSubAnim.start();
-        } else {
-            final int fromH = lp.height > 0 ? lp.height : box.getHeight();
-            if (fromH <= 0) {
-                box.setVisibility(View.GONE);
-                lp.height = ViewGroup.LayoutParams.WRAP_CONTENT; box.setLayoutParams(lp);
-                return;
-            }
-            lp.height = fromH; box.setLayoutParams(lp);
-            glassSubAnim = ValueAnimator.ofInt(fromH, 0);
-            glassSubAnim.setDuration(200);
-            glassSubAnim.setInterpolator(ANIM_EXIT);
-            glassSubAnim.addUpdateListener(a -> {
-                int h = (Integer) a.getAnimatedValue();
-                if (lp.height != h) { lp.height = h; box.setLayoutParams(lp); }
-            });
-            glassSubAnim.addListener(new android.animation.AnimatorListenerAdapter() {
-                @Override public void onAnimationEnd(android.animation.Animator a) {
-                    box.setVisibility(View.GONE);
-                    lp.height = ViewGroup.LayoutParams.WRAP_CONTENT; box.setLayoutParams(lp);
-                    if (glassSubAnim == a) glassSubAnim = null;
-                }
-                @Override public void onAnimationCancel(android.animation.Animator a) {
-                    if (glassSubAnim == a) glassSubAnim = null;
-                }
-            });
-            glassSubAnim.start();
-        }
+        if (glassSubBox == null) return;
+        foldHeightSpring(glassSubBox, open, () -> rebuildGlassSub(), null, glassSubSpring);
     }
-
-    // Q97：「透明程度」三档行（与 segRow 同形制）——玻璃关时整行置灰不可点；
-    // 档位成套映射四参数：模糊半径（BACKDROP_BLUR_R）/饱和（BACKDROP_SAT）/染色浓淡
-    // （glassTintScale）/提亮（glassWashScale），Q105 起四轴同动拉开档距。
     void glassLevelRow(LinearLayout page) {
         final boolean enabled = !glassDisabled;
         LinearLayout box = new LinearLayout(this);
@@ -17842,8 +18005,10 @@ public class MainActivity extends Activity {
             open[0] = !open[0];
             haptic();
             try { if (prefs != null) prefs.edit().putBoolean("settings_feat_open", open[0]).apply(); } catch (Throwable ignored) {}
-            body.setVisibility(open[0] ? View.VISIBLE : View.GONE);
             chev.setText(open[0] ? "▾" : "▸");
+            // Q120（2.33）：收展补上动画——走全站共用弹簧高度驱动（foldHeightSpring），
+            // 与我的卡片折叠（2.30）/玻璃从属块（2.31）同一支劲，不再硬显隐（用户 00:58 点名）。
+            foldHeightSpring(body, open[0], null, null, featureFoldSpring);
         });
         page.addView(wrap);
     }
