@@ -400,6 +400,14 @@ public class MainActivity extends Activity {
                 path.lineTo(18.5f * sx, 11.8f * sy);
                 path.lineTo(6f * sx, 11.8f * sy);
                 cv.drawPath(path, p);
+            } else if ("extsearch".equals(kind)) { // 放大镜（在线搜卡，Q124 件十四）
+                cv.drawCircle(10.5f * sx, 10.5f * sy, 6f * sx, p);
+                cv.drawLine(15f * sx, 15f * sy, 20f * sx, 20f * sy, p);
+            } else if ("binquery".equals(kind)) { // 卡框＋小放大镜（在线查询卡信息，Q124 件十四）
+                android.graphics.RectF r = new android.graphics.RectF(3.5f * sx, 5.5f * sy, 20.5f * sx, 18.5f * sy);
+                cv.drawRoundRect(r, 2.5f * sx, 2.5f * sy, p);
+                cv.drawCircle(13.8f * sx, 11.2f * sy, 2.7f * sx, p);
+                cv.drawLine(15.8f * sx, 13.2f * sy, 18.2f * sx, 15.6f * sy, p);
             } else { // custom：加号卡
                 android.graphics.RectF r = new android.graphics.RectF(4f * sx, 5.5f * sy, 20f * sx, 18.5f * sy);
                 cv.drawRoundRect(r, 2.5f * sx, 2.5f * sy, p);
@@ -3323,8 +3331,20 @@ public class MainActivity extends Activity {
     }
     // 正文行高：混合版 body line-height 1.5；原生多行正文统一走此助手，不在单行标签上套
     static void bodyLH(TextView t) { t.setLineSpacing(0, 1.45f); }
+    // Q124（2.36，件十八）：组织未知判定与归一一处收口——数据里 org 为 JSON null 时
+    // Android optString 会吐字符串 "null"（长城校园借记IC卡详情副标/tag 实证），另有
+    // 字面「待核实」两张。显示层一律「无卡组织」，数据文件本身不改、不编造。
+    static String normOrg124(String s) {
+        if (s == null) return "";
+        s = s.trim();
+        if (s.isEmpty() || "null".equalsIgnoreCase(s) || "待核实".equals(s)) return "";
+        return s;
+    }
+    static boolean orgUnknown124(String s) { return normOrg124(s).isEmpty(); }
+
     static String orgLabel(String org) {
-        if (org == null) return "";
+        if (org == null || org.isEmpty() || "null".equalsIgnoreCase(org.trim()) || "待核实".equals(org.trim()) || "__none__".equals(org))
+            return EN_MODE ? "No Network" : "无卡组织"; // Q124（件十八）：未知组织统一标记，禁再出「null」
         switch (org) {
             case "visa": return "VISA";
             case "mastercard": return "万事达";
@@ -3416,7 +3436,7 @@ public class MainActivity extends Activity {
                     JSONObject o = arr.getJSONObject(i);
                     Card cd = new Card();
                     cd.id = o.optString("id"); cd.name = o.optString("name");
-                    cd.bank = o.optString("bank"); cd.org = o.optString("org");
+                    cd.bank = o.optString("bank"); cd.org = normOrg124(o.optString("org")); // Q124（件十八）
                     cd.type = o.optString("type", "debit"); cd.status = o.optString("status");
                     cd.review = o.optString("review"); cd.image = o.optString("image");
                     cd.keywords = o.optString("keywords"); cd.url = o.optString("url");
@@ -3492,12 +3512,42 @@ public class MainActivity extends Activity {
             try {
                 int w = b.getWidth(), h = b.getHeight();
                 if (w < 24 || h < 24) return b;
-                int ix = Math.max(1, Math.round(w * 0.025f));
-                int iy = Math.max(1, Math.round(h * 0.025f));
+                float frac = 0.025f;
+                // Q124（2.36，件十五）：资产实测——301 张源图里仅 czb-shihua 一张自带
+                // 纯黑框（772×494，四边约 12–14px），其余「黑边」多为深色卡面本身；
+                // 显示层为 CENTER_CROP＋透明框，不垫黑。故只对「外圈近纯黑且低方差、
+                // 内圈（9% 处）明显更亮」的真黑框图加深内裁到 5.5%，深色卡面（内圈
+                // 同样暗）不触发，不动任何资产原图。采样约百点，开销可忽略。
+                if (hasBakedDarkFrame124(b, w, h)) frac = 0.055f;
+                int ix = Math.max(1, Math.round(w * frac));
+                int iy = Math.max(1, Math.round(h * frac));
                 if (w - 2 * ix < 8 || h - 2 * iy < 8) return b;
                 Bitmap c = Bitmap.createBitmap(b, ix, iy, w - 2 * ix, h - 2 * iy);
                 return c != null ? c : b;
             } catch (Throwable t) { return b; }
+        }
+
+        static boolean hasBakedDarkFrame124(Bitmap b, int w, int h) {
+            try {
+                int inset = Math.max(2, Math.round(Math.min(w, h) * 0.09f));
+                long sumO = 0, sumI = 0; int nO = 0, nI = 0;
+                long sqO = 0;
+                int step = Math.max(1, Math.min(w, h) / 48);
+                for (int x = 0; x < w; x += step) {
+                    int[] ysO = {0, h - 1}; int[] ysI = {inset, h - 1 - inset};
+                    for (int y : ysO) { int p = b.getPixel(x, y); int v = (Color.red(p) + Color.green(p) + Color.blue(p)) / 3; sumO += v; sqO += (long) v * v; nO++; }
+                    for (int y : ysI) { int p = b.getPixel(x, y); int v = (Color.red(p) + Color.green(p) + Color.blue(p)) / 3; sumI += v; nI++; }
+                }
+                for (int y = 0; y < h; y += step) {
+                    int[] xsO = {0, w - 1}; int[] xsI = {inset, w - 1 - inset};
+                    for (int x : xsO) { int p = b.getPixel(x, y); int v = (Color.red(p) + Color.green(p) + Color.blue(p)) / 3; sumO += v; sqO += (long) v * v; nO++; }
+                    for (int x : xsI) { int p = b.getPixel(x, y); int v = (Color.red(p) + Color.green(p) + Color.blue(p)) / 3; sumI += v; nI++; }
+                }
+                if (nO == 0 || nI == 0) return false;
+                double meanO = sumO / (double) nO, meanI = sumI / (double) nI;
+                double sdO = Math.sqrt(Math.max(0, sqO / (double) nO - meanO * meanO));
+                return meanO < 38 && sdO < 26 && (meanI - meanO) > 42;
+            } catch (Throwable t) { return false; }
         }
 
         static File remoteCacheDir(Context c) {
@@ -4117,46 +4167,33 @@ public class MainActivity extends Activity {
             () -> box.removeAllViews(),
             mineFoldSpring);
     }
-    // Q117（2.30）：自定义区头部就地开合——原地换一节新构建的区＋高度补间到新高，
-    // 同折叠条口径不整页重建。新节头部点击仍回本函数，连点按当时高度接续。
-    ValueAnimator customFoldAnim = null;
+    // Q124（2.36，件十一）：自定义区开合改走全站共用折展（foldHeightSpring＋
+    // SPRING_FOLD，与设置「功能启用」同支），废旧 ValueAnimator 换节补间：旧实现整节
+    // 摘除替换＋240ms 定长补间，真机呈硬跳且与把手/定位竞态。新实现原节不动：头部
+    // 文案/箭头原地翻，展开体（tilesBox）原地量高弹簧收展，落定回 WRAP_CONTENT；
+    // 连点由驱动自当前高度接续。就地口径（不重建整页）不回退。
+    final SpringDriver customFoldSpring124 = new SpringDriver();
     void toggleCustomSection(final LinearLayout sec) {
         customOpen = !customOpen;
-        final ViewGroup parent = (ViewGroup) sec.getParent();
-        if (parent == null) { refreshMineKeepScroll(); return; }
-        if (customFoldAnim != null) { customFoldAnim.cancel(); customFoldAnim = null; }
-        final int idx = parent.indexOfChild(sec);
-        final int fromH = sec.getHeight();
-        final LinearLayout fresh = (LinearLayout) buildCustomSection();
-        parent.removeView(sec);
-        parent.addView(fresh, idx);
-        mineCustomSecView = fresh; // Q122（件九）：把手随换节更新，宫格下次点击仍就地命中
-        mineBuiltSig = computeMineSig(); // Q116 签名与就地态对齐（customOpen 在签名内）
-        int w = parent.getWidth() - parent.getPaddingLeft() - parent.getPaddingRight();
-        if (w <= 0) w = getResources().getDisplayMetrics().widthPixels - dp(this, 28);
-        fresh.measure(View.MeasureSpec.makeMeasureSpec(w, View.MeasureSpec.EXACTLY),
-            View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED));
-        final int toH = fresh.getMeasuredHeight();
-        final ViewGroup.LayoutParams lp = fresh.getLayoutParams();
-        if (fromH <= 0 || toH <= 0) return; // 没旧高可接（异常路径）就静态换节，不硬补间
-        lp.height = fromH; fresh.setLayoutParams(lp);
-        customFoldAnim = ValueAnimator.ofInt(fromH, toH);
-        customFoldAnim.setDuration(240);
-        customFoldAnim.setInterpolator(ANIM_ENTER);
-        customFoldAnim.addUpdateListener(a -> {
-            int h = (Integer) a.getAnimatedValue();
-            if (lp.height != h) { lp.height = h; fresh.setLayoutParams(lp); }
-        });
-        customFoldAnim.addListener(new android.animation.AnimatorListenerAdapter() {
-            @Override public void onAnimationEnd(android.animation.Animator a) {
-                lp.height = ViewGroup.LayoutParams.WRAP_CONTENT; fresh.setLayoutParams(lp);
-                if (customFoldAnim == a) customFoldAnim = null;
-            }
-            @Override public void onAnimationCancel(android.animation.Animator a) {
-                if (customFoldAnim == a) customFoldAnim = null;
-            }
-        });
-        customFoldAnim.start();
+        mineBuiltSig = computeMineSig(); // Q116 签名与就地态对齐
+        try {
+            LinearLayout head = (LinearLayout) sec.getChildAt(0);
+            LinearLayout info = (LinearLayout) head.getChildAt(1);
+            TextView sub = (TextView) info.getChildAt(1);
+            sub.setText(customCards.size() + " 张 · " + (customOpen ? "点开收起" : "点开展开"));
+            TextView arrow = (TextView) head.getChildAt(2);
+            arrow.animate().cancel();
+            arrow.animate().rotation(customOpen ? 90 : 0).setDuration(200).setInterpolator(ANIM_ENTER).start();
+        } catch (Throwable ignored) {}
+        if (sec.getChildCount() < 2 || !(sec.getChildAt(1) instanceof LinearLayout)) {
+            refreshMineKeepScroll();
+            return;
+        }
+        final LinearLayout body124 = (LinearLayout) sec.getChildAt(1);
+        foldHeightSpring(body124, customOpen,
+            () -> { body124.removeAllViews(); fillCustomTiles124(body124); },
+            () -> body124.removeAllViews(),
+            customFoldSpring124);
     }
 
     // ---------- 全局状态 ----------
@@ -6507,7 +6544,10 @@ public class MainActivity extends Activity {
         boostWindowFace(addBg); // Q122（2.34，件七）：面提实——旧面下窗顶透出背后页面文字鬼影，提实后不可读
         card.setBackground(addBg);
         if (Build.VERSION.SDK_INT >= 21) { card.setElevation(dp(this, 24)); topSheetClip(card, 22, this); } // Q45 顶圆底直轮廓
-        card.setPadding(dp(this, 18), dp(this, 16), dp(this, 18), dp(this, 12) + navBarH());
+        // Q124（2.36，件八）：窗体矮一档更贴底——只收内部纵向间距（行高 52→48、
+        // 段距 12/8→10/6、上下垫 16/12→12/10），内容/口径/弹簧一字不动。
+        // 旧总高 ≈ 标题 24＋16＋64＋60＋60＋取消 41＋12 ≈ 277dp，新 ≈ 249dp（另加 navBarH 不变）。
+        card.setPadding(dp(this, 18), dp(this, 12), dp(this, 18), dp(this, 10) + navBarH());
         FrameLayout.LayoutParams clp = new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         clp.gravity = Gravity.BOTTOM;
         clp.leftMargin = dp(this, 12); clp.rightMargin = dp(this, 12); clp.bottomMargin = 0;
@@ -6515,26 +6555,26 @@ public class MainActivity extends Activity {
         card.setOnClickListener(v -> {});
         card.addView(tv(this, "\u6DFB\u52A0\u5361\u7247", 17, colText(), true));
         TextView r1 = addSheetRow("\u81EA\u5B9A\u4E49\u5361\u7247", () -> { closeAddSheet(sheet); openCustomForm(null); });
-        LinearLayout.LayoutParams r1lp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(this, 52));
-        r1lp.topMargin = dp(this, 12);
+        LinearLayout.LayoutParams r1lp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(this, 48));
+        r1lp.topMargin = dp(this, 10);
         card.addView(r1, r1lp);
         TextView rExt = addSheetRow("\u5728\u7EBF\u641C\u5361\uFF08\u6269\u5C55\u5361\u5E93\uFF09", () -> {
             suppressNextChromeRestore = true; closeAddSheet(sheet);
             openExtendedSearch();
         });
-        LinearLayout.LayoutParams rExtLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(this, 52));
-        rExtLp.topMargin = dp(this, 8);
+        LinearLayout.LayoutParams rExtLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(this, 48));
+        rExtLp.topMargin = dp(this, 6);
         card.addView(rExt, rExtLp);
         TextView r2 = addSheetRow("\u5728\u7EBF\u67E5\u8BE2\u5361\u4FE1\u606F", () -> {
             suppressNextChromeRestore = true; closeAddSheet(sheet);
             openBinQuery();
         });
-        LinearLayout.LayoutParams r2lp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(this, 52));
-        r2lp.topMargin = dp(this, 8);
+        LinearLayout.LayoutParams r2lp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(this, 48));
+        r2lp.topMargin = dp(this, 6);
         card.addView(r2, r2lp);
         TextView cancel = tv(this, "\u53D6\u6D88", 15, colText2(), false);
         cancel.setGravity(Gravity.CENTER);
-        cancel.setPadding(0, dp(this, 10), 0, dp(this, 6));
+        cancel.setPadding(0, dp(this, 8), 0, dp(this, 4));
         cancel.setOnClickListener(v -> closeAddSheet(sheet));
         card.addView(cancel);
         content.addView(sheet);
@@ -7367,6 +7407,16 @@ public class MainActivity extends Activity {
         chips.addView(chip("已停发".equals(c.status) ? "已停发" : "在发",
             "已停发".equals(c.status) ? Color.rgb(0xF3, 0xE8, 0xE8) : Color.rgb(0xE6, 0xF6, 0xEC),
             "已停发".equals(c.status) ? Color.rgb(0xB0, 0x23, 0x2B) : Color.rgb(0x1D, 0x8A, 0x49), chipSp));
+        // Q124（2.36，件一）：状态 chip 钉单行——英文 "Discontinued" 在窄瓷砖里曾折成
+        // 两行把 chips 行撑高一行（用户 02:38 图证英文瓷砖过高）；中文「已停发/在发」
+        // 本就单行，此钉对中文像素零影响。评分 chip 同钉防长文案同病。
+        for (int ci = 0; ci < chips.getChildCount(); ci++) {
+            if (chips.getChildAt(ci) instanceof TextView) {
+                TextView cv2 = (TextView) chips.getChildAt(ci);
+                cv2.setSingleLine(true); cv2.setMaxLines(1);
+                cv2.setEllipsize(android.text.TextUtils.TruncateAt.END);
+            }
+        }
         final TextView addedChip = chip("已添加", Color.rgb(0xE6, 0xF6, 0xEC), Color.rgb(0x1D, 0x8A, 0x49), chipSp);
         // 我的卡片瓷砖不重复「已添加」（页面本身即自有条目），把同一格位留给类别标签，未标则不占位
         if (!mineTile && mine.contains(c.id)) chips.addView(addedChip);
@@ -7732,6 +7782,10 @@ public class MainActivity extends Activity {
         wrap.setOrientation(LinearLayout.VERTICAL);
         Paint mp = new Paint();
         mp.setTextSize(sp * uiScale * getResources().getDisplayMetrics().scaledDensity);
+        // Q124（2.36，件一）：chip 本体是粗体（tv bold→700），旧测宽 Paint 是常规体，
+        // 英文长词实宽被低估、排版按假宽塞行，真渲染溢出后被迫多折一行把瓷砖撑高。
+        // 英文下改用同字重测宽与渲染对齐；中文旧 Paint 逐字不动（中文排版口径冻结）。
+        if (EN_MODE) try { mp.setTypeface(weightTypeface(this, 700)); } catch (Throwable ignored) {}
         int gap = dp(this, 4);
         LinearLayout row = null;
         int rowW = 0, rows = 0;
@@ -7768,6 +7822,7 @@ public class MainActivity extends Activity {
         wrap.setOrientation(LinearLayout.VERTICAL);
         Paint mp = new Paint();
         mp.setTextSize(sp * uiScale * getResources().getDisplayMetrics().scaledDensity);
+        if (EN_MODE) try { mp.setTypeface(weightTypeface(this, 700)); } catch (Throwable ignored) {} // Q124：同 buildFeatFlow，英文粗体实测
         int gap = dp(this, 4);
         LinearLayout row = null;
         int rowW = 0, rows = 0;
@@ -8171,7 +8226,9 @@ public class MainActivity extends Activity {
         for (Card c : Store.all) {
             String ct = (c.type == null || c.type.isEmpty()) ? "debit" : c.type;
             if (filterType != null && !filterType.equals(ct)) continue;
-            if (filterOrg != null && !filterOrg.equals(c.org == null ? "" : c.org)) continue;
+            // Q124（件十九）：「无卡组织」哨兵值——筛组织未知全集，与件十八同判定
+            if ("__none__".equals(filterOrg)) { if (!orgUnknown124(c.org)) continue; }
+            else if (filterOrg != null && !filterOrg.equals(c.org == null ? "" : c.org)) continue;
             if (filterStatus != null && !filterStatus.equals(c.status == null ? "" : c.status)) continue;
             if (filterBank != null && !filterBank.equals(c.bank == null ? "" : c.bank)) continue;
             // Q69：评分状态以 Card.hasScore（条目是否带数值 score）为准，待评分/无 score 计未评分。
@@ -8224,6 +8281,12 @@ public class MainActivity extends Activity {
     // checkDataUpdate(fromPull) 同一条链：先检测→有新版弹件三确认窗（列摘要+代价、
     // 点确认才应用）、已最新/失败给 toast，绝不下拉直接覆盖。指示胶囊照首页 Q61。
     void attachPullRefresh123(final FrameLayout page, final ScrollView sv) {
+        attachPullRefresh123(page, sv, false);
+    }
+
+    // Q124（2.36，件五）：资讯页下拉旧线误接 checkDataUpdate（卡库更新确认窗）——
+    // newsMode 时只强制重拉资讯/常识两条源并给回执，其余三页数据更新口径不动。
+    void attachPullRefresh123(final FrameLayout page, final ScrollView sv, final boolean newsMode) {
         final FrameLayout bar = new FrameLayout(this);
         bar.setBackground(roundRect(Color.argb(238, 255, 255, 255), 999, this));
         bar.setVisibility(View.GONE);
@@ -8243,7 +8306,7 @@ public class MainActivity extends Activity {
         final float[] dyv = { 0f };
         final Runnable ui = () -> {
             if (refreshing[0]) {
-                txt.setText("正在检查数据更新…");
+                txt.setText(newsMode ? "正在刷新资讯…" : "正在检查数据更新…");
                 bar.setVisibility(View.VISIBLE); bar.setAlpha(1f); bar.setTranslationY(0f);
                 return;
             }
@@ -8276,10 +8339,17 @@ public class MainActivity extends Activity {
                 if (dy >= dp(this, 72)) {
                     refreshing[0] = true; dyv[0] = 0f; ui.run();
                     haptic();
-                    checkDataUpdate(true, true, () -> {
-                        refreshing[0] = false;
-                        bar.setVisibility(View.GONE);
-                    });
+                    if (newsMode) {
+                        refreshNewsSources124(() -> {
+                            refreshing[0] = false;
+                            bar.setVisibility(View.GONE);
+                        });
+                    } else {
+                        checkDataUpdate(true, true, () -> {
+                            refreshing[0] = false;
+                            bar.setVisibility(View.GONE);
+                        });
+                    }
                     return true;
                 }
                 dyv[0] = 0f; ui.run();
@@ -8766,7 +8836,7 @@ public class MainActivity extends Activity {
         addChipFlow(panel, typeChips);
 
         panel.addView(filterSectionTitle("\u5361\u7ec4\u7ec7"));
-        String[][] orgs = {{"visa", "VISA"}, {"mastercard", "\u4e07\u4e8b\u8fbe"}, {"mastercard-nucc", "\u4e07\u4e8b\u8fbe-\u7f51\u8054"}, {"amex-cn", "\u8fd0\u901a-\u4eba\u6c11\u5e01"}, {"unionpay", "\u94f6\u8054"}, {"jcb", "JCB"}};
+        String[][] orgs = {{"visa", "VISA"}, {"mastercard", "\u4e07\u4e8b\u8fbe"}, {"mastercard-nucc", "\u4e07\u4e8b\u8fbe-\u7f51\u8054"}, {"amex-cn", "\u8fd0\u901a-\u4eba\u6c11\u5e01"}, {"unionpay", "\u94f6\u8054"}, {"jcb", "JCB"}, {"__none__", "无卡组织"}}; // Q124（件十九）：末项筛组织未知全集
         List<View> orgChips = new ArrayList<>();
         for (final String[] o : orgs) {
             orgChips.add(filterChip(o[1], o[0].equals(filterOrg), () -> {
@@ -9715,7 +9785,7 @@ public class MainActivity extends Activity {
         // 把首行卡名压扁重印成叠字；软件层每次按字形直绘、只画一次，不吃动画层纹理。
         nm.setLayerType(View.LAYER_TYPE_SOFTWARE, null);
         info.addView(nm);
-        String orgTxt = (c.org == null || c.org.isEmpty()) ? "—" : orgLabel(c.org);
+        String orgTxt = orgLabel(c.org); // Q124（件十八）：未知组织显「无卡组织」，不再显「—」
         TextView meta = tv(this, c.bank + " · " + orgTxt + " · " + (c.isCredit() ? "信用卡" : "借记卡"), 11.5f, colText2(), false);
         meta.setSingleLine(true);
         meta.setEllipsize(android.text.TextUtils.TruncateAt.END);
@@ -9930,33 +10000,17 @@ public class MainActivity extends Activity {
         pillLp.leftMargin = dp(this, 18); pillLp.rightMargin = dp(this, 18);
         pillLp.bottomMargin = dp(this, 12) + navBarH();
         overlay.addView(pillWrap, pillLp);
-        // Q120（2.33）：主钮滚动让路接线——窗内滚动一动就淡出，停稳 280ms 淡入；
-        // 代次守卫防连滚时旧「停稳」任务提前把钮召回。钮态每窗重置为全显。
+        // Q124（2.36，件十六，覆盖 2.35 速淡口径）：蓝钮改固定按钮——钉详情窗底部
+        // 常驻，滚动不躲不闪。2.35 的「滚动淡出＋停稳 280ms 淡回」就此退役：不再注册
+        // 滚动观察者（fadeDetailPill/detailPillSpring 代码保留停用），钮恒 alpha 1、
+        // 恒可点。内容留白维持既有口径：正文底部 padding 78dp＋手势条 = 钮高 50dp
+        // ＋底距 12dp＋16dp 余量，最后一行完整滚到钮上方不被挡（两态同此）。
         detailPillWrap = pillWrap;
         detailPillDriver.cancel();
         detailPillSpring.x = 1f; detailPillSpring.v = 0f;
         pillWrap.setAlpha(1f);
         pillWrap.setVisibility(View.VISIBLE);
-        // Q122（2.34，件四返工）：2.33 把淡出挂在 sc 的 setOnScrollChangeListener 上
-        // （单监听槽），真机滑动纹丝不动（用户 01:22）。代码层逐行核过旧挂载自洽、
-        // 无第二处 setter 覆盖——失效点不在字面接线，故换不可覆盖的挂法绝其类：
-        // ViewTreeObserver.OnScrollChangedListener（setter 覆盖不到、编程滚动与手指
-        // 滚动同源触发），读 sc.getScrollY() 实值比对；每窗新建一个、存
-        // detailScrollObs，关窗 finish 里摘除（见 closeDetail），不重复挂、不残留。
-        final ScrollView scObs122 = sc;
-        final int[] lastY122 = {sc.getScrollY()};
-        detailScrollObs = () -> {
-            if (detailClosing || detailView == null || detailScroll != scObs122) return;
-            int y = scObs122.getScrollY();
-            if (y == lastY122[0]) return;
-            lastY122[0] = y;
-            fadeDetailPill(false);
-            final int g122 = ++detailPillRestGen;
-            mainHandler.postDelayed(() -> {
-                if (g122 == detailPillRestGen && !detailClosing && detailView != null) fadeDetailPill(true);
-            }, 280);
-        };
-        sc.getViewTreeObserver().addOnScrollChangedListener(detailScrollObs);
+        detailPrimaryBtn.setClickable(true);
 
         // Q30 关闭钮：长在窗体内部，随窗同升同降同销毁。对照混合版 .p-close 数值——
         // 34dp 半透圆、top/right 12dp 浮在图廊右上；48dp 只是触控框，圆心对齐靠框边距 5dp+居中 7dp=12dp。
@@ -10142,6 +10196,54 @@ public class MainActivity extends Activity {
         String nm = v.optString("name", "");
         if (bin == null || bin.isEmpty()) return "\u2014";
         return (nm == null || nm.isEmpty()) ? bin : bin + "\uFF08" + nm + "\uFF09";
+    }
+
+    // Q124（2.36，件十七）：详情图廊下行统一模板——有等级写等级、有币种且有等级写
+    // 「币种 · 等级」、只有其一写其一。取数只用库内既有字段：子版本名（币种词头/
+    // 等级词）→ 卡名（等级词）→ specs「币种支持」（单币种解析）；取不到该项不显，
+    // 严禁编造。子版本名两者皆无时原样回显（金葵花卡/主题名等既有口径）。
+    static final String[] CURRENCIES124 = {"人民币", "美元", "英镑", "欧元", "澳元", "港币", "日元", "加元", "新加坡元", "瑞士法郎", "韩元", "泰铢", "林吉特"};
+    static String levelFromName124(String name) {
+        if (name == null) return "";
+        if (name.contains("白金")) return "白金卡";
+        if (name.contains("钻石")) return "钻石卡";
+        if (name.contains("金卡")) return "金卡";
+        if (name.contains("普卡")) return "普卡";
+        if (name.contains("世界")) return "世界卡";
+        if (name.contains("无限")) return "无限卡";
+        return "";
+    }
+    static String currencyFromName124(String name) {
+        if (name == null) return "";
+        String t = name.trim();
+        for (String cur : CURRENCIES124) if (t.startsWith(cur)) return cur;
+        return "";
+    }
+    static String currencyFromSpecs124(Card c) {
+        if (c == null || c.specs == null) return "";
+        String s = c.specs.optString("币种支持", "");
+        if (s == null || s.isEmpty() || s.contains("待核实")) return "";
+        if (s.contains("多币种") || s.contains("全币种")) return ""; // 非单一币种不冒充
+        for (String cur : CURRENCIES124) if (s.startsWith(cur)) return cur;
+        int a = s.indexOf('（'), b = s.indexOf('）');
+        if (a >= 0 && b > a) {
+            String inner = s.substring(a + 1, b);
+            for (String cur : CURRENCIES124) if (inner.startsWith(cur)) return cur;
+        }
+        return "";
+    }
+    String variantCaption124(Card c, JSONObject v) {
+        String vname = v == null ? "" : v.optString("name", "");
+        String currency = currencyFromName124(vname);
+        String level = levelFromName124(vname);
+        if (currency.isEmpty() && level.isEmpty()) {
+            if (vname != null && !vname.isEmpty()) return vname; // 主题/系列名原样（既有口径）
+            level = levelFromName124(c.name);
+            currency = currencyFromSpecs124(c);
+        }
+        if (!currency.isEmpty() && !level.isEmpty()) return currency + " · " + level;
+        if (!currency.isEmpty()) return currency;
+        return level;
     }
 
     void updateDetailVariant(int idx) {
@@ -10344,15 +10446,12 @@ public class MainActivity extends Activity {
         if (detailGalAnim != null) { detailGalAnim.cancel(); detailGalAnim = null; }
         for (int i = 0; i < nSlides; i++) {
             String imgPath = c.image;
-            String slideName = "";
-            if (hasVar) {
-                JSONObject vv = c.variants.optJSONObject(i);
-                if (vv != null) {
-                    String vi = vv.optString("image", "");
-                    if (vi != null && !vi.isEmpty()) imgPath = vi;
-                    slideName = vv.optString("name", "");
-                }
+            JSONObject vv124 = hasVar ? c.variants.optJSONObject(i) : null;
+            if (vv124 != null) {
+                String vi = vv124.optString("image", "");
+                if (vi != null && !vi.isEmpty()) imgPath = vi;
             }
+            String slideName = variantCaption124(c, vv124); // Q124（件十七）：统一模板（币种 · 等级）
             LinearLayout slide = new LinearLayout(this);
             slide.setOrientation(LinearLayout.VERTICAL);
             slide.setGravity(Gravity.CENTER_HORIZONTAL);
@@ -11592,6 +11691,12 @@ public class MainActivity extends Activity {
                     scrollTargetBelowFixedHead(mineScrollView, sec122, 8, null);
                 } else { customOpen = true; pendingScrollCustom = true; refreshMineKeepScroll(); }
             }});
+        // Q124（2.36，件十四，用户解冻本件）：宫格直达两格——在线搜卡/在线查询卡信息，
+        // 不再经添加卡片底页（底页三项保留作冗余入口）；与现有格同图标语言/同尺寸。
+        cells.add(new Object[]{"extsearch", "在线搜卡", "扩展卡库",
+            (Runnable) () -> openExtendedSearch()});
+        cells.add(new Object[]{"binquery", "在线查询卡信息", "BIN 认行",
+            (Runnable) () -> openBinQuery()});
         if (cells.isEmpty()) return new View(this);
         LinearLayout card = new LinearLayout(this);
         card.setOrientation(LinearLayout.VERTICAL);
@@ -11637,6 +11742,7 @@ public class MainActivity extends Activity {
         cell.addView(chip, new LinearLayout.LayoutParams(dp(this, 46), dp(this, 46)));
         TextView n = tv(this, name, 12, colText(), true);
         n.setSingleLine(true);
+        n.setEllipsize(android.text.TextUtils.TruncateAt.END); // Q124：长名（如「在线查询卡信息」）窄屏只许尾省不许裁字
         LinearLayout.LayoutParams nlp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         nlp.topMargin = dp(this, 6);
         cell.addView(n, nlp);
@@ -11976,15 +12082,8 @@ public class MainActivity extends Activity {
         arrow.setRotation(customOpen ? 90 : 0);
         head.addView(arrow, new LinearLayout.LayoutParams(dp(this, 24), dp(this, 24)));
         head.setOnClickListener(v -> { haptic(); toggleCustomSection(sec); }); // Q117：就地开合，不整页重建
-        if (!customOpen) return sec;
-        // 展开教学只弹一次首次 toast（混合版 __ccDragHint 口径），不留常驻行
-        try {
-            if (!prefs.getBoolean("cc_drag_hint_shown", false)) {
-                prefs.edit().putBoolean("cc_drag_hint_shown", true).commit();
-                mainHandler.postDelayed(() -> showFloatToast("长按色带可拖动排序"), 600);
-            }
-        } catch (Throwable ignored) {}
-        // 展开态：整叠色带河——外框 16dp 裁圆+柔影，每带 18/14/30 内边距，带底 48dp 竖向淡接至下一带顶色（Q40 照 .csk-tile::after）
+        // Q124（件十一）：展开体先建好挂进节里，收起态 GONE 不占位；开合由
+        // toggleCustomSection 走 foldHeightSpring 原地收展（beforeOpen 回填本盒）。
         LinearLayout tilesBox = new LinearLayout(this);
         customTilesBox = tilesBox;
         tilesBox.setOrientation(LinearLayout.VERTICAL);
@@ -11994,6 +12093,22 @@ public class MainActivity extends Activity {
         LinearLayout.LayoutParams boxLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         boxLp.topMargin = dp(this, 10);
         sec.addView(tilesBox, boxLp);
+        if (!customOpen) { tilesBox.setVisibility(View.GONE); return sec; }
+        fillCustomTiles124(tilesBox);
+        return sec;
+    }
+
+    // Q124（件十一）：色带河填充——展开态整叠色带（外框 16dp 裁圆+柔影，每带
+    // 18/14/30 内边距，带底 48dp 竖向淡接至下一带顶色，Q40 照 .csk-tile::after），
+    // buildCustomSection 静态展开与 toggleCustomSection 就地弹簧展开共用一处构建。
+    void fillCustomTiles124(LinearLayout tilesBox) {
+        // 展开教学只弹一次首次 toast（混合版 __ccDragHint 口径），不留常驻行
+        try {
+            if (!prefs.getBoolean("cc_drag_hint_shown", false)) {
+                prefs.edit().putBoolean("cc_drag_hint_shown", true).commit();
+                mainHandler.postDelayed(() -> showFloatToast("长按色带可拖动排序"), 600);
+            }
+        } catch (Throwable ignored) {}
         for (int i = 0; i < customCards.size(); i++) {
             final CustomCard c = customCards.get(i);
             final int idx = i;
@@ -12055,8 +12170,8 @@ public class MainActivity extends Activity {
             }
             // 三颗 30dp 半透玻璃小圆钮：上移/下移/删除（细字形，禁用态半透明；删除走二次确认+撤销）
             final FrameLayout tileF = tile;
-            row.addView(customMoveBtn("↑", i == 0, v -> moveCustom(customTileIndex(tileF), -1)));
-            row.addView(customMoveBtn("↓", i == customCards.size() - 1, v -> moveCustom(customTileIndex(tileF), 1)));
+            row.addView(customMoveBtn("↑", i == 0, v -> moveCustom(customTileIndex(tileF), -1, tileF)));
+            row.addView(customMoveBtn("↓", i == customCards.size() - 1, v -> moveCustom(customTileIndex(tileF), 1, tileF)));
             row.addView(customMoveBtn("✕", false, v -> { int ci = customTileIndex(tileF); if (ci >= 0 && ci < customCards.size()) confirmDeleteCustom(customCards.get(ci)); }));
             tile.setOnClickListener(v -> {
                 if (System.currentTimeMillis() - lastDragEndAt < 450) return;
@@ -12065,7 +12180,6 @@ public class MainActivity extends Activity {
             });
             tile.setOnLongClickListener(v -> { startCustomDrag(tile, customTileIndex(tileF)); return true; });
         }
-        return sec;
     }
 
     // Q56：色带在其容器中的当前位置（换位/拖动落位后以此为准，监听里不吃旧下标）
@@ -12086,7 +12200,7 @@ public class MainActivity extends Activity {
         g.setStroke(dp(this, 1), Color.argb(60, 255, 255, 255));
         b.setBackground(g);
         if (disabled) b.setOnClickListener(null);
-        else b.setOnClickListener(v -> { haptic(); moveCustom(customTileIndex(tile), dir); });
+        else b.setOnClickListener(v -> { haptic(); moveCustom(customTileIndex(tile), dir, tile); });
     }
 
     // Q56 对照混合版 endTileDrag→restyleTiles(wrap)：只就地重算编号/渐变衔接/首尾圆角/钮态，不整页重建、不闪
@@ -12290,7 +12404,7 @@ public class MainActivity extends Activity {
         return b;
     }
 
-    void moveCustom(int idx, int dir) {
+    void moveCustom(int idx, int dir, View tile) {
         int j = idx + dir;
         if (idx < 0 || j < 0 || j >= customCards.size()) return;
         CustomCard t = customCards.get(idx);
@@ -12298,9 +12412,16 @@ public class MainActivity extends Activity {
         customCards.set(j, t);
         saveCustomCards();
         // Q56 ①：↑/↓ 换位与拖动同法——物理交换两带后就地重衔接，不整页重建
+        // Q124（件十二）：容器从被点带体自身父级解析——旧实现只认 customTilesBox
+        // 字段，字段若指向已摘除的旧盒（整页重建/换节后），交换会落在看不见的
+        // 视图树上、界面纹丝不动（↑/↓「点按无反应」根因）。子数与数据对不上
+        // 同样回落整页重建，保证每次点击必有可见结果。
         try {
-            ViewGroup box = customTilesBox;
-            if (box != null && j < box.getChildCount()) {
+            ViewGroup box = null;
+            if (tile != null && tile.getParent() instanceof ViewGroup) box = (ViewGroup) tile.getParent();
+            if (box == null) box = customTilesBox;
+            if (box != null && box.getChildCount() == customCards.size()) {
+                if (box instanceof LinearLayout) customTilesBox = (LinearLayout) box;
                 View a = box.getChildAt(idx);
                 View b = box.getChildAt(j);
                 int lo = Math.min(idx, j), hi = Math.max(idx, j);
@@ -13788,8 +13909,12 @@ public class MainActivity extends Activity {
         form.setOrientation(LinearLayout.VERTICAL);
         form.setPadding(dp(this, 18), dp(this, 18), dp(this, 18), dp(this, 18) + navBarH()); // .dlg padding 18px；Q45 贴底后底部再加手势避让
         sv.addView(form);
+        // Q124（2.36，件十）：表单滚动区改弹性占高（weight 承接）——旧口径 WRAP_CONTENT
+        // 让 ScrollView 按整表实高撑出窗外：窗高封顶 0.82 屏高后上顶下底双切（顶部
+        // 配色行半截、底部出屏）。改后窗高 = min(整表实高, 0.82 屏高)，超高部分由
+        // 表单内滚动承接，窗体永远完整落在可视区内。
         card.addView(sv, new LinearLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+            ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
 
         form.addView(tv(this, isNew ? "添加自定义卡片" : "编辑自定义卡片", 17, colText(), true));
         // Q82 卡种扩展位：银行卡/电话卡/其他，字段按卡种收窄（电话卡不套银行卡的组织/一类二类）
@@ -14058,8 +14183,11 @@ public class MainActivity extends Activity {
         int maxH = (int) (getResources().getDisplayMetrics().heightPixels * 0.82); // .dlg max-height 82vh
         card.measure(View.MeasureSpec.makeMeasureSpec(sw - dp(this, 24), View.MeasureSpec.EXACTLY),
             View.MeasureSpec.makeMeasureSpec(maxH, View.MeasureSpec.AT_MOST));
+        // Q124（件十）：窗高取整表自然高与 0.82 屏高之小者（弹性 sv 已承接超高滚动）
+        int formNatural124 = form.getMeasuredHeight();
+        int cardH124 = Math.min(Math.max(formNatural124, dp(this, 160)), maxH);
         FrameLayout.LayoutParams clp = new FrameLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT, Math.min(card.getMeasuredHeight(), maxH));
+            ViewGroup.LayoutParams.MATCH_PARENT, cardH124);
         clp.gravity = Gravity.BOTTOM;
         clp.leftMargin = dp(this, 12); clp.rightMargin = dp(this, 12);
         clp.bottomMargin = 0; // Q45：窗底直达屏底，表单底部留白（含手势避让）托起动作行
@@ -14519,9 +14647,11 @@ public class MainActivity extends Activity {
                     if (prefs != null) prefs.edit().putString("glossary_cache", json).apply();
                     glossaryItems = fresh;
                     if (changed) runOnUiThread(() -> { if ("news".equals(tab) && glossaryBox != null) renderGlossary(); });
+                    glossaryFetchOk124 = true; glossaryFetchChanged124 = changed; fireGlossaryFetchCb124(); // Q124
                     return;
                 } catch (Exception e) { /* 换下一条，失败保持内置/缓存 */ }
             }
+            fireGlossaryFetchCb124(); // Q124：双线皆败也算一次完成
         }).start();
     }
 
@@ -14807,6 +14937,128 @@ public class MainActivity extends Activity {
         return out;
     }
 
+    // Q124（2.36，件七）：常识展开盒/折叠预览的就地构建——与 renderGlossary 内展开/
+    // 折叠分支同参数（成员行、档位钮、正文、尾注逐项照搬），供小钮点击时就地换装：
+    // 收起落定只替换本卡正文、展开点击即就地建盒弹簧升起，全程不整表重渲染
+    // （旧口径收尾 afterHidden 整表重绘＝顿＋闪的来源）。
+    LinearLayout glossaryOpenBox124(final GlossaryItem g) {
+        LinearLayout host = new LinearLayout(this);
+        host.setOrientation(LinearLayout.VERTICAL);
+        String bodyTxt = g.dBody();
+        if (g.tiers != null && !g.tiers.isEmpty()) {
+            GlossaryItem cur = null;
+            for (GlossaryItem tg : g.tiers) if (tg.id.equals(glossaryAcctTierId)) cur = tg;
+            if (cur == null) { cur = g.tiers.get(0); glossaryAcctTierId = cur.id; }
+            final GlossaryItem curTier = cur;
+            LinearLayout tierRow = new LinearLayout(this);
+            tierRow.setOrientation(LinearLayout.HORIZONTAL);
+            LinearLayout.LayoutParams trp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            trp.topMargin = dp(this, 10);
+            host.addView(tierRow, trp);
+            for (final GlossaryItem tg : acctTiersDisplay123(g.tiers)) {
+                boolean on = tg == curTier;
+                String pillTxt;
+                if (isEn()) {
+                    if ("acct1".equals(tg.id)) pillTxt = "Class I";
+                    else if ("acct2".equals(tg.id)) pillTxt = "Class II";
+                    else if ("acct3".equals(tg.id)) pillTxt = "Class III";
+                    else pillTxt = tg.dTerm();
+                } else pillTxt = tg.dTerm();
+                TextView pill = tv(this, pillTxt, 12.5f, on ? accentColor() : colText(), on);
+                pill.setGravity(Gravity.CENTER);
+                pill.setBackground(on ? softCapsuleBg(9) : roundRect(colChipOff(), 9, this));
+                pill.setSingleLine(true); pill.setMaxLines(1); pill.setEllipsize(android.text.TextUtils.TruncateAt.END);
+                pill.setPadding(dp(this, 4), dp(this, 8), dp(this, 4), dp(this, 8));
+                LinearLayout.LayoutParams plp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+                plp.rightMargin = dp(this, 8);
+                pill.setLayoutParams(plp);
+                pill.setOnClickListener(v -> { haptic(); glossaryAcctTierId = tg.id; renderGlossary(); });
+                tierRow.addView(pill);
+            }
+            String tAka = curTier.dAka();
+            if (!tAka.isEmpty()) {
+                TextView ta = tv(this, tAka, 12, colText2(), false);
+                LinearLayout.LayoutParams tap = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+                tap.topMargin = dp(this, 8);
+                host.addView(ta, tap);
+            }
+            TextView tb = tv(this, curTier.dBody(), 13, inkBody(), false);
+            tb.setLineSpacing(dp(this, 2), 1f);
+            LinearLayout.LayoutParams tbp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            tbp.topMargin = dp(this, 6);
+            host.addView(tb, tbp);
+            TextView note = tv(this, isEn() ? "Exact rules follow the issuer's and card network's current terms." : "具体规则以发卡行与卡组织现行说明为准。", 11.5f, colText2(), false);
+            LinearLayout.LayoutParams nlp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            nlp.topMargin = dp(this, 8);
+            host.addView(note, nlp);
+        } else if (g.members != null && !g.members.isEmpty()) {
+            GlossaryItem sel = null;
+            String pick123 = glossaryPick123.get(g.id);
+            if (pick123 != null) for (GlossaryItem mm : g.members) if (pick123.equals(mm.id)) sel = mm;
+            if (sel == null) sel = g.members.get(0);
+            final GlossaryItem selMember = sel;
+            for (final GlossaryItem mm : g.members) {
+                boolean on = mm == selMember;
+                TextView mrow = tv(this, mm.dTerm(), 13, on ? accentColor() : colText(), on);
+                mrow.setBackground(on ? softCapsuleBg(10) : roundRect(colChipOff(), 10, this));
+                mrow.setPadding(dp(this, 12), dp(this, 9), dp(this, 12), dp(this, 9));
+                LinearLayout.LayoutParams mrp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+                mrp.topMargin = dp(this, 8);
+                host.addView(mrow, mrp);
+                mrow.setOnClickListener(v -> { haptic(); glossaryPick123.put(g.id, mm.id); renderGlossary(); });
+            }
+            String mAka = selMember.dAka();
+            if (!mAka.isEmpty()) {
+                TextView ma = tv(this, mAka, 12, colText2(), false);
+                LinearLayout.LayoutParams map2 = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+                map2.topMargin = dp(this, 8);
+                host.addView(ma, map2);
+            }
+            TextView mb = tv(this, selMember.dBody(), 13, inkBody(), false);
+            mb.setLineSpacing(dp(this, 2), 1f);
+            LinearLayout.LayoutParams mbp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            mbp.topMargin = dp(this, 6);
+            host.addView(mb, mbp);
+            TextView note = tv(this, isEn() ? "Exact rules follow the issuer's and card network's current terms." : "具体规则以发卡行与卡组织现行说明为准。", 11.5f, colText2(), false);
+            LinearLayout.LayoutParams nlp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            nlp.topMargin = dp(this, 8);
+            host.addView(note, nlp);
+        } else if (!bodyTxt.isEmpty()) {
+            TextView bd = tv(this, bodyTxt, 13, inkBody(), false);
+            bd.setLineSpacing(dp(this, 2), 1f);
+            LinearLayout.LayoutParams bdp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            bdp.topMargin = dp(this, 6);
+            host.addView(bd, bdp);
+            TextView note = tv(this, isEn() ? "Exact rules follow the issuer's and card network's current terms." : "具体规则以发卡行与卡组织现行说明为准。", 11.5f, colText2(), false);
+            LinearLayout.LayoutParams nlp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            nlp.topMargin = dp(this, 8);
+            host.addView(note, nlp);
+        }
+        return host;
+    }
+
+    View glossaryPreviewView124(GlossaryItem g) {
+        if (g.tiers != null && !g.tiers.isEmpty()) return null; // 档位条折叠态靠 aka 行预览
+        String txt = null;
+        if (g.members != null && !g.members.isEmpty()) {
+            GlossaryItem sel = null;
+            String pick123 = glossaryPick123.get(g.id);
+            if (pick123 != null) for (GlossaryItem mm : g.members) if (pick123.equals(mm.id)) sel = mm;
+            if (sel == null) sel = g.members.get(0);
+            txt = sel.dBody();
+        } else {
+            txt = g.dBody();
+        }
+        if (txt == null || txt.isEmpty()) return null;
+        TextView bd = tv(this, txt, 13, inkBody(), false);
+        bd.setLineSpacing(dp(this, 2), 1f);
+        bd.setMaxLines(2); bd.setEllipsize(android.text.TextUtils.TruncateAt.END);
+        LinearLayout.LayoutParams bdp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        bdp.topMargin = dp(this, 6);
+        bd.setLayoutParams(bdp);
+        return bd;
+    }
+
     void renderGlossary() {
         if (glossaryBox == null) return;
         glossaryBox.removeAllViews();
@@ -15007,19 +15259,31 @@ public class MainActivity extends Activity {
             }
             // Q123（件一）：开合触发收窄——只有「展开/收起」小钮能触发展开/收起，
             // 卡身点击无动作；收起先弹簧收到 0 落定再重渲染（foldHeightSpring 收尾口径）。
-            final LinearLayout foldNow123 = foldRef123[0];
             arrow.setPadding(dp(this, 12), dp(this, 9), dp(this, 2), dp(this, 9));
             arrow.setOnClickListener(v -> {
                 haptic();
                 if (glossaryOpen.contains(g.id)) {
                     glossaryOpen.remove(g.id);
                     arrow.setText("展开 ›");
-                    if (foldNow123 != null) foldHeightSpring(foldNow123, false, null, () -> renderGlossary(), glossaryFoldSpring);
+                    final LinearLayout fbNow124 = foldRef123[0];
+                    if (fbNow124 != null) foldHeightSpring(fbNow124, false, null, () -> {
+                        // Q124（件七）：落定就地换折叠预览，不再整表重渲染（顿＋闪来源）
+                        int idx124 = card.indexOfChild(fbNow124);
+                        card.removeView(fbNow124);
+                        foldRef123[0] = null;
+                        View pv124 = glossaryPreviewView124(g);
+                        if (pv124 != null) card.addView(pv124, idx124 >= 0 ? idx124 : card.getChildCount());
+                    }, glossaryFoldSpring);
                     else renderGlossary();
                 } else {
                     glossaryOpen.add(g.id);
-                    glossaryAnimId123 = g.id;
-                    renderGlossary();
+                    arrow.setText("收起 ‹");
+                    // Q124（件七）：就地建展开盒弹簧升起，不等整表重渲染
+                    while (card.getChildCount() > bodyStart123) card.removeViewAt(bodyStart123);
+                    final LinearLayout fb124 = glossaryOpenBox124(g);
+                    card.addView(fb124, bodyStart123);
+                    foldRef123[0] = fb124;
+                    fb124.post(() -> foldHeightSpring(fb124, true, null, null, glossaryFoldSpring));
                 }
             });
             if (jumpGroupId123 != null && jumpGroupId123.equals(g.id)) jumpView = card;
@@ -15063,7 +15327,7 @@ public class MainActivity extends Activity {
                 e.id = o.optString("id", "");
                 e.name = o.optString("name", "");
                 e.bank = o.optString("bank", "");
-                e.org = o.optString("org", "");
+                e.org = normOrg124(o.optString("org", "")); // Q124（件十八）
                 e.type = o.optString("type", "");
                 e.url = o.optString("url", "");
                 e.image = o.optString("image", "");
@@ -15366,6 +15630,11 @@ public class MainActivity extends Activity {
             extResultBox.measure(View.MeasureSpec.makeMeasureSpec(Math.max(1, w), View.MeasureSpec.EXACTLY),
                 View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED));
             int h = Math.min(extResultBox.getMeasuredHeight(), cap);
+            // Q124（2.36，件九）：底部按钮被切根因——结果区 0.52 屏高＋窗内固定件
+            // （标题/说明/输入/计数/按钮行）总高可超过窗高上限 0.86 屏高，旧口径窗高
+            // 封顶后自顶向下排版把按钮行挤出窗外只剩一条边。改：先按内容给结果区
+            // 高度，再量窗；若窗超上限，把溢出从结果区扣回（保底 120dp），按钮行
+            // 永远整行在窗内，结果区滚动承接。
             ViewGroup.LayoutParams lp = extResScroll.getLayoutParams();
             if (lp != null && lp.height != h) { lp.height = h; extResScroll.setLayoutParams(lp); }
             extResScroll.scrollTo(0, 0);
@@ -15377,7 +15646,16 @@ public class MainActivity extends Activity {
                 cardV.measure(View.MeasureSpec.makeMeasureSpec(
                         getResources().getDisplayMetrics().widthPixels - dp(this, 24), View.MeasureSpec.EXACTLY),
                     View.MeasureSpec.makeMeasureSpec(maxCardH, View.MeasureSpec.AT_MOST));
-                int nh = Math.min(cardV.getMeasuredHeight(), maxCardH);
+                int totalH = cardV.getMeasuredHeight();
+                if (totalH > maxCardH && lp != null) {
+                    int shrunk = Math.max(dp(this, 120), h - (totalH - maxCardH));
+                    if (shrunk != lp.height) { lp.height = shrunk; extResScroll.setLayoutParams(lp); }
+                    cardV.measure(View.MeasureSpec.makeMeasureSpec(
+                            getResources().getDisplayMetrics().widthPixels - dp(this, 24), View.MeasureSpec.EXACTLY),
+                        View.MeasureSpec.makeMeasureSpec(maxCardH, View.MeasureSpec.AT_MOST));
+                    totalH = cardV.getMeasuredHeight();
+                }
+                int nh = Math.min(totalH, maxCardH);
                 ViewGroup.LayoutParams wlp = wrapG.getLayoutParams();
                 if (wlp != null && wlp.height != nh) { wlp.height = nh; wrapG.setLayoutParams(wlp); }
                 if (wrapG.getChildCount() > 0) {
@@ -17170,6 +17448,40 @@ public class MainActivity extends Activity {
         newsItems = s == null ? new ArrayList<NewsItem>() : s;
     }
 
+    // Q124（2.36，件五）：资讯/常识强制重拉的一次性完成回执（下拉刷新用）——
+    // 拉取线程在成功/全败两个出口各点一次，UI 线程汇合后报「已更新/已是最新/失败」。
+    Runnable newsFetchCb124 = null, glossaryFetchCb124 = null;
+    boolean newsFetchOk124, newsFetchChanged124, glossaryFetchOk124, glossaryFetchChanged124;
+    void fireNewsFetchCb124() {
+        runOnUiThread(() -> { Runnable c = newsFetchCb124; newsFetchCb124 = null; if (c != null) c.run(); });
+    }
+    void fireGlossaryFetchCb124() {
+        runOnUiThread(() -> { Runnable c = glossaryFetchCb124; glossaryFetchCb124 = null; if (c != null) c.run(); });
+    }
+    void refreshNewsSources124(final Runnable done) {
+        final int[] pending = { 2 };
+        final Runnable one = () -> {
+            if (--pending[0] > 0) return;
+            boolean anyChanged = newsFetchChanged124 || glossaryFetchChanged124;
+            boolean anyOk = newsFetchOk124 || glossaryFetchOk124;
+            if (anyChanged) {
+                String what = newsFetchChanged124 && glossaryFetchChanged124 ? "资讯与常识"
+                    : newsFetchChanged124 ? "资讯" : "常识";
+                showFloatToast(isEn() ? "Updated: " + what : "已更新：" + what);
+            } else if (anyOk) {
+                showFloatToast(isEn() ? "Already up to date" : "已是最新");
+            } else {
+                showFloatToast(isEn() ? "Refresh failed — showing local content" : "刷新失败，显示的是本地内容");
+            }
+            newsFetchOk124 = newsFetchChanged124 = glossaryFetchOk124 = glossaryFetchChanged124 = false;
+            if (done != null) done.run();
+        };
+        newsFetchCb124 = one; glossaryFetchCb124 = one;
+        newsFetchStarted = false; glossaryFetchStarted = false; // 强制重拉：绕过一次性门禁
+        fetchNewsUpdate();
+        fetchGlossaryUpdate();
+    }
+
     void fetchNewsUpdate() {
         if (newsFetchStarted) return;
         newsFetchStarted = true;
@@ -17197,10 +17509,40 @@ public class MainActivity extends Activity {
                     if (prefs != null) prefs.edit().putString("news_cache", json).apply();
                     newsItems = fresh;
                     if (changed) runOnUiThread(() -> { if ("news".equals(tab) && newsListBox != null) renderNews(); });
+                    newsFetchOk124 = true; newsFetchChanged124 = changed; fireNewsFetchCb124(); // Q124
                     return;
                 } catch (Exception e) { /* 换下一条线路，失败就保持内置/缓存 */ }
             }
+            fireNewsFetchCb124(); // Q124：双线皆败也算一次完成（ok 保持 false）
         }).start();
+    }
+
+    // Q124（2.36，件七）：资讯详情盒就地构建（与 renderNews 内展开分支同参数），
+    // 供小钮就地展开/收起换装，不再整表重渲染。
+    LinearLayout buildNewsDetail124(final NewsItem n) {
+        LinearLayout det = new LinearLayout(this);
+        det.setOrientation(LinearLayout.VERTICAL);
+        det.setBackground(roundRect(darkEff() ? Color.argb(42, 255, 255, 255) : Color.rgb(0xF5, 0xF6, 0xF8), 10, this));
+        det.setPadding(dp(this, 10), dp(this, 8), dp(this, 10), dp(this, 8));
+        LinearLayout.LayoutParams dlp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        dlp.topMargin = dp(this, 9);
+        det.setLayoutParams(dlp);
+        det.addView(tv(this, "来源：" + (n.source == null || n.source.isEmpty() ? "—" : n.source)
+            + " · 日期：" + (n.date == null || n.date.isEmpty() ? "—" : n.date), 11.5f, inkBody(), false));
+        if (n.url != null && !n.url.isEmpty()) {
+            TextView link = tv(this, "查看原文 ›", 13, inkLink(), true);
+            LinearLayout.LayoutParams llp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            llp.topMargin = dp(this, 6);
+            det.addView(link, llp);
+            link.setOnClickListener(v -> {
+                haptic();
+                try { startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(n.url))); }
+                catch (Exception e) { showFloatToast("打不开这个链接"); }
+            });
+        } else {
+            det.addView(tv(this, "暂无原文链接", 11.5f, colText2(), false));
+        }
+        return det;
     }
 
     void renderNews() {
@@ -17266,8 +17608,10 @@ public class MainActivity extends Activity {
             card.addView(ttl, ttlp2);
             if (!open) ttl.setMaxLines(2);
 
+            final TextView[] smRef124 = new TextView[1]; // Q124（件七）：就地收起时恢复两行预览用
             if (n.summary != null && !n.summary.isEmpty()) {
                 TextView sm = tv(this, n.summary, 13, inkBody(), false);
+                smRef124[0] = sm;
                 sm.setLineSpacing(dp(this, 2), 1f);
                 LinearLayout.LayoutParams smlp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
                 smlp.topMargin = dp(this, 5);
@@ -17311,19 +17655,31 @@ public class MainActivity extends Activity {
             // Q123（2.35，件一）：开合触发收窄——只有「展开/收起」小钮能展开/收起，
             // 卡身点击无动作，防整卡误触（箭头补内边距放大可点区）。
             // Q123（件十一）：收起先弹簧收到 0 落定再重渲染，与设置折展同一时序。
-            final LinearLayout detNow123 = detRef123[0];
             arrow.setPadding(dp(this, 12), dp(this, 9), dp(this, 2), dp(this, 9));
             arrow.setOnClickListener(v -> {
                 haptic();
                 if (newsOpen.contains(n.id)) {
                     newsOpen.remove(n.id);
                     arrow.setText("展开 ›");
-                    if (detNow123 != null) foldHeightSpring(detNow123, false, null, () -> renderNews(), newsFoldSpring);
+                    final LinearLayout detNow124 = detRef123[0];
+                    if (detNow124 != null) foldHeightSpring(detNow124, false, null, () -> {
+                        // Q124（件七）：落定就地摘详情盒＋恢复标题/摘要两行预览，不整表重渲染
+                        card.removeView(detNow124);
+                        detRef123[0] = null;
+                        ttl.setMaxLines(2);
+                        if (smRef124[0] != null) { smRef124[0].setMaxLines(2); smRef124[0].setEllipsize(android.text.TextUtils.TruncateAt.END); }
+                    }, newsFoldSpring);
                     else renderNews();
                 } else {
                     newsOpen.add(n.id);
-                    newsAnimId123 = n.id;
-                    renderNews();
+                    arrow.setText("收起 ‹");
+                    // Q124（件七）：就地建详情盒弹簧升起，标题/摘要同步放开行数
+                    ttl.setMaxLines(Integer.MAX_VALUE);
+                    if (smRef124[0] != null) { smRef124[0].setMaxLines(Integer.MAX_VALUE); smRef124[0].setEllipsize(null); }
+                    final LinearLayout det124 = buildNewsDetail124(n);
+                    card.addView(det124);
+                    detRef123[0] = det124;
+                    det124.post(() -> foldHeightSpring(det124, true, null, null, newsFoldSpring));
                 }
             });
             }
@@ -17345,7 +17701,7 @@ public class MainActivity extends Activity {
         noScrollbar(sv); // Q49：资讯仅 6 条，滚动指示从简到近乎无，不挂长条
         sv.setClipToPadding(false);
         newsScroll = sv;
-        attachPullRefresh123(page, sv); // Q123（件四）：非设置页下拉刷新
+        attachPullRefresh123(page, sv, true); // Q124（件五）：资讯页下拉只刷资讯/常识两源
         if (Build.VERSION.SDK_INT >= 23) sv.setOnScrollChangeListener((v, sx, sy, ox, oy) -> { pageScrollSaveY.put("news", sy); updateTopFabVisibility(sy); });
         page.addView(sv, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         LinearLayout scrollContent = new LinearLayout(this);
@@ -17800,6 +18156,13 @@ public class MainActivity extends Activity {
         helloClosing = false;
         helloFlat = false;
         if (navWrap != null) navWrap.setVisibility(View.GONE); // Q32
+        // Q124（2.36，件三）：欢迎页期间主页悬浮钮漏出（用户 02:43 图证）——搜索/筛选
+        // 两钮带 elevation，Z 序压过欢迎页根（elevation 0），且 showHello 旧口径只藏
+        // navWrap 与 pageHost、从未摘钮，仅靠同容器后加顺序盖不住高 Z 兄弟。进欢迎页
+        // 先把四钮整摘（hideFabsNow 现成口径）；退场走 closeHello→showTab 的
+        // syncSearchFab/syncAddFab 原口径重挂，helloOpen 在场期间 sync* 的
+        // isChromeCovered 门禁保证不被任何路径召回。
+        hideFabsNow();
         // Q120（2.33）：同 openAbout 口径——宿主隐藏、全屏页单挂，驻留页不陪葬。
         if (fullScreenPage != null && fullScreenPage.getParent() == content) content.removeView(fullScreenPage);
         if (pageHost != null) pageHost.setVisibility(View.GONE);
@@ -18456,6 +18819,33 @@ public class MainActivity extends Activity {
         updRow.setOnClickListener(v -> { haptic(); if (pendFinal > 0 && pendingUpdateJson != null) showUpdateConfirm(); else { showFloatToast("正在检查数据更新…"); checkDataUpdate(true); } });
         page.addView(updRow);
         switchRow(page, "启动时自动检测更新", "开启只检测并提示，不自动应用；关闭则仅手动检查", prefs != null && prefs.getBoolean("auto_check_update", false), on -> { if(prefs!=null) prefs.edit().putBoolean("auto_check_update", on).apply(); haptic(); rebuildPages(); }); // Q121：默认关（站规矩）
+        // Q124（2.36，件六）：清除缓存行——占用口径与 Q124 盘点一致：cacheDir 全部
+        // ＋ filesDir/ota-images（远程卡图下载缓存，按版本分目录、可按需重下）。
+        // 只清这两处可再生内容；卡库 OTA 数据文件、用户卡片/收藏/设置 prefs、
+        // 导入字体、崩溃记录一律不碰。清除在后台线程做，完事回主线程刷新副文案回执。
+        final View cacheRow = settingRow(isEn() ? "Clear Cache" : "清除缓存", "");
+        final TextView cacheSub = (TextView) ((ViewGroup) cacheRow).getChildAt(1);
+        final Runnable cacheSubRefresh = () -> {
+            long bytes = dirSizeBytes(getCacheDir()) + dirSizeBytes(new File(getFilesDir(), "ota-images"));
+            cacheSub.setText(isEn() ? "Downloaded image cache · " + fmtBytesKb(bytes) + " · Tap to clear"
+                : "已下载卡图缓存 · " + fmtBytesKb(bytes) + " · 点此清除");
+        };
+        cacheSubRefresh.run();
+        cacheRow.setOnClickListener(v -> {
+            haptic();
+            cacheSub.setText(isEn() ? "Clearing…" : "正在清除…");
+            new Thread(() -> {
+                deleteDirRecursive(getCacheDir());
+                deleteDirRecursive(new File(getFilesDir(), "ota-images"));
+                runOnUiThread(() -> {
+                    long left = dirSizeBytes(getCacheDir()) + dirSizeBytes(new File(getFilesDir(), "ota-images"));
+                    cacheSubRefresh.run();
+                    showFloatToast(isEn() ? "Cache cleared · " + fmtBytesKb(left) + " left"
+                        : "已清除缓存 · 还剩 " + fmtBytesKb(left));
+                });
+            }).start();
+        });
+        page.addView(cacheRow);
 
         sectionHead(page, S("sec_about"));
         // Q18: last-crash trace at top of About (copyable / clearable); empty when no crash recorded
@@ -18763,6 +19153,29 @@ public class MainActivity extends Activity {
         row.setOnClickListener(v -> { boolean nv = !sw.on; sw.setOn(nv, true); set.onSet(nv); }); // Q104（2.18）：以开关自身状态为准——旧式捕获构建时 on，连点第二次写回同值拨不动（摘要计数与折叠组同修）
         page.addView(row);
         return row; // Q118：调用方需整行引用时取用（如玻璃主行副文案原地刷新），旧调用方忽略返回值不受影响
+    }
+
+    // Q124（2.36，件六）：缓存计量/清理助手（只服务「清除缓存」一行，口径见该行注释）
+    static long dirSizeBytes(File f) {
+        if (f == null || !f.exists()) return 0;
+        if (f.isFile()) return f.length();
+        long sum = 0;
+        File[] kids = f.listFiles();
+        if (kids != null) for (File k : kids) sum += dirSizeBytes(k);
+        return sum;
+    }
+    static void deleteDirRecursive(File f) {
+        if (f == null || !f.exists()) return;
+        if (f.isDirectory()) {
+            File[] kids = f.listFiles();
+            if (kids != null) for (File k : kids) deleteDirRecursive(k);
+        }
+        try { f.delete(); } catch (Throwable ignored) {}
+    }
+    static String fmtBytesKb(long b) {
+        if (b < 1024) return b + " B";
+        if (b < 1024 * 1024) return String.format(java.util.Locale.US, "%.1f KB", b / 1024.0);
+        return String.format(java.util.Locale.US, "%.1f MB", b / (1024.0 * 1024.0));
     }
 
     View settingRow(String k, String v) {
