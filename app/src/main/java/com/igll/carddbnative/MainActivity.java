@@ -558,7 +558,11 @@ public class MainActivity extends Activity {
         syncSearchFab(); syncAddFab(); syncTopFab();
     }
     // P2d-fix：长页面底部安全留白，确保末行能完整滚出悬浮 dock 之外（dock 高约 67dp+底边距 12dp）
-    int dockPad() { return dp(this, 112) + navBarH(); } // Q26：再加导航栏避让，末行滚出抬高后的 dock
+    // Q118（2.31，用户 00:22 图证末行仍被 dock 压）：dock 实占高按 navRow 实测约 72dp＋底
+    // 边距 12dp，旧 112 口径只剩约 28dp 净空，再叠 elevation 柔影晕带即读成压行；抬到
+    // 128 补足安全边距。五主页签滚动子层（home/student/mine/news/settings）与各二级页
+    // 底部留白统一走本口径，逐页已核都在用 dockPad()，无一页例外。
+    int dockPad() { return dp(this, 128) + navBarH(); } // Q26：再加导航栏避让，末行滚出抬高后的 dock
     // P-scroll：全 App 长列表统一细淡滚动条——3dp 细窄、低对比蓝灰，滚动时显、停稳后淡出，不许一根长粗条挂右边
     void thinScrollbar(ScrollView sv) { thinScrollbar(sv, true); }
     // 更新日志这类短框常驻需求：同款细淡，但不自动淡出（用户 15:28 要求右侧滑杆常显）
@@ -2140,6 +2144,7 @@ public class MainActivity extends Activity {
         if (!moreMenuBackdropFrozen) recordHwBackdrop();
         if (helloOpen) return; // Q99：你好页入场动画全程冻结背板采样，不与飞入抢主线程
         if (moreMenuBackdropFrozen) return; // Q102：⋯ 菜单开窗期间背板冻结（开窗瞬间已同步抓存静止帧），不许动画期逐帧整屏重抓＋三遍模糊抖背景
+        if (detailCard != null) return; // Q118（2.31）：详情窗在场——冻结玻璃只用开窗落定那一帧（openDetail 已排一次结构性重抓），窗内上下滑动绝不再逐帧整树重抓＋三遍模糊（慢拖中途停顿逾 200ms 即被本 tick 抓一帧，正是详情页滑动卡顿主源）
         if (android.os.SystemClock.uptimeMillis() - lastScrollEventMs < 200) return;
         // Q99：屏上只有 live 玻璃且文档条带有效时，屏幕快照不必逐帧重抓——live 玻璃走
         // 条带按 scrollY 同帧取景；重抓整根只剩抢主线程。有 frozen 玻璃（底表/弹层）
@@ -2975,6 +2980,7 @@ public class MainActivity extends Activity {
         // 钩子的节流抓图承担，玻璃件位置对位在各自 onDraw 按当前坐标算。旧快照链
         // （captureGlassSnapshot/applyGlass/条带）仅剩 API<31 时代的登记路径调用，
         // 玻璃件现全是 GlassBackdropView，不再经它成像，代码留仓封存。
+        if (detailCard != null) return; // Q118（2.31）：详情窗在场同 captureBackdropTick 闸——650ms 停稳防抖（glassRefreshTask）不许在窗内滚动的停顿间隙整帧重抓，冻结帧用开窗落定那一存档
         if (glassDisabled || rootView == null || rootView.getWidth() <= 0) return;
         backdropLastCapMs = 0;
         captureBackdrop();
@@ -4281,6 +4287,8 @@ public class MainActivity extends Activity {
     // Q18: glass consecutive-failure auto-disable + crash trace
     int glassFailCount = 0;
     boolean glassDisabled = false;
+    LinearLayout glassSubBox = null;   // Q118（2.31）：玻璃主开关从属两块（硬件行＋透明程度）的折叠容器
+    TextView glassMainDesc = null;     // Q118（2.31）：玻璃主行副文案引用，拨动时原地刷新不整页重建
     // Q97：玻璃透明程度三档（0 薄透 / 1 标准 / 2 毛玻璃默认）与「自动停用」来源标记，
     // 与 glass_disabled 同存 prefs（glass_level / glass_auto_off），设置页可调。
     int glassLevel = 2;
@@ -7393,12 +7401,21 @@ public class MainActivity extends Activity {
         if (Build.VERSION.SDK_INT >= 21) popWrap.setElevation(dp(this, 24));
         popWrap.addView(glassLayerHw(popWrap, 28, false, "cardmenu"), new FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
-        View popFace = new View(this);
-        popFace.setBackground(glassWindowTint(28, false));
-        popFace.setClickable(false);
-        popFace.setFocusable(false);
-        popWrap.addView(popFace, new FrameLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        // Q118（2.31）：同 ⋯ 菜单病同治——popFace 旧 glassWindowTint α≈233 近不透明白面
+        // 改玻璃＋轻 wash 唯一面（关停态才回落实面保可读），行直接浮在磨砂上。
+        if (glassDisabled) {
+            View popFace = new View(this);
+            popFace.setBackground(glassWindowTint(28, false));
+            popFace.setClickable(false);
+            popFace.setFocusable(false);
+            popWrap.addView(popFace, new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        } else {
+            View popWash = glassWashView(28, false);
+            glassClip(popWash, 28, false);
+            popWrap.addView(popWash, new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        }
         FrameLayout.LayoutParams popInWrap = new FrameLayout.LayoutParams(popW, popH);
         popInWrap.leftMargin = cmPad; popInWrap.topMargin = cmPad;
         popWrap.addView(pop, popInWrap);
@@ -9579,6 +9596,16 @@ public class MainActivity extends Activity {
         wrap.setTranslationY(sheetH);
         wrap.animate().translationY(0f).setDuration(ANIM_DUR_SHEET_IN).setInterpolator(ANIM_ENTER).start();
         glyphFrame.animate().alpha(1f).setDuration(ANIM_DUR_FADE).setStartDelay(70).setInterpolator(ANIM_ENTER).start();
+        // Q118（2.31）：详情冻结玻璃的唯一结构性重抓——升起落定（240ms）后抓一帧存档，
+        // 此后窗内滚动全程零重抓（captureBackdropTick/refreshLiveGlass 已同闸封路），
+        // 关窗后 tick 自然恢复跟随；连排开下一张时 dc118 已换，旧任务自废不误抓。
+        final Card dc118 = c;
+        mainHandler.postDelayed(() -> {
+            if (detailCard == dc118 && !detailClosing) {
+                backdropLastCapMs = 0;
+                try { captureBackdrop(); } catch (Throwable ignored) {}
+            }
+        }, 300);
     }
 
     void attachDetailDrag(final View wrap, final View sheetCard) {
@@ -17029,12 +17056,24 @@ public class MainActivity extends Activity {
         // glassWindowTint(16) 近实底内缩 16dp，改由窗级染色以半径 32 铺满整个 cardWrap
         // 作唯一面（糊层与染色同界，与情景窗 Q103 同口径），wash 层一并摘除，边缘只剩
         // 染色面自带的那一道白色发丝描边；card 退为透明内容架，行落位/内边距分毫不动。
-        View menuFace = new View(this);
-        menuFace.setBackground(glassWindowTint(32, false));
-        menuFace.setClickable(false);
-        menuFace.setFocusable(false);
-        cardWrap.addView(menuFace, new FrameLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        // Q118（2.31，用户 00:28 红圈）：旧 menuFace 是 glassWindowTint α≈233/223 的近不
+        // 透明面——毛玻璃档下糊层本就近白，再压 91% 白即读成「圆角玻璃面板里垫了块方形
+        // 白板」（2.20 删掉的是内嵌小白板，这块整面白留了下来）。改与筛选窗同口径：玻璃
+        // ＋轻 wash（α58/44）作唯一面，行直接浮在磨砂上；仅玻璃关停态（糊层整面不画）
+        // 才回落 glassWindowTint 实面保可读——那是静态染色语境，不成双层观感。
+        if (glassDisabled) {
+            View menuFace = new View(this);
+            menuFace.setBackground(glassWindowTint(32, false));
+            menuFace.setClickable(false);
+            menuFace.setFocusable(false);
+            cardWrap.addView(menuFace, new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        } else {
+            View menuWash = glassWashView(32, false);
+            glassClip(menuWash, 32, false);
+            cardWrap.addView(menuWash, new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        }
         final LinearLayout card = new LinearLayout(this);
         card.setOrientation(LinearLayout.VERTICAL);
         card.setPadding(dp(this, 6), dp(this, 6), dp(this, 6), dp(this, 6));
@@ -17165,40 +17204,30 @@ public class MainActivity extends Activity {
         });
         // Q97：玻璃控制二合一——开关（关走静态半透染色、本机保存）＋状态说明同行；
         // 旧《关于」区被动状态行（仅关停时出现、不可操作）就此退役，由本行接管。
-        switchRow(page, "玻璃效果",
-            glassDisabled
-                ? (glassAutoOff ? "已自动停用（异常后回落半透，不影响使用），打开可重试" : "已关闭，玻璃件使用静态半透染色")
-                : "已开启，底栏与弹窗按身后内容实时磨砂",
+        // Q118（2.31，用户三度澄清定版）：从属两块（硬件玻璃行＋透明程度）收进 glassSubBox
+        // 折叠容器——关主开关＝整块高度收起藏匿不占位，开＝重搭后量高展开（与 2.30 我的
+        // 卡片就地收展同口径），不再置灰摆着；主行副文案由 glassMainDescText() 一处口径、
+        // 构建与拨动共用；拨动改走 invalidatePagesSoft 不整页重建（同 Q102 防闪），别页
+        // 下次切到时按新关态重建，本页只原地收展＋副文案原地刷新，任意轮次联动一致。
+        View glassMainRow = switchRow(page, "玻璃效果", glassMainDescText(),
             !glassDisabled, on -> {
                 glassDisabled = !on;
                 if (on) glassAutoOff = false;
                 try { prefs.edit().putBoolean("glass_disabled", glassDisabled).putBoolean("glass_auto_off", glassAutoOff).apply(); } catch (Throwable ignored) {}
                 haptic();
                 applyGlassEnabledChange();
-                rebuildPages();
+                animateGlassSub(!glassDisabled);
+                if (glassMainDesc != null) { try { glassMainDesc.setText(glassMainDescText()); } catch (Throwable ignored) {} }
+                invalidatePagesSoft();
             });
-        // Q108（2.22）硬件玻璃实验开关，Q109（2.23）起覆盖全部玻璃件——关掉即时全件
-        // 回落软件链（各件 onDraw 逐帧自查）。自动退回（hwGlassDead）
-        // 时行副文案带时间戳留痕；重新打开＝清 dead＋重置双标记，再试一轮。
-        switchRow(page, "硬件玻璃（实验）", hwGlassDesc(), hwGlassEnabled, on -> {
-            if (on) {
-                hwGlassDead = false;
-                hwArmWritten = false;   // 重新武装：下一帧录制前重写 armed/stable
-                hwStableMarked = false;
-                hwJustRetreated = false;
-                hwDeadPieces.clear();      // Q111：手动重开＝已退件也再给一次机会（已证件保留）
-                hwTrialClaimedBy = null;   // 本进程试验位释放，下一帧重新按序申领
-                try { prefs.edit().putBoolean("glass_hw_exp", true).putBoolean("glass_hw_dead", false).putString("glass_hw_note", "").putString("glass_hw_trial", "").putString("glass_hw_deadpieces", "").apply(); } catch (Throwable ignored) {}
-                hwGlassEnabled = Build.VERSION.SDK_INT >= 31 && !glassDisabled;
-            } else {
-                hwGlassEnabled = false;
-                try { prefs.edit().putBoolean("glass_hw_exp", false).apply(); } catch (Throwable ignored) {}
-            }
-            haptic();
-            applyHwGlassChange();
-            rebuildPages();
-        });
-        glassLevelRow(page);
+        try {
+            glassMainDesc = (TextView) ((ViewGroup) ((ViewGroup) glassMainRow).getChildAt(0)).getChildAt(1);
+        } catch (Throwable ignored) { glassMainDesc = null; }
+        glassSubBox = new LinearLayout(this);
+        glassSubBox.setOrientation(LinearLayout.VERTICAL);
+        page.addView(glassSubBox, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        rebuildGlassSub();
+        if (glassDisabled) glassSubBox.setVisibility(View.GONE);
         segRow(page, S("haptic"), new String[][]{{"0",S("haptic_off")},{"1",S("haptic_light")},{"2",S("haptic_mid")},{"3",S("haptic_strong")}}, String.valueOf(hapticLevel), v -> {
             hapticLevel = Integer.parseInt(v); prefs.edit().putInt("haptic_level", hapticLevel).apply(); haptic(); rebuildPages();
         });
@@ -17402,6 +17431,112 @@ public class MainActivity extends Activity {
         if (!glassDisabled) { backdropLastCapMs = 0; captureBackdrop(); }
     }
 
+    /** Q118（2.31）：玻璃主行副文案一处口径——设置构建与拨动后原地刷新共用，不许两处各写一份漂移。 */
+    String glassMainDescText() {
+        if (!glassDisabled) return "已开启，底栏与弹窗按身后内容实时磨砂";
+        return glassAutoOff ? "已自动停用（异常后回落半透，不影响使用），打开可重试" : "已关闭，玻璃件使用静态半透染色";
+    }
+
+    /** Q108（2.22）硬件玻璃实验开关拨动落地（Q118 自设置构建内联 lambda 抽出为命名方法，
+     * 构建与折叠容器展开重搭共用同一入口，行为与旧内联逐字一致）。 */
+    void onHwGlassToggle(boolean on) {
+        if (on) {
+            hwGlassDead = false;
+            hwArmWritten = false;   // 重新武装：下一帧录制前重写 armed/stable
+            hwStableMarked = false;
+            hwJustRetreated = false;
+            hwDeadPieces.clear();      // Q111：手动重开＝已退件也再给一次机会（已证件保留）
+            hwTrialClaimedBy = null;   // 本进程试验位释放，下一帧重新按序申领
+            try { prefs.edit().putBoolean("glass_hw_exp", true).putBoolean("glass_hw_dead", false).putString("glass_hw_note", "").putString("glass_hw_trial", "").putString("glass_hw_deadpieces", "").apply(); } catch (Throwable ignored) {}
+            hwGlassEnabled = Build.VERSION.SDK_INT >= 31 && !glassDisabled;
+        } else {
+            hwGlassEnabled = false;
+            try { prefs.edit().putBoolean("glass_hw_exp", false).apply(); } catch (Throwable ignored) {}
+        }
+        haptic();
+        applyHwGlassChange();
+        rebuildPages();
+    }
+
+    /** Q118（2.31）：按当前状态把从属两块（硬件玻璃行＋透明程度）重搭进折叠容器——
+     * 展开动画前调用，行副文案/档位置灰都跟现态，不许拿着关态文案展开。 */
+    void rebuildGlassSub() {
+        if (glassSubBox == null) return;
+        glassSubBox.removeAllViews();
+        // Q108（2.22）硬件玻璃实验开关，Q109（2.23）起覆盖全部玻璃件——关掉即时全件
+        // 回落软件链（各件 onDraw 逐帧自查）。自动退回（hwGlassDead）时行副文案带时间戳
+        // 留痕；重新打开＝清 dead＋重置双标记，再试一轮（落地在 onHwGlassToggle）。
+        switchRow(glassSubBox, "硬件玻璃（实验）", hwGlassDesc(), hwGlassEnabled, on -> onHwGlassToggle(on));
+        glassLevelRow(glassSubBox);
+    }
+
+    /** Q118（2.31）：玻璃从属块就地收展——与 2.30 toggleMineRowsBox 同口径：收起高度
+     * 补间至 0 后 GONE 不占位；展开先重搭内容、量高后补间展开，落定回 WRAP_CONTENT。
+     * 连点以最新一次为准（旧补间先取消，按当时高度接续）。 */
+    ValueAnimator glassSubAnim = null;
+    void animateGlassSub(final boolean open) {
+        final LinearLayout box = glassSubBox;
+        if (box == null) return;
+        if (glassSubAnim != null) { glassSubAnim.cancel(); glassSubAnim = null; }
+        final ViewGroup.LayoutParams lp = box.getLayoutParams();
+        if (lp == null) { box.setVisibility(open ? View.VISIBLE : View.GONE); return; }
+        if (open) {
+            rebuildGlassSub();
+            box.setVisibility(View.VISIBLE);
+            int w = box.getWidth();
+            if (w <= 0) w = getResources().getDisplayMetrics().widthPixels - dp(this, 28);
+            box.measure(View.MeasureSpec.makeMeasureSpec(w, View.MeasureSpec.EXACTLY),
+                View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED));
+            final int toH = box.getMeasuredHeight();
+            final int fromH = lp.height > 0 ? lp.height : 0;
+            if (toH <= 0) { lp.height = ViewGroup.LayoutParams.WRAP_CONTENT; box.setLayoutParams(lp); return; }
+            lp.height = fromH; box.setLayoutParams(lp);
+            glassSubAnim = ValueAnimator.ofInt(fromH, toH);
+            glassSubAnim.setDuration(240);
+            glassSubAnim.setInterpolator(ANIM_ENTER);
+            glassSubAnim.addUpdateListener(a -> {
+                int h = (Integer) a.getAnimatedValue();
+                if (lp.height != h) { lp.height = h; box.setLayoutParams(lp); }
+            });
+            glassSubAnim.addListener(new android.animation.AnimatorListenerAdapter() {
+                @Override public void onAnimationEnd(android.animation.Animator a) {
+                    lp.height = ViewGroup.LayoutParams.WRAP_CONTENT; box.setLayoutParams(lp);
+                    if (glassSubAnim == a) glassSubAnim = null;
+                }
+                @Override public void onAnimationCancel(android.animation.Animator a) {
+                    if (glassSubAnim == a) glassSubAnim = null;
+                }
+            });
+            glassSubAnim.start();
+        } else {
+            final int fromH = lp.height > 0 ? lp.height : box.getHeight();
+            if (fromH <= 0) {
+                box.setVisibility(View.GONE);
+                lp.height = ViewGroup.LayoutParams.WRAP_CONTENT; box.setLayoutParams(lp);
+                return;
+            }
+            lp.height = fromH; box.setLayoutParams(lp);
+            glassSubAnim = ValueAnimator.ofInt(fromH, 0);
+            glassSubAnim.setDuration(200);
+            glassSubAnim.setInterpolator(ANIM_EXIT);
+            glassSubAnim.addUpdateListener(a -> {
+                int h = (Integer) a.getAnimatedValue();
+                if (lp.height != h) { lp.height = h; box.setLayoutParams(lp); }
+            });
+            glassSubAnim.addListener(new android.animation.AnimatorListenerAdapter() {
+                @Override public void onAnimationEnd(android.animation.Animator a) {
+                    box.setVisibility(View.GONE);
+                    lp.height = ViewGroup.LayoutParams.WRAP_CONTENT; box.setLayoutParams(lp);
+                    if (glassSubAnim == a) glassSubAnim = null;
+                }
+                @Override public void onAnimationCancel(android.animation.Animator a) {
+                    if (glassSubAnim == a) glassSubAnim = null;
+                }
+            });
+            glassSubAnim.start();
+        }
+    }
+
     // Q97：「透明程度」三档行（与 segRow 同形制）——玻璃关时整行置灰不可点；
     // 档位成套映射四参数：模糊半径（BACKDROP_BLUR_R）/饱和（BACKDROP_SAT）/染色浓淡
     // （glassTintScale）/提亮（glassWashScale），Q105 起四轴同动拉开档距。
@@ -17454,7 +17589,7 @@ public class MainActivity extends Activity {
         page.addView(box);
     }
 
-    void switchRow(LinearLayout page, String label, String desc, final boolean on, final SwitchSet set) {
+    View switchRow(LinearLayout page, String label, String desc, final boolean on, final SwitchSet set) {
         LinearLayout row = new LinearLayout(this);
         row.setOrientation(LinearLayout.HORIZONTAL);
         row.setGravity(Gravity.CENTER_VERTICAL);
@@ -17475,6 +17610,7 @@ public class MainActivity extends Activity {
         row.addView(sw, new LinearLayout.LayoutParams(dp(this, 46), dp(this, 28)));
         row.setOnClickListener(v -> { boolean nv = !sw.on; sw.setOn(nv, true); set.onSet(nv); }); // Q104（2.18）：以开关自身状态为准——旧式捕获构建时 on，连点第二次写回同值拨不动（摘要计数与折叠组同修）
         page.addView(row);
+        return row; // Q118：调用方需整行引用时取用（如玻璃主行副文案原地刷新），旧调用方忽略返回值不受影响
     }
 
     View settingRow(String k, String v) {
