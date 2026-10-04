@@ -621,6 +621,102 @@ public class MainActivity extends Activity {
             if (!ok) themeColorKey = "blue";
         } catch (Throwable ignored) { darkModePref = "system"; themeColorKey = "blue"; }
     }
+    // Q85 language: app_lang system(default)/zh/en, effective via Locale when system.
+    // UI chrome strings live in STR (zh/en pairs); card data (names/specs from JSON) is data, not chrome, and stays as-is.
+    String appLangPref = "system";
+    static final java.util.Map<String, String[]> STR = new java.util.HashMap<>();
+    static {
+        STR.put("nav_home", new String[]{"全部卡片","All Cards"});
+        STR.put("nav_student", new String[]{"学生推荐","Student Picks"});
+        STR.put("nav_mine", new String[]{"我的卡片","My Cards"});
+        STR.put("nav_news", new String[]{"资讯","News"});
+        STR.put("nav_settings", new String[]{"设置","Settings"});
+        STR.put("settings_title", new String[]{"设置","Settings"});
+        STR.put("language", new String[]{"语言","Language"});
+        STR.put("lang_system", new String[]{"跟随系统","Follow System"});
+        STR.put("lang_zh", new String[]{"简体中文","简体中文"});
+        STR.put("lang_en", new String[]{"English","English"});
+        STR.put("lang_hint", new String[]{"切换立即生效，不用重启","Applies instantly, no restart needed"});
+        STR.put("sec_features", new String[]{"功能启用","Features"});
+        STR.put("sec_appearance", new String[]{"外观","Appearance"});
+        STR.put("sec_display", new String[]{"显示","Display"});
+        STR.put("sec_experience", new String[]{"使用体验","Experience"});
+        STR.put("sec_data", new String[]{"数据","Data"});
+        STR.put("sec_about", new String[]{"关于","About"});
+        STR.put("dark_mode", new String[]{"深色模式","Dark Mode"});
+        STR.put("dark_system", new String[]{"跟随系统","System"});
+        STR.put("dark_light", new String[]{"浅色","Light"});
+        STR.put("dark_dark", new String[]{"深色","Dark"});
+        STR.put("card_color", new String[]{"卡面配色","Placeholder Color"});
+        STR.put("card_color_light", new String[]{"浅色柔光","Light Soft"});
+        STR.put("card_color_dark", new String[]{"深色沉稳","Dark Calm"});
+        STR.put("font", new String[]{"字体","Font"});
+        STR.put("font_builtin", new String[]{"软件字体","App Font"});
+        STR.put("font_system", new String[]{"系统字体","System Font"});
+        STR.put("font_custom", new String[]{"自定义","Custom"});
+        STR.put("ui_size", new String[]{"界面大小","UI Size"});
+        STR.put("ui_compact", new String[]{"紧凑","Compact"});
+        STR.put("ui_standard", new String[]{"标准","Standard"});
+        STR.put("ui_large", new String[]{"大号","Large"});
+        STR.put("haptic", new String[]{"触感反馈","Haptics"});
+        STR.put("haptic_off", new String[]{"关","Off"});
+        STR.put("haptic_light", new String[]{"轻","Light"});
+        STR.put("haptic_mid", new String[]{"中","Medium"});
+        STR.put("haptic_strong", new String[]{"强","Strong"});
+        STR.put("high_refresh", new String[]{"高刷新率","High Refresh Rate"});
+        STR.put("data_update", new String[]{"数据更新","Data Update"});
+        STR.put("version", new String[]{"版本","Version"});
+        STR.put("changelog", new String[]{"更新日志","Changelog"});
+        STR.put("welcome", new String[]{"欢迎页","Welcome"});
+        STR.put("about", new String[]{"关于卡盒","About CardBox"});
+        STR.put("search_hint", new String[]{"搜索卡名 / 银行 / 组织","Search name / bank / network"});
+        STR.put("filter", new String[]{"筛选","Filter"});
+        STR.put("clear", new String[]{"清空","Clear"});
+        STR.put("done", new String[]{"完成","Done"});
+        STR.put("cancel", new String[]{"取消","Cancel"});
+        STR.put("save", new String[]{"保存","Save"});
+        STR.put("delete", new String[]{"删除","Delete"});
+        STR.put("close", new String[]{"关闭","Close"});
+        STR.put("back", new String[]{"返回","Back"});
+        STR.put("home_title", new String[]{"卡盒","CardBox"});
+        STR.put("student_title", new String[]{"学生推荐","Student Picks"});
+        STR.put("mine_title", new String[]{"我的卡片","My Cards"});
+        STR.put("news_title", new String[]{"资讯","News"});
+        STR.put("all_cards", new String[]{"全部卡片","All Cards"});
+        STR.put("add_to_mine", new String[]{"加入我的卡片","Add to My Cards"});
+        STR.put("added_manage", new String[]{"已加入我的卡片 · 管理","In My Cards · Manage"});
+        STR.put("view_detail", new String[]{"查看详情","View Details"});
+        STR.put("remove_from_mine", new String[]{"从我的卡片移除","Remove from My Cards"});
+        STR.put("add_card", new String[]{"添加到我的卡片","Add to My Cards"});
+        STR.put("theme_color", new String[]{"主题色","Theme Color"});
+    }
+    String S(String key) {
+        String[] v = STR.get(key);
+        if (v == null) return key;
+        return isEn() ? v[1] : v[0];
+    }
+    // L(zh,en): inline pair helper for one-off chrome strings not yet keyed; new code should prefer S(key).
+    String L(String zh, String en) { return isEn() ? en : zh; }
+    boolean isEn() {
+        if ("en".equals(appLangPref)) return true;
+        if ("zh".equals(appLangPref)) return false;
+        try { return "en".equals(java.util.Locale.getDefault().getLanguage()); } catch (Throwable e) { return false; }
+    }
+    void loadLangPref() {
+        try {
+            appLangPref = prefs == null ? "system" : prefs.getString("app_lang", "system");
+            if (!"zh".equals(appLangPref) && !"en".equals(appLangPref)) appLangPref = "system";
+        } catch (Throwable ignored) { appLangPref = "system"; }
+    }
+    void refreshNavLabels() {
+        try {
+            TextView a = navLabels.get("home"); if (a != null) a.setText(S("nav_home"));
+            TextView b = navLabels.get("student"); if (b != null) b.setText(S("nav_student"));
+            TextView c = navLabels.get("mine"); if (c != null) c.setText(S("nav_mine"));
+            TextView d = navLabels.get("news"); if (d != null) d.setText(S("nav_news"));
+            TextView e = navLabels.get("settings"); if (e != null) e.setText(S("nav_settings"));
+        } catch (Throwable ignored) {}
+    }
     boolean darkEff() {
         if ("dark".equals(darkModePref)) return true;
         if ("light".equals(darkModePref)) return false;
@@ -2397,6 +2493,7 @@ public class MainActivity extends Activity {
         if (hapticLevel < 0 || hapticLevel > 3) hapticLevel = 2;
         loadPlaceholderPrefs(); // Q71
         loadAppearancePrefs(); // Q72
+        loadLangPref(); // Q85
         applyHighRefresh();
         try { mine = new HashSet<>(prefs.getStringSet("mine_ids", new HashSet<String>())); } catch (Exception e) { mine = new HashSet<>(); }
         sortMode = prefs.getString("sort_mode", null);
@@ -2915,6 +3012,7 @@ public class MainActivity extends Activity {
         pages.clear();
         if (content != null) content.removeAllViews();
         showTab(tab);
+        refreshNavLabels(); // Q85
     }
 
     // Q55 自定义字体导入：系统文件选择 .ttf/.otf，先下到临时文件校验（大小+文件头+试加载），成功才替换正式文件并即时启用
@@ -3206,7 +3304,7 @@ public class MainActivity extends Activity {
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
 
         String[][] tabs = {
-            {"home", "全部卡片"}, {"student", "学生推荐"}, {"mine", "我的卡片"}, {"news", "资讯"}, {"settings", "设置"}
+            {"home", S("nav_home")}, {"student", S("nav_student")}, {"mine", S("nav_mine")}, {"news", S("nav_news")}, {"settings", S("nav_settings")}
         };
         for (String[] t : tabs) {
             final String key = t[0];
@@ -12905,7 +13003,7 @@ public class MainActivity extends Activity {
     }
 
     View buildSettingsPage() {
-        LinearLayout page = basePage("设置");
+        LinearLayout page = basePage(S("settings_title"));
         // Q58：标题行右上角 ⋯ 菜单钮（细线三点自绘，禁用 emoji；菜单从此钮角长出）
         try {
             if (page.getChildCount() > 0 && page.getChildAt(0) instanceof TextView) {
@@ -12936,7 +13034,7 @@ public class MainActivity extends Activity {
         page.addView(wizEntry);
 
         // 功能启用区（2026-10-04 06:33 钉版）：可选模块逐项登记在此，关掉入口与界面彻底不出现、不占位
-        sectionHead(page, "功能启用");
+        sectionHead(page, S("sec_features"));
         switchRow(page, "展柜", "我的卡片页的纯卡面展示（堆叠 / 平放自由画布）", prefs == null || prefs.getBoolean("showcase_enabled", true), on -> {
             if (prefs != null) prefs.edit().putBoolean("showcase_enabled", on).apply(); haptic(); rebuildPages();
         });
@@ -12951,20 +13049,23 @@ public class MainActivity extends Activity {
         });
 
         // Q72 外观分区：深色模式/主题色/卡面配色三件事各管各、互不染指（卡面配色只管无图占位底色）
-        sectionHead(page, "外观");
-        segRow(page, "深色模式", new String[][]{{"system","跟随系统"},{"light","浅色"},{"dark","深色"}}, darkModePref, v -> {
+        sectionHead(page, S("sec_appearance"));
+        segRow(page, S("dark_mode"), new String[][]{{"system",S("dark_system")},{"light",S("dark_light")},{"dark",S("dark_dark")}}, darkModePref, v -> {
             darkModePref = v; prefs.edit().putString("dark_mode", v).apply(); haptic(); applyAppearanceChrome(); rebuildPages();
         });
+        segRow(page, S("language"), new String[][]{{"system",S("lang_system")},{"zh",S("lang_zh")},{"en",S("lang_en")}}, appLangPref, v -> {
+            appLangPref = v; if (prefs != null) prefs.edit().putString("app_lang", v).apply(); haptic(); refreshNavLabels(); rebuildPages();
+        });
         themeColorRow(page);
-        segRow(page, "卡面配色", new String[][]{{"light","浅色柔光"},{"dark","深色沉稳"}}, placeholderStyle, v -> {
+        segRow(page, S("card_color"), new String[][]{{"light",S("card_color_light")},{"dark",S("card_color_dark")}}, placeholderStyle, v -> {
             placeholderStyle = v; prefs.edit().putString("placeholder_style", v).apply(); haptic(); rebuildPages();
         });
         switchRow(page, "自选卡面配色", "开启后在无图卡详情里逐张换颜色；关闭用自动配色", placeholderCustomEnabled, on -> {
             placeholderCustomEnabled = on; prefs.edit().putBoolean("placeholder_custom_enabled", on).apply(); haptic(); rebuildPages();
         });
 
-        sectionHead(page, "显示");
-        segRow(page, "字体", new String[][]{{"builtin","软件字体"},{"system","系统字体"},{"custom","自定义"}}, fontMode, v -> {
+        sectionHead(page, S("sec_display"));
+        segRow(page, S("font"), new String[][]{{"builtin",S("font_builtin")},{"system",S("font_system")},{"custom",S("font_custom")}}, fontMode, v -> {
             if ("custom".equals(v) && !hasCustomFont(this)) { haptic(); showFloatToast("先导入一个字体文件再用自定义"); openFontPicker(); return; }
             fontMode = v; prefs.edit().putString("font_mode", v).apply(); haptic(); rebuildPages();
         });
@@ -12978,18 +13079,18 @@ public class MainActivity extends Activity {
             fontDelRow.setOnClickListener(v -> { deleteCustomFont(); });
             page.addView(fontDelRow);
         }
-        segRow(page, "界面大小", new String[][]{{"0.9","紧凑"},{"1","标准"},{"1.12","大号"}}, String.valueOf(uiScale), v -> {
+        segRow(page, S("ui_size"), new String[][]{{"0.9",S("ui_compact")},{"1",S("ui_standard")},{"1.12",S("ui_large")}}, String.valueOf(uiScale), v -> {
             uiScale = Float.parseFloat(v); prefs.edit().putFloat("ui_scale", uiScale).apply(); haptic(); rebuildPages();
         });
-        sectionHead(page, "使用体验");
+        sectionHead(page, S("sec_experience"));
         switchRow(page, "高刷新率", "把刷新率拉到屏幕最高档（耗电略增）", prefs.getBoolean("high_refresh", false), on -> {
             prefs.edit().putBoolean("high_refresh", on).apply(); haptic(); applyHighRefresh(); rebuildPages();
         });
-        segRow(page, "触感反馈", new String[][]{{"0","关"},{"1","轻"},{"2","中"},{"3","强"}}, String.valueOf(hapticLevel), v -> {
+        segRow(page, S("haptic"), new String[][]{{"0",S("haptic_off")},{"1",S("haptic_light")},{"2",S("haptic_mid")},{"3",S("haptic_strong")}}, String.valueOf(hapticLevel), v -> {
             hapticLevel = Integer.parseInt(v); prefs.edit().putInt("haptic_level", hapticLevel).apply(); haptic(); rebuildPages();
         });
 
-        sectionHead(page, "数据");
+        sectionHead(page, S("sec_data"));
         int pendVer = prefs == null ? -1 : prefs.getInt("pending_update_version", -1); if (pendVer <= Store.dataVersion) pendVer = -1; else if (pendingUpdateVer > Store.dataVersion) pendVer = pendingUpdateVer;
         String updSub = pendVer > 0 ? ("v" + Store.dataVersion + " · " + Store.all.size() + " 张卡 · 有新版 v" + pendVer + " 可更新 ›") : ("v" + Store.dataVersion + " · " + Store.all.size() + " 张卡 · 点此直接检查更新 ›");
         View updRow = settingRow("数据更新", updSub);
@@ -12999,7 +13100,7 @@ public class MainActivity extends Activity {
         page.addView(updRow);
         switchRow(page, "启动时自动检测更新", "开启只检测并提示，不自动应用；关闭则仅手动检查", prefs == null || prefs.getBoolean("auto_check_update", true), on -> { if(prefs!=null) prefs.edit().putBoolean("auto_check_update", on).apply(); haptic(); rebuildPages(); });
 
-        sectionHead(page, "关于");
+        sectionHead(page, S("sec_about"));
         // Q18: last-crash trace at top of About (copyable / clearable); empty when no crash recorded
         if (crashLogText != null && !crashLogText.trim().isEmpty()) {
             LinearLayout crashBox = new LinearLayout(this);
@@ -13054,7 +13155,7 @@ public class MainActivity extends Activity {
         } else if (glassDisabled) {
             page.addView(settingRow("玻璃效果", "已自动停用（连续失败后回落半透，不影响使用）"));
         }
-        page.addView(settingRow("版本", appVersion() + "（原生版）"));
+        page.addView(settingRow(S("version"), appVersion() + (isEn() ? " (Native)" : "（原生版）")));
         View logRow = settingRow("更新日志", settingsLogOpen ? "收起更新日志" : "每个版本改了什么 ›");
         logRow.setOnClickListener(v -> { haptic(); settingsLogOpen = !settingsLogOpen; rebuildPages(); });
         page.addView(logRow);
@@ -13111,7 +13212,7 @@ public class MainActivity extends Activity {
         LinearLayout.LayoutParams blp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         blp.topMargin = dp(this, 8);
         box.setLayoutParams(blp);
-        box.addView(tv(this, "主题色", 14, colText(), true));
+        box.addView(tv(this, S("theme_color"), 14, colText(), true));
         box.addView(tv(this, "只改选中态、开关、链接与强调色，不改卡面颜色", 11.5f, colText2(), false));
         LinearLayout row = new LinearLayout(this);
         row.setOrientation(LinearLayout.HORIZONTAL);
