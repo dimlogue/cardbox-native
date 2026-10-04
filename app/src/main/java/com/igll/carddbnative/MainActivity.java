@@ -5091,7 +5091,7 @@ public class MainActivity extends Activity {
         inlineRow.addView(sicon, new LinearLayout.LayoutParams(dp(this, 20), dp(this, 20)));
         searchBox = new EditText(this);
         applyUiFont(searchBox, 400);
-        searchBox.setHint("搜索卡名 / 银行 / BIN…");
+        searchBox.setHint(S("search_hint"));
         searchBox.setTextSize(15);
         searchBox.setSingleLine(true);
         searchBox.setBackground(null);
@@ -5150,7 +5150,7 @@ public class MainActivity extends Activity {
         floatRow.addView(ficon, new LinearLayout.LayoutParams(dp(this, 20), dp(this, 20)));
         floatSearchBox = new EditText(this);
         applyUiFont(floatSearchBox, 400);
-        floatSearchBox.setHint("搜索卡名 / 银行 / BIN…");
+        floatSearchBox.setHint(S("search_hint"));
         floatSearchBox.setTextSize(15);
         floatSearchBox.setSingleLine(true);
         floatSearchBox.setBackground(null);
@@ -7275,11 +7275,11 @@ public class MainActivity extends Activity {
         if (detailPrimaryBtn == null || c == null) return;
         boolean joined = !entriesForCard(c.id).isEmpty();
         if (joined) {
-            detailPrimaryBtn.setText("已加入我的卡片 · 管理");
+            detailPrimaryBtn.setText(S("added_manage"));
             detailPrimaryBtn.setTextColor(colText());
             detailPrimaryBtn.setBackground(roundRect(colSurface(), 14, this));
         } else {
-            detailPrimaryBtn.setText("加入我的卡片");
+            detailPrimaryBtn.setText(S("add_to_mine"));
             detailPrimaryBtn.setTextColor(Color.WHITE);
             GradientDrawable g = new GradientDrawable(GradientDrawable.Orientation.LEFT_RIGHT,
                 new int[]{Color.rgb(0x0A, 0x84, 0xFF), Color.rgb(0x5E, 0x5C, 0xE6)});
@@ -7935,7 +7935,7 @@ public class MainActivity extends Activity {
     }
 
     View buildMinePage() {
-        LinearLayout page = basePage("我的卡片");
+        LinearLayout page = basePage(S("mine_title"));
         // Q39: .mine-pagetitle 1.7rem/800/-.01em，与通用 .page-title 区分
         if (page.getChildCount() > 0 && page.getChildAt(0) instanceof TextView) {
             TextView mt = (TextView) page.getChildAt(0);
@@ -11963,7 +11963,7 @@ public class MainActivity extends Activity {
         fetchNewsUpdate();
         ensureGlossary();
         fetchGlossaryUpdate();
-        LinearLayout page = basePage("卡片资讯");
+        LinearLayout page = basePage(S("news_title"));
         TextView sub = tv(this, "新卡发布、权益调整、停发换卡——公开信息整理，仅供参考", 12.5f, Color.rgb(0x8E, 0x8E, 0x93), false);
         LinearLayout.LayoutParams subLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         subLp.topMargin = dp(this, 4);
@@ -13156,14 +13156,14 @@ public class MainActivity extends Activity {
             page.addView(settingRow("玻璃效果", "已自动停用（连续失败后回落半透，不影响使用）"));
         }
         page.addView(settingRow(S("version"), appVersion() + (isEn() ? " (Native)" : "（原生版）")));
-        View logRow = settingRow("更新日志", settingsLogOpen ? "收起更新日志" : "每个版本改了什么 ›");
+        View logRow = settingRow(S("changelog"), settingsLogOpen ? L("收起更新日志","Hide changelog") : L("每个版本改了什么 ›","What changed ›"));
         logRow.setOnClickListener(v -> { haptic(); settingsLogOpen = !settingsLogOpen; rebuildPages(); });
         page.addView(logRow);
         if (settingsLogOpen) page.addView(buildInlineLogBox());
-        View welRow = settingRow("欢迎页", "重新看一遍首次打开的介绍 ›");
+        View welRow = settingRow(S("welcome"), L("重新看一遍首次打开的介绍 ›","Replay the intro ›"));
         welRow.setOnClickListener(v -> { haptic(); showWelcome(); });
         page.addView(welRow);
-        View aboutRow = settingRow("关于卡盒", "介绍与赞助 ›");
+        View aboutRow = settingRow(S("about"), L("介绍与赞助 ›","Intro & support ›"));
         aboutRow.setOnClickListener(v -> { haptic(); openAbout(); });
         page.addView(aboutRow);
         page.addView(settingRow("迁移进度", "全部卡片 / 详情 / 我的卡片 / 学生推荐 / 筛选 / 资讯 / 情景选卡 / 自定义卡 / 拖动 / 字体与界面大小 / 高刷 / 触感 / 欢迎页 / 更新日志 / 数据 OTA 已迁移"));
