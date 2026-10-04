@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="com.igll.carddbnative"
-    android:versionCode="240"
-    android:versionName="2.40-native">
+    android:versionCode="241"
+    android:versionName="2.41-native">
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.VIBRATE" />
     <uses-permission android:name="android.permission.NFC" />
@@ -20,10 +20,44 @@
             android:name=".MainActivity"
             android:exported="true"
             android:configChanges="orientation|screenSize|keyboardHidden">
+        </activity>
+        <!-- Q129（2.41）：桌面图标三款预置，activity-alias 切换（先启新后禁旧，见 applyLauncherIcon129）。
+             经典款为默认且 manifest 里恒 enabled，alias 切换失败也有它兜底，绝不出现桌面无图标。 -->
+        <activity-alias
+            android:name=".LauncherClassic"
+            android:enabled="true"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher"
+            android:label="卡盒·原生版"
+            android:targetActivity=".MainActivity">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
-        </activity>
+        </activity-alias>
+        <activity-alias
+            android:name=".LauncherStacked"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher_stacked"
+            android:label="卡盒·原生版"
+            android:targetActivity=".MainActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+        <activity-alias
+            android:name=".LauncherRounded"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher_rounded"
+            android:label="卡盒·原生版"
+            android:targetActivity=".MainActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
     </application>
 </manifest>
