@@ -1058,6 +1058,8 @@ public class MainActivity extends Activity {
         STR.put("nav_news", new String[]{"资讯","News"});
         STR.put("nav_settings", new String[]{"设置","Settings"});
         STR.put("doubt", new String[]{"存疑","Unverified"});
+        STR.put("ai_redraw_badge", new String[]{"AI 重绘","AI Redrawn"}); // Q136（2.48）挂详情大卡图左上角；Q138（2.49）改与「存疑」竖排（存疑上、本标下）
+        STR.put("ai_redraw_note", new String[]{"本卡卡面图为 AI 重绘示意图，非银行官方卡面，仅供识别参考。","This card image is an AI-redrawn illustration, not the bank's official card face; for identification only."}); // Q138（2.49，用户 20:14 点名）：带 ai_redraw 的卡在标签行下出一段低调说明
         STR.put("settings_title", new String[]{"设置","Settings"});
         STR.put("language", new String[]{"语言","Language"});
         STR.put("lang_system", new String[]{"跟随系统","System"}); // Q114（2.27）：英文短词，与 dark_system 同口径（旧 "Follow System" 在等分钮里折两行突出）
@@ -6616,12 +6618,12 @@ public class MainActivity extends Activity {
                         if (ensureCustomLoaded(MainActivity.this) == null) {
                             fontMode = "builtin";
                             try { prefs.edit().putString("font_mode", "builtin").apply(); } catch (Throwable ignored) {}
-                            rebuildPages();
+                            applyAppearanceSoft130(); // Q135（件三普查）：改走无闪换入
                             showFloatToast("这个字体文件读不了，已回退软件字体");
                             return;
                         }
                         haptic();
-                        rebuildPages();
+                        applyAppearanceSoft130(); // Q135（件三普查）：改走无闪换入
                         showFloatToast("自定义字体已启用：" + finalName);
                     });
                     return;
@@ -6635,7 +6637,7 @@ public class MainActivity extends Activity {
             runOnUiThread(() -> {
                 fontMode = "builtin";
                 try { prefs.edit().putString("font_mode", "builtin").apply(); } catch (Throwable ignored) {}
-                rebuildPages();
+                applyAppearanceSoft130(); // Q135（件三普查）：改走无闪换入
                 showFloatToast(msg);
             });
         }).start();
@@ -6649,7 +6651,7 @@ public class MainActivity extends Activity {
         fontMode = "builtin";
         try { prefs.edit().putString("font_mode", "builtin").remove("custom_font_name").apply(); } catch (Throwable ignored) {}
         haptic();
-        rebuildPages();
+        applyAppearanceSoft130(); // Q135（件三普查）：改走无闪换入（不在设置页时函数自回落 rebuildPages，旧行为不变）
         showFloatToast("自定义字体已删除，已回退软件字体");
     }
 
@@ -8560,6 +8562,13 @@ public class MainActivity extends Activity {
     // 必须是高斯模糊毛玻璃（同 Q47 ＋/✓ 磨砂钮、Q73 统一玻璃规范：身后卡图裁片磨砂 + 薄染色 +
     // 浅提亮 + 白色柔边，深色模式同规范换深色档），不许实白塑料块。纯展示层：数据核实后自动消失。
     View doubtBadge(final Card c, Bitmap bmp, float textSp, int padH, int padV) {
+        return imgBadge(c, bmp, S("doubt"), textSp, padH, padV);
+    }
+
+    // Q136（2.48）抽出、Q138（2.49）保留：与「存疑」同一套磨砂胶囊的通用角标（身后卡图裁片
+    // 磨砂 + 薄染色 + 提亮 + 柔边，字色按裁片明暗定），供详情大卡图上的「AI 重绘」标复用——
+    // 两标同套样式、同位置逻辑（竖排，见图廊），不另造实底块。doubtBadge 转调至此、渲染不变。
+    View imgBadge(final Card c, Bitmap bmp, String label, float textSp, int padH, int padV) {
         FrameLayout badge = new FrameLayout(this);
         badge.setClickable(false); badge.setFocusable(false);
         badge.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
@@ -8571,7 +8580,7 @@ public class MainActivity extends Activity {
         // 与 Q92 全屏糊层同病：WRAP_CONTENT 容器里不许留 MATCH_PARENT 子层。
         // 改：先量文字实尺寸，三层与文字全部钉死该像素尺寸，胶囊只有字面大小。
         boolean lightBg = !darkEff() && (frost != null ? frost.lum > 168 : placeholderLightBg(c.id));
-        TextView t = tv(this, S("doubt"), textSp, lightBg ? Color.rgb(0x1C, 0x1C, 0x1E) : Color.WHITE, true);
+        TextView t = tv(this, label, textSp, lightBg ? Color.rgb(0x1C, 0x1C, 0x1E) : Color.WHITE, true);
         t.setGravity(Gravity.CENTER);
         t.setPadding(dp(this, padH), dp(this, padV), dp(this, padH), dp(this, padV));
         if (!lightBg) t.setShadowLayer(dp(this, 1.5f), 0, dp(this, 0.5f), Color.argb(110, 0, 0, 0));
@@ -12015,7 +12024,7 @@ public class MainActivity extends Activity {
             LinearLayout slide = new LinearLayout(this);
             slide.setOrientation(LinearLayout.VERTICAL);
             slide.setGravity(Gravity.CENTER_HORIZONTAL);
-            slide.setPadding(dp(this, 26), dp(this, 16), dp(this, 26), dp(this, 4)); // Q33：大图略内缩留呼吸边（对照 .p-slide padding 16/22 再放宽 4dp），不死贴窗边
+            slide.setPadding(dp(this, 26), dp(this, 16), dp(this, 26), dp(this, 4)); // Q33：大图略内缩留呼吸边（对照 .p-slide padding 16/22 再放宽 4dp），不死贴窗边（Q136 曾改整幅平展，Q138 按 5e6ac95 逐行恢复，用户 20:09 斥丑点名收回）
             track.addView(slide, new LinearLayout.LayoutParams(screenW, ViewGroup.LayoutParams.WRAP_CONTENT));
             int availW = screenW - dp(this, 52);
             // Q125（2.37，流畅度·详情开窗）：图廊按显示宽尺寸解码——旧 Img.get
@@ -12027,7 +12036,7 @@ public class MainActivity extends Activity {
                 float ratio = (float) b.getHeight() / (float) b.getWidth();
                 imgH = Math.round(availW * ratio);
                 int maxH = dp(this, 260);
-                if (imgH > maxH) { imgH = maxH; imgW = Math.round(imgH / ratio); }
+                if (imgH > maxH) { imgH = maxH; imgW = Math.round(imgH / ratio); } // Q138：封顶缩宽回算恢复 5e6ac95 原行（Q136 的整幅裁满已撤销）
             }
             // Q48：控件级圆角裁切为主——用户定性「控件是正方形、图要裁成圆弧边框」；旧实现仅靠 roundBitmap
             // 副本切角，副本分配失败或个别 OEM 的 outline 退化时方图四角（源图深色角）直接露黑。改：外框
@@ -12040,7 +12049,7 @@ public class MainActivity extends Activity {
             // outline 同半径裁切一把弧（Q48 的控件裁切本已双装，位图二层自此退役）。
             float cardR = cardR129(Math.max(16f, cardRadiusDp(imgW / getResources().getDisplayMetrics().density))); // Q129：卡图类收口
             FrameLayout imgFrame = new FrameLayout(this);
-            imgFrame.setBackground(cardFrameBg131(cardR)); // Q126 定调（浅 #F1F1F4／深 #2A2A2E）自 Q131 起收进全 App 共用助手 cardFrameBg131，值逐位一致
+            imgFrame.setBackground(cardFrameBg131(cardR)); // Q126 定调（浅 #F1F1F4／深 #2A2A2E）自 Q131 起收进全 App 共用助手 cardFrameBg131，值逐位一致（Q136 曾改透明无影，Q138 逐行恢复）
             if (Build.VERSION.SDK_INT >= 21) imgFrame.setElevation(dp(this, 6));
             roundClip(imgFrame, cardR, this);
             ImageView iv = new ImageView(this);
@@ -12052,12 +12061,29 @@ public class MainActivity extends Activity {
             ilp.gravity = Gravity.CENTER_HORIZONTAL;
             slide.addView(imgFrame, ilp);
             // Q89：详情英雄图左上角同压一枚「存疑」毛玻璃标（口径同瓷砖，略放大）
-            if (c.hasUnverified()) {
+            // Q136（2.48）曾把「AI 重绘」标从下方标签行挪到卡图上；Q138（2.49，用户 20:14
+            // 新令）排法改竖排：存疑在上、AI 重绘在其下（用户原话「ai重绘放在那个存疑下面」），
+            // 两标左缘同 8dp、上标顶距 8dp、下标紧随其下间隔 6dp；只有一枚时落位与旧单标
+            // 逐位一致。两标同走 imgBadge 磨砂胶囊（渲染逐位不变）。标签行不出 AI 标（沿用）。
+            if (c.hasUnverified() || c.aiRedraw133) {
+                LinearLayout badgeCol = new LinearLayout(this);
+                badgeCol.setOrientation(LinearLayout.VERTICAL);
+                badgeCol.setClickable(false); badgeCol.setFocusable(false);
+                badgeCol.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
+                if (c.hasUnverified()) badgeCol.addView(doubtBadge(c, b, 10.5f, 9, 4),
+                    new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+                if (c.aiRedraw133) {
+                    View aiBadge = imgBadge(c, b, S("ai_redraw_badge"), 10.5f, 9, 4);
+                    LinearLayout.LayoutParams alp = new LinearLayout.LayoutParams(
+                        ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+                    if (c.hasUnverified()) alp.topMargin = dp(this, 6);
+                    badgeCol.addView(aiBadge, alp);
+                }
                 FrameLayout.LayoutParams dlp = new FrameLayout.LayoutParams(
                     ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
                 dlp.gravity = Gravity.TOP | Gravity.LEFT;
                 dlp.leftMargin = dp(this, 8); dlp.topMargin = dp(this, 8);
-                imgFrame.addView(doubtBadge(c, b, 10.5f, 9, 4), dlp);
+                imgFrame.addView(badgeCol, dlp);
             }
             if (b == null) { iv.setBackground(placeholderGradFor(c.id, cardR, this)); // Q104/2.18：卡面组织小标全撤（详情图廊同口径，参数表组织字段保留）
                 if (placeholderCustomEnabled) imgFrame.setOnLongClickListener(v -> { haptic(); openPlaceholderColorPicker(c); return true; });
@@ -12130,6 +12156,18 @@ public class MainActivity extends Activity {
 
         // Q83 标题下标签流：组织/卡种/状态/银行/评分/特点/学生推荐，身份一眼扫完
         bodyInner.addView(buildDetailChips(c));
+
+        // Q138（2.49，用户 20:14 点名）：带 AI 重绘标的卡在标签行下加一段低调说明小字
+        // （与卡图左上角「AI 重绘」标呼应）；没标的卡不占位、一个字不多。字号/灰度与
+        // 本页注脚同档（12sp colText3），不进弹窗、不与固定蓝钮相干（蓝钮在窗体层）。
+        if (c.aiRedraw133) {
+            TextView aiNote = tv(this, S("ai_redraw_note"), 12f, colText3(), false);
+            aiNote.setLineSpacing(0, 1.4f);
+            LinearLayout.LayoutParams anp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            anp.topMargin = dp(this, 8);
+            bodyInner.addView(aiNote, anp);
+        }
 
         // 当前版本信息（首版，随横滑切换与 BIN 同步）；Q83：入分块信息卡
         if (hasVar) {
@@ -12252,9 +12290,9 @@ public class MainActivity extends Activity {
         if (c.hasScore) chips.add(chip((isEn() ? "Score " : "评分 ") + String.format(java.util.Locale.US, "%.1f", c.score), accentColor(), Color.WHITE, 12f));
         for (String[] f : FEATS) if (featMatch(c, f[0])) chips.add(chip(EN_MODE ? featLabelEn(f[0]) : f[1], chipBg, colText(), 12f)); // Q114：英文缩略表，与瓷砖同口径
         if (c.studentPick) chips.add(chip("学生推荐", accentColor(), Color.WHITE, 12f));
-        // Q133（2.45，件四）：AI 重绘小标——与本行既有胶囊同档（chipBg 底、12sp），
-        // 不用醒目色、不上卡图（本行本就在卡图下方）；列表瓷砖不加，保持卡面干净。
-        if (c.aiRedraw133) chips.add(chip(isEn() ? "AI Redrawn" : "AI 重绘", chipBg, colText(), 12f));
+        // Q133（2.45，件四）：AI 重绘小标原与本行胶囊同档一枚；Q136（2.48）用户点名挪走，
+        // Q138（2.49）维持：标在详情大卡图左上角与「存疑」竖排（见 buildDetailSheetBody
+        // 图廊），本标签行不出 AI 标；带标卡另在标签行下出一段说明（同函数内）。
         // Q91：宽度按文字实测（Paint 量 12sp 粗体实宽），旧版「字数×0.68」把中文宽度估小、
         // 行内总宽溢出后后面的胶囊被横向 LinearLayout 挤成一字宽、文字竖排成条（真机「评分 9.8」竖条）。
         Paint chipMp = new Paint(Paint.ANTI_ALIAS_FLAG);
@@ -16057,7 +16095,7 @@ public class MainActivity extends Activity {
             runOnUiThread(() -> {
                 otaFetchStarted = false; // Q122：查毕放闸，后续手动/自动检查不再被首查标记永久挡下
                 if (onDone != null) onDone.run();
-                if ("settings".equals(tab)) rebuildPages();
+                if ("settings".equals(tab)) applyAppearanceSoft130(); // Q135（件三普查）：检查完成回刷设置页改走无闪换入
                 if (manual || fromPull) { showUpdateConfirm(); }
                 else {
                     int prompted = prefs == null ? -1 : prefs.getInt("update_prompted_version", -1);
@@ -19328,6 +19366,112 @@ public class MainActivity extends Activity {
         return det;
     }
 
+    // Q135（2.47，件二）：资讯条目整卡折展——资讯专用机制，foldHeightSpring 与
+    // 常识侧（16979/17002/17044 三调用点）一字未动。病根（内容相关，非全页手感）：
+    // 展开时标题/摘要 setMaxLines 放开是瞬时的、详情盒只占总增高一小截，旧法只对
+    // 详情盒走弹簧——展开「先猛涨一截、详情盒再慢升」，收起弹簧收完详情盒后摘要
+    // 在落定回调里一步塌回两行，且旧回锚只按详情盒高算、漏了摘要塌量，收起后
+    // 位置再错一截。顿跳量正比于「摘要展开行数 − 2」：现行 6 条里 n6（摘要
+    // 107 字）最甚、n2（85）/n1（80）/n5（79）次之，n3（73）/n4（61）仅多约
+    // 一行、近乎正常——用户 15:56「只有几个有 bug」即此；与 url/来源/详情盒
+    // 高度无关（6 条详情盒内容高度条条相同）。改法：预量收起/展开两态卡高，
+    // 卡高钉住由一支弹簧逐帧写（卡已 ClipToOutline，固定高期间内容裁切显现），
+    // 落定回 WRAP_CONTENT；收起在钉高内先摘盒复行再弹簧收，落定按总收缩量回锚。
+    // 弹簧件（Spring1D/SpringDriver/SPRING_FOLD_*）与回锚/测位函数均为现成件的
+    // 新调用、实现未改；foldBusy130 防叠锁的加放时机与旧口径逐字一致。
+    // 【Q138 注】收起半句（先复行＋落定回锚）已被 2.49 逐帧复查推翻，见下方 Q138 块。
+    int newsCardWidthSpec135(final LinearLayout card) {
+        int w = card.getWidth();
+        if (w <= 0 && card.getParent() instanceof View) {
+            View p = (View) card.getParent();
+            w = p.getWidth() - p.getPaddingLeft() - p.getPaddingRight();
+        }
+        if (w <= 0) w = getResources().getDisplayMetrics().widthPixels - dp(this, 28);
+        return View.MeasureSpec.makeMeasureSpec(w, View.MeasureSpec.EXACTLY);
+    }
+
+    void animateNewsCard135(final LinearLayout card, final int fromH, final int toH, final Runnable onDone) {
+        final ViewGroup.LayoutParams clp = card.getLayoutParams();
+        if (clp == null || toH <= 0 || fromH <= 0 || Math.abs(toH - fromH) < 1) {
+            if (clp != null) { clp.height = ViewGroup.LayoutParams.WRAP_CONTENT; card.setLayoutParams(clp); }
+            if (onDone != null) onDone.run();
+            return;
+        }
+        clp.height = fromH; card.setLayoutParams(clp);
+        final Spring1D s = new Spring1D(fromH);
+        new SpringDriver().drive(s, toH, SPRING_FOLD_K, SPRING_FOLD_Z,
+            x -> { int h = Math.round(x); if (clp.height != h) { clp.height = h; card.setLayoutParams(clp); } },
+            () -> { clp.height = ViewGroup.LayoutParams.WRAP_CONTENT; card.setLayoutParams(clp); if (onDone != null) onDone.run(); });
+    }
+
+    void expandNewsCard135(final LinearLayout card, final TextView ttl, final TextView sm,
+                           final LinearLayout det, final Runnable onDone) {
+        final int wSpec = newsCardWidthSpec135(card);
+        final int uSpec = View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED);
+        int closedH = card.getHeight();
+        if (closedH <= 0) { card.measure(wSpec, uSpec); closedH = card.getMeasuredHeight(); }
+        ttl.setMaxLines(Integer.MAX_VALUE);
+        if (sm != null) { sm.setMaxLines(Integer.MAX_VALUE); sm.setEllipsize(null); }
+        card.addView(det);
+        card.measure(wSpec, uSpec);
+        animateNewsCard135(card, closedH, card.getMeasuredHeight(), onDone);
+    }
+
+    // Q138（2.49，件二·资讯四进宫）：逐帧复查 Q135 上述机制后的修正——展开维持
+    // 「状态先装、钉高裁切揭示」（与常识已验的 foldHeightSpring「beforeOpen 装内容、
+    // 弹簧只管高」同构，逐帧无状态翻转点，不动）；收起改三处（病灶全在收起）：
+    // ①旧法在弹簧启动前就摘盒＋摘要复两行——卡高还钉在展开高，摘要 N 行→2 行与
+    // 详情盒消失在首帧内一步完成（内容突变＝用户 20:11「收起会顿一下」），其后弹簧
+    // 只收一段空高；改：动画全程内容保持展开态（靠钉高＋子视图量测上限渐隐），
+    // 落定单帧内才摘盒复行——此刻卡高已等于收起高、翻态后自然高与之逐像素一致，
+    // 落定帧高度/位置零突变。②旧法落定再调 restoreFoldScroll131 回锚：那是为
+    // 「落定一步摘盒」的瞬时移除计的账，渐变收缩下盒下内容已随布局逐帧上移，
+    // 落定再滚一次＝双重计账、末帧位置再跳——删除，收起全程不写滚动位。
+    // ③收起高 closedH 改临时量：同步换到收起态量高再换回展开态（同一调用栈、
+    // 无帧插入），不许拿展开态的量测近似。验收口径：n1–n6 逐条展开/收起单调、
+    // 无首帧突变、无末帧跳；常识 foldHeightSpring 与其调用点仍一行未动。
+    void collapseNewsCard135(final LinearLayout card, final TextView ttl, final TextView sm,
+                             final LinearLayout det, final Runnable onDone) {
+        final int wSpec = newsCardWidthSpec135(card);
+        final int uSpec = View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED);
+        int curH = card.getHeight();
+        if (curH <= 0) { card.measure(wSpec, uSpec); curH = card.getMeasuredHeight(); }
+        if (det == null || curH <= 0) { if (onDone != null) onDone.run(); return; }
+        // 临时量收起高：换到收起态量一次，立即换回展开态（同步完成、不可见）
+        final int detIdx = card.indexOfChild(det);
+        card.removeView(det);
+        ttl.setMaxLines(2);
+        if (sm != null) { sm.setMaxLines(2); sm.setEllipsize(android.text.TextUtils.TruncateAt.END); }
+        card.measure(wSpec, uSpec);
+        final int closedH = card.getMeasuredHeight();
+        ttl.setMaxLines(Integer.MAX_VALUE);
+        if (sm != null) { sm.setMaxLines(Integer.MAX_VALUE); sm.setEllipsize(null); }
+        if (detIdx >= 0) card.addView(det, detIdx); else card.addView(det);
+        // 内容保持展开态，卡高 curH→closedH 单调收拢；落定单帧内翻收起态
+        animateNewsCard135(card, curH, closedH, () -> {
+            card.removeView(det);
+            ttl.setMaxLines(2);
+            if (sm != null) { sm.setMaxLines(2); sm.setEllipsize(android.text.TextUtils.TruncateAt.END); }
+            if (onDone != null) onDone.run();
+        });
+    }
+
+    void enterNewsCard135(final LinearLayout card, final TextView ttl, final TextView sm,
+                          final LinearLayout det, final Runnable onDone) {
+        final int wSpec = newsCardWidthSpec135(card);
+        final int uSpec = View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED);
+        ttl.setMaxLines(2);
+        if (sm != null) { sm.setMaxLines(2); sm.setEllipsize(android.text.TextUtils.TruncateAt.END); }
+        det.setVisibility(View.GONE);
+        card.measure(wSpec, uSpec);
+        final int closedH = card.getMeasuredHeight();
+        ttl.setMaxLines(Integer.MAX_VALUE);
+        if (sm != null) { sm.setMaxLines(Integer.MAX_VALUE); sm.setEllipsize(null); }
+        det.setVisibility(View.VISIBLE);
+        card.measure(wSpec, uSpec);
+        animateNewsCard135(card, closedH, card.getMeasuredHeight(), onDone);
+    }
+
     void renderNews() {
         if (newsListBox == null) return;
         // P-keepscroll：展开/收起一条资讯会整表重绘，先记位置、重绘后恢复，不跳顶
@@ -19434,7 +19578,7 @@ public class MainActivity extends Activity {
                 newsAnimId123 = null;
                 final LinearLayout db123 = detRef123[0];
                 foldBusy130.add(n.id); // Q130（件十）：入场动画在途同上锁，落定放行；驱动改逐条新建（旧共用 newsFoldSpring 连点互相摘任务、旧盒摘不掉正是叠空根源之一）
-                db123.post(() -> foldHeightSpring(db123, true, null, null, new SpringDriver(), () -> foldBusy130.remove(n.id)));
+                db123.post(() -> enterNewsCard135(card, ttl, smRef124[0], db123, () -> foldBusy130.remove(n.id)));
             }
             // Q123（2.35，件一）：开合触发收窄——只有「展开/收起」小钮能展开/收起，
             // 卡身点击无动作，防整卡误触（箭头补内边距放大可点区）。
@@ -19451,18 +19595,12 @@ public class MainActivity extends Activity {
                     arrow.setText("展开 ›");
                     foldBusy130.add(n.id);
                     final LinearLayout detNow124 = detRef123[0];
-                    // Q131：收起前锚记（滚动位/盒顶/盒高），落定摘盒后回锚，收起回初见位置
-                    final int foldSvY131 = newsScroll != null ? newsScroll.getScrollY() : 0;
-                    final int foldBoxTop131 = (detNow124 != null && newsScroll != null) ? contentTopInScroll131(detNow124, newsScroll) : 0;
-                    final int foldBoxH131 = detNow124 != null ? detNow124.getHeight() : 0;
-                    if (detNow124 != null) foldHeightSpring(detNow124, false, null, () -> {
-                        // Q124（件七）：落定就地摘详情盒＋恢复标题/摘要两行预览，不整表重渲染
-                        card.removeView(detNow124);
+                    if (detNow124 != null) {
                         detRef123[0] = null;
-                        ttl.setMaxLines(2);
-                        if (smRef124[0] != null) { smRef124[0].setMaxLines(2); smRef124[0].setEllipsize(android.text.TextUtils.TruncateAt.END); }
-                        restoreFoldScroll131(newsScroll, foldSvY131, foldBoxTop131, foldBoxH131); // Q131
-                    }, new SpringDriver(), () -> foldBusy130.remove(n.id));
+                        // Q138（2.49，件二）：整卡一支弹簧收起，内容保持展开态至落定单帧
+                        // 才摘盒复行、全程不写滚动位（旧 Q135 的先复行＋落定回锚已废，见上）
+                        collapseNewsCard135(card, ttl, smRef124[0], detNow124, () -> foldBusy130.remove(n.id));
+                    }
                     else { renderNews(); foldBusy130.remove(n.id); }
                 } else {
                     newsOpen.add(n.id);
@@ -19471,12 +19609,11 @@ public class MainActivity extends Activity {
                     // Q124（件七）：就地建详情盒弹簧升起，标题/摘要同步放开行数
                     // Q130（件十）：挂新盒前摘可能残留的旧详情盒兜底，本条恒只一份详情
                     if (detRef123[0] != null) { card.removeView(detRef123[0]); detRef123[0] = null; }
-                    ttl.setMaxLines(Integer.MAX_VALUE);
-                    if (smRef124[0] != null) { smRef124[0].setMaxLines(Integer.MAX_VALUE); smRef124[0].setEllipsize(null); }
+                    // Q135（2.47，件二）：整卡一支弹簧展开——预量两态卡高后逐帧写卡高，
+                    // 不再「摘要瞬时放开＋详情盒慢升」两段式（顿跳正比于摘要多出行数）。
                     final LinearLayout det124 = buildNewsDetail124(n);
-                    card.addView(det124);
                     detRef123[0] = det124;
-                    det124.post(() -> foldHeightSpring(det124, true, null, null, new SpringDriver(), () -> foldBusy130.remove(n.id)));
+                    expandNewsCard135(card, ttl, smRef124[0], det124, () -> foldBusy130.remove(n.id));
                 }
             });
             }
@@ -20675,7 +20812,7 @@ public class MainActivity extends Activity {
         rebuildGlassSub();
         if (glassDisabled) glassSubBox.setVisibility(View.GONE);
         segRow(page, S("haptic"), new String[][]{{"0",S("haptic_off")},{"1",S("haptic_light")},{"2",S("haptic_mid")},{"3",S("haptic_strong")}}, String.valueOf(hapticLevel), v -> {
-            hapticLevel = Integer.parseInt(v); prefs.edit().putInt("haptic_level", hapticLevel).apply(); haptic(); rebuildPages();
+            hapticLevel = Integer.parseInt(v); prefs.edit().putInt("haptic_level", hapticLevel).apply(); haptic(); applyAppearanceSoft130(); // Q135（件三普查）：改走无闪换入（旧 rebuildPages 点击露空帧闪屏）
         });
 
         sectionHead(page, S("sec_data"));
@@ -20688,7 +20825,7 @@ public class MainActivity extends Activity {
         final int pendFinal = pendVer;
         updRow.setOnClickListener(v -> { haptic(); if (pendFinal > 0 && pendingUpdateJson != null) showUpdateConfirm(); else { showFloatToast("正在检查数据更新…"); checkDataUpdate(true); } });
         page.addView(updRow);
-        switchRow(page, "启动时自动检测更新", "开启只检测并提示，不自动应用；关闭则仅手动检查", prefs != null && prefs.getBoolean("auto_check_update", false), on -> { if(prefs!=null) prefs.edit().putBoolean("auto_check_update", on).apply(); haptic(); rebuildPages(); }); // Q121：默认关（站规矩）
+        switchRow(page, "启动时自动检测更新", "开启只检测并提示，不自动应用；关闭则仅手动检查", prefs != null && prefs.getBoolean("auto_check_update", false), on -> { if(prefs!=null) prefs.edit().putBoolean("auto_check_update", on).apply(); haptic(); applyAppearanceSoft130(); }); // Q121：默认关（站规矩）；Q135（件三普查）：改走无闪换入
         // Q124（2.36，件六）：清除缓存行——占用口径与 Q124 盘点一致：cacheDir 全部
         // ＋ filesDir/ota-images（远程卡图下载缓存，按版本分目录、可按需重下）。
         // 只清这两处可再生内容；卡库 OTA 数据文件、用户卡片/收藏/设置 prefs、
@@ -20750,7 +20887,7 @@ public class MainActivity extends Activity {
             });
             crashBtns.addView(copyBtn, new LinearLayout.LayoutParams(0, dp(this, 38), 1f));
             TextView clearBtn = softMiniBtn("清除记录", false);
-            clearBtn.setOnClickListener(v -> { haptic(); clearCrashLog(); rebuildPages(); showFloatToast("崩溃记录已清除"); });
+            clearBtn.setOnClickListener(v -> { haptic(); clearCrashLog(); applyAppearanceSoft130(); showFloatToast("崩溃记录已清除"); }); // Q135（件三普查）：改走无闪换入
             LinearLayout.LayoutParams clrLp = new LinearLayout.LayoutParams(0, dp(this, 38), 1f);
             clrLp.leftMargin = dp(this, 10);
             crashBtns.addView(clearBtn, clrLp);
@@ -20929,7 +21066,7 @@ public class MainActivity extends Activity {
         }
         haptic();
         applyHwGlassChange();
-        rebuildPages();
+        applyAppearanceSoft130(); // Q135（件三普查）：改走无闪换入
     }
 
     /** Q118（2.31）：按当前状态把从属两块（硬件玻璃行＋透明程度）重搭进折叠容器——
@@ -20995,7 +21132,7 @@ public class MainActivity extends Activity {
                     haptic();
                     backdropLastCapMs = 0; // 清节流：新半径立即重抓一帧背板（饱和随绘制滤镜同步换档）
                     captureBackdrop();
-                    rebuildPages();
+                    applyAppearanceSoft130(); // Q135（件三普查）：改走无闪换入（captureBackdrop 重抓背板保留在前）
                 });
             }
             row.addView(t);
@@ -21703,11 +21840,11 @@ public class MainActivity extends Activity {
 
         panelSubHead(panel, S("sec_appearance"), true);
         segInner(panel, S("dark_mode"), new String[][]{{"system",S("dark_system")},{"light",S("dark_light")},{"dark",S("dark_dark")}}, darkModePref, v -> {
-            darkModePref = v; prefs.edit().putString("dark_mode", v).apply(); haptic(); applyAppearanceChrome(); rebuildPages();
+            darkModePref = v; prefs.edit().putString("dark_mode", v).apply(); haptic(); applyAppearanceChrome(); applyAppearanceSoft130(); // Q135（件三普查）：深色解冻同治，改走无闪换入
         });
         addHair(panel);
         segInner(panel, S("language"), new String[][]{{"system",S("lang_system")},{"zh",S("lang_zh")},{"en",S("lang_en")}}, appLangPref, v -> {
-            appLangPref = v; if (prefs != null) prefs.edit().putString("app_lang", v).apply(); EN_MODE = isEn(); haptic(); refreshNavLabels(); rebuildPages();
+            appLangPref = v; if (prefs != null) prefs.edit().putString("app_lang", v).apply(); EN_MODE = isEn(); haptic(); refreshNavLabels(); applyAppearanceSoft130(); // Q135（件三普查）：语言解冻同治，改走无闪换入
         });
         addHair(panel);
         themeColorInner(panel);
@@ -21748,7 +21885,7 @@ public class MainActivity extends Activity {
             if ("custom".equals(v) && !hasCustomFont(this)) { haptic(); showFloatToast("先导入一个字体文件再用自定义"); openFontPicker(); return; }
             fontMode = v; prefs.edit().putString("font_mode", v).apply(); haptic();
             try { tfWCache.clear(); } catch (Throwable ignored) {} // Q125：切字体清字重合成缓存（研报 A4）
-            rebuildPages(); // 内含 refreshNavLabels→refreshNavFonts125：底栏即时跟随新字体
+            applyAppearanceSoft130(); // Q135（件三普查）：字体解冻同治，改走无闪换入；其内 refreshNavLabels→refreshNavFonts125，底栏字体跟随不变
         });
         View fontImpRow = settingInner("导入字体文件", hasCustomFont(this)
             ? (isEn() ? "Imported: " + (customFontName == null || customFontName.length() == 0 ? "Custom Font" : customFontName) + " · Tap to change ›" : "已导入：" + (customFontName == null || customFontName.length() == 0 ? "自定义字体" : customFontName) + " · 点此更换 ›")
@@ -21762,7 +21899,7 @@ public class MainActivity extends Activity {
         }
         addHair(panel);
         segInner(panel, S("ui_size"), new String[][]{{"0.9",S("ui_compact")},{"1",S("ui_standard")},{"1.12",S("ui_large")}}, String.valueOf(uiScale), v -> {
-            uiScale = Float.parseFloat(v); prefs.edit().putFloat("ui_scale", uiScale).apply(); haptic(); rebuildPages();
+            uiScale = Float.parseFloat(v); prefs.edit().putFloat("ui_scale", uiScale).apply(); haptic(); applyAppearanceSoft130(); // Q135（件三普查）：改走无闪换入
         });
         page.addView(panel);
     }
