@@ -509,6 +509,11 @@ public class MainActivity extends Activity {
             FrameLayout.LayoutParams lp = (FrameLayout.LayoutParams) filterFab.getLayoutParams();
             lp.bottomMargin = dp(this, 108) + navBarH(); filterFab.setLayoutParams(lp);
         }
+        if (addFab != null && addFab.getParent() != null
+            && addFab.getLayoutParams() instanceof FrameLayout.LayoutParams) {
+            FrameLayout.LayoutParams lp = (FrameLayout.LayoutParams) addFab.getLayoutParams();
+            lp.bottomMargin = dp(this, 108) + navBarH(); addFab.setLayoutParams(lp); // Q147：悬浮＋同筛选钮槽
+        }
         syncTopFab();
     }
     // Q12 浮窗升起时悬浮件全体退场（对照混合版 styles.css body.dock-hidden：
@@ -7783,12 +7788,17 @@ public class MainActivity extends Activity {
         syncTopFab();
     }
 
-    // Q7 ④：我的卡片页右下圆形 ＋（照混合版 .fab：56dp、右 20dp、底 108dp+inset、蓝底白 ＋、与 dock 同层浮空）；
-    // 仅在 mine 页且浮窗（筛选/选卡/详情/向导/关于/长按菜单）不在场时出现，浮窗退场归 Q12 同步。
+    // Q7 ④：我的卡片页右下悬浮 ＋（与 dock 同层浮空）；Q99 曾因压住「境外能力」
+    // 进度行退场（want=false 恒摘），接替的页内常驻行又经 Q125 删除——mine 页自此
+    // 无悬浮加卡入口。Q147（2.58，用户 04:36–04:37 定案「还是加一个加号的按钮，
+    // 就像筛选的按钮一样，那个悬浮按钮吧」）复活本钮：48dp 玻璃钮与筛选/搜索钮
+    // 同语言同层级，落位同筛选钮槽位（右 20dp、底 108dp+navBarH；mine 页右列无
+    // 其他钮、不压 dock），点按直达自定义卡片添加表单。显隐随 chrome 同步——mine
+    // 页且无浮窗在场时驻留，切页/showTab/restoreChrome 时入场淡入缩放同筛选钮，
+    // 浮窗升起经 hideChrome/hideFabsNow 的 addFab 名单退场，与筛选/搜索钮同口径；
+    // 不走回顶钮的滚动触发门（加卡是常驻动作，非回顶语义）。
     void syncAddFab() {
-        // Q99：右下悬浮＋钮在我的卡片页会压住「境外能力」进度行（用户 18:39 实拍），
-        // 改收进布局流——页尾常驻「添加卡片」行（buildMinePage 内），悬浮钮退场。
-        boolean want = false;
+        boolean want = "mine".equals(tab) && !isChromeCovered();
         if (!want) {
             if (addFab != null && addFab.getParent() != null) ((ViewGroup) addFab.getParent()).removeView(addFab);
             addFab = null;
@@ -7797,93 +7807,62 @@ public class MainActivity extends Activity {
         if (addFab == null || addFab.getParent() != content) {
             if (addFab != null && addFab.getParent() != null) ((ViewGroup) addFab.getParent()).removeView(addFab);
             addFab = buildAddFab();
-            FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(dp(this, 56), dp(this, 56));
+            FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(dp(this, 48), dp(this, 48));
             lp.gravity = Gravity.END | Gravity.BOTTOM;
             lp.rightMargin = dp(this, 20);
-            lp.bottomMargin = dp(this, 108) + navBarH();
+            lp.bottomMargin = dp(this, 108) + navBarH(); // 与筛选钮同槽：dock 之上、右列底位
             content.addView(addFab, lp);
-            addFab.setAlpha(0f); addFab.setScaleX(0.82f); addFab.setScaleY(0.82f);
+            addFab.setAlpha(0f); addFab.setScaleX(0.8f); addFab.setScaleY(0.8f);
             addFab.animate().alpha(1f).scaleX(1f).scaleY(1f).setDuration(ANIM_DUR_FADE).setInterpolator(ANIM_ENTER).start();
+        }
+    }
+    // Q147：细线加号（24 网格、线宽口径与 TopIconView 一致，禁用字形「＋」充数）
+    class AddPlusIconView extends View {
+        AddPlusIconView(Context c) { super(c); }
+        @Override protected void onDraw(Canvas cv) {
+            Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);
+            p.setStyle(Paint.Style.STROKE);
+            p.setStrokeCap(Paint.Cap.ROUND);
+            styleIconPaint129(p); // Q129：图标包风格层（现行包空转）
+            p.setStrokeJoin(Paint.Join.ROUND);
+            p.setColor(iconInk());
+            float ox = getPaddingLeft(), oy = getPaddingTop();
+            float sx = (getWidth() - getPaddingLeft() - getPaddingRight()) / 24f;
+            float sy = (getHeight() - getPaddingTop() - getPaddingBottom()) / 24f;
+            p.setStrokeWidth(2f * sx);
+            cv.drawLine(ox + 12f * sx, oy + 5f * sy, ox + 12f * sx, oy + 19f * sy, p);
+            cv.drawLine(ox + 5f * sx, oy + 12f * sy, ox + 19f * sx, oy + 12f * sy, p);
         }
     }
     View buildAddFab() {
         FrameLayout fab = new FrameLayout(this);
-        GradientDrawable bg = new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
-            new int[]{Color.rgb(0x2F, 0x7D, 0xFF), Color.rgb(0x0A, 0x5C, 0xD6)});
-        float fr146a = fabClipR146(); // Q146：加卡圆钮钮体形状随圆角一杆（标准档 OVAL 原路，渐变色不变）
-        if (fr146a < 0) bg.setShape(GradientDrawable.OVAL); else bg.setCornerRadius(dp(this, fr146a));
-        fab.setBackground(bg);
+        // Q147：与 buildFilterFab/buildSearchFab 同语言——玻璃底＋live 糊层（钮体
+        // 半径走 fabClipR146，标准档回 -1 原形、偏离档随圆角一杆）＋提亮层＋柔影，
+        // 只把字形换成细线加号；旧 56dp 蓝渐变圆钮随 Q99 退场史一并作废，不复活。
+        fab.setBackground(glassFabBg());
+        fab.addView(glassLayer(fab, fabClipR146(), true), new FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        fab.addView(fabFrostWash(), new FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         applyGlassFabShadow(fab);
-        TextView plus = tv(this, "\uFF0B", 28, Color.WHITE, false);
-        plus.setGravity(Gravity.CENTER);
-        fab.addView(plus, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
-        fab.setOnClickListener(v -> { haptic(); openAddSheet(); });
+        AddPlusIconView icon = new AddPlusIconView(this);
+        int pad = dp(this, 13); // 48 钮内 svg 本体 22dp，与筛选/搜索钮同内衬
+        icon.setPadding(pad, pad, pad, pad);
+        fab.addView(icon, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        fab.setOnClickListener(v -> { haptic(); openCustomForm(null); });
+        fab.setOnTouchListener((v, e) -> {
+            if (e.getAction() == MotionEvent.ACTION_DOWN) pressBounce(v, true);
+            else if (e.getAction() == MotionEvent.ACTION_UP || e.getAction() == MotionEvent.ACTION_CANCEL)
+                pressBounce(v, false);
+            return false;
+        });
         return fab;
     }
-    // Q7 ④ + Q9：点 ＋ 先升「添加卡片」底表（自定义卡片 / 在线查询卡信息 / 取消），再进表单；
-    // 在线查询走真 BIN 在线认行（openBinQuery），不再是空壳跳转。
-    void openAddSheet() {
-        hideChrome(); // Q12
-        final FrameLayout sheet = new FrameLayout(this);
-        addSheetView = sheet;
-        sheet.setBackgroundColor(Color.argb(117, 15, 20, 40));
-        sheet.setOnClickListener(v -> closeAddSheet(sheet));
-        LinearLayout card = new LinearLayout(this);
-        card.setOrientation(LinearLayout.VERTICAL);
-        // Q45：添加底表改为贴底形态——仅顶部圆角、底部直角直达屏底，消灭底部两角透出遮罩的黑三角
-        GradientDrawable addBg = glassWindowTint(sheetR129(22f), false); // Q126（2.38，件三）：窗已浮起（下沿 dp10+navBarH），底角改全圆——旧 topOnly 顶圆底直在浮卡上出方形黑角
-        boostWindowFace(addBg); // Q122（2.34，件七）：面提实——旧面下窗顶透出背后页面文字鬼影，提实后不可读
-        card.setBackground(addBg);
-        if (Build.VERSION.SDK_INT >= 21) { softShadow(card, 24); roundClip(card, sheetR129(22f), this); } // Q126（件三）：柔影替默认黑影、轮廓全圆角，角部不再发黑
-        // Q124（2.36，件八）：窗体矮一档更贴底——只收内部纵向间距（行高 52→48、
-        // 段距 12/8→10/6、上下垫 16/12→12/10），内容/口径/弹簧一字不动。
-        // 旧总高 ≈ 标题 24＋16＋64＋60＋60＋取消 41＋12 ≈ 277dp，新 ≈ 249dp（另加 navBarH 不变）。
-        card.setPadding(dp(this, 18), dp(this, 12), dp(this, 18), dp(this, 10) + navBarH());
-        FrameLayout.LayoutParams clp = new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        clp.gravity = Gravity.BOTTOM;
-        clp.leftMargin = dp(this, 12); clp.rightMargin = dp(this, 12); clp.bottomMargin = dp(this, 10) + navBarH(); // Q125（贴底窗扫查）：浮卡补 dp(10)+手势区安全距，不再贴死屏底
-        sheet.addView(card, clp);
-        card.setOnClickListener(v -> {});
-        card.addView(tv(this, "\u6DFB\u52A0\u5361\u7247", 17, colText(), true));
-        TextView r1 = addSheetRow("\u81EA\u5B9A\u4E49\u5361\u7247", () -> { closeAddSheet(sheet); openCustomForm(null); });
-        LinearLayout.LayoutParams r1lp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(this, 48));
-        r1lp.topMargin = dp(this, 10);
-        card.addView(r1, r1lp);
-        TextView rExt = addSheetRow("\u5728\u7EBF\u641C\u5361\uFF08\u6269\u5C55\u5361\u5E93\uFF09", () -> {
-            suppressNextChromeRestore = true; closeAddSheet(sheet);
-            openExtendedSearch();
-        });
-        LinearLayout.LayoutParams rExtLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(this, 48));
-        rExtLp.topMargin = dp(this, 6);
-        card.addView(rExt, rExtLp);
-        TextView r2 = addSheetRow("\u5728\u7EBF\u67E5\u8BE2\u5361\u4FE1\u606F", () -> {
-            suppressNextChromeRestore = true; closeAddSheet(sheet);
-            openBinQuery();
-        });
-        LinearLayout.LayoutParams r2lp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(this, 48));
-        r2lp.topMargin = dp(this, 6);
-        card.addView(r2, r2lp);
-        TextView cancel = tv(this, "\u53D6\u6D88", 15, colText2(), false);
-        cancel.setGravity(Gravity.CENTER);
-        cancel.setPadding(0, dp(this, 8), 0, dp(this, 4));
-        cancel.setOnClickListener(v -> closeAddSheet(sheet));
-        card.addView(cancel);
-        content.addView(sheet);
-        // Q74：遮罩与窗体同曲线同步升起（此前只有卡动、遮罩硬现）
-        sheet.setAlpha(0f);
-        sheet.animate().alpha(1f).setDuration(ANIM_DUR_SHADE_IN).setInterpolator(ANIM_ENTER).start();
-        card.setAlpha(0f); card.setTranslationY(dp(this, 28));
-        card.animate().alpha(1f).translationY(0f).setDuration(ANIM_DUR_SHEET_IN).setInterpolator(ANIM_ENTER).start();
-        sheet.setTag("addSheet");
-    }
-    TextView addSheetRow(String label, final Runnable act) {
-        TextView r = tv(this, label, 16, colText(), false);
-        r.setGravity(Gravity.CENTER_VERTICAL);
-        r.setPadding(dp(this, 14), 0, dp(this, 14), 0);
-        r.setBackground(roundRect(Color.rgb(0xF2, 0xF3, 0xF7), 14, this));
-        r.setOnClickListener(v -> { haptic(); act.run(); });
-        return r;
-    }
+    // Q147（2.58）：添加卡片底页 openAddSheet 及其专属行助手 addSheetRow 整段删除。
+    // 去重后底页只剩「自定义卡片」一项，原三处入口（工具格、悬浮＋、底页行自身）
+    // 已全部改直达 openCustomForm（见 buildMineToolGrid/buildAddFab），函数再无调用
+    // 点——不留一层有名无实的窗。closeAddSheet 与 addSheetView 字段保留：返回键
+    // 处理与 isChromeCovered 名单仍在引用（恒为 null 时两处自动无操作，无害）。
     void closeAddSheet(final View sheet) {
         if (sheet == addSheetView) addSheetView = null;
         if (sheet == null || sheet.getParent() == null) { restoreChrome(); return; }
@@ -13363,39 +13342,18 @@ public class MainActivity extends Activity {
                 (Runnable) () -> openOwnActs()});
         }
         cells.add(new Object[]{"custom", "自定义卡片", customCards.size() + " 张",
-            // Q126（2.38，件八/九）：独立折叠节取消，自定义卡与库卡同区——有卡且卡带盒
-            // 还在场 → scrollTargetBelowFixedHead 定位到卡带；一张都没有 → 沿 2.37 空态
-            // 口径走 openAddSheet（与旧底部「添加卡片」条同一面）。
-            // Q127（2.39 急修，用户 05:22 点名）：旧口径只认把手非空——卡区被折叠
-            // （mine_open=false）时 tilesBox126 是 GONE 区里的空盒、对它算窗口位移
-            // 等于没滚动（点击被吞，真机「点了没用」）；把手若已随重建脱离当前页
-            // 滚动树同理。改：目标须验明还挂在 mineScrollView 树上且卡区展开才走
-            // 定位滚动，否则置 pendingScrollCustom 走 showTab→buildMinePage 的
-            // 「强制展开＋落位」既有口径，一次到位；无卡仍 openAddSheet。
-            (Runnable) () -> {
-                if (!customCards.isEmpty()) {
-                    boolean zoneOpen127 = prefs == null || prefs.getBoolean("mine_open", true);
-                    View tgt126 = mineCustomSecView;
-                    boolean attached127 = false;
-                    if (zoneOpen127 && tgt126 != null && mineScrollView != null) {
-                        android.view.ViewParent vp127 = tgt126.getParent();
-                        while (vp127 instanceof View) {
-                            if (vp127 == mineScrollView) { attached127 = true; break; }
-                            vp127 = ((View) vp127).getParent();
-                        }
-                    }
-                    if (attached127) {
-                        scrollTargetBelowFixedHead(mineScrollView, tgt126, 8, null);
-                    } else {
-                        pendingScrollCustom = true;
-                        showTab("mine");
-                    }
-                } else {
-                    openAddSheet();
-                }
-            }});
+            // Q147（2.58，用户 02:47＋04:35 定案）：本格改无条件直达自定义表单。
+            // 旧 Q126/Q127 口径＝有卡先「定位滚动到卡带」、无卡才弹添加底页，与格名
+            // （用户读作「添加自定义卡片」）名实不符：有卡＋卡区展开＋落点已在视口
+            // 时定位滚动量为零、视觉零反馈，真机即「点了没用」；卡区折叠/把手脱树
+            // 路径虽走重建＋展开＋落位，也只把人带去看已有卡、从不开表单。「定位到
+            // 已有卡」由卡区本人在页内可达＋保存后 pendingScrollCustom 自动落位
+            // 承接，不再占此格（逐路取证见 PROGRESS Q147）。
+            (Runnable) () -> openCustomForm(null)});
         // Q124（2.36，件十四，用户解冻本件）：宫格直达两格——在线搜卡/在线查询卡信息，
-        // 不再经添加卡片底页（底页三项保留作冗余入口）；与现有格同图标语言/同尺寸。
+        // 与现有格同图标语言/同尺寸。Q147（2.58，用户 04:35 点名功能重复）追注：
+        // 当年「底页三项保留作冗余入口」已撤——添加底页内的同名两行整段删除，
+        // 本两格自此为唯一入口（openExtendedSearch/openBinQuery 本体未动）。
         cells.add(new Object[]{"extsearch", "在线搜卡", "扩展卡库",
             (Runnable) () -> openExtendedSearch()});
         cells.add(new Object[]{"binquery", "在线查询卡信息", "BIN 认行",
@@ -13675,9 +13633,11 @@ public class MainActivity extends Activity {
         if (!mineRows.isEmpty()) inner.addView(buildMineAnalysis(mineCards, false));
         // Q125（2.37，件十一）：页尾旧「＋添加卡片 · 自定义卡片 / 在线查卡」整行入口
         // 删除——工具宫格已有自定义卡片/在线搜卡/在线查询卡信息三格直达，此行与宫格
-        // 重复且被回顶箭头叠压（用户两图点名）。构建/点击代码随删（openAddSheet 本体
-        // 仍由悬浮 ＋ 钮与工具格空态共用，不删）。页尾留白由 inner 的 dockPad() 承担，
-        // 回顶箭头落位不变。
+        // 重复且被回顶箭头叠压（用户两图点名）。构建/点击代码随删。页尾留白由 inner
+        // 的 dockPad() 承担，回顶箭头落位不变。Q147（2.58）追注：当年注明「openAddSheet
+        // 本体仍由悬浮＋与工具格共用、不删」的前提已变——底页去重后只剩一项、三入口
+        // 全改直达表单，openAddSheet 本版本整段删除；悬浮＋经用户 04:36 定案以筛选钮
+        // 语言复活（syncAddFab），本页尾仍不设常驻添加行。
         mineBuiltSig = computeMineSig(); // Q116：构建成功才记账，构建抛错下次照旧重建
         return page;
     }
