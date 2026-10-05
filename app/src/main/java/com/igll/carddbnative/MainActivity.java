@@ -1356,6 +1356,8 @@ public class MainActivity extends Activity {
             "· Public materials from UnionPay, Visa, Mastercard, American Express, JCB and other card networks");
         EN_TXT.put("· 卡盒数据仓（cards.json）随版本经 OTA 更新，更新前会先提示、经确认才应用",
             "· The CardBox data set (cards.json), delivered by over-the-air updates — you are always asked before an update is applied");
+        EN_TXT.put("· 部分卡面图为 AI 重绘示意，非银行官方卡面（详情页标有「AI 重绘」小标），官方卡面以发卡行官方公布为准",
+            "· Some card images are AI-redrawn illustrations rather than official card art (marked \"AI Redrawn\" on the detail page); official card designs are as published by the issuing bank");
         EN_TXT.put("· 版式与字段结构研读参考：公开卡片资料站与开源卡包类应用（仅研读结构与口径，代码全部手写，未抄录）",
             "· Layout and field structure studied from public card databases and open-source card-wallet apps (structure and conventions only; all code here is hand-written, nothing copied)");
         EN_TXT.put("标准", "Standard"); // Q114：玻璃档位 segRow 中键（与 ui_standard 同值，纯展示）
@@ -3214,6 +3216,19 @@ public class MainActivity extends Activity {
         } catch (Throwable ignored) {}
     }
 
+    // Q133（2.45，件三）：开窗后唯一一次结构性抓帧（冻结背板刷新）的空闲门控调度——
+    // 见 openDetail 调用点注释。tries=0 为首判（延迟 300ms，沿旧口径），之后每次顺延 220ms。
+    void scheduleDetailBackdrop133(final Card dc118, final int tries133) {
+        mainHandler.postDelayed(() -> {
+            if (detailCard != dc118 || detailClosing) return; // 窗已关/已换，旧任务自尽
+            boolean busy133 = detailTouchDown133
+                || (android.os.SystemClock.uptimeMillis() - lastScrollEventMs < 180);
+            if (busy133 && tries133 < 8) { scheduleDetailBackdrop133(dc118, tries133 + 1); return; }
+            backdropLastCapMs = 0;
+            try { captureBackdrop(); } catch (Throwable ignored) {}
+        }, tries133 == 0 ? 300 : 220);
+    }
+
     /** 抓当前根视图快照（0.2 降采样）：抓图时把所有已登记玻璃面整面隐藏，避免把玻璃自己拍进背景。 */
     Bitmap captureGlassSnapshot() {
         // Q16 (1) crash kill: full Throwable guard. On some vivo/OEM devices drawing a subtree that carries
@@ -3861,6 +3876,7 @@ public class MainActivity extends Activity {
         JSONArray variants;
         boolean hasScore;
         boolean studentPick;
+        boolean aiRedraw133; // Q133（2.45，件四）：数据字段 ai_redraw——卡面图为 AI 重绘（详情小标，列表不标）
         int studentOrder;
         String studentReason;
         // Q67：数据线下发的逐维度分项分（score_dims）。只读展示，不在端上按权重重算。
@@ -3940,6 +3956,7 @@ public class MainActivity extends Activity {
                     cd.scoreDims = parseScoreDims(o.optJSONObject("score_dims"));
                     cd.specs = o.optJSONObject("specs");
                     cd.variants = o.optJSONArray("variants");
+                    cd.aiRedraw133 = o.optBoolean("ai_redraw", false); // Q133：字段缺失默认 false，老数据零影响
                     JSONObject sp = o.optJSONObject("student_pick");
                     cd.studentPick = sp != null;
                     cd.studentOrder = sp != null ? sp.optInt("order", 999) : 999;
@@ -3993,6 +4010,10 @@ public class MainActivity extends Activity {
         static Bitmap cacheGet(String k) { synchronized (cache) { return cache.get(k); } }
         static void cachePut(String k, Bitmap b) { synchronized (cache) { cache.put(k, b); } }
         static final java.util.Set<String> fetching = new java.util.HashSet<>();
+        // Q133（2.45，件六）：远程图落盘成功回调（后台线程触发，实现方须自行转主线
+        // 程）；由 Activity 初始化时登记。旧口径无此钩子：图下完了瓷砖仍顶着落盘
+        // 前的过渡图，要等下一次整表重搭才换上。
+        static volatile java.util.function.Consumer<String> remoteFetchedHook = null;
 
         static Bitmap decode(InputStream in) {
             BitmapFactory.Options op = new BitmapFactory.Options();
@@ -4198,6 +4219,8 @@ public class MainActivity extends Activity {
                         byte[] buf = new byte[8192]; int n;
                         while ((n = in.read(buf)) > 0) fos.write(buf, 0, n);
                         in.close(); fos.close();
+                        java.util.function.Consumer<String> h133 = remoteFetchedHook; // Q133：落盘通知（已建瓷砖就地换入）
+                        if (h133 != null) { try { h133.accept(path); } catch (Throwable ignored) {} }
                     }
                     conn.disconnect();
                 } catch (Exception e) { /* 断网就下次再试 */ }
@@ -4282,6 +4305,9 @@ public class MainActivity extends Activity {
         if ("eligibility".equals(k)) return "申请资格";
         if ("min_income_hkd".equals(k)) return "年薪门槛";
         if ("supported_currency_codes".equals(k)) return "支持币种";
+        if ("supported_currency_codes_detail".equals(k)) return "币种明细"; // Q133（2.45，件五）：银联借记种子新键
+        if ("min_balance_hkd".equals(k)) return "最低结存";
+        if ("age_min".equals(k)) return "申请年龄";
         if ("overseas_atm_fee".equals(k)) return "海外 ATM 费";
         if ("residency_status".equals(k)) return "居民资格";
         return k;
@@ -4457,19 +4483,27 @@ public class MainActivity extends Activity {
             top.setOrientation(LinearLayout.HORIZONTAL);
             top.setGravity(Gravity.CENTER_VERTICAL);
             cardBox.addView(top);
+            // Q133（2.45，件一）：缩略框按图宽高比在 86dp 宽、72dp 高上限内定形
+            // （框比＝图比、整图可见不裁）；2.44 写死 86×54 横框 CENTER_CROP，
+            // 竖图只剩中段、超宽图上下被压。无图/解码失败沿旧 86×54 占位框。
+            Bitmap fb133 = (f.image != null && !f.image.isEmpty()) ? Img.getSized(this, f.image, dp(this, 86)) : null;
+            int thW133 = dp(this, 86), thH133 = dp(this, 54);
+            if (fb133 != null && fb133.getWidth() > 0 && fb133.getHeight() > 0) {
+                float ar133 = (float) fb133.getWidth() / (float) fb133.getHeight();
+                thH133 = Math.round(thW133 / ar133);
+                int thMax133 = dp(this, 72);
+                if (thH133 > thMax133) { thH133 = thMax133; thW133 = Math.round(thMax133 * ar133); }
+            }
             FrameLayout thumb = new FrameLayout(this);
             thumb.setBackground(cardFrameBg131(cardSmallR129(9f))); // Q131：缩略框底衬承托面，角区不露黑
-            top.addView(thumb, new LinearLayout.LayoutParams(dp(this, 86), dp(this, 54)));
+            top.addView(thumb, new LinearLayout.LayoutParams(thW133, thH133));
             ImageView iv = new ImageView(this);
             iv.setScaleType(ImageView.ScaleType.CENTER_CROP);
             iv.setBackground(placeholderGradFor(f.id, cardSmallR129(9f), this)); // 无图走 Q70 占位面（核心无图卡同口径）
             roundClip(iv, cardSmallR129(9f), this);
             thumb.addView(iv, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
             roundClip(thumb, cardSmallR129(9f), this);
-            if (f.image != null && !f.image.isEmpty()) {
-                Bitmap b = Img.getSized(this, f.image, dp(this, 86));
-                if (b != null) iv.setImageBitmap(b);
-            }
+            if (fb133 != null) iv.setImageBitmap(fb133);
             LinearLayout tx = new LinearLayout(this);
             tx.setOrientation(LinearLayout.VERTICAL);
             LinearLayout.LayoutParams txLp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
@@ -4540,21 +4574,36 @@ public class MainActivity extends Activity {
         sc.addView(body);
         root.addView(sc, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
 
-        // 卡面大图（无图走 Q70 占位面，与核心无图卡同口径，不编造图）
+        // Q133（2.45，件一）：卡面大图框按图自身宽高比定高——整宽铺满、按位图比
+        // 算高、260dp 封顶后缩宽居中（与核心详情图廊 Q100/Q122 同口径，框比＝图比、
+        // CENTER_CROP 无裁切）。2.44 写死「整宽×180dp」横框：竖图（宽高比约 0.63）
+        // 铺满框宽后可视只剩整卡中段一条，再叠 2.44 包内图源画布自带的白边
+        // （fxhk-023-t0 旧图为方画布、竖卡仅占中间约半宽），即真机所见「中间一条
+        // 竖带、两边大白」；横图则被压进 180dp 矮框里显小（图源白边已由数据侧
+        // 逐张裁净，显示侧框比脱钩仍须在本版治）。无图占位沿旧 180dp 整宽框。
         int availW = getResources().getDisplayMetrics().widthPixels - dp(this, 32);
-        float cardR = cardR129(Math.max(16f, cardRadiusDp(availW / getResources().getDisplayMetrics().density)));
+        Bitmap hb = (f.image != null && !f.image.isEmpty()) ? Img.getSized(this, f.image, availW) : null;
+        int imgW = availW, imgH = dp(this, 180);
+        if (hb != null && hb.getWidth() > 0 && hb.getHeight() > 0) {
+            float ratio133 = (float) hb.getHeight() / (float) hb.getWidth();
+            imgH = Math.round(availW * ratio133);
+            int maxH133 = dp(this, 260);
+            if (imgH > maxH133) { imgH = maxH133; imgW = Math.round(imgH / ratio133); }
+        }
+        float cardR = cardR129(Math.max(16f, cardRadiusDp(imgW / getResources().getDisplayMetrics().density)));
         FrameLayout hero = new FrameLayout(this);
         hero.setBackground(cardFrameBg131(cardR));
         if (Build.VERSION.SDK_INT >= 21) hero.setElevation(dp(this, 6));
         roundClip(hero, cardR, this);
         ImageView hiv = new ImageView(this);
-        hiv.setScaleType(ImageView.ScaleType.CENTER_CROP);
+        hiv.setScaleType(ImageView.ScaleType.CENTER_CROP); // 框比＝图比，铺满无裁切（Q122 同理）
         roundClip(hiv, cardR, this);
-        Bitmap hb = (f.image != null && !f.image.isEmpty()) ? Img.getSized(this, f.image, availW) : null;
         if (hb != null) hiv.setImageBitmap(hb);
         else hiv.setBackground(placeholderGradFor(f.id, cardR, this));
-        hero.addView(hiv, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(this, 180)));
-        body.addView(hero, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(this, 180)));
+        hero.addView(hiv, new FrameLayout.LayoutParams(imgW, imgH));
+        LinearLayout.LayoutParams heroLp133 = new LinearLayout.LayoutParams(imgW, imgH);
+        heroLp133.gravity = Gravity.CENTER_HORIZONTAL;
+        body.addView(hero, heroLp133);
 
         TextView nm = tvW(this, f.name, 19, colText(), 800);
         LinearLayout.LayoutParams nlp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
@@ -5179,6 +5228,8 @@ public class MainActivity extends Activity {
     final Spring1D detailPillSpring = new Spring1D(1f);        // Q120：主钮不透明度弹簧态 1=全显
     int detailPillRestGen = 0;                               // Q120：滚动停稳计时代次
     boolean detailPillSuppressed = false;                    // Q122（2.34，件五）：加入选择窗在场时整颗藏死，淡出/淡入都不许碰
+    boolean detailTouchDown133 = false;                      // Q133（2.45，件三）：详情内手指按下态，供开窗结构性抓帧的空闲门控读
+    Runnable detailGalDebounce133 = null;                    // Q133（2.45，件三）：详情图廊视口高跟随的防抖任务
     android.view.ViewTreeObserver.OnScrollChangedListener detailScrollObs = null; // Q122（件四）：真滚动源观察者，关窗摘除
     LinearLayout detailVerInfoBox = null;
     java.util.List<View> detailDots = new java.util.ArrayList<>();
@@ -5305,6 +5356,7 @@ public class MainActivity extends Activity {
     float navDownRawY = 0f; // Q38: lift-off-dock abort guard for the press-first-move path
     // Q21 ②：首页渲染签名（查询/筛选/排序/列数/分组/展开集/收藏集/数据版本）——未变时切页回来不重搭 213 张瓷砖。
     String homeRenderSig = null;
+    String homeMineSigRendered133 = null; // Q133（2.45，件六）：上次已同步到瓷砖的 mine 段签
     int homeRenderGen = 0; // 分帧渲染代次：新的 refresh 作废上一轮未跑完的续帧任务
     long navGlassMs = 0;
     FrameLayout navWrap;
@@ -5682,6 +5734,7 @@ public class MainActivity extends Activity {
         loadMineOrder();
         loadMineEntries();
         Store.load(this);
+        Img.remoteFetchedHook = p133 -> mainHandler.post(() -> swapInFetchedImage133(p133)); // Q133（2.45，件六）：远程图落盘→已建瓷砖就地换入
         scoreDimsSel.retainAll(availableScoreDims()); // Q67：旧 OTA 已下线维度不残留成幽灵选择
         try { nfcAdapter = NfcAdapter.getDefaultAdapter(this); } catch (Throwable ignored) { nfcAdapter = null; }
 
@@ -8613,6 +8666,7 @@ public class MainActivity extends Activity {
         box.addView(art, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, imgH));
         ImageView iv = new ImageView(this);
         iv.setScaleType(ImageView.ScaleType.CENTER_CROP); // cover：铺满不留白、等比不拉伸
+        iv.setTag(c.image); // Q133（2.45，件六）：远程图落盘就地换入的认件 tag（见 swapInFetchedImage133）
         topSheetClip(iv, tileR, this); // Q126（件十）：图自身补与 art 同半径同轮廓裁切——旧实现只靠父容器单层 outline，失效时方图顶角直出
         iv.setBackground(placeholderGradFor(c.id, 0, this));
         art.addView(iv, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
@@ -8643,6 +8697,7 @@ public class MainActivity extends Activity {
 
         LinearLayout chips = new LinearLayout(this);
         chips.setOrientation(LinearLayout.HORIZONTAL);
+        chips.setTag(c.id); // Q133（2.45，件六）：跨页 mine 变更就地同步的认件 tag（见 syncHomeTileStates133）
         LinearLayout.LayoutParams clp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         clp.topMargin = dp(this, nc >= 4 ? 5 : 6);
         body.addView(chips, clp);
@@ -8669,6 +8724,7 @@ public class MainActivity extends Activity {
             }
         }
         final TextView addedChip = chip("已添加", Color.rgb(0xE6, 0xF6, 0xEC), Color.rgb(0x1D, 0x8A, 0x49), chipSp);
+        addedChip.setTag("added133"); // Q133（2.45，件六）：就地同步认件（syncAddedChip133 按 tag 找、不按文案）
         // 我的卡片瓷砖不重复「已添加」（页面本身即自有条目），把同一格位留给类别标签，未标则不占位
         if (!mineTile && mine.contains(c.id)) chips.addView(addedChip);
         // Q65：类别标签只在用户自有条目瓷砖出现（我的卡片传入 acctClass），未标完全不占位；样式同现行 chips
@@ -8706,6 +8762,7 @@ public class MainActivity extends Activity {
         // Q24 加卡钮：点它直接切换我的卡片不进详情（对照混合版 [data-mine] 点击 stopPropagation + toggleMine，
         // 反馈走既有悬浮提示条/撤销）；钮态与「已添加」chip 在切换/撤销后就地同步，不整页重绘。
         final MineAddBtn mineBtn = new MineAddBtn(this);
+        mineBtn.setTag(c.id); // Q133（2.45，件六）：跨页 mine 变更就地同步的认件 tag
         mineBtn.setOn(mine.contains(c.id));
         mineBtn.setCardImage(b, c.image); // Q47：钮下卡图磨砂片一次性生成并缓存，无图回落浅白玻璃
         int btnSize = nc >= 4 ? dp(this, 22) : nc == 3 ? dp(this, 26) : dp(this, 32);
@@ -9662,6 +9719,12 @@ public class MainActivity extends Activity {
     }
 
     // Q21 ② 首页渲染签名：把决定网格内容的全部输入拼成一把钥匙——切页回来/关弹层这类「什么都没变」的 refresh 直接跳过整表重搭。
+    // Q133（2.45，件六）：签名拆两段——本函数只管「列表结构」（哪些卡、什么序、
+    // 几列、分组开合、数据版本），mine 集合单独成签（homeMineSig133）。旧口径把
+    // mine 混进总签：在详情/我的卡片页加减一张卡，mine 一变，切回首页就整表
+    // 354 张分帧重搭＋居中「加载中」转圈（列表结构其实一字未变）——用户 14:31
+    // 点名的「切页回来像每切一次都刷新一遍」。mine 态在瓷砖上本就有就地同步
+    // 先例（瓷砖钮自家回调 Q24），本版补齐跨页变更的就地同步（见 refreshHome）。
     String homeSig() {
         StringBuilder sb = new StringBuilder();
         sb.append(query).append('|').append(filterType).append('|').append(filterOrg).append('|')
@@ -9669,8 +9732,15 @@ public class MainActivity extends Activity {
           .append(selectedScoreDimsOrdered()).append('|')
           .append(sortMode).append('|').append(cols).append('|').append(groupBank).append('|')
           .append(new java.util.TreeSet<>(bankOpen)).append('|').append(Store.dataVersion).append('|')
-          .append(Store.all.size()).append('|').append(mine.size()).append(':');
-        for (String id : new java.util.TreeSet<>(mine)) sb.append(id).append(',');
+          .append(Store.all.size());
+        return sb.toString();
+    }
+
+    // Q133：mine 段独立签（内容＝卡 id 集合，序无关）。
+    String homeMineSig133() {
+        StringBuilder sb = new StringBuilder();
+        sb.append(mine == null ? 0 : mine.size()).append(':');
+        if (mine != null) for (String id : new java.util.TreeSet<>(mine)) sb.append(id).append(',');
         return sb.toString();
     }
 
@@ -9682,8 +9752,16 @@ public class MainActivity extends Activity {
             homeHero.setVisibility(heroOn ? View.VISIBLE : View.GONE);
         }
         // Q21 ②：签名未变的重复 refresh（切页回来、关详情、关筛选）不再把 213 张瓷砖连图带字重搭一遍——这是切页发慢的主因。
+        // Q133（2.45，件六）：结构签未变时一律不再整表重搭；mine 段变了只就地
+        // 同步瓷砖钮态与「已添加」chip（syncHomeTileStates133），列表/滚动位/
+        // 已解码图原样不动。结构签变（搜索/筛选/排序/列数/分组/数据版）才走下方整表重搭。
         String sig = homeSig();
         if (sig.equals(homeRenderSig) && homeList.getChildCount() > 0) {
+            String mSig133 = homeMineSig133();
+            if (!mSig133.equals(homeMineSigRendered133)) {
+                syncHomeTileStates133();
+                homeMineSigRendered133 = mSig133;
+            }
             // Q116：字面没变就不写——每次回首页都 setText 同一句话，等于让该行无端
             // 失效、整页跟着走一遍布局遍历；其余路径（过滤重算等）本就便宜，不动。
             if (homeCount != null) {
@@ -9700,9 +9778,84 @@ public class MainActivity extends Activity {
         renderActiveFilters();
         renderHomeList(list);
         homeRenderSig = sig;
+        homeMineSigRendered133 = homeMineSig133(); // Q133：整表新搭时瓷砖 mine 态即为现值
         updateFilterFabBadge();
         warmStudentImages(); // Q105：首页建成后顺手把学生专区卡图在后台解好，进学生页不再逐张同步解码
         if (keepY > 0 && homeScroll != null) homeScroll.post(() -> homeScroll.scrollTo(0, keepY));
+    }
+
+    // Q133（2.45，件六）：首页已建瓷砖的 mine 态就地同步——递归走 homeList，
+    // 靠建砖时打的 tag 认件：MineAddBtn 的 tag＝卡 id、chips 行的 tag＝卡 id、
+    // 「已添加」chip 自身的 tag＝"added133"。只改钮态与 chip 在不在，不摘不挂
+    // 任何行、图不动、滚动位不动（与瓷砖钮自家回调 Q24 的就地同步同口径）。
+    void syncHomeTileStates133() {
+        if (homeList == null) return;
+        syncHomeTileStatesIn133(homeList);
+    }
+
+    void syncHomeTileStatesIn133(View v) {
+        if (v == null) return;
+        Object tg = v.getTag();
+        if (v instanceof MineAddBtn && tg instanceof String) {
+            ((MineAddBtn) v).setOn(mine != null && mine.contains((String) tg));
+        } else if (v instanceof LinearLayout && tg instanceof String) {
+            syncAddedChip133((LinearLayout) v, (String) tg); // 只有 chips 行打了卡 id tag（行/组头无 tag，不误认）
+        }
+        if (v instanceof ViewGroup) {
+            ViewGroup g = (ViewGroup) v;
+            for (int i = 0; i < g.getChildCount(); i++) syncHomeTileStatesIn133(g.getChildAt(i));
+        }
+    }
+
+    void syncAddedChip133(LinearLayout chipsRow, String cardId) {
+        boolean in = mine != null && mine.contains(cardId);
+        TextView found = null;
+        for (int i = 0; i < chipsRow.getChildCount(); i++) {
+            View ch = chipsRow.getChildAt(i);
+            if (ch instanceof TextView && "added133".equals(ch.getTag())) { found = (TextView) ch; break; }
+        }
+        if (in && found == null) {
+            // 与 cardTile 建砖同口径新建一枚（字号按当前列数档，结构签已保证列数没变）
+            float sp133 = cols >= 4 ? 8f : cols == 3 ? 8.5f : 10f;
+            TextView nc133 = chip("已添加", Color.rgb(0xE6, 0xF6, 0xEC), Color.rgb(0x1D, 0x8A, 0x49), sp133);
+            nc133.setTag("added133");
+            nc133.setSingleLine(true); nc133.setMaxLines(1);
+            nc133.setEllipsize(android.text.TextUtils.TruncateAt.END);
+            if (cols >= 4) { // Q75 四列收紧同口径
+                nc133.setPadding(dp(this, 4), dp(this, 2), dp(this, 4), dp(this, 2));
+                if (nc133.getLayoutParams() instanceof LinearLayout.LayoutParams)
+                    ((LinearLayout.LayoutParams) nc133.getLayoutParams()).rightMargin = dp(this, 4);
+            }
+            chipsRow.addView(nc133);
+        } else if (!in && found != null) {
+            chipsRow.removeView(found);
+        }
+    }
+
+    // Q133（2.45，件六）：远程图下载落盘后的就地换入——fetchRemote 成功回调
+    // （Img.remoteFetchedHook）转主线程到此：靠建砖时卡图 iv 的 tag（图路径）
+    // 找已建瓷砖，远程文件已在盘上，getSized 自然改走远程源并入缓存。旧口径
+    // 无任何完成钩子：图下完了也要等下一次整表重搭才换上新图，且落盘前的
+    // 过渡图解码（provisional）按 Q105 口径不入缓存、每次重搭重付一遍。
+    void swapInFetchedImage133(String path) {
+        if (path == null || homeList == null) return;
+        swapInFetchedIn133(homeList, path);
+    }
+
+    void swapInFetchedIn133(View v, final String path) {
+        if (v == null) return;
+        if (v instanceof ImageView && path.equals(v.getTag())) {
+            final ImageView iv = (ImageView) v;
+            int w = iv.getWidth();
+            if (w > 0) {
+                Bitmap nb = Img.getSized(this, path, w);
+                if (nb != null) iv.setImageBitmap(nb);
+            }
+        }
+        if (v instanceof ViewGroup) {
+            ViewGroup g = (ViewGroup) v;
+            for (int i = 0; i < g.getChildCount(); i++) swapInFetchedIn133(g.getChildAt(i), path);
+        }
     }
 
     // Q105（2.19）：学生页 25 张卡旧实现进页时一个同步循环里逐张解码搭完，进页瞬间
@@ -11417,13 +11570,13 @@ public class MainActivity extends Activity {
         // Q118（2.31）：详情冻结玻璃的唯一结构性重抓——升起落定（240ms）后抓一帧存档，
         // 此后窗内滚动全程零重抓（captureBackdropTick/refreshLiveGlass 已同闸封路），
         // 关窗后 tick 自然恢复跟随；连排开下一张时 dc118 已换，旧任务自废不误抓。
+        // Q133（2.45，件三）：结构性抓帧改空闲门控。旧＋300ms 无条件抓帧：用户开窗
+        // 即甩动时，这一帧整树软件绘制＋三遍 boxBlur（captureBackdrop）正落进第一波
+        // 甩动里，是开窗后首卡的一个固定来源——手指还按着、或近 180ms 内刚有滚动
+        // 事件，就顺延 220ms 再判，最多顺延 8 次兜底必抓（冻结帧最终必达，落点口径
+        // 与 Q118 不变）。
         final Card dc118 = c;
-        mainHandler.postDelayed(() -> {
-            if (detailCard == dc118 && !detailClosing) {
-                backdropLastCapMs = 0;
-                try { captureBackdrop(); } catch (Throwable ignored) {}
-            }
-        }, 300);
+        scheduleDetailBackdrop133(dc118, 0);
     }
 
     void attachDetailDrag(final View wrap, final View sheetCard) {
@@ -11436,6 +11589,8 @@ public class MainActivity extends Activity {
         if (detailScroll != null) {
             detailScroll.setOnTouchListener((v, e) -> {
                 if (detailClosing) return false;
+                if (e.getActionMasked() == MotionEvent.ACTION_DOWN) detailTouchDown133 = true; // Q133：抓帧门控打点（放行照旧）
+                if (e.getActionMasked() == MotionEvent.ACTION_UP || e.getActionMasked() == MotionEvent.ACTION_CANCEL) detailTouchDown133 = false;
                 switch (e.getActionMasked()) {
                     case MotionEvent.ACTION_DOWN:
                         downY[0] = e.getRawY(); downX[0] = e.getRawX();
@@ -11520,13 +11675,22 @@ public class MainActivity extends Activity {
             }
             detailScroll = null; detailBinView = null; detailVerInfoBox = null;
             detailDots = new java.util.ArrayList<>();
+            if (detailGalDebounce133 != null) { mainHandler.removeCallbacks(detailGalDebounce133); detailGalDebounce133 = null; } // Q133：关窗摘残防抖任务
+            detailTouchDown133 = false; // Q133：关窗复位抓帧门控标志
             detailCard = null; detailClosing = false; detailFromWiz = false; detailEntryKey = null;
             restoreCurrentTabScroll();
             restoreChrome(); // Q12
             if (placeholderDirty) { placeholderDirty = false; rebuildPages(); } // Q71：自选色落盘后刷新底层瓷砖
             // FIFO：关窗落定才开下一次点选的那张，不叠窗
-            Card next = detailQueue.poll();
-            if (next != null) openDetail(next, wasWiz && wizardOpen);
+            // Q133（2.45，件三）：构建让开一帧。旧版在关窗落定的同一主线程回合里
+            // 同步重建下一张整页正文＋图廊逐 slide 解码，关窗尾帧与开窗首帧叠成
+            // 一卡；改 post 到下一帧让关窗落定帧先走完。这一帧内若用户已点开别的
+            // 卡，openDetail 自带排队逻辑接管（detailCard 非空即入队），排队卡不丢。
+            final Card next133 = detailQueue.poll();
+            if (next133 != null) {
+                final boolean wiz133 = wasWiz && wizardOpen;
+                mainHandler.post(() -> openDetail(next133, wiz133));
+            }
         };
         if (overlay == null || wrap == null) { finish.run(); return; }
         // Q30：✕ 是 wrap 子层，不摘出、不冻结、不单独淡出——随窗同降，overlay 销毁时一并销毁，主页不留残影。
@@ -11655,25 +11819,34 @@ public class MainActivity extends Activity {
         }
         if (detailBinView != null) detailBinView.setText(variantBinText(c, idx));
         // Q100：图廊视口高随当前 slide 收紧（圆点贴着当前图下沿，不再掉进最高 slide 撑出的空地）
+        // Q133（2.45，件三）：高跟随改 120ms 防抖后启。旧版横滑每跨一页就当场重启
+        // 200ms 高度动画，动画每帧 setLayoutParams 逼图廊所在的整页正文（ScrollView
+        // 唯一子，随身高变化整棵重测）连帧重排——快滑连翻数页即连卡数轮。圆点/BIN/
+        // 版本信息仍在本函数即时切（上方已做），视口高只在翻页停稳后跟随一次；最终
+        // 高与动画时长/曲线与 Q100 逐字不变，只改启动时机。
         if (detailHsv != null && idx >= 0 && idx < detailSlideHeights.size()) {
             final int targetH = detailSlideHeights.get(idx);
-            ViewGroup.LayoutParams hlp = detailHsv.getLayoutParams();
-            if (hlp != null && hlp.height != targetH) {
+            final HorizontalScrollView hsvRef133 = detailHsv;
+            if (detailGalDebounce133 != null) mainHandler.removeCallbacks(detailGalDebounce133);
+            detailGalDebounce133 = () -> {
+                if (detailHsv != hsvRef133) return; // 已换下一张详情，旧页任务自尽
+                ViewGroup.LayoutParams hlp = hsvRef133.getLayoutParams();
+                if (hlp == null || hlp.height == targetH) return;
                 if (detailGalAnim != null) detailGalAnim.cancel();
                 final int fromH = hlp.height > 0 ? hlp.height : targetH;
                 detailGalAnim = ValueAnimator.ofInt(fromH, targetH);
                 detailGalAnim.setDuration(200);
                 detailGalAnim.setInterpolator(ANIM_ENTER);
-                final HorizontalScrollView hsvRef = detailHsv;
                 detailGalAnim.addUpdateListener(a -> {
-                    if (detailHsv != hsvRef) return; // 已换下一张详情，旧动画不许碰新图廊
-                    ViewGroup.LayoutParams p = hsvRef.getLayoutParams();
+                    if (detailHsv != hsvRef133) return; // 已换下一张详情，旧动画不许碰新图廊
+                    ViewGroup.LayoutParams p = hsvRef133.getLayoutParams();
                     if (p == null) return;
                     p.height = (Integer) a.getAnimatedValue();
-                    hsvRef.setLayoutParams(p);
+                    hsvRef133.setLayoutParams(p);
                 });
                 detailGalAnim.start();
-            }
+            };
+            mainHandler.postDelayed(detailGalDebounce133, 120);
         }
         if (detailVerInfoBox != null) {
             detailVerInfoBox.removeAllViews();
@@ -12079,6 +12252,9 @@ public class MainActivity extends Activity {
         if (c.hasScore) chips.add(chip((isEn() ? "Score " : "评分 ") + String.format(java.util.Locale.US, "%.1f", c.score), accentColor(), Color.WHITE, 12f));
         for (String[] f : FEATS) if (featMatch(c, f[0])) chips.add(chip(EN_MODE ? featLabelEn(f[0]) : f[1], chipBg, colText(), 12f)); // Q114：英文缩略表，与瓷砖同口径
         if (c.studentPick) chips.add(chip("学生推荐", accentColor(), Color.WHITE, 12f));
+        // Q133（2.45，件四）：AI 重绘小标——与本行既有胶囊同档（chipBg 底、12sp），
+        // 不用醒目色、不上卡图（本行本就在卡图下方）；列表瓷砖不加，保持卡面干净。
+        if (c.aiRedraw133) chips.add(chip(isEn() ? "AI Redrawn" : "AI 重绘", chipBg, colText(), 12f));
         // Q91：宽度按文字实测（Paint 量 12sp 粗体实宽），旧版「字数×0.68」把中文宽度估小、
         // 行内总宽溢出后后面的胶囊被横向 LinearLayout 挤成一字宽、文字竖排成条（真机「评分 9.8」竖条）。
         Paint chipMp = new Paint(Paint.ANTI_ALIAS_FLAG);
@@ -13751,6 +13927,20 @@ public class MainActivity extends Activity {
                                     if (i > cur && center > sc) target = Math.max(target, i);
                                 }
                                 if (target != cur) {
+                                    // Q133（2.45，件二 A）：换位前先记各兄弟带的视觉顶
+                                    // （解析布局顶 tops127＋在飞补间的当前平移）——重排后
+                                    // 逐带回填「视觉顶－新布局顶」差值再 160ms 动画归零
+                                    // （FLIP）。旧版只有 remove/add＋LinearLayout 同帧重排：
+                                    // 被顶替的带每次过中线就整带瞬移一带高，进/出拖卡覆盖
+                                    // 区只在一帧内蹦变，钮与带面在拖卡边缘闪进闪出，即
+                                    // 真机所见「圆钮透过被拖卡显出来、衔接没衔接好」。
+                                    final int nB133 = parent.getChildCount();
+                                    final View[] sibs133 = new View[nB133];
+                                    final float[] visTop133 = new float[nB133];
+                                    for (int i = 0; i < nB133; i++) {
+                                        sibs133[i] = parent.getChildAt(i);
+                                        visTop133[i] = tops127[i] + sibs133[i].getTranslationY();
+                                    }
                                     parent.removeView(v);
                                     parent.addView(v, target);
                                     // Q127：新布局顶解析重算（前置兄弟 margin+高＋自身 margin），
@@ -13765,7 +13955,31 @@ public class MainActivity extends Activity {
                                     int newTop127 = ns127 + vlp127.topMargin;
                                     v.setTranslationY(v.getTranslationY() + (dragTop127[0] - newTop127));
                                     dragTop127[0] = newTop127;
+                                    // Q133：兄弟带 FLIP 回填（拖卡本体不参与，继续走
+                                    // 上面的 Q127 解析账本）；中途反向再换位时按当时
+                                    // 视觉顶续接，先 cancel 在飞补间（保留当前平移值）。
+                                    int stack133 = parent.getPaddingTop();
                                     for (int i = 0; i < parent.getChildCount(); i++) {
+                                        View sib = parent.getChildAt(i);
+                                        LinearLayout.LayoutParams slp133 = (LinearLayout.LayoutParams) sib.getLayoutParams();
+                                        stack133 += slp133.topMargin;
+                                        int newTop133 = stack133;
+                                        stack133 += sib.getHeight();
+                                        if (sib == v) continue;
+                                        float vis133 = 0f; boolean found133 = false;
+                                        for (int j = 0; j < nB133; j++) if (sibs133[j] == sib) { vis133 = visTop133[j]; found133 = true; break; }
+                                        if (!found133) continue;
+                                        float off133 = vis133 - newTop133;
+                                        sib.animate().cancel();
+                                        if (Math.abs(off133) > 0.5f) {
+                                            sib.setTranslationY(off133);
+                                            sib.animate().translationY(0f).setDuration(160).setInterpolator(ANIM_ENTER).start();
+                                        } else if (sib.getTranslationY() != 0f) sib.setTranslationY(0f);
+                                    }
+                                    // Q133：编号只重写真正变的区间（旧版全列 setText
+                                    // 每次换位逐带触发重绘，也是换位帧的帮凶）
+                                    int loN133 = Math.min(cur, target), hiN133 = Math.max(cur, target);
+                                    for (int i = loN133; i <= hiN133 && i < parent.getChildCount(); i++) {
                                         View band = parent.getChildAt(i);
                                         if (band instanceof ViewGroup && ((ViewGroup) band).getChildCount() > 0) {
                                             View idxV = ((ViewGroup) band).getChildAt(0);
@@ -13792,6 +14006,7 @@ public class MainActivity extends Activity {
 
     void finishCustomDrag(View tile, int fromIdx, float dy) {
         tile.setOnTouchListener(null);
+        dragReorderTouchMs131 = android.os.SystemClock.uptimeMillis(); // Q133（2.45，件二 B）：落位 140ms 动画也圈进背板冻结窗——旧版只在 MOVE 打点，拖后停顿再松手时冻结已过期，落位中途 captureBackdropTick 整树重抓＋三遍模糊正撞动画帧
         // Q131（2.43，件一）：松手放下闪的落点收口——旧顺序是先把拖动态的蓝框/圆角
         // 裁切/18dp elevation 一瞬全摘（影子与框先于带体消失），再把整列每条带的
         // 背景 Drawable 全量重造一遍，同时缩放/平移还在 140ms 动画里：三股变化挤在
@@ -13800,10 +14015,21 @@ public class MainActivity extends Activity {
         // （移动区间及两侧各一），原位拖回恒零重染。数据落位口径（Q7 子序优先）不变。
         final Object dragBg131 = tile.getTag();
         tile.setTag(null);
+        final Drawable dragBgNow133 = tile.getBackground(); // 拖动态背景实例（蓝框描边就地写在此实例上）
         final int gen131 = ++customDragGen131;
         final Runnable frameOff131 = () -> {
-            if (gen131 == customDragGen131 && dragBg131 instanceof Drawable)
-                setCustomTileDragFrame(tile, false, (Drawable) dragBg131);
+            if (gen131 != customDragGen131) return;
+            // Q133（2.45，件二 B）：落位重衔接已把被拖带背景换成新位次的带渐变
+            // （无蓝框）时，终点不许再回换拖前旧背景——旧实例的首/末圆角旗标停在
+            // 旧位次，换回即在动画终点帧跳一次几何，正是 2.43 真机仍报「放下闪」
+            // 的一帧。当前背景仍是拖动态实例才走旧收尾（还原原背景并清描边）；
+            // 已被重衔接换新时终点只收海拔与裁切两项。
+            if (tile.getBackground() == dragBgNow133) {
+                if (dragBg131 instanceof Drawable) setCustomTileDragFrame(tile, false, (Drawable) dragBg131);
+            } else {
+                if (Build.VERSION.SDK_INT >= 21) tile.setElevation(0);
+                tile.setClipToOutline(false);
+            }
         };
         if (mineScrollView != null) mineScrollView.requestDisallowInterceptTouchEvent(false);
         lastDragEndAt = System.currentTimeMillis();
@@ -19506,6 +19732,7 @@ public class MainActivity extends Activity {
             "· 各银行官网公开的产品页、收费标准与权益说明（卡面、费率与权益以发卡行最新公布为准）",
             "· 银联、Visa、Mastercard、American Express、JCB 等卡组织公开资料",
             "· 卡盒数据仓（cards.json）随版本经 OTA 更新，更新前会先提示、经确认才应用",
+            "· 部分卡面图为 AI 重绘示意，非银行官方卡面（详情页标有「AI 重绘」小标），官方卡面以发卡行官方公布为准", // Q133（2.45，件四）
             "· 版式与字段结构研读参考：公开卡片资料站与开源卡包类应用（仅研读结构与口径，代码全部手写，未抄录）"
         };
         for (String ln : srcLines) {
