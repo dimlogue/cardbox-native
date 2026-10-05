@@ -16984,8 +16984,10 @@ public class MainActivity extends Activity {
             if (open && boxRef127[0] != null && g.id.equals(glossaryAnimId123)) {
                 glossaryAnimId123 = null;
                 final LinearLayout fb127 = boxRef127[0];
+                final TextView fbd127 = bdRef127[0];
+                final View fnote127 = noteRef127[0];
                 foldBusy130.add(g.id); // Q130（件十）：深链入场动画在途同上锁，落定自动放行
-                fb127.post(() -> foldHeightSpring(fb127, true, null, null, new SpringDriver(), () -> foldBusy130.remove(g.id)));
+                fb127.post(() -> enterGlossaryCard139(card, fbd127, fb127, fnote127, () -> foldBusy130.remove(g.id))); // Q139：入场改整卡折展，与点击展开同一机制（旧为附加盒单独 foldHeightSpring）
             }
             // Q123（件一）：开合触发收窄——只有「展开/收起」小钮能触发展开/收起，
             // 卡身点击无动作。Q127：收起＝附加盒弹簧收到 0 落定摘除＋正文翻回 2 行，
@@ -17002,55 +17004,46 @@ public class MainActivity extends Activity {
                     glossaryOpen.remove(g.id);
                     arrow.setText("展开 ›");
                     foldBusy130.add(g.id);
-                    final LinearLayout boxNow127 = boxRef127[0];
-                    // Q131：同资讯条——收起前锚记（盒与尾注同摘，总高并计），落定回锚
-                    final int foldSvY131g = newsScroll != null ? newsScroll.getScrollY() : 0;
-                    final int foldBoxTop131g = (boxNow127 != null && newsScroll != null) ? contentTopInScroll131(boxNow127, newsScroll) : 0;
-                    final int foldBoxH131g = (boxNow127 != null ? boxNow127.getHeight() : 0)
-                        + (noteRef127[0] != null ? noteRef127[0].getHeight() : 0);
-                    if (boxNow127 != null) foldHeightSpring(boxNow127, false, null, () -> {
-                        // Q127：落定摘附加盒＋尾注，正文翻回 2 行截断——存活视图与初始
-                        // 渲染同一套量测，卡高精确落回初始收起态（不多露一行、不留残高）
-                        card.removeView(boxNow127);
+                    // Q139：整卡收拢（collapseGlossaryCard139）——内容保持展开态、卡高
+                    // 钉住单调收拢、落定单帧内摘盒摘注＋正文复 2 行，全程不写滚动位。
+                    // 废旧法：只对附加盒走 foldHeightSpring、正文留到落定才一步塌回，
+                    // 再加 Q131 回锚（只按盒高计、漏正文塌量）二次修正——双跳根源。
+                    collapseGlossaryCard139(card, bdRef127[0], boxRef127[0], noteRef127[0], () -> {
                         boxRef127[0] = null;
-                        if (noteRef127[0] != null) { card.removeView(noteRef127[0]); noteRef127[0] = null; }
-                        if (bdRef127[0] != null) { bdRef127[0].setMaxLines(2); bdRef127[0].setEllipsize(android.text.TextUtils.TruncateAt.END); }
-                        restoreFoldScroll131(newsScroll, foldSvY131g, foldBoxTop131g, foldBoxH131g); // Q131
-                    }, new SpringDriver(), () -> foldBusy130.remove(g.id)); // Q127：逐卡独立驱动，不再共用一支互相摘任务
-                    else {
-                        if (noteRef127[0] != null) { card.removeView(noteRef127[0]); noteRef127[0] = null; }
-                        if (bdRef127[0] != null) { bdRef127[0].setMaxLines(2); bdRef127[0].setEllipsize(android.text.TextUtils.TruncateAt.END); }
+                        noteRef127[0] = null;
                         foldBusy130.remove(g.id);
-                    }
+                    });
                 } else {
                     glossaryOpen.add(g.id);
                     arrow.setText("收起 ‹");
                     foldBusy130.add(g.id);
-                    // Q127：就地挂附加盒弹簧升起，常驻正文同步放开行数（新闻同款时序），不整表重渲染
+                    // Q139：整卡展开（expandGlossaryCard139）——先量收起高、再装展开
+                    // 态、整卡钉高一支弹簧揭示、落定回 WRAP_CONTENT。废旧法：正文
+                    // setMaxLines 点击帧直跳＋附加盒随后单独 foldHeightSpring 补升。
                     // Q130（件十）：挂新盒前先摘可能残留的旧盒/旧尾注兜底——无论何种时序，本条恒只一份附加内容
                     if (boxRef127[0] != null) { card.removeView(boxRef127[0]); boxRef127[0] = null; }
                     if (noteRef127[0] != null) { card.removeView(noteRef127[0]); noteRef127[0] = null; }
-                    if (bdRef127[0] != null) { bdRef127[0].setMaxLines(Integer.MAX_VALUE); bdRef127[0].setEllipsize(null); }
                     final LinearLayout boxNew127;
+                    final int boxIdx139;
+                    View noteNew139 = null;
                     if (isTier127) {
                         boxNew127 = glossaryTierBox124(g);
-                        card.addView(boxNew127, bodyStart123);
+                        boxIdx139 = bodyStart123;
                     } else if (isMember127) {
                         boxNew127 = glossaryMemberBox124(g, selMember127);
-                        card.addView(boxNew127, bodyStart123);
-                        TextView note127 = glossaryNoteView124();
-                        noteRef127[0] = note127;
-                        card.addView(note127);
+                        boxIdx139 = bodyStart123;
+                        noteNew139 = glossaryNoteView124();
                     } else if (bdRef127[0] != null) {
                         LinearLayout nb127 = new LinearLayout(this);
                         nb127.setOrientation(LinearLayout.VERTICAL);
                         nb127.addView(glossaryNoteView124());
                         boxNew127 = nb127;
-                        card.addView(nb127);
-                    } else boxNew127 = null;
+                        boxIdx139 = -1;
+                    } else { boxNew127 = null; boxIdx139 = -1; }
                     if (boxNew127 != null) {
                         boxRef127[0] = boxNew127;
-                        boxNew127.post(() -> foldHeightSpring(boxNew127, true, null, null, new SpringDriver(), () -> foldBusy130.remove(g.id)));
+                        noteRef127[0] = noteNew139;
+                        expandGlossaryCard139(card, bdRef127[0], boxNew127, boxIdx139, noteNew139, () -> foldBusy130.remove(g.id));
                     } else foldBusy130.remove(g.id);
                 }
             });
@@ -19470,6 +19463,114 @@ public class MainActivity extends Activity {
         det.setVisibility(View.VISIBLE);
         card.measure(wSpec, uSpec);
         animateNewsCard135(card, closedH, card.getMeasuredHeight(), onDone);
+    }
+
+    // Q139（2.50）：常识（glossary）折展整卡化——把 Q135 展开形态＋Q138 收起形态
+    // （2.49 已在资讯上线验过）移植到常识侧，资讯五函数一字不动。取证（逐帧走旧
+    // 路径）：点名三条（支付安全/卡片信息/费用与使用）均为成员型词条，展开旧法在
+    // 点击帧即把常驻正文 bd 的 setMaxLines 瞬时放开（2 行→全文一步直跳）＋尾注
+    // 整高直挂，附加盒（成员盒）再走 foldHeightSpring 单独补升——首帧突变＋两段
+    // 式；收起旧法只对附加盒走弹簧（正文全程保持展开行数），落定回调里才摘盒摘
+    // 注＋正文一步塌回 2 行（末帧大跳，量正比于正文展开行数），且 restoreFoldScroll131
+    // 回锚只按盒＋尾注高计、漏掉正文塌量 → ScrollView 自行钳位后再被 scrollTo 二次
+    // 修正（回锚双计账）。资讯侧同一家族的病在 2.47/2.49 已逐条治过，常识侧保留了
+    // 旧形态（用户此前测时未点到长正文成员条，23:48 截图点名三条正式立项）。改法：
+    // 常识自带一套同构函数（量宽/量高/钉高弹簧与资讯逐行同式，弹簧件
+    // Spring1D/SpringDriver/SPRING_FOLD_* 共用不改）：展开先量收起高→装展开态
+    // （正文放行＋挂附加盒/尾注）→整卡钉高一支弹簧揭示、落定回 WRAP_CONTENT；
+    // 收起先临时量收起高（同步翻收起态量高再翻回，无帧插入）→内容保持展开态钉高
+    // 单调收拢→落定单帧内摘盒摘注、正文复 2 行、回 WRAP_CONTENT，翻态后自然高与
+    // 落定卡高逐像素一致；收起全程不写滚动位（Q131 常识回锚废止，restoreFoldScroll131
+    // 本体保留不删）。深链入场同改整卡折展。foldHeightSpring 本体与其余调用点
+    // （玻璃从属块/功能启用/我的卡片/详情盒）一字未动；条目文案、排版、成员/档位
+    // 切换的整表重渲口径、foldBusy130 防叠加放时机逐字沿用；资讯六条零牵连。
+    int glossaryCardWidthSpec139(final LinearLayout card) {
+        int w = card.getWidth();
+        if (w <= 0 && card.getParent() instanceof View) {
+            View p = (View) card.getParent();
+            w = p.getWidth() - p.getPaddingLeft() - p.getPaddingRight();
+        }
+        if (w <= 0) w = getResources().getDisplayMetrics().widthPixels - dp(this, 28);
+        return View.MeasureSpec.makeMeasureSpec(w, View.MeasureSpec.EXACTLY);
+    }
+
+    void animateGlossaryCard139(final LinearLayout card, final int fromH, final int toH, final Runnable onDone) {
+        final ViewGroup.LayoutParams clp = card.getLayoutParams();
+        if (clp == null || toH <= 0 || fromH <= 0 || Math.abs(toH - fromH) < 1) {
+            if (clp != null) { clp.height = ViewGroup.LayoutParams.WRAP_CONTENT; card.setLayoutParams(clp); }
+            if (onDone != null) onDone.run();
+            return;
+        }
+        clp.height = fromH; card.setLayoutParams(clp);
+        final Spring1D s = new Spring1D(fromH);
+        new SpringDriver().drive(s, toH, SPRING_FOLD_K, SPRING_FOLD_Z,
+            x -> { int h = Math.round(x); if (clp.height != h) { clp.height = h; card.setLayoutParams(clp); } },
+            () -> { clp.height = ViewGroup.LayoutParams.WRAP_CONTENT; card.setLayoutParams(clp); if (onDone != null) onDone.run(); });
+    }
+
+    // 展开：调用前卡须处于收起态（正文 2 行、无附加盒/尾注）；box/boxIdx 为待挂的
+    // 附加盒与插入位（档位/成员盒=bodyStart123、单条尾注盒=-1 挂尾），note 为成员
+    // 卡的独立尾注（挂尾），其余形态传 null。装态顺序与旧渲染最终层级逐位一致。
+    void expandGlossaryCard139(final LinearLayout card, final TextView bd,
+                               final LinearLayout box, final int boxIdx, final View note,
+                               final Runnable onDone) {
+        final int wSpec = glossaryCardWidthSpec139(card);
+        final int uSpec = View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED);
+        int closedH = card.getHeight();
+        if (closedH <= 0) { card.measure(wSpec, uSpec); closedH = card.getMeasuredHeight(); }
+        if (bd != null) { bd.setMaxLines(Integer.MAX_VALUE); bd.setEllipsize(null); }
+        if (box != null) { if (boxIdx >= 0) card.addView(box, boxIdx); else card.addView(box); }
+        if (note != null) card.addView(note);
+        card.measure(wSpec, uSpec);
+        animateGlossaryCard139(card, closedH, card.getMeasuredHeight(), onDone);
+    }
+
+    // 收起：box/note 为当前挂着的附加盒与独立尾注（同实例摘下、量高、原位挂回，
+    // 动画全程内容保持展开态）；落定单帧内才真正摘除并把正文复 2 行。
+    void collapseGlossaryCard139(final LinearLayout card, final TextView bd,
+                                 final LinearLayout box, final View note,
+                                 final Runnable onDone) {
+        if (box == null && note == null && bd == null) { if (onDone != null) onDone.run(); return; }
+        final int wSpec = glossaryCardWidthSpec139(card);
+        final int uSpec = View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED);
+        int curH = card.getHeight();
+        if (curH <= 0) { card.measure(wSpec, uSpec); curH = card.getMeasuredHeight(); }
+        final int boxIdx = box != null ? card.indexOfChild(box) : -1;
+        final int noteIdx = note != null ? card.indexOfChild(note) : -1;
+        if (box != null) card.removeView(box);
+        if (note != null) card.removeView(note);
+        if (bd != null) { bd.setMaxLines(2); bd.setEllipsize(android.text.TextUtils.TruncateAt.END); }
+        card.measure(wSpec, uSpec);
+        final int closedH = card.getMeasuredHeight();
+        if (bd != null) { bd.setMaxLines(Integer.MAX_VALUE); bd.setEllipsize(null); }
+        if (box != null) { if (boxIdx >= 0) card.addView(box, boxIdx); else card.addView(box); }
+        if (note != null) { if (noteIdx >= 0) card.addView(note, noteIdx); else card.addView(note); }
+        animateGlossaryCard139(card, curH, closedH, () -> {
+            if (box != null) card.removeView(box);
+            if (note != null) card.removeView(note);
+            if (bd != null) { bd.setMaxLines(2); bd.setEllipsize(android.text.TextUtils.TruncateAt.END); }
+            if (onDone != null) onDone.run();
+        });
+    }
+
+    // 深链入场：卡以展开态渲染完成，临时翻收起态量高再翻回，整卡钉高升起。
+    void enterGlossaryCard139(final LinearLayout card, final TextView bd,
+                              final LinearLayout box, final View note,
+                              final Runnable onDone) {
+        final int wSpec = glossaryCardWidthSpec139(card);
+        final int uSpec = View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED);
+        final int boxIdx = box != null ? card.indexOfChild(box) : -1;
+        final int noteIdx = note != null ? card.indexOfChild(note) : -1;
+        if (box != null) card.removeView(box);
+        if (note != null) card.removeView(note);
+        if (bd != null) { bd.setMaxLines(2); bd.setEllipsize(android.text.TextUtils.TruncateAt.END); }
+        card.measure(wSpec, uSpec);
+        final int closedH = card.getMeasuredHeight();
+        if (bd != null) { bd.setMaxLines(Integer.MAX_VALUE); bd.setEllipsize(null); }
+        if (box != null) { if (boxIdx >= 0) card.addView(box, boxIdx); else card.addView(box); }
+        if (note != null) { if (noteIdx >= 0) card.addView(note, noteIdx); else card.addView(note); }
+        card.measure(wSpec, uSpec);
+        animateGlossaryCard139(card, closedH, card.getMeasuredHeight(), onDone);
     }
 
     void renderNews() {
