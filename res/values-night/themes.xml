@@ -5,6 +5,8 @@
 <resources>
     <style name="Theme.CardDB" parent="@android:style/Theme.Material.Light.NoActionBar">
         <item name="android:windowBackground">#121B2A</item>
+        <!-- Q151（N16）：深档同补 SplashScreen 背景（与本档窗底同色），见浅档注释 -->
+        <item name="android:windowSplashScreenBackground">#121B2A</item>
         <item name="android:statusBarColor">#121B2A</item>
         <item name="android:navigationBarColor">#121B2A</item>
     </style>

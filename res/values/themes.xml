@@ -5,6 +5,10 @@
 <resources>
     <style name="Theme.CardDB" parent="@android:style/Theme.Material.Light.NoActionBar">
         <item name="android:windowBackground">#E2EDF9</item>
+        <!-- Q151（N16）：Android 12+ 启动屏走系统 SplashScreen，其背景默认取
+             colorBackground 回落白——windowBackground 设了雾蓝真机仍先白闪正源
+             在此。补 windowSplashScreenBackground 与窗底同色，点图标第一眼即雾蓝。 -->
+        <item name="android:windowSplashScreenBackground">#E2EDF9</item>
         <item name="android:statusBarColor">#E2EDF9</item>
         <item name="android:navigationBarColor">#E2EDF9</item>
     </style>
