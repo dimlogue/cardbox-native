@@ -17844,8 +17844,15 @@ public class MainActivity extends Activity {
         return "";
     }
     int showcaseBgIdx() {
-        int i = prefs == null ? 0 : prefs.getInt("showcase_bg", 0);
-        return (i >= 0 && i < SHOWCASE_BGS.length) ? i : 0;
+        if (prefs == null) return 0;
+        if (prefs.contains("showcase_bg")) {
+            int i = prefs.getInt("showcase_bg", 0);
+            return (i >= 0 && i < SHOWCASE_BGS.length) ? i : 0;
+        }
+        // Q149（2.60，深色跟随）：从未手动选过展柜底色时，深色模式默认取色点最深
+        // 一档（SHOWCASE_BGS 末位 #101014），不再浅底晃眼（用户 05:00 定）；手动
+        // 点过任一色点即落 showcase_bg、此后逐字按存档，浅色默认仍 0 档不变。
+        return darkEff() ? SHOWCASE_BGS.length - 1 : 0;
     }
     boolean showcaseDarkBg() { return showcaseBgIdx() >= 4; }
     int showcaseOnBg() { return showcaseDarkBg() ? Color.WHITE : Color.rgb(0x1C, 0x1C, 0x1E); }
@@ -17952,20 +17959,20 @@ public class MainActivity extends Activity {
         closeBtn.setLayoutParams(cbLp);
         closeBtn.setOnClickListener(v -> { haptic(); closeShowcase(); });
         head.addView(closeBtn);
-        // 主体
+        // 主体行：画布（左、占满余宽）＋右侧竖栏（Q149/2.60 用户 05:03 构图定案：
+        // 色点竖排＋密度竖拖＋按银行分组，底部旧控制栏撤除、画布吃回底部空间）
+        LinearLayout bodyRow149 = new LinearLayout(this);
+        bodyRow149.setOrientation(LinearLayout.HORIZONTAL);
+        col.addView(bodyRow149, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
         showcaseBody = new FrameLayout(this);
         showcaseBody.setClipChildren(true);
-        col.addView(showcaseBody, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
-        // 底部控制：背景色点 + 按银行分组 + 平放密度（只在平放显示）
-        LinearLayout ctrl = new LinearLayout(this);
-        ctrl.setClickable(true); // Q127：控件区优先——色点/滑杆之间的空隙也由控件区接住，不许漏给下层
-        ctrl.setOrientation(LinearLayout.VERTICAL);
-        ctrl.setPadding(dp(this, 16), dp(this, 8), dp(this, 16), dp(this, 12) + navBarH());
-        col.addView(ctrl, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
-        LinearLayout ctrlRow = new LinearLayout(this);
-        ctrlRow.setOrientation(LinearLayout.HORIZONTAL);
-        ctrlRow.setGravity(Gravity.CENTER_VERTICAL);
-        ctrl.addView(ctrlRow, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        bodyRow149.addView(showcaseBody, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1f));
+        LinearLayout rail149 = new LinearLayout(this);
+        rail149.setOrientation(LinearLayout.VERTICAL);
+        rail149.setGravity(Gravity.CENTER);
+        rail149.setClickable(true); // Q127 口径沿用：控件区优先——色点/滑杆之间的空隙也由竖栏接住，不许漏给下层画布
+        rail149.setPadding(dp(this, 6), dp(this, 10), dp(this, 4), dp(this, 10) + navBarH());
+        bodyRow149.addView(rail149, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.MATCH_PARENT));
         final java.util.List<View> bgDots = new ArrayList<>();
         for (int i = 0; i < SHOWCASE_BGS.length; i++) {
             final int bi = i;
@@ -17976,7 +17983,7 @@ public class MainActivity extends Activity {
             dg.setStroke(dp(this, bi == showcaseBgIdx() ? 2 : 1), showcaseDotStroke122(bi == showcaseBgIdx())); // Q122：描边随底对比
             dot.setBackground(dg);
             LinearLayout.LayoutParams dLp = new LinearLayout.LayoutParams(dp(this, 26), dp(this, 26));
-            if (i > 0) dLp.leftMargin = dp(this, 8);
+            if (i > 0) dLp.topMargin = dp(this, 9);
             dot.setLayoutParams(dLp);
             dot.setOnClickListener(v -> {
                 haptic();
@@ -17993,30 +18000,16 @@ public class MainActivity extends Activity {
                 updateShowcaseChips();
             });
             bgDots.add(dot);
-            ctrlRow.addView(dot);
+            rail149.addView(dot);
         }
-        View sp = new View(this);
-        ctrlRow.addView(sp, new LinearLayout.LayoutParams(0, 1, 1f));
-        showcaseGroupChip = tv(this, "按银行分组", 12.5f, showcaseOnBg(), true);
-        showcaseGroupChip.setGravity(Gravity.CENTER);
-        showcaseGroupChip.setPadding(dp(this, 12), dp(this, 7), dp(this, 12), dp(this, 7));
-        showcaseGroupChip.setOnClickListener(v -> {
-            haptic();
-            boolean g = prefs != null && prefs.getBoolean("showcase_bank_group", false);
-            if (prefs != null) prefs.edit().putBoolean("showcase_bank_group", !g).apply();
-            updateShowcaseChips(); buildShowcaseBody(true);
-        });
-        ctrlRow.addView(showcaseGroupChip);
+        // 密度段（竖拖，只在平放显示，显隐仍由 updateShowcaseChips 统一管）
         showcaseDensityRow = new LinearLayout(this);
-        ((LinearLayout) showcaseDensityRow).setOrientation(LinearLayout.HORIZONTAL);
-        ((LinearLayout) showcaseDensityRow).setGravity(Gravity.CENTER_VERTICAL);
-        LinearLayout.LayoutParams drLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        drLp.topMargin = dp(this, 10);
+        ((LinearLayout) showcaseDensityRow).setOrientation(LinearLayout.VERTICAL);
+        ((LinearLayout) showcaseDensityRow).setGravity(Gravity.CENTER_HORIZONTAL);
+        LinearLayout.LayoutParams drLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        drLp.topMargin = dp(this, 16);
         showcaseDensityRow.setLayoutParams(drLp);
-        ctrl.addView(showcaseDensityRow);
-        TextView dLab = tv(this, "密度", 12.5f, showcaseOnBg(), true); // Q122：标签用全量语义墨色保对比（旧 OnBg2 半透灰在浅底近隐形）
-        showcaseDensityLab = dLab;
-        ((LinearLayout) showcaseDensityRow).addView(dLab);
+        rail149.addView(showcaseDensityRow);
         android.widget.SeekBar seek = new android.widget.SeekBar(this);
         seek.setMax(70);
         float dens0 = prefs == null ? 1f : prefs.getFloat("showcase_density", 1f);
@@ -18027,13 +18020,40 @@ public class MainActivity extends Activity {
             public void onStopTrackingTouch(android.widget.SeekBar sb) {
                 float d = 0.6f + sb.getProgress() / 100f;
                 if (prefs != null) prefs.edit().putFloat("showcase_density", d).apply();
-                buildShowcaseBody(false);
+                // Q149：密度改就地改卡尺寸，不再整幅重建——旧 buildShowcaseBody(false)
+                // 先摘光卡再靠 post 重排，拖一次闪一帧卡山（用户 05:01 点名）。
+                applyShowcaseDensity149(d);
             }
         });
-        LinearLayout.LayoutParams skLp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
-        skLp.leftMargin = dp(this, 10);
-        ((LinearLayout) showcaseDensityRow).addView(seek, skLp);
+        // 竖拖：SeekBar 旋 -90° 套固定高盒（max 在上、往上拖变密），圆钮即系统 thumb
+        FrameLayout seekBox149 = new FrameLayout(this);
+        LinearLayout.LayoutParams sbxLp = new LinearLayout.LayoutParams(dp(this, 30), dp(this, 118));
+        seekBox149.setLayoutParams(sbxLp);
+        seek.setRotation(-90f);
+        FrameLayout.LayoutParams skLp = new FrameLayout.LayoutParams(dp(this, 118), dp(this, 30));
+        skLp.gravity = Gravity.CENTER;
+        seekBox149.addView(seek, skLp);
+        ((LinearLayout) showcaseDensityRow).addView(seekBox149);
+        TextView dLab = tv(this, "密度", 12.5f, showcaseOnBg(), true); // Q122：标签用全量语义墨色保对比（旧 OnBg2 半透灰在浅底近隐形）
+        showcaseDensityLab = dLab;
+        LinearLayout.LayoutParams dlLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        dlLp.topMargin = dp(this, 6);
+        dLab.setLayoutParams(dlLp);
+        ((LinearLayout) showcaseDensityRow).addView(dLab);
         showcaseSeek = seek;
+        showcaseGroupChip = tv(this, EN_MODE ? "Group\nby\nBank" : "按\n银\n行\n分\n组", 12.5f, showcaseOnBg(), true);
+        showcaseGroupChip.setGravity(Gravity.CENTER);
+        showcaseGroupChip.setPadding(dp(this, 7), dp(this, 10), dp(this, 7), dp(this, 10));
+        LinearLayout.LayoutParams gcLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        gcLp.topMargin = dp(this, 14);
+        showcaseGroupChip.setLayoutParams(gcLp);
+        showcaseGroupChip.setOnClickListener(v -> {
+            haptic();
+            boolean g = prefs != null && prefs.getBoolean("showcase_bank_group", false);
+            if (prefs != null) prefs.edit().putBoolean("showcase_bank_group", !g).apply();
+            updateShowcaseChips(); buildShowcaseBody(true);
+        });
+        rail149.addView(showcaseGroupChip);
         tintShowcaseSeek(); // Q122：滑杆轨道/圆点按当前底色描色
         updateShowcaseChips();
         content.addView(overlay, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
@@ -19261,12 +19281,16 @@ public class MainActivity extends Activity {
             return;
         }
         String mode = prefs == null ? "stack" : prefs.getString("showcase_mode", "stack");
-        // Q141（2.52，乙组③「卡片保持完整」）：平放时 showcaseBody 与其父 col 放开裁剪——
-        // 卡拖到屏面任意处整卡渲染不缺角（压头/压控区的视觉重叠，用户 00:13「无所谓」；
-        // 控区在 col 绘制序靠后、钮仍在上层）；堆叠式 clip 维持 true，与旧版一致。
+        // Q149（2.60，层级，用户 04:39 点名）：平放也恢复舞台裁剪——卡只在画布
+        // 矩形内绘制：放大/拖动时从顶栏与右侧竖栏底下过，不再窜上盖住关闭钮与
+        // 控件（推翻 Q141 乙组③「压头压控无所谓」的旧注，那批用户当时未见盖钮
+        // 之害）。裁的只是绘制溢出：落位零钳位、缩放 0.05–20、存位逐字恢复、
+        // Q143 满屏命中（＝画布全域）一字不变，卡身圆角与图面裁切口径亦不动
+        // ——卡不是被剪缺角，是滑到栏后被栏遮住，如卡片滑进柜格。栏的观感
+        // （半透染色/描边/色点）逐值未动、不垫任何白底不透明条。
         boolean canvas141 = "canvas".equals(mode);
-        showcaseBody.setClipChildren(!canvas141);
-        if (showcaseBody.getParent() instanceof ViewGroup) ((ViewGroup) showcaseBody.getParent()).setClipChildren(!canvas141);
+        showcaseBody.setClipChildren(true);
+        if (showcaseBody.getParent() instanceof ViewGroup) ((ViewGroup) showcaseBody.getParent()).setClipChildren(true);
         if (canvas141) buildShowcaseCanvas(items); else buildShowcaseStack(items);
         if (animate) {
             showcaseBody.setAlpha(0f);
@@ -19387,6 +19411,7 @@ public class MainActivity extends Activity {
             faces.add(face);
             face.setOnTouchListener(new View.OnTouchListener() {
                 float downRawX, downRawY; int startL, startT; boolean moved;
+                boolean pinchSeen149; // Q149：本卡上出现过第二指（双指接管，卡不許再跟手乱跑）
                 public boolean onTouch(View v, MotionEvent ev) {
                     // Q127（2.39）：命中范围只许等于看得见的范围——卡的布局框可伸出
                     // 舞台下沿，落在 showcaseBody 可见矩形之外的命中一律不接。
@@ -19403,11 +19428,13 @@ public class MainActivity extends Activity {
                         && ev.getRawX() >= bl140[0] && ev.getRawX() <= bl140[0] + showcaseBody.getWidth()
                         && ev.getRawY() >= bl140[1] && ev.getRawY() <= bl140[1] + showcaseBody.getHeight();
                     if (ev.getActionMasked() == MotionEvent.ACTION_DOWN && !inBody140) return false;
+                    if (ev.getActionMasked() == MotionEvent.ACTION_POINTER_DOWN) { pinchSeen149 = true; return true; } // Q149：第二指落下即双指接管，本卡 MOVE 全程旁观
+                    if (ev.getActionMasked() == MotionEvent.ACTION_MOVE && pinchSeen149) return true;
                     showcaseLastTouchMs = System.currentTimeMillis();
                     FrameLayout.LayoutParams lp = (FrameLayout.LayoutParams) v.getLayoutParams();
                     switch (ev.getActionMasked()) {
                         case MotionEvent.ACTION_DOWN:
-                            moved = false; showcaseDragging = true; showcaseTouching140 = true;
+                            moved = false; pinchSeen149 = false; showcaseDragging = true; showcaseTouching140 = true;
                             downRawX = ev.getRawX(); downRawY = ev.getRawY();
                             startL = lp.leftMargin; startT = lp.topMargin;
                             if (v.getParent() instanceof ViewGroup) ((ViewGroup) v.getParent()).bringChildToFront(v);
@@ -19437,6 +19464,7 @@ public class MainActivity extends Activity {
                         case MotionEvent.ACTION_CANCEL:
                             showcaseDragging = false; showcaseTouching140 = false;
                             showcaseLastTouchMs = System.currentTimeMillis();
+                            if (pinchSeen149) { pinchSeen149 = false; return true; } // Q149：捏合收尾——不点开、不存位（防卡被双指带飞后误记落点）
                             if (!moved && ev.getActionMasked() == MotionEvent.ACTION_UP && inBody140) {
                                 haptic();
                                 openShowcaseZoom(it); // Q122（件十四②）：点卡只放大看卡面（纯展示，无标记/再加/移除）
@@ -19455,11 +19483,17 @@ public class MainActivity extends Activity {
         // 空白处：拖动平移整画布 + 双指缩放（只动绘制层，不触发排版）
         final android.view.ScaleGestureDetector sgd = new android.view.ScaleGestureDetector(this,
             new android.view.ScaleGestureDetector.SimpleOnScaleGestureListener() {
+                // Q149（2.60，双指锚定）：锚点只在手势开始钉一次——旧版每个 onScale
+                // 都把 pivot 追到当前双指中心，中心一漂整幅画布跟着滑动，读作「卡片
+                // 到处飞」；钉死开始锚后，缩放纯绕锚，中心漂移不再平移画布。
+                @Override public boolean onScaleBegin(android.view.ScaleGestureDetector d) {
+                    world.setPivotX(d.getFocusX()); world.setPivotY(d.getFocusY());
+                    return true;
+                }
                 @Override public boolean onScale(android.view.ScaleGestureDetector d) {
                     // Q141（2.52，乙组②）：缩放护栏 0.05–20（近无限「一整个屏幕可以
                     // 无限缩小和放大」，只留防数值爆掉的极宽界）；旧 0.5–2.2 随拆墙作废。
                     float s = Math.max(0.05f, Math.min(20f, world.getScaleX() * d.getScaleFactor()));
-                    world.setPivotX(d.getFocusX()); world.setPivotY(d.getFocusY());
                     world.setScaleX(s); world.setScaleY(s);
                     return true;
                 }
@@ -19467,16 +19501,23 @@ public class MainActivity extends Activity {
         world.setOnTouchListener(new View.OnTouchListener() {
             float downRawX, downRawY, startTx, startTy;
             long showcaseLastTapMs122 = 0;
+            boolean panReanchor149; // Q149：双指抬起剩单指后，下一 MOVE 先重钉平移锚（旧锚作废，防一跳）
             public boolean onTouch(View v, MotionEvent ev) {
                 showcaseLastTouchMs = System.currentTimeMillis();
                 // Q140（2.51）：拖卡在途时空画布这只手只许旁观——旧写法第二指落在
                 // 空白处照样平移/喂缩放，卡与画布同吃一串事件互相抢位。
                 if (showcaseDragging) return true;
                 sgd.onTouchEvent(ev);
+                // Q149：指的增减在平移判据之前截住——第二指落下＝双指接管缩放；
+                // 任一指抬起后剩下的单指，锚已失真，置旗等下一 MOVE 重钉（见下）。
+                int act149 = ev.getActionMasked();
+                if (act149 == MotionEvent.ACTION_POINTER_DOWN) return true;
+                if (act149 == MotionEvent.ACTION_POINTER_UP) { panReanchor149 = true; return true; }
                 if (ev.getPointerCount() > 1) return true;
                 switch (ev.getActionMasked()) {
                     case MotionEvent.ACTION_DOWN:
                         showcaseTouching140 = true;
+                        panReanchor149 = false;
                         downRawX = ev.getRawX(); downRawY = ev.getRawY();
                         startTx = v.getTranslationX(); startTy = v.getTranslationY();
                         // Q122（件十六补）：双击画布一键回正（与点标题同一兜底）
@@ -19485,14 +19526,22 @@ public class MainActivity extends Activity {
                         showcaseLastTapMs122 = now122;
                         return true;
                     case MotionEvent.ACTION_MOVE:
+                        // Q149：双指收成单指的第一帧只重钉锚、不平移——旧版沿用最初
+                        // 落指的 downRaw/startT，手一抬画布直接跳一截（「抽搐」病灶）。
+                        if (panReanchor149) {
+                            panReanchor149 = false;
+                            downRawX = ev.getRawX(); downRawY = ev.getRawY();
+                            startTx = v.getTranslationX(); startTy = v.getTranslationY();
+                            return true;
+                        }
                         // Q122（件十六）：平移只留防丢底线（内容与视口至少重叠 64dp），其余自由跟手不回弹
                         v.setTranslationX(clampShowcasePanX(startTx + (ev.getRawX() - downRawX)));
                         v.setTranslationY(clampShowcasePanY(startTy + (ev.getRawY() - downRawY)));
                         return true;
                     case MotionEvent.ACTION_UP:
                     case MotionEvent.ACTION_CANCEL:
-                    case MotionEvent.ACTION_POINTER_UP:
-                        if (ev.getPointerCount() <= 1) showcaseTouching140 = false;
+                        panReanchor149 = false;
+                        showcaseTouching140 = false;
                         return true;
                 }
                 return true;
@@ -19576,6 +19625,35 @@ public class MainActivity extends Activity {
         });
         showcaseLastTouchMs = System.currentTimeMillis();
         startShowcaseDrift();
+    }
+
+    /** Q149（2.60）：密度改尺寸就地生效（竖栏滑杆松手调用）——旧路径 buildShowcaseBody
+     * 全摘重建：卡先齐聚左上（落位靠 post 才排）、再整批同步解码新尺寸桶，拖一次闪
+     * 一帧（用户 05:01「拖动的话会闪图」）。改：画布在场时只改各卡 LayoutParams 的
+     * 宽高（内图 MATCH_PARENT 随框缩放，落位/存位/margin 一概不碰），同步扩内容
+     * 矩形；未分组流式排布位不重排（与旧版的唯一差别：旧密度下流式占位下次重建
+     * 才按新尺寸续排，存位逐字恢复口径不变）。堆叠模式滑杆不可见、调不到此处；
+     * 兜底仍走全量重建，不为密度改冒新路径。 */
+    void applyShowcaseDensity149(float dens) {
+        if (showcaseWorld == null || showcaseBody == null) { buildShowcaseBody(false); return; }
+        String mode149 = prefs == null ? "stack" : prefs.getString("showcase_mode", "stack");
+        if (!"canvas".equals(mode149)) { buildShowcaseBody(false); return; }
+        final int faceW = Math.round(dp(this, 190) * Math.max(0.6f, Math.min(1.3f, dens)));
+        final int faceH = Math.round(faceW / 1.586f);
+        final int m149 = dp(this, 10);
+        for (int i = 0; i < showcaseWorld.getChildCount(); i++) {
+            View ch = showcaseWorld.getChildAt(i);
+            if (!(ch.getTag() instanceof String)) continue; // 只动卡面（分组小字无 tag）
+            if (!(ch.getLayoutParams() instanceof FrameLayout.LayoutParams)) continue;
+            FrameLayout.LayoutParams lp = (FrameLayout.LayoutParams) ch.getLayoutParams();
+            if (lp.width == faceW && lp.height == faceH) continue;
+            lp.width = faceW; lp.height = faceH;
+            ch.setLayoutParams(lp);
+            showcaseMinX = Math.min(showcaseMinX, lp.leftMargin - m149);
+            showcaseMinY = Math.min(showcaseMinY, lp.topMargin - m149);
+            showcaseMaxX = Math.max(showcaseMaxX, lp.leftMargin + faceW + m149);
+            showcaseMaxY = Math.max(showcaseMaxY, lp.topMargin + faceH + m149);
+        }
     }
 
     void openExtendedSearch() {
