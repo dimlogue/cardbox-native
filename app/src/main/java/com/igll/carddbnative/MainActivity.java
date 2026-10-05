@@ -17092,7 +17092,7 @@ public class MainActivity extends Activity {
         }
         for (final GlossaryItem g : glossaryGrouped123()) {
             final boolean open = glossaryOpen.contains(g.id);
-            LinearLayout card = new LinearLayout(this);
+            LinearLayout card = new FoldClipLayout144(this, panelR143(14f)); // Q144：折展动画期逐帧自裁宿主（半径与卡面 rippleBg 收口同值）
             card.setOrientation(LinearLayout.VERTICAL);
             card.setBackground(rippleBg(Color.WHITE, 14));
             card.setClipToOutline(true);
@@ -19652,10 +19652,11 @@ public class MainActivity extends Activity {
             return;
         }
         clp.height = fromH; card.setLayoutParams(clp);
+        setFoldClip144(card, true); // Q144：动画在途逐帧自裁（落定回调与回 WRAP 同帧摘除）
         final Spring1D s = new Spring1D(fromH);
         new SpringDriver().drive(s, toH, SPRING_FOLD_K, SPRING_FOLD_Z,
             x -> { int h = Math.round(x); if (clp.height != h) { clp.height = h; card.setLayoutParams(clp); } },
-            () -> { clp.height = ViewGroup.LayoutParams.WRAP_CONTENT; card.setLayoutParams(clp); if (onDone != null) onDone.run(); });
+            () -> { setFoldClip144(card, false); clp.height = ViewGroup.LayoutParams.WRAP_CONTENT; card.setLayoutParams(clp); if (onDone != null) onDone.run(); });
     }
 
     void expandNewsCard135(final LinearLayout card, final TextView ttl, final TextView sm,
@@ -19706,6 +19707,32 @@ public class MainActivity extends Activity {
     // 深链入场只增高不减、scrollY 恒合法，无病不动（经查落定位同理恒等）。
     // 已知取舍：锚以点收起瞬间为准，动画约 0.4s 内手动滚动会被落定锚覆盖一次
     // （foldBusy 已锁本条点击，与 Q131 当年取舍同）。
+    // Q144（2.55）：折展动画在途逐帧自裁的折叠卡宿主——资讯卡（16dp）与常识卡
+    // （14dp）共用，半径传建卡时卡面 rippleBg 经 autoR143 收口后的同值（panelR143
+    // 分档），裁切形状与框体圆角逐像素同路。foldClip144 仅由两 animate 驱动武装，
+    // 落定回调内与回 WRAP_CONTENT 同一帧摘除；静止态不裁切、卡渲染路径零改变。
+    class FoldClipLayout144 extends LinearLayout {
+        boolean foldClip144 = false;
+        final float clipRDp144;
+        private final android.graphics.Path foldClipPath144 = new android.graphics.Path();
+        FoldClipLayout144(Context c, float clipRDp) { super(c); clipRDp144 = clipRDp; }
+        @Override protected void dispatchDraw(android.graphics.Canvas canvas) {
+            if (!foldClip144) { super.dispatchDraw(canvas); return; }
+            int save144 = canvas.save();
+            float r144 = dp(getContext(), clipRDp144);
+            foldClipPath144.reset();
+            foldClipPath144.addRoundRect(0f, 0f, getWidth(), getHeight(), r144, r144,
+                android.graphics.Path.Direction.CW);
+            canvas.clipPath(foldClipPath144);
+            super.dispatchDraw(canvas);
+            canvas.restoreToCount(save144);
+        }
+    }
+
+    void setFoldClip144(final LinearLayout card, final boolean on144) {
+        if (card instanceof FoldClipLayout144) ((FoldClipLayout144) card).foldClip144 = on144;
+    }
+
     int[] captureFoldScroll142(final LinearLayout card) {
         if (newsScroll == null) return null;
         return new int[]{ newsScroll.getScrollY(), contentTopInScroll131(card, newsScroll) };
@@ -19800,10 +19827,11 @@ public class MainActivity extends Activity {
             return;
         }
         clp.height = fromH; card.setLayoutParams(clp);
+        setFoldClip144(card, true); // Q144：与资讯同治（动画在途逐帧自裁，落定同帧摘除）
         final Spring1D s = new Spring1D(fromH);
         new SpringDriver().drive(s, toH, SPRING_FOLD_K, SPRING_FOLD_Z,
             x -> { int h = Math.round(x); if (clp.height != h) { clp.height = h; card.setLayoutParams(clp); } },
-            () -> { clp.height = ViewGroup.LayoutParams.WRAP_CONTENT; card.setLayoutParams(clp); if (onDone != null) onDone.run(); });
+            () -> { setFoldClip144(card, false); clp.height = ViewGroup.LayoutParams.WRAP_CONTENT; card.setLayoutParams(clp); if (onDone != null) onDone.run(); });
     }
 
     // 展开：调用前卡须处于收起态（正文 2 行、无附加盒/尾注）；box/boxIdx 为待挂的
@@ -19900,7 +19928,7 @@ public class MainActivity extends Activity {
             newsListBox.addView(gh123, ghp123);
             for (final NewsItem n : ge123.getValue()) {
             final boolean open = newsOpen.contains(n.id);
-            LinearLayout card = new LinearLayout(this);
+            LinearLayout card = new FoldClipLayout144(this, panelR143(16f)); // Q144：折展动画期逐帧自裁宿主（半径与卡面 rippleBg 收口同值）
             card.setOrientation(LinearLayout.VERTICAL);
             card.setBackground(rippleBg(Color.WHITE, 16));
             card.setClipToOutline(true); softShadow(card, 5); // Q94 铺开：资讯卡柔面＋柔影
