@@ -2298,6 +2298,10 @@ public class MainActivity extends Activity {
     boolean backdropCapturing = false;
     boolean backdropHookInstalled = false;
     long backdropLastCapMs = 0;
+    // Q130（2.42，件五/八）：frozen 玻璃窗通用冻结武装位——无 frozen 窗在场时为 true；
+    // 任一 frozen 窗从无到有只放行一帧 captureBackdrop 抓冻结帧后置 false，窗在场期间
+    // tick 不再整树重抓＋三遍模糊。false→无窗时自然重新武装（见 captureBackdropTick 尾段）。
+    boolean frozenFrameArmed130 = true;
     // Q98：滚动冻结与失败自愈的状态位——lastScrollEventMs 由根视图滚动监听打点，
     // preDraw 抓图在滚动活跃期（末次滚动事件 200ms 内）跳过，背板稳定冻结、滚动
     // 零采样不抢主线程，停稳由既有 650ms 防抖强制重抓一帧；backdropFailStreak 数
@@ -2448,11 +2452,25 @@ public class MainActivity extends Activity {
         // Q99：屏上只有 live 玻璃且文档条带有效时，屏幕快照不必逐帧重抓——live 玻璃走
         // 条带按 scrollY 同帧取景；重抓整根只剩抢主线程。有 frozen 玻璃（底表/弹层）
         // 或无长滚动页（条带无源）时照旧抓屏幕背板；条带失效则顺手补抓条带。
-        if (!anyFrozenGlassShown() && bandScroll() != null) {
-            if (bandBmp == null || bandBmpSv != bandScroll()) scheduleBandCapture();
-            return;
+        // Q130（2.42，件五/八）：frozen 窗通用冻结——旧口径下任一 frozen 窗在场时每个
+        // preDraw 都整树软件绘制＋三遍盒式模糊（50ms 节流），与约 280–400ms 的进场动画
+        // 抢主线程，正是「＋」加入底窗/常识窗/筛选窗等弹窗出场顿、动画僵的共同根因。详情
+        // （Q118 detailCard 守卫）与 ⋯ 菜单（Q102 moreMenuBackdropFrozen）已有专属冻结，
+        // 现泛化到全部 frozen 窗：从无到有只放行一帧抓冻结帧（与窗自带的直接结构性抓帧
+        // 同帧同图、互不叠加），之后冻结至无窗在场再重新武装。玻璃参数/默认值/硬件录制
+        // （recordHwBackdrop）一字未动，只改执行时机。
+        boolean frozenShown130 = anyFrozenGlassShown();
+        if (!frozenShown130) {
+            frozenFrameArmed130 = true;
+            if (bandScroll() != null) {
+                if (bandBmp == null || bandBmpSv != bandScroll()) scheduleBandCapture();
+                return;
+            }
+        } else if (!frozenFrameArmed130) {
+            return; // 冻结帧已抓：窗在场期间（含进场动画全程）tick 零重抓
         }
         captureBackdrop();
+        if (frozenShown130) frozenFrameArmed130 = false;
     }
 
     /** Q98：背板失败计数——单次抓图/绘制异常只丢这一帧（旧帧继续垫着），连续 3 次
@@ -5146,6 +5164,11 @@ public class MainActivity extends Activity {
         // 滚动时内容从半透明条下隐约滑过；最后一项靠各页内衬的底部留白滚出条外。
         content.setPadding(0, 0, 0, 0);
         content.setClipToPadding(false);
+        // Q130（件九）：放宽 content 对直接子级的裁剪——筛选钮角标按混合版口径外探 4dp
+        // 骑在钮角上，默认 clipChildren 会按钮体边界把角标圆切平一截（用户真机图证）。
+        // 只放宽这一层：页宿主/各窗的内部裁剪一律不动，钮本体位置/大小/样式与角标
+        // 颜色字号一字未动，角标完整露出。
+        content.setClipChildren(false);
         root.addView(content, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         // Q120（2.33）：五页签常驻宿主——页面只建一次挂在这里，切换只显隐＋绘制层过渡，
         // 切走不拆、切回不重建（首页 365 张全量行双向切零重搭）。FAB/窗/浮层仍挂
@@ -5157,7 +5180,17 @@ public class MainActivity extends Activity {
         applyAppearanceChrome(); // Q72：先套色再显页，切深色不闪白
         // Q29：滚动只重置停稳计时、滚动中零截图（scheduleGlassRefresh 内 650ms 防抖，见其注释）
         // Q41：滚动期条带平移跟随（只 Canvas 绘制、不重采样，与停稳计时互不干扰）
-        root.getViewTreeObserver().addOnScrollChangedListener(() -> { lastScrollEventMs = android.os.SystemClock.uptimeMillis(); scheduleGlassRefresh(); followBandScroll(); invalidateLiveGlass(); }); // Q98 打点供背板滚动冻结判定；Q99 live 玻璃同帧重采样
+        root.getViewTreeObserver().addOnScrollChangedListener(() -> {
+            lastScrollEventMs = android.os.SystemClock.uptimeMillis(); // Q98 打点供背板滚动冻结判定
+            // Q130（件七）：详情窗在场时滚动全是窗内 detailScroll 的事件——玻璃链在此
+            // 全程冻结（tick/refreshLiveGlass 已有 detailCard 守卫、bandScroll 恒 null、
+            // live 玻璃全藏在窗后），scheduleGlassRefresh 的逐事件摘挂防抖＋
+            // followBandScroll/invalidateLiveGlass 的全表迭代纯属无效记账、逐帧压主线程。
+            // 窗内只留时间戳打点，三件玻璃记账一律跳过；详情正文开窗一次建成、滚动不
+            // 重建/不重测，此处只改执行路径，布局/文案/动效口径与默认值一字未动。
+            if (detailCard != null) return;
+            scheduleGlassRefresh(); followBandScroll(); invalidateLiveGlass(); // Q99 live 玻璃同帧重采样
+        });
 
         showTab("home");
         // Q121（2.33 插队，站规矩复犯纠正）：「启动时自动检测更新」旧默认 true——
@@ -5283,7 +5316,16 @@ public class MainActivity extends Activity {
         FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         lp.leftMargin = dp(this, 16);
         lp.rightMargin = dp(this, 16);
-        if (detailView != null && detailView.getParent() != null) {
+        // Q130（件十三）：瞬时提示位置二选一（设置·外观「瞬时提示位置」，默认顶部＝
+        // 2.41 现行行为逐位不变）。全 App 提示只经此一处出口，选底部即全跟随：贴底栏
+        // 上方 106dp+手势区（非详情现行底挂位、原就是为悬浮钮列让出的安全线），详情内
+        // 同值清开窗底固定蓝钮（钮顶沿≈62dp+navBarH）、且提示挂 rootView 最前层不被
+        // 底窗遮挡——2.37 挪顶护的底部安全留白在底部档同样不被侵占。
+        boolean toastBottom130 = prefs != null && "bottom".equals(prefs.getString("toast_pos", "top"));
+        if (toastBottom130) {
+            lp.gravity = Gravity.BOTTOM;
+            lp.bottomMargin = dp(this, 106) + navBarH();
+        } else if (detailView != null && detailView.getParent() != null) {
             // Q125（2.37，件八后半）：详情开着时提示改挂窗顶——原底挂 106dp 正压
             // 规格区末行（已加入/已移除＋撤销实证）；窗顶是遮罩带，不挡正文任何
             // 一行，也不侵占尾部 16dp 安全区。详情关时落位一字不变。
@@ -5825,6 +5867,50 @@ public class MainActivity extends Activity {
         }
         if (cur != null && curTab != null) pages.put(curTab, cur);
         homeList = null;
+    }
+
+    // Q130（2.42，件一）：外观四切换（主题色/界面圆角松手提交/图标风格/组织小标）共用无闪换入。
+    // 旧口径四处全走 rebuildPages——pageHost.removeAllViews 拆当前页＋showTab 走切页全程
+    // （clearLiveGlassForTabSwitch 清条带、glassTabSwitchMs 守卫窗内 live 玻璃不画、背板
+    // ≥600ms 才重抓），点击瞬间必然露一帧空白＝用户真机连报的「切换全都闪」。改：仅在设置页
+    // 在场时，同一 handler 内同步新造设置页并原地换入 pageHost（不摘宿主、不改 currentPageView
+    // 之外的任何状态机）、强制 measure/layout 后当场 scrollTo 回原滚动位；不走 showTab、
+    // 不碰 glassTabSwitchMs/条带，旧页在新页就位前一直在屏上，无空帧。别页按
+    // invalidatePagesSoft 口径失效（下次切到才重建）；换后 +300ms 一次性 refreshLiveGlass
+    // 让 dock 玻璃按新观感重抓一帧（守卫：仍是这张新页且无浮窗在场）。非设置页回落 rebuildPages。
+    void applyAppearanceSoft130() {
+        if (!"settings".equals(tab) || pageHost == null || currentPageView == null) { rebuildPages(); return; }
+        final View oldPage = currentPageView;
+        final int keepY = savedPageScrollY("settings", settingsScroll);
+        final View fresh;
+        try { fresh = buildSettingsPage(); } catch (Throwable t) { rebuildPages(); return; }
+        if (fresh == null || fresh == oldPage) { rebuildPages(); return; }
+        pages.clear();
+        if (pageHost != null) {
+            for (int i = pageHost.getChildCount() - 1; i >= 0; i--) {
+                View ch = pageHost.getChildAt(i);
+                if (ch != oldPage) pageHost.removeViewAt(i);
+            }
+            int idx = pageHost.indexOfChild(oldPage);
+            if (idx >= 0) pageHost.removeViewAt(idx);
+            pageHost.addView(fresh, idx >= 0 ? idx : pageHost.getChildCount(),
+                new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        }
+        pages.put("settings", fresh);
+        currentPageView = fresh;
+        homeList = null;
+        refreshNavLabels(); // 与 rebuildPages 同步的收尾（标签/图标色随新观感就地重绘，不拆页）
+        int w = pageHost.getWidth(), h = pageHost.getHeight();
+        if (w > 0 && h > 0) {
+            fresh.measure(View.MeasureSpec.makeMeasureSpec(w, View.MeasureSpec.EXACTLY),
+                View.MeasureSpec.makeMeasureSpec(h, View.MeasureSpec.EXACTLY));
+            fresh.layout(0, 0, fresh.getMeasuredWidth(), fresh.getMeasuredHeight());
+        }
+        if (settingsScroll != null && keepY > 0) settingsScroll.scrollTo(0, keepY);
+        final View settledPage = fresh;
+        mainHandler.postDelayed(() -> {
+            if (currentPageView == settledPage && !isChromeCovered()) refreshLiveGlass();
+        }, 300);
     }
 
     // Q55 自定义字体导入：系统文件选择 .ttf/.otf，先下到临时文件校验（大小+文件头+试加载），成功才替换正式文件并即时启用
@@ -6514,9 +6600,19 @@ public class MainActivity extends Activity {
     void foldHeightSpring(final LinearLayout box, final boolean open,
                           final Runnable beforeOpen, final Runnable afterHidden,
                           final SpringDriver driver) {
-        if (box == null) return;
+        foldHeightSpring(box, open, beforeOpen, afterHidden, driver, null);
+    }
+
+    // Q130（件十）：带落定回调的重载——展开/收起任一落定（含量高、清行等提前收尾路径）
+    // 都回执一次，供资讯/常识条目按条上「动画中」锁、落定才放行下一次点击。5 参旧签名
+    // 转调至此、onSettled 为 null 时行为与旧实现逐字一致，其他调用方（功能启用/我的卡片
+    // /玻璃从属块）一字未动。
+    void foldHeightSpring(final LinearLayout box, final boolean open,
+                          final Runnable beforeOpen, final Runnable afterHidden,
+                          final SpringDriver driver, final Runnable onSettled130) {
+        if (box == null) { if (onSettled130 != null) onSettled130.run(); return; }
         final ViewGroup.LayoutParams lp = box.getLayoutParams();
-        if (lp == null) { box.setVisibility(open ? View.VISIBLE : View.GONE); return; }
+        if (lp == null) { box.setVisibility(open ? View.VISIBLE : View.GONE); if (onSettled130 != null) onSettled130.run(); return; }
         if (open) {
             if (beforeOpen != null) beforeOpen.run();
             box.setVisibility(View.VISIBLE);
@@ -6525,12 +6621,12 @@ public class MainActivity extends Activity {
             box.measure(View.MeasureSpec.makeMeasureSpec(w, View.MeasureSpec.EXACTLY),
                 View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED));
             final int toH = box.getMeasuredHeight();
-            if (toH <= 0) { lp.height = ViewGroup.LayoutParams.WRAP_CONTENT; box.setLayoutParams(lp); return; }
+            if (toH <= 0) { lp.height = ViewGroup.LayoutParams.WRAP_CONTENT; box.setLayoutParams(lp); if (onSettled130 != null) onSettled130.run(); return; }
             final Spring1D s = new Spring1D(lp.height > 0 ? lp.height : 0f);
             lp.height = Math.round(s.x); box.setLayoutParams(lp);
             driver.drive(s, toH, SPRING_FOLD_K, SPRING_FOLD_Z,
                 x -> { int h = Math.round(x); if (lp.height != h) { lp.height = h; box.setLayoutParams(lp); } },
-                () -> { lp.height = ViewGroup.LayoutParams.WRAP_CONTENT; box.setLayoutParams(lp); });
+                () -> { lp.height = ViewGroup.LayoutParams.WRAP_CONTENT; box.setLayoutParams(lp); if (onSettled130 != null) onSettled130.run(); });
         } else {
             driver.cancel();
             final Spring1D s = new Spring1D(lp.height > 0 ? lp.height : box.getHeight());
@@ -6538,6 +6634,7 @@ public class MainActivity extends Activity {
                 box.setVisibility(View.GONE);
                 lp.height = ViewGroup.LayoutParams.WRAP_CONTENT; box.setLayoutParams(lp);
                 if (afterHidden != null) afterHidden.run();
+                if (onSettled130 != null) onSettled130.run();
                 return;
             }
             lp.height = Math.round(s.x); box.setLayoutParams(lp);
@@ -6547,6 +6644,7 @@ public class MainActivity extends Activity {
                     box.setVisibility(View.GONE);
                     lp.height = ViewGroup.LayoutParams.WRAP_CONTENT; box.setLayoutParams(lp);
                     if (afterHidden != null) afterHidden.run();
+                    if (onSettled130 != null) onSettled130.run();
                 });
         }
     }
@@ -7153,7 +7251,7 @@ public class MainActivity extends Activity {
         FrameLayout fab = new FrameLayout(this);
         fab.setClipChildren(false);
         fab.setClipToPadding(false);
-        int n0 = activeFilterCount();
+        int n0 = activeFilterCount() + scoreDimsSel.size(); // Q130（件九）：初始角标与 updateFilterFabBadge 同一公式——旧实现漏加评分维度，只选维度时角标少数/不显
         fab.setBackground(glassFabBg());
         fab.addView(glassLayer(fab, -1, true), new FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
@@ -14514,6 +14612,33 @@ public class MainActivity extends Activity {
             runOnUiThread(() -> {
                 resultBox.removeAllViews();
                 if (!fOk) {
+                    // Q130（件十二）：在线查不到不再直接躺平——旧实现本地卡库匹配只挂在
+                    // 在线成功分支里，binlist 超时/限流/断网即恒显「查不到」，连库内明明
+                    // 有 BIN 规格的卡（如广发运通 Lucky 370330）也查不出（用户真机图证）。
+                    // 改：在线无果先落本地卡库前缀匹配（findLocalCardForBin 既有口径：
+                    // 库内 BIN 规格去非数字后与输入比最长公共前缀 6–8 位），命中即出
+                    // 发卡行/卡组织/卡种＋命中行、一键加入照走；本地也没有才报查不到
+                    // （未收录如实报，不动任何卡数据、不删卡不清字段）。
+                    Card localOnly = null;
+                    try { localOnly = findLocalCardForBin(bin, null, null); } catch (Throwable ignored) { localOnly = null; }
+                    if (localOnly != null) {
+                        lastBin = bin; lastBinLocalCard = localOnly;
+                        lastBinBank = localOnly.bank; lastBinScheme = orgLabel(localOnly.org);
+                        lastBinType = localOnly.isCredit() ? "信用卡" : "借记卡";
+                        lastBinBrand = ""; lastBinCountry = ""; lastBinPrepaid = null;
+                        lastBinBankUrl = ""; lastBinBankPhone = ""; lastBinBankCity = ""; lastBinCountryAlpha2 = "";
+                        resultBox.addView(binSpecRow("BIN", bin));
+                        if (localOnly.bank != null && localOnly.bank.length() > 0) resultBox.addView(binSpecRow("发卡行", localOnly.bank));
+                        resultBox.addView(binSpecRow("卡组织", orgLabel(localOnly.org)));
+                        resultBox.addView(binSpecRow("类型", lastBinType));
+                        View hit130 = binLocalHitRow(localOnly);
+                        LinearLayout.LayoutParams hLp130 = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+                        hLp130.topMargin = dp(MainActivity.this, 10);
+                        resultBox.addView(hit130, hLp130);
+                        addBtn.setVisibility(View.VISIBLE);
+                        resultBox.post(() -> resizeBinSheetToFit());
+                        return;
+                    }
                     resultBox.addView(tv(MainActivity.this, "查不到这个 BIN 的信息，换个试试。", 13.5f, colText2(), false));
                     addBtn.setVisibility(View.GONE);
                     resultBox.post(() -> resizeBinSheetToFit());
@@ -15267,6 +15392,10 @@ public class MainActivity extends Activity {
     }
     List<NewsItem> newsItems = null; // null = 还没读；空 = 读过但确实没有
     java.util.Set<String> newsOpen = new java.util.HashSet<>(); // 展开的资讯 id（点开看详情）
+    // Q130（件十）：资讯/常识条目折展动画在途的条 id——动画进行中再点直接吞掉、落定才
+    // 放行，防连点把附加盒/尾注叠出多份（旧病：收起的摘盒回调被下一击的新盒覆盖，
+    // 旧盒永不摘除、越叠越高）。两类条目共用此锁，按各自条目 id 隔离、互不牵连。
+    final java.util.Set<String> foldBusy130 = new java.util.HashSet<>();
     boolean newsFetchStarted = false;
     LinearLayout newsListBox = null;
     TextView newsMeta = null;
@@ -15971,17 +16100,24 @@ public class MainActivity extends Activity {
             if (open && boxRef127[0] != null && g.id.equals(glossaryAnimId123)) {
                 glossaryAnimId123 = null;
                 final LinearLayout fb127 = boxRef127[0];
-                fb127.post(() -> foldHeightSpring(fb127, true, null, null, new SpringDriver()));
+                foldBusy130.add(g.id); // Q130（件十）：深链入场动画在途同上锁，落定自动放行
+                fb127.post(() -> foldHeightSpring(fb127, true, null, null, new SpringDriver(), () -> foldBusy130.remove(g.id)));
             }
             // Q123（件一）：开合触发收窄——只有「展开/收起」小钮能触发展开/收起，
             // 卡身点击无动作。Q127：收起＝附加盒弹簧收到 0 落定摘除＋正文翻回 2 行，
             // 不再整表重渲染、不再先矮到 0 再换预览。
             arrow.setPadding(dp(this, 12), dp(this, 9), dp(this, 2), dp(this, 9));
             arrow.setOnClickListener(v -> {
+                // Q130（件十）：本条折展动画在途时再点直接吞掉——旧实现状态位点一次翻一次、
+                // 附加盒点一次挂一只，收起的摘盒回调被后续新盒覆盖后永不执行，BIN 胶囊/
+                // 尾注随连点叠出 3–4 份。落定（onSettled130）才放行下一次点击，连点任意次
+                // 本条只收敛一份内容、一份高度；逐条独立、与 2.39 A3「互不牵连」一致。
+                if (foldBusy130.contains(g.id)) return;
                 haptic();
                 if (glossaryOpen.contains(g.id)) {
                     glossaryOpen.remove(g.id);
                     arrow.setText("展开 ›");
+                    foldBusy130.add(g.id);
                     final LinearLayout boxNow127 = boxRef127[0];
                     if (boxNow127 != null) foldHeightSpring(boxNow127, false, null, () -> {
                         // Q127：落定摘附加盒＋尾注，正文翻回 2 行截断——存活视图与初始
@@ -15990,15 +16126,20 @@ public class MainActivity extends Activity {
                         boxRef127[0] = null;
                         if (noteRef127[0] != null) { card.removeView(noteRef127[0]); noteRef127[0] = null; }
                         if (bdRef127[0] != null) { bdRef127[0].setMaxLines(2); bdRef127[0].setEllipsize(android.text.TextUtils.TruncateAt.END); }
-                    }, new SpringDriver()); // Q127：逐卡独立驱动，不再共用一支互相摘任务
+                    }, new SpringDriver(), () -> foldBusy130.remove(g.id)); // Q127：逐卡独立驱动，不再共用一支互相摘任务
                     else {
                         if (noteRef127[0] != null) { card.removeView(noteRef127[0]); noteRef127[0] = null; }
                         if (bdRef127[0] != null) { bdRef127[0].setMaxLines(2); bdRef127[0].setEllipsize(android.text.TextUtils.TruncateAt.END); }
+                        foldBusy130.remove(g.id);
                     }
                 } else {
                     glossaryOpen.add(g.id);
                     arrow.setText("收起 ‹");
+                    foldBusy130.add(g.id);
                     // Q127：就地挂附加盒弹簧升起，常驻正文同步放开行数（新闻同款时序），不整表重渲染
+                    // Q130（件十）：挂新盒前先摘可能残留的旧盒/旧尾注兜底——无论何种时序，本条恒只一份附加内容
+                    if (boxRef127[0] != null) { card.removeView(boxRef127[0]); boxRef127[0] = null; }
+                    if (noteRef127[0] != null) { card.removeView(noteRef127[0]); noteRef127[0] = null; }
                     if (bdRef127[0] != null) { bdRef127[0].setMaxLines(Integer.MAX_VALUE); bdRef127[0].setEllipsize(null); }
                     final LinearLayout boxNew127;
                     if (isTier127) {
@@ -16019,8 +16160,8 @@ public class MainActivity extends Activity {
                     } else boxNew127 = null;
                     if (boxNew127 != null) {
                         boxRef127[0] = boxNew127;
-                        boxNew127.post(() -> foldHeightSpring(boxNew127, true, null, null, new SpringDriver()));
-                    }
+                        boxNew127.post(() -> foldHeightSpring(boxNew127, true, null, null, new SpringDriver(), () -> foldBusy130.remove(g.id)));
+                    } else foldBusy130.remove(g.id);
                 }
             });
             if (jumpGroupId123 != null && jumpGroupId123.equals(g.id)) jumpView = card;
@@ -16175,7 +16316,16 @@ public class MainActivity extends Activity {
         customOpen = true;
         saveCustomCards();
         showFloatToast("已加入我的卡片，可在详情里标一类/二类");
+        // Q130（件十一）：加入后原地保位——renderExtResults 全量重渲末尾 fitExtResultHeight
+        // 无条件 scrollTo(0,0)，列表被弹回顶部、刚翻到的位置全丢（用户真机图证）。改：
+        // 重渲前记下偏移、渲后贴回原位；结果行数与高度不因加入而变，恢复值精确成立，
+        // 只有这张卡的钮态经重渲由「加入」变「已加入」。连加多张同此。窗布局/文案/窗底
+        // 两钮（刷新索引/关闭）一字未动。
+        final int extKeepY130 = extResScroll != null ? extResScroll.getScrollY() : 0;
         renderExtResults();
+        if (extResScroll != null && extKeepY130 > 0) {
+            extResScroll.post(() -> { if (extResScroll != null) extResScroll.scrollTo(0, extKeepY130); });
+        }
     }
 
     // Q91：搜卡窗内分区标题（本地卡库 / 扩展卡库），与窗内既有灰字口径同档
@@ -16462,6 +16612,7 @@ public class MainActivity extends Activity {
             face.setBackground(placeholderGradFor(it.card.id, r, this));
             ImageView iv = new ImageView(this);
             iv.setScaleType(cropFill127 ? ImageView.ScaleType.CENTER_CROP : ImageView.ScaleType.FIT_CENTER); // Q122（2.34，件十五补）：小面整幅等比可见；Q127 放大面铺满裁切
+            roundClip(iv, r, this); // Q130（件六）：卡图自身补与外框同一把弧——旧实现只靠 face 外框单层 outline，个别机型失效时方图四角直出（右角最显）；只加裁切，缩放/显示区/半径公式（cardR129 随圆角 t 同步）一字未动
             Bitmap b = Img.getSized(this, it.card.image, Math.max(64, wPx)); // Q105：展柜面按实际显示宽解码（旧全量解码；源宽恒 ≥ 显示宽，画面不变）
             if (b != null) { iv.setImageBitmap(b); if (darkEff()) iv.setAlpha(0.92f); }
             face.addView(iv, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
@@ -18424,17 +18575,23 @@ public class MainActivity extends Activity {
             if (open && detRef123[0] != null && n.id.equals(newsAnimId123)) {
                 newsAnimId123 = null;
                 final LinearLayout db123 = detRef123[0];
-                db123.post(() -> foldHeightSpring(db123, true, null, null, newsFoldSpring));
+                foldBusy130.add(n.id); // Q130（件十）：入场动画在途同上锁，落定放行；驱动改逐条新建（旧共用 newsFoldSpring 连点互相摘任务、旧盒摘不掉正是叠空根源之一）
+                db123.post(() -> foldHeightSpring(db123, true, null, null, new SpringDriver(), () -> foldBusy130.remove(n.id)));
             }
             // Q123（2.35，件一）：开合触发收窄——只有「展开/收起」小钮能展开/收起，
             // 卡身点击无动作，防整卡误触（箭头补内边距放大可点区）。
             // Q123（件十一）：收起先弹簧收到 0 落定再重渲染，与设置折展同一时序。
             arrow.setPadding(dp(this, 12), dp(this, 9), dp(this, 2), dp(this, 9));
             arrow.setOnClickListener(v -> {
+                // Q130（件十）：与常识条同一套防叠——本条折展动画在途时再点吞掉、落定才
+                // 放行；驱动逐条新建不再共用 newsFoldSpring（连点时新驱动摘掉旧收起任务、
+                // 旧详情盒的摘除回调永不执行、越点越叠出空高）。文案/布局/视觉一字未动。
+                if (foldBusy130.contains(n.id)) return;
                 haptic();
                 if (newsOpen.contains(n.id)) {
                     newsOpen.remove(n.id);
                     arrow.setText("展开 ›");
+                    foldBusy130.add(n.id);
                     final LinearLayout detNow124 = detRef123[0];
                     if (detNow124 != null) foldHeightSpring(detNow124, false, null, () -> {
                         // Q124（件七）：落定就地摘详情盒＋恢复标题/摘要两行预览，不整表重渲染
@@ -18442,18 +18599,21 @@ public class MainActivity extends Activity {
                         detRef123[0] = null;
                         ttl.setMaxLines(2);
                         if (smRef124[0] != null) { smRef124[0].setMaxLines(2); smRef124[0].setEllipsize(android.text.TextUtils.TruncateAt.END); }
-                    }, newsFoldSpring);
-                    else renderNews();
+                    }, new SpringDriver(), () -> foldBusy130.remove(n.id));
+                    else { renderNews(); foldBusy130.remove(n.id); }
                 } else {
                     newsOpen.add(n.id);
                     arrow.setText("收起 ‹");
+                    foldBusy130.add(n.id);
                     // Q124（件七）：就地建详情盒弹簧升起，标题/摘要同步放开行数
+                    // Q130（件十）：挂新盒前摘可能残留的旧详情盒兜底，本条恒只一份详情
+                    if (detRef123[0] != null) { card.removeView(detRef123[0]); detRef123[0] = null; }
                     ttl.setMaxLines(Integer.MAX_VALUE);
                     if (smRef124[0] != null) { smRef124[0].setMaxLines(Integer.MAX_VALUE); smRef124[0].setEllipsize(null); }
                     final LinearLayout det124 = buildNewsDetail124(n);
                     card.addView(det124);
                     detRef123[0] = det124;
-                    det124.post(() -> foldHeightSpring(det124, true, null, null, newsFoldSpring));
+                    det124.post(() -> foldHeightSpring(det124, true, null, null, new SpringDriver(), () -> foldBusy130.remove(n.id)));
                 }
             });
             }
@@ -19223,14 +19383,23 @@ public class MainActivity extends Activity {
     // Q50：更新日志底部动作行——对照混合版 styles.css .cl-actions（display:flex;gap:10px;justify-content:center）
     // 与 .cl-top（padding:9px 20px;border-radius:999px;background:#eef4fb;color:#0a5cd6;font-weight:700;font-size:.85rem）
     // 两钮居中并排药丸、紧贴日志框下沿成一组，不再整宽灰钮平摊；两处（独立页/设置页内嵌）共用此助手保证口径一致。
+    // Q130（件二）：底带并入全站胶囊语言——colSurface 底带＋顶部发丝线承托，药丸改 accentSoftBg 底＋accentColor 字，
+    // 不再是飘在渐变页底上的一对浅蓝钮。功能与文案一字未动。
     LinearLayout changelogActions(final Runnable onTop, final Runnable onFold) {
+        LinearLayout wrap = new LinearLayout(this);
+        wrap.setOrientation(LinearLayout.VERTICAL);
+        wrap.setBackgroundColor(colSurface());
+        View hair = new View(this);
+        hair.setBackgroundColor(colDivider());
+        wrap.addView(hair, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, Math.max(1, dp(this, 1))));
         LinearLayout actions = new LinearLayout(this);
         actions.setOrientation(LinearLayout.HORIZONTAL);
         actions.setGravity(Gravity.CENTER);
         actions.setPadding(dp(this, 12), dp(this, 8), dp(this, 12), dp(this, 10));
-        TextView top = tvW(this, "↑ 回到顶部", 13.5f, inkLink(), 700);
+        wrap.addView(actions, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        TextView top = tvW(this, "↑ 回到顶部", 13.5f, accentColor(), 700);
         top.setGravity(Gravity.CENTER);
-        top.setBackground(rippleBg(Color.rgb(0xEE, 0xF4, 0xFB), 999));
+        top.setBackground(rippleBg(accentSoftBg(), 999));
         top.setPadding(dp(this, 20), dp(this, 9), dp(this, 20), dp(this, 9));
         top.setOnTouchListener((v, ev) -> {
             if (ev.getAction() == android.view.MotionEvent.ACTION_DOWN) pressBounce(v, true);
@@ -19239,9 +19408,9 @@ public class MainActivity extends Activity {
         });
         top.setOnClickListener(v -> { haptic(); if (onTop != null) onTop.run(); });
         actions.addView(top, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT));
-        TextView fold = tvW(this, "收起日志", 13.5f, inkLink(), 700);
+        TextView fold = tvW(this, "收起日志", 13.5f, accentColor(), 700);
         fold.setGravity(Gravity.CENTER);
-        fold.setBackground(rippleBg(Color.rgb(0xEE, 0xF4, 0xFB), 999));
+        fold.setBackground(rippleBg(accentSoftBg(), 999));
         fold.setPadding(dp(this, 20), dp(this, 9), dp(this, 20), dp(this, 9));
         fold.setOnTouchListener((v, ev) -> {
             if (ev.getAction() == android.view.MotionEvent.ACTION_DOWN) pressBounce(v, true);
@@ -19252,7 +19421,7 @@ public class MainActivity extends Activity {
         LinearLayout.LayoutParams flp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         flp.leftMargin = dp(this, 10);
         actions.addView(fold, flp);
-        return actions;
+        return wrap;
     }
 
     View buildChangelogPage() {
@@ -19270,27 +19439,54 @@ public class MainActivity extends Activity {
         page.setPadding(dp(this, 16), dp(this, 6), dp(this, 16), dp(this, 16));
         changelogScroll.addView(page);
         if (Build.VERSION.SDK_INT >= 23) changelogScroll.setOnScrollChangeListener((v, sx, sy, ox, oy) -> updateTopFabVisibility(sy));
-        // Q49：更新日志长列表可拖拽黑条（常显细条、按住拖快速拉动全文）
+        // Q49：更新日志长列表可拖拽黑条（按住拖快速拉动全文）
+        // Q130（件二）：persistent 改 false 与全 App 统一——右缘不再常显一根原始条，滚动/拖动时
+        // 才出既有玻璃胶囊条＋百分比气泡（DragBarView 本体即用户选定方案，只抓拇指不劫手势）。
         FrameLayout logWrap = new FrameLayout(this);
         logWrap.addView(changelogScroll, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
-        attachDragBar(logWrap, changelogScroll, true, 8, 8);
+        attachDragBar(logWrap, changelogScroll, false, 8, 8);
         root.addView(logWrap, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
 
         List<LogEntry> logs = loadChangelog();
         if (logs.isEmpty()) {
             page.addView(tv(this, "更新日志读取失败", 13.5f, colText2(), false));
         }
+        // Q130（件二）：每个版本包进 Soft 白卡（roundRect(colSurface(),18) 与设置页同语言），
+        // 版本号 15sp/800 突出，条目改小圆点＋正文排版；记录 note 文本一字未动（旧「• 」本就是
+        // 代码拼的前缀，现由绘制圆点承担）。
         for (LogEntry e : logs) {
-            TextView ver = tv(this, "v" + e.v, 14.5f, colText(), true);
-            LinearLayout.LayoutParams vlp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-            vlp.topMargin = dp(this, 14);
-            page.addView(ver, vlp);
+            LinearLayout verCard = new LinearLayout(this);
+            verCard.setOrientation(LinearLayout.VERTICAL);
+            verCard.setBackground(roundRect(colSurface(), 18, this));
+            verCard.setClipToOutline(true);
+            verCard.setPadding(dp(this, 14), dp(this, 12), dp(this, 14), dp(this, 13));
+            LinearLayout.LayoutParams clp130 = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            clp130.topMargin = dp(this, 10);
+            page.addView(verCard, clp130);
+            TextView ver = tvW(this, "v" + e.v, 15, colText(), 800);
+            verCard.addView(ver, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+            boolean firstNote130 = true;
             for (String note : e.notes) {
-                TextView nt = tv(this, "•  " + note, 12.5f, inkBody(), false);
+                LinearLayout nrow = new LinearLayout(this);
+                nrow.setOrientation(LinearLayout.HORIZONTAL);
+                nrow.setGravity(Gravity.TOP);
+                LinearLayout.LayoutParams nrlp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+                nrlp.topMargin = dp(this, firstNote130 ? 7 : 5);
+                firstNote130 = false;
+                verCard.addView(nrow, nrlp);
+                View dot130 = new View(this);
+                GradientDrawable dotBg130 = new GradientDrawable();
+                dotBg130.setShape(GradientDrawable.OVAL);
+                dotBg130.setColor(colText3());
+                dot130.setBackground(dotBg130);
+                LinearLayout.LayoutParams dotLp130 = new LinearLayout.LayoutParams(dp(this, 5), dp(this, 5));
+                dotLp130.topMargin = dp(this, 6);
+                nrow.addView(dot130, dotLp130);
+                TextView nt = tv(this, note, 12.5f, inkBody(), false);
                 nt.setLineSpacing(0, 1.45f);
-                LinearLayout.LayoutParams nlp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-                nlp.topMargin = dp(this, 3); nlp.leftMargin = dp(this, 4);
-                page.addView(nt, nlp);
+                LinearLayout.LayoutParams nlp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+                nlp.leftMargin = dp(this, 8);
+                nrow.addView(nt, nlp);
             }
         }
 
@@ -20177,7 +20373,7 @@ public class MainActivity extends Activity {
             LinearLayout.LayoutParams clp2 = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
             row.addView(cell, clp2);
             cell.setOnClickListener(v -> {
-                themeColorKey = key; prefs.edit().putString("theme_color", key).apply(); haptic(); rebuildPages();
+                themeColorKey = key; prefs.edit().putString("theme_color", key).apply(); haptic(); applyAppearanceSoft130(); // Q130：外观切换走无闪换入（旧 rebuildPages 整页重建闪一帧）
             });
         }
         panel.addView(box);
@@ -20277,7 +20473,7 @@ public class MainActivity extends Activity {
         if (prefs != null) try { prefs.edit().putFloat("ui_corner_t", t).apply(); } catch (Throwable ignored) {}
         if (dockGlass129 != null) try { setupGlassLayerVisual(dockGlass129, dockR129()); } catch (Throwable ignored) {}
         applyAppearanceChrome();
-        rebuildPages();
+        applyAppearanceSoft130(); // Q130：松手提交走无闪换入（拖动期本就只预览样例、不动页面）
     }
     void cornerInner129(LinearLayout panel) {
         LinearLayout box = new LinearLayout(this);
@@ -20374,7 +20570,7 @@ public class MainActivity extends Activity {
                 if (prefs != null) prefs.edit().putString("icon_pack", iconPack129).apply();
                 haptic();
                 refreshNavIcons129(); // 底栏不重建、逐个重绘即时换脸
-                rebuildPages();
+                applyAppearanceSoft130(); // Q130：无闪换入（旧 rebuildPages 闪一帧）
             });
             row.addView(t);
         }
@@ -20436,7 +20632,7 @@ public class MainActivity extends Activity {
                 orgStyle129 = o[0];
                 if (prefs != null) prefs.edit().putString("org_badge_style", orgStyle129).apply();
                 haptic();
-                rebuildPages(); // 只刷新本设置区预览，卡面无任何落点变化
+                applyAppearanceSoft130(); // Q130：无闪换入，只刷新本设置区预览，卡面无任何落点变化
             });
             row.addView(t);
         }
@@ -20599,6 +20795,13 @@ public class MainActivity extends Activity {
         });
 
         addHair(panel);
+        // Q130（件十三）：瞬时提示位置二选一（顶/底，默认顶）——切换本身走件一的无闪
+        // 换入 applyAppearanceSoft130，不整窗重刷；提示文案/时长/样式一字未动。
+        segInner(panel, L("瞬时提示位置", "Toast position"), new String[][]{{"top", L("顶部", "Top")}, {"bottom", L("底部", "Bottom")}},
+            prefs == null ? "top" : prefs.getString("toast_pos", "top"), v -> {
+                if (prefs != null) prefs.edit().putString("toast_pos", v).apply(); haptic(); applyAppearanceSoft130();
+            });
+        addHair(panel);
         panelSubHead(panel, S("sec_display"), false);
         // Q104（2.18）字体三档真选择：默认（内置 Noto Sans SC）/ 本机字体（系统字）/ 内置宋体
         // （随包子集 Noto Serif SC）——三者字型肉眼可辨，原「使用本机字体」单列开关并入此选择。
@@ -20655,9 +20858,9 @@ public class MainActivity extends Activity {
         if (moreMenuOverlay != null) { closeMoreMenu(); return; }
         if (floatSearchOpen) { closeFloatSearch(); return; }
         if (cardMenuPop != null) { closeCardMenu(); return; }
+        if (changelogOpen) { closeChangelog(); return; } // Q130（件三）：日志压在关于之上，先关日志回关于（旧序 about 检查在前、系统返回把两层一起吞掉）；左上 ‹ 与系统键同走 closeChangelog 同一落点
         if (aboutPageOpen) { closeAbout(); return; }
         if (helloOpen) { closeHello(); return; }
-        if (changelogOpen) { closeChangelog(); return; }
         if (placeholderPickerView != null) { closePlaceholderPicker(); return; }
         if (glossarySheetView != null) { closeGlossarySheet(); return; } // Q122（件十三）：常识浮层压在最上，先关它再回向导/详情
         if (customDetailSheet != null) { closeCustomDetail(); return; }
