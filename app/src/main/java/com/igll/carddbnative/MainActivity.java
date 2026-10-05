@@ -21719,7 +21719,7 @@ public class MainActivity extends Activity {
         launcherInner129(panel);
         addHair(panel);
         segInner(panel, S("card_color"), new String[][]{{"light",S("card_color_light")},{"dark",S("card_color_dark")}}, placeholderStyle, v -> {
-            placeholderStyle = v; prefs.edit().putString("placeholder_style", v).apply(); haptic(); rebuildPages();
+            placeholderStyle = v; prefs.edit().putString("placeholder_style", v).apply(); haptic(); applyAppearanceSoft130(); // Q134：卡面配色补进无闪换入（旧 rebuildPages 整页重建、点击瞬间拆页露空帧＝闪屏）
         });
         addHair(panel);
         switchInner(panel, "自选卡面配色", "开启后在无图卡详情里逐张换颜色；关闭用自动配色", placeholderCustomEnabled, on -> {
