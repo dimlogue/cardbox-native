@@ -20643,7 +20643,10 @@ public class MainActivity extends Activity {
         buildAppearancePanel(page);
         sectionHead(page, S("sec_experience"));
         switchRow(page, "高刷新率", "把刷新率拉到屏幕最高档（耗电略增）", prefs.getBoolean("high_refresh", false), on -> {
-            prefs.edit().putBoolean("high_refresh", on).apply(); haptic(); applyHighRefresh(); rebuildPages();
+            // Q135（2.47）：去掉尾随 rebuildPages()——high_refresh 只喂 applyHighRefresh 的窗口
+            // 参数、全 App 无任何页面按它渲染，整页重建（removeAllViews＋showTab）纯是点击瞬间
+            // 露空白帧的闪源；开关视觉由 switchRow 自行拨动，无需重建任何页。
+            prefs.edit().putBoolean("high_refresh", on).apply(); haptic(); applyHighRefresh();
         });
         // Q97：玻璃控制二合一——开关（关走静态半透染色、本机保存）＋状态说明同行；
         // 旧《关于」区被动状态行（仅关停时出现、不可操作）就此退役，由本行接管。
