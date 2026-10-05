@@ -4839,6 +4839,7 @@ public class MainActivity extends Activity {
     float showcaseDriftVx = 0.35f, showcaseDriftVy = 0.22f;
     long showcaseLastTouchMs = 0;
     boolean showcaseDragging = false;
+    boolean showcaseTouching140 = false; // Q140：任一手指在展柜画布上（漂移让路判据）
     TextView showcaseStackChip = null, showcaseCanvasChip = null, showcaseGroupChip = null;
     TextView showcaseDensityLab = null;              // Q122：密度行标签（随底色刷新对比）
     android.widget.SeekBar showcaseSeek = null;     // Q122：密度滑杆（轨道/圆点随底色描色）
@@ -17675,6 +17676,7 @@ public class MainActivity extends Activity {
         showcaseView = null; showcaseBody = null; showcaseWorld = null;
         showcaseStackChip = null; showcaseCanvasChip = null; showcaseGroupChip = null; showcaseDensityRow = null; showcaseTitleTv = null;
         showcaseZoomView = null; showcaseDensityLab = null; showcaseSeek = null; showcaseContentW = 0; showcaseContentH = 0; // Q122：放大层/密度行/内容界随关清
+        showcaseDragging = false; showcaseTouching140 = false; // Q140：关柜复位手势旗
         showcaseClosing = false;
         if (v != null && v.getParent() != null) ((ViewGroup) v.getParent()).removeView(v);
     }
@@ -18815,7 +18817,7 @@ public class MainActivity extends Activity {
         showcaseDriftTask = new Runnable() {
             public void run() {
                 if (showcaseView == null || showcaseWorld == null || showcaseClosing) return;
-                if (!showcaseDragging && System.currentTimeMillis() - showcaseLastTouchMs > 3000) {
+                if (!showcaseDragging && !showcaseTouching140 && System.currentTimeMillis() - showcaseLastTouchMs > 3000) { // Q140：手指还压在画布上（停住不动）漂移不许抢
                     float ptx127 = showcaseWorld.getTranslationX();
                     float pty127 = showcaseWorld.getTranslationY();
                     float nx = clampShowcasePanX(ptx127 + showcaseDriftVx); // Q122：漂移不越防丢底线
@@ -18943,22 +18945,23 @@ public class MainActivity extends Activity {
             face.setOnTouchListener(new View.OnTouchListener() {
                 float downRawX, downRawY; int startL, startT; boolean moved;
                 public boolean onTouch(View v, MotionEvent ev) {
-                    // Q127（2.39，用户 05:28 点名）：命中范围只许等于看得见的范围——卡的
-                    // 布局框可伸出舞台下沿（内容超高靠平移到达），落在 showcaseBody
-                    // 可见矩形之外的命中一律不接（控件区被看不见的卡罩住点开详情的
-                    // 通道就此断掉）；矩形内的拖/点口径一字不动。
-                    if (showcaseBody != null) {
-                        int[] bl127 = new int[2];
-                        showcaseBody.getLocationOnScreen(bl127);
-                        float rx127 = ev.getRawX(), ry127 = ev.getRawY();
-                        if (rx127 < bl127[0] || rx127 > bl127[0] + showcaseBody.getWidth()
-                            || ry127 < bl127[1] || ry127 > bl127[1] + showcaseBody.getHeight()) return false;
-                    }
+                    // Q127（2.39）：命中范围只许等于看得见的范围——卡的布局框可伸出
+                    // 舞台下沿，落在 showcaseBody 可见矩形之外的命中一律不接。
+                    // Q140（2.51）：该拒绝只许用在 ACTION_DOWN（不许控件区的手从看不见
+                    // 的卡框上起手）；MOVE/UP 一律走完——旧写法把落在控件条上松手的
+                    // UP 也吞掉，落位不保存、showcaseDragging 永久卡真（拖到一半就
+                    // 「死了」）。是否在界内改作 UP 时点判（只决定点开是否算数）。
+                    int[] bl140 = new int[2];
+                    if (showcaseBody != null) showcaseBody.getLocationOnScreen(bl140);
+                    boolean inBody140 = showcaseBody != null
+                        && ev.getRawX() >= bl140[0] && ev.getRawX() <= bl140[0] + showcaseBody.getWidth()
+                        && ev.getRawY() >= bl140[1] && ev.getRawY() <= bl140[1] + showcaseBody.getHeight();
+                    if (ev.getActionMasked() == MotionEvent.ACTION_DOWN && !inBody140) return false;
                     showcaseLastTouchMs = System.currentTimeMillis();
                     FrameLayout.LayoutParams lp = (FrameLayout.LayoutParams) v.getLayoutParams();
                     switch (ev.getActionMasked()) {
                         case MotionEvent.ACTION_DOWN:
-                            moved = false; showcaseDragging = true;
+                            moved = false; showcaseDragging = true; showcaseTouching140 = true;
                             downRawX = ev.getRawX(); downRawY = ev.getRawY();
                             startL = lp.leftMargin; startT = lp.topMargin;
                             if (v.getParent() instanceof ViewGroup) ((ViewGroup) v.getParent()).bringChildToFront(v);
@@ -18968,23 +18971,43 @@ public class MainActivity extends Activity {
                             int nx = startL + Math.round((ev.getRawX() - downRawX) / sc);
                             int ny = startT + Math.round((ev.getRawY() - downRawY) / sc);
                             if (Math.abs(ev.getRawX() - downRawX) + Math.abs(ev.getRawY() - downRawY) > dp(MainActivity.this, 4)) moved = true;
-                            int pw = world.getWidth() > 0 ? world.getWidth() : getResources().getDisplayMetrics().widthPixels;
-                            int ph = world.getHeight() > 0 ? world.getHeight() : getResources().getDisplayMetrics().heightPixels;
-                            // Q122（件十六）：防丢底线——最多拖出到只剩 56dp 在界内，不许整张拖丢；旧 −faceW/2 半出界作废
-                            int keep122 = dp(MainActivity.this, 56);
-                            lp.leftMargin = Math.max(-faceW + keep122, Math.min(nx, pw - keep122));
-                            lp.topMargin = Math.max(-faceH + keep122, Math.min(ny, ph - keep122));
+                            // Q140（2.51，用户点名「空气墙」）：落位钳位改按当前可见
+                            // 窗口算——world 经平移/缩放后，可见区在 world 坐标里是
+                            // 一个随变换走的矩形；旧钳位钉死在 world 原始边距＋「只
+                            // 剩 56dp 在界内」，缩放缩小/平移后卡拖到屏面中途就撞
+                            // 一堵看不见的墙，落位又许半张出屏还存进记忆位。新口径：
+                            // 渲染整卡恒在 showcaseBody 可见矩形内（四边最远落位整
+                            // 卡可见不裁），墙即屏边。窗口换算：屏面点 c → world
+                            // 坐标 w = pivot + (c − translation − pivot) / scale。
+                            int bw140 = showcaseBody != null ? showcaseBody.getWidth() : 0;
+                            int bh140 = showcaseBody != null ? showcaseBody.getHeight() : 0;
+                            if (bw140 > 0 && bh140 > 0) {
+                                float px140 = world.getPivotX(), py140 = world.getPivotY();
+                                float vx0 = px140 + (0f - world.getTranslationX() - px140) / sc;
+                                float vy0 = py140 + (0f - world.getTranslationY() - py140) / sc;
+                                float vx1 = px140 + (bw140 - world.getTranslationX() - px140) / sc;
+                                float vy1 = py140 + (bh140 - world.getTranslationY() - py140) / sc;
+                                int lo140 = Math.round(vx0), to140 = Math.round(vy0);
+                                int hi140 = Math.round(vx1) - faceW, bi140 = Math.round(vy1) - faceH;
+                                nx = hi140 < lo140 ? lo140 : Math.max(lo140, Math.min(nx, hi140));
+                                ny = bi140 < to140 ? to140 : Math.max(to140, Math.min(ny, bi140));
+                            }
+                            lp.leftMargin = nx;
+                            lp.topMargin = ny;
                             v.setLayoutParams(lp);
+                            int m140 = dp(MainActivity.this, 10);
+                            showcaseContentW = Math.max(showcaseContentW, nx + faceW + m140);
+                            showcaseContentH = Math.max(showcaseContentH, ny + faceH + m140);
                             return true;
                         }
                         case MotionEvent.ACTION_UP:
                         case MotionEvent.ACTION_CANCEL:
-                            showcaseDragging = false;
+                            showcaseDragging = false; showcaseTouching140 = false;
                             showcaseLastTouchMs = System.currentTimeMillis();
-                            if (!moved) {
+                            if (!moved && ev.getActionMasked() == MotionEvent.ACTION_UP && inBody140) {
                                 haptic();
                                 openShowcaseZoom(it); // Q122（件十四②）：点卡只放大看卡面（纯展示，无标记/再加/移除）
-                            } else if (showcasePosJson != null) {
+                            } else if (moved && showcasePosJson != null) {
                                 try {
                                     showcasePosJson.put(it.key, lp.leftMargin + "," + lp.topMargin);
                                     if (prefs != null) prefs.edit().putString("showcase_positions", showcasePosJson.toString()).apply();
@@ -19011,10 +19034,14 @@ public class MainActivity extends Activity {
             long showcaseLastTapMs122 = 0;
             public boolean onTouch(View v, MotionEvent ev) {
                 showcaseLastTouchMs = System.currentTimeMillis();
+                // Q140（2.51）：拖卡在途时空画布这只手只许旁观——旧写法第二指落在
+                // 空白处照样平移/喂缩放，卡与画布同吃一串事件互相抢位。
+                if (showcaseDragging) return true;
                 sgd.onTouchEvent(ev);
                 if (ev.getPointerCount() > 1) return true;
                 switch (ev.getActionMasked()) {
                     case MotionEvent.ACTION_DOWN:
+                        showcaseTouching140 = true;
                         downRawX = ev.getRawX(); downRawY = ev.getRawY();
                         startTx = v.getTranslationX(); startTy = v.getTranslationY();
                         // Q122（件十六补）：双击画布一键回正（与点标题同一兜底）
@@ -19026,6 +19053,11 @@ public class MainActivity extends Activity {
                         // Q122（件十六）：平移只留防丢底线（内容与视口至少重叠 64dp），其余自由跟手不回弹
                         v.setTranslationX(clampShowcasePanX(startTx + (ev.getRawX() - downRawX)));
                         v.setTranslationY(clampShowcasePanY(startTy + (ev.getRawY() - downRawY)));
+                        return true;
+                    case MotionEvent.ACTION_UP:
+                    case MotionEvent.ACTION_CANCEL:
+                    case MotionEvent.ACTION_POINTER_UP:
+                        if (ev.getPointerCount() <= 1) showcaseTouching140 = false;
                         return true;
                 }
                 return true;
