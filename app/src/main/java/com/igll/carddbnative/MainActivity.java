@@ -417,6 +417,10 @@ public class MainActivity extends Activity {
                 cv.drawRoundRect(r, 2.5f * sx, 2.5f * sy, p);
                 cv.drawCircle(13.8f * sx, 11.2f * sy, 2.7f * sx, p);
                 cv.drawLine(15.8f * sx, 13.2f * sy, 18.2f * sx, 15.6f * sy, p);
+            } else if ("fxzone".equals(kind)) { // 地球（外卡专区，Q132）：外圆＋经线椭圆＋赤道线
+                cv.drawCircle(12f * sx, 12f * sy, 8.5f * sx, p);
+                cv.drawOval(new android.graphics.RectF(8f * sx, 3.5f * sy, 16f * sx, 20.5f * sy), p);
+                cv.drawLine(3.7f * sx, 12f * sy, 20.3f * sx, 12f * sy, p);
             } else { // custom：加号卡
                 android.graphics.RectF r = new android.graphics.RectF(4f * sx, 5.5f * sy, 20f * sx, 18.5f * sy);
                 cv.drawRoundRect(r, 2.5f * sx, 2.5f * sy, p);
@@ -4200,6 +4204,482 @@ public class MainActivity extends Activity {
                 synchronized (fetching) { fetching.remove(path); }
             }).start();
         }
+    }
+
+    // ---------- Q132（2.44）外卡专区：独立数据集（assets/data/foreign.json＋data/foreign/ 图），
+    // 与核心 cards.json 完全分开——不进 Store、不进主搜索、核心卡数口径不变。条目带核实状态
+    // （core_verified=核心核实，其余＝待核），评分模型未定一律不出分；图缺走 Q70 占位面，
+    // 不许编造图。数据由 foreign-seed-02.json 生成，字段口径见方向稿。 ----------
+    static class FxCard {
+        String id, name, nameEn, bank, org, type, level, status, review, url, image, tier;
+        String verifyStatus, verifiedAt;
+        JSONObject specs;
+        java.util.List<String> keywords = new ArrayList<>();
+        java.util.List<String> aliases = new ArrayList<>();
+        java.util.List<String> missing = new ArrayList<>();
+        boolean coreVerified() { return "core_verified".equals(verifyStatus); }
+        String orgLabel() {
+            if ("visa".equals(org)) return "Visa";
+            if ("mastercard".equals(org)) return "Mastercard";
+            if ("unionpay".equals(org)) return "UnionPay";
+            if ("amex".equals(org)) return "Amex";
+            if ("jcb".equals(org)) return "JCB";
+            return "组织待核";
+        }
+        String typeLabel() { return "credit".equals(type) ? "信用卡" : "扣账卡"; }
+        String verifyLabel() {
+            if (coreVerified()) return "核心核实";
+            if ("variant_split_required".equals(verifyStatus)) return "待核 · 系列待拆";
+            if ("official_conflict_hold".equals(verifyStatus)) return "待核 · 口径待消解";
+            return "待核";
+        }
+    }
+
+    static class FxStore {
+        static java.util.List<FxCard> all = null;
+        static void load(Context c) {
+            if (all != null) return;
+            all = new ArrayList<>();
+            try {
+                JSONObject root = new JSONObject(Store.readAll(c.getAssets().open("data/foreign.json")));
+                JSONArray arr = root.getJSONArray("cards");
+                for (int i = 0; i < arr.length(); i++) {
+                    JSONObject o = arr.getJSONObject(i);
+                    FxCard f = new FxCard();
+                    f.id = nz125(o.optString("id")); f.name = nz125(o.optString("name"));
+                    f.nameEn = nz125(o.optString("name_en")); f.bank = nz125(o.optString("bank"));
+                    f.org = nz125(o.optString("org")); f.type = nz125(o.optString("type", "debit"));
+                    f.level = nz125(o.optString("card_level")); f.status = nz125(o.optString("status"));
+                    f.review = nz125(o.optString("review")); f.url = nz125(o.optString("url"));
+                    f.image = nz125(o.optString("image")); f.tier = nz125(o.optString("priority_tier"));
+                    JSONObject v = o.optJSONObject("verification");
+                    f.verifyStatus = v == null ? "" : nz125(v.optString("status"));
+                    f.verifiedAt = v == null ? "" : nz125(v.optString("verified_at"));
+                    if (v != null) {
+                        JSONArray mf = v.optJSONArray("missing_fields");
+                        if (mf != null) for (int j = 0; j < mf.length(); j++) f.missing.add(mf.optString(j));
+                    }
+                    JSONArray kw = o.optJSONArray("keywords");
+                    if (kw != null) for (int j = 0; j < kw.length(); j++) f.keywords.add(kw.optString(j));
+                    JSONArray al = o.optJSONArray("aliases");
+                    if (al != null) for (int j = 0; j < al.length(); j++) f.aliases.add(al.optString(j));
+                    f.specs = o.optJSONObject("specs");
+                    all.add(f);
+                }
+            } catch (Exception e) { /* 读不到走空列表，专区页会如实提示 */ }
+        }
+    }
+
+    // 待核字段键 → 展示名（只译已知键，未知原样透出不编造）
+    static String fxMissingLabel(String k) {
+        if ("org".equals(k)) return "卡组织";
+        if ("annual_fee_hkd".equals(k)) return "年费金额";
+        if ("annual_fee_status".equals(k)) return "年费状态";
+        if ("supplementary_annual_fee_hkd".equals(k)) return "附属卡年费";
+        if ("foreign_transaction_fee_pct".equals(k)) return "外币手续费率";
+        if ("fx_fee_scope".equals(k)) return "手续费适用范围";
+        if ("card_level".equals(k)) return "卡等级";
+        if ("eligibility".equals(k)) return "申请资格";
+        if ("min_income_hkd".equals(k)) return "年薪门槛";
+        if ("supported_currency_codes".equals(k)) return "支持币种";
+        if ("overseas_atm_fee".equals(k)) return "海外 ATM 费";
+        if ("residency_status".equals(k)) return "居民资格";
+        return k;
+    }
+
+    boolean fxZoneOpen = false, fxDetailOpen = false;
+    String fxQuery = "";
+    boolean fxCoreOnly = false;
+    int fxZoneKeepY = 0;
+    ScrollView fxZoneScroll = null;
+    LinearLayout fxListBox = null;
+    TextView fxCountTv = null;
+
+    boolean fxzoneEnabled() { return prefs == null || prefs.getBoolean("fxzone_enabled", true); }
+
+    void openFxZone() {
+        captureCurrentPageScroll();
+        FxStore.load(this);
+        fxZoneOpen = true;
+        if (navWrap != null) navWrap.setVisibility(View.GONE); // 同整页口径：藏整条 dock
+        if (fullScreenPage != null && fullScreenPage.getParent() == content) content.removeView(fullScreenPage);
+        if (pageHost != null) pageHost.setVisibility(View.GONE);
+        fullScreenPage = buildFxZonePage();
+        content.addView(fullScreenPage);
+        syncTopFab();
+    }
+
+    void closeFxZone() {
+        fxZoneOpen = false;
+        fxZoneScroll = null; fxListBox = null; fxCountTv = null;
+        if (navWrap != null) navWrap.setVisibility(View.VISIBLE); // Q32
+        showTab(tab);
+    }
+
+    View buildFxZonePage() {
+        LinearLayout root = new LinearLayout(this);
+        root.setOrientation(LinearLayout.VERTICAL);
+        root.setBackground(softPageBg());
+        root.addView(pageBackHead("外卡专区", () -> { haptic(); closeFxZone(); }),
+            new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+
+        TextView intro = tv(this, "首批香港银行卡 · 独立数据，不混入主卡库搜索", 11.5f, colText2(), false);
+        intro.setPadding(dp(this, 16), dp(this, 2), dp(this, 16), 0);
+        root.addView(intro);
+
+        // 搜索行（与首页搜索同一语言：柔面胶囊＋细线放大镜＋无底输入）
+        LinearLayout searchRow = new LinearLayout(this);
+        searchRow.setOrientation(LinearLayout.HORIZONTAL);
+        searchRow.setGravity(Gravity.CENTER_VERTICAL);
+        searchRow.setBackground(roundRect(colSurface(), 999, this));
+        searchRow.setPadding(dp(this, 12), dp(this, 2), dp(this, 12), dp(this, 2));
+        LinearLayout.LayoutParams srlp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        srlp.leftMargin = dp(this, 16); srlp.rightMargin = dp(this, 16); srlp.topMargin = dp(this, 10);
+        root.addView(searchRow, srlp);
+        SearchIconView sicon = new SearchIconView(this);
+        sicon.iconColor = colText2();
+        searchRow.addView(sicon, new LinearLayout.LayoutParams(dp(this, 18), dp(this, 18)));
+        final EditText fxBox = new EditText(this);
+        applyUiFont(fxBox, 400);
+        fxBox.setHint("搜卡名 / 银行，如：汇丰、Mox、渣打");
+        fxBox.setTextSize(14);
+        fxBox.setSingleLine(true);
+        fxBox.setBackground(null);
+        fxBox.setTextColor(colText()); fxBox.setHintTextColor(colText2());
+        fxBox.setShadowLayer(0, 0, 0, 0);
+        fxBox.setPadding(dp(this, 8), dp(this, 8), dp(this, 4), dp(this, 8));
+        pinInputRole125(fxBox);
+        if (fxQuery != null && !fxQuery.isEmpty()) fxBox.setText(fxQuery);
+        fxBox.addTextChangedListener(new TextWatcher() {
+            public void beforeTextChanged(CharSequence t, int a, int b, int c) {}
+            public void onTextChanged(CharSequence t, int a, int b, int c) {
+                fxQuery = t.toString();
+                renderFxList();
+            }
+            public void afterTextChanged(Editable t) {}
+        });
+        searchRow.addView(fxBox, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+
+        // 筛选行：只看核心核实开关胶囊＋计数
+        LinearLayout chipRow = new LinearLayout(this);
+        chipRow.setOrientation(LinearLayout.HORIZONTAL);
+        chipRow.setGravity(Gravity.CENTER_VERTICAL);
+        chipRow.setPadding(dp(this, 16), dp(this, 10), dp(this, 16), dp(this, 2));
+        root.addView(chipRow);
+        final TextView coreChip = chip("只看核心核实",
+            fxCoreOnly ? accentColor() : (darkEff() ? Color.rgb(0x2E, 0x2E, 0x33) : Color.rgb(0xEF, 0xF1, 0xF6)),
+            fxCoreOnly ? Color.WHITE : colText(), 11.5f);
+        coreChip.setOnClickListener(v -> {
+            haptic();
+            fxCoreOnly = !fxCoreOnly;
+            coreChip.setBackground(roundRect(fxCoreOnly ? accentColor() : (darkEff() ? Color.rgb(0x2E, 0x2E, 0x33) : Color.rgb(0xEF, 0xF1, 0xF6)), 999, this));
+            coreChip.setTextColor(fxCoreOnly ? Color.WHITE : colText());
+            renderFxList();
+        });
+        chipRow.addView(coreChip);
+        fxCountTv = tv(this, "", 11.5f, colText2(), false);
+        LinearLayout.LayoutParams ctlp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+        ctlp.leftMargin = dp(this, 10);
+        chipRow.addView(fxCountTv, ctlp);
+
+        fxZoneScroll = new ScrollView(this);
+        thinScrollbar(fxZoneScroll);
+        fxListBox = new LinearLayout(this);
+        fxListBox.setOrientation(LinearLayout.VERTICAL);
+        fxListBox.setClipChildren(false);
+        fxListBox.setPadding(dp(this, 16), dp(this, 4), dp(this, 16), dp(this, 24) + navBarH()); // dock 已藏：底部留白避手势条
+        fxZoneScroll.addView(fxListBox);
+        FrameLayout wrap = new FrameLayout(this);
+        wrap.addView(fxZoneScroll, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        attachDragBar(wrap, fxZoneScroll, false, 8, 8);
+        root.addView(wrap, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
+        renderFxList();
+        if (fxZoneKeepY > 0) {
+            final int y = fxZoneKeepY;
+            fxZoneScroll.post(() -> { if (fxZoneScroll != null) fxZoneScroll.scrollTo(0, y); });
+        }
+        // Q64 同口径轻入场
+        root.setAlpha(0f); root.setTranslationY(dp(this, 4));
+        root.animate().alpha(1f).translationY(0f).setDuration(ANIM_DUR_FADE).setInterpolator(ANIM_ENTER).start();
+        return root;
+    }
+
+    boolean fxMatch(FxCard f, String q) {
+        if (q == null || q.trim().isEmpty()) return true;
+        String s = q.trim().toLowerCase(java.util.Locale.US);
+        if (f.name != null && f.name.toLowerCase(java.util.Locale.US).contains(s)) return true;
+        if (f.nameEn != null && f.nameEn.toLowerCase(java.util.Locale.US).contains(s)) return true;
+        if (f.bank != null && f.bank.toLowerCase(java.util.Locale.US).contains(s)) return true;
+        if (f.orgLabel().toLowerCase(java.util.Locale.US).contains(s)) return true;
+        for (String a : f.aliases) if (a != null && a.toLowerCase(java.util.Locale.US).contains(s)) return true;
+        for (String k : f.keywords) if (k != null && k.toLowerCase(java.util.Locale.US).contains(s)) return true;
+        return false;
+    }
+
+    void renderFxList() {
+        if (fxListBox == null) return;
+        fxListBox.removeAllViews();
+        java.util.List<FxCard> all = FxStore.all == null ? new ArrayList<FxCard>() : FxStore.all;
+        java.util.List<FxCard> shown = new ArrayList<>();
+        for (FxCard f : all) {
+            if (fxCoreOnly && !f.coreVerified()) continue;
+            if (!fxMatch(f, fxQuery)) continue;
+            shown.add(f);
+        }
+        if (fxCountTv != null) fxCountTv.setText("共 " + shown.size() + " 张" + (fxCoreOnly ? "（核心核实）" : ""));
+        if (all.isEmpty()) {
+            TextView e = tv(this, "外卡数据读取失败", 13, colText2(), false);
+            e.setGravity(Gravity.CENTER);
+            e.setPadding(0, dp(this, 40), 0, 0);
+            fxListBox.addView(e);
+            return;
+        }
+        if (shown.isEmpty()) {
+            TextView e = tv(this, "没有符合的外卡，换个关键词或放宽筛选试试", 13, colText2(), false);
+            e.setGravity(Gravity.CENTER);
+            e.setPadding(0, dp(this, 40), 0, 0);
+            fxListBox.addView(e);
+            return;
+        }
+        for (final FxCard f : shown) {
+            LinearLayout cardBox = new LinearLayout(this);
+            cardBox.setOrientation(LinearLayout.VERTICAL);
+            cardBox.setBackground(rippleBg(colSurface(), 18));
+            softShadow(cardBox, 5);
+            cardBox.setClipToOutline(true);
+            cardBox.setPadding(dp(this, 12), dp(this, 10), dp(this, 12), dp(this, 12));
+            LinearLayout.LayoutParams clp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            clp.topMargin = dp(this, 10);
+            fxListBox.addView(cardBox, clp);
+            cardBox.setOnClickListener(v -> { haptic(); openFxDetail(f); });
+
+            LinearLayout top = new LinearLayout(this);
+            top.setOrientation(LinearLayout.HORIZONTAL);
+            top.setGravity(Gravity.CENTER_VERTICAL);
+            cardBox.addView(top);
+            FrameLayout thumb = new FrameLayout(this);
+            thumb.setBackground(cardFrameBg131(cardSmallR129(9f))); // Q131：缩略框底衬承托面，角区不露黑
+            top.addView(thumb, new LinearLayout.LayoutParams(dp(this, 86), dp(this, 54)));
+            ImageView iv = new ImageView(this);
+            iv.setScaleType(ImageView.ScaleType.CENTER_CROP);
+            iv.setBackground(placeholderGradFor(f.id, cardSmallR129(9f), this)); // 无图走 Q70 占位面（核心无图卡同口径）
+            roundClip(iv, cardSmallR129(9f), this);
+            thumb.addView(iv, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+            roundClip(thumb, cardSmallR129(9f), this);
+            if (f.image != null && !f.image.isEmpty()) {
+                Bitmap b = Img.getSized(this, f.image, dp(this, 86));
+                if (b != null) iv.setImageBitmap(b);
+            }
+            LinearLayout tx = new LinearLayout(this);
+            tx.setOrientation(LinearLayout.VERTICAL);
+            LinearLayout.LayoutParams txLp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+            txLp.leftMargin = dp(this, 10);
+            top.addView(tx, txLp);
+            TextView nm = tv(this, f.name, 14, colText(), true);
+            nm.setMaxLines(2);
+            tx.addView(nm);
+            tx.addView(tv(this, f.bank, 11, colText2(), false));
+            String meta = f.orgLabel() + " · " + f.typeLabel();
+            if (f.level != null && !f.level.isEmpty()) meta += " · " + f.level;
+            tx.addView(tv(this, meta, 11, colText2(), false));
+            TextView vc = chip(f.verifyLabel(),
+                f.coreVerified() ? accentColor() : (darkEff() ? Color.rgb(0x2E, 0x2E, 0x33) : Color.rgb(0xEF, 0xF1, 0xF6)),
+                f.coreVerified() ? Color.WHITE : colText2(), 10.5f);
+            top.addView(vc);
+
+            LinearLayout metaRow = new LinearLayout(this);
+            metaRow.setOrientation(LinearLayout.HORIZONTAL);
+            metaRow.setGravity(Gravity.CENTER_VERTICAL);
+            LinearLayout.LayoutParams mlp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            mlp.topMargin = dp(this, 8);
+            cardBox.addView(metaRow, mlp);
+            if (f.tier != null && !f.tier.isEmpty()) metaRow.addView(chip(f.tier, darkEff() ? Color.rgb(0x2E, 0x2E, 0x33) : Color.rgb(0xEF, 0xF1, 0xF6), colText2(), 10.5f));
+            if (f.status != null && !f.status.isEmpty()) {
+                TextView st = tv(this, f.status, 11, colText2(), false);
+                LinearLayout.LayoutParams slp2 = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+                slp2.leftMargin = dp(this, 8);
+                metaRow.addView(st, slp2);
+            }
+            if (!f.missing.isEmpty()) {
+                TextView mt = tv(this, f.missing.size() + " 项待核", 11, colText3(), false);
+                LinearLayout.LayoutParams mtlp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+                mtlp.leftMargin = dp(this, 8);
+                metaRow.addView(mt, mtlp);
+            }
+        }
+    }
+
+    void openFxDetail(FxCard f) {
+        if (fxZoneScroll != null) fxZoneKeepY = fxZoneScroll.getScrollY();
+        fxDetailOpen = true;
+        if (fullScreenPage != null && fullScreenPage.getParent() == content) content.removeView(fullScreenPage);
+        fullScreenPage = buildFxDetailPage(f);
+        content.addView(fullScreenPage);
+        syncTopFab();
+    }
+
+    void closeFxDetail() {
+        fxDetailOpen = false;
+        if (fullScreenPage != null && fullScreenPage.getParent() == content) content.removeView(fullScreenPage);
+        fullScreenPage = buildFxZonePage();
+        content.addView(fullScreenPage);
+        syncTopFab();
+    }
+
+    View buildFxDetailPage(final FxCard f) {
+        LinearLayout root = new LinearLayout(this);
+        root.setOrientation(LinearLayout.VERTICAL);
+        root.setBackground(softPageBg());
+        root.addView(pageBackHead(f.name, () -> { haptic(); closeFxDetail(); }),
+            new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        ScrollView sc = new ScrollView(this);
+        thinScrollbar(sc);
+        LinearLayout body = new LinearLayout(this);
+        body.setOrientation(LinearLayout.VERTICAL);
+        body.setPadding(dp(this, 16), dp(this, 10), dp(this, 16), dp(this, 24) + navBarH());
+        sc.addView(body);
+        root.addView(sc, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
+
+        // 卡面大图（无图走 Q70 占位面，与核心无图卡同口径，不编造图）
+        int availW = getResources().getDisplayMetrics().widthPixels - dp(this, 32);
+        float cardR = cardR129(Math.max(16f, cardRadiusDp(availW / getResources().getDisplayMetrics().density)));
+        FrameLayout hero = new FrameLayout(this);
+        hero.setBackground(cardFrameBg131(cardR));
+        if (Build.VERSION.SDK_INT >= 21) hero.setElevation(dp(this, 6));
+        roundClip(hero, cardR, this);
+        ImageView hiv = new ImageView(this);
+        hiv.setScaleType(ImageView.ScaleType.CENTER_CROP);
+        roundClip(hiv, cardR, this);
+        Bitmap hb = (f.image != null && !f.image.isEmpty()) ? Img.getSized(this, f.image, availW) : null;
+        if (hb != null) hiv.setImageBitmap(hb);
+        else hiv.setBackground(placeholderGradFor(f.id, cardR, this));
+        hero.addView(hiv, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(this, 180)));
+        body.addView(hero, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(this, 180)));
+
+        TextView nm = tvW(this, f.name, 19, colText(), 800);
+        LinearLayout.LayoutParams nlp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        nlp.topMargin = dp(this, 14);
+        body.addView(nm, nlp);
+        if (f.nameEn != null && !f.nameEn.isEmpty()) body.addView(tv(this, f.nameEn, 12, colText2(), false));
+
+        // 信息胶囊两行（组织/卡种/等级/发行状态；银行/优先级）
+        int chipBg = darkEff() ? Color.rgb(0x2E, 0x2E, 0x33) : Color.rgb(0xEF, 0xF1, 0xF6);
+        LinearLayout cr1 = new LinearLayout(this);
+        cr1.setOrientation(LinearLayout.HORIZONTAL);
+        LinearLayout.LayoutParams cr1lp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        cr1lp.topMargin = dp(this, 10);
+        body.addView(cr1, cr1lp);
+        cr1.addView(chip(f.orgLabel(), chipBg, colText(), 11.5f));
+        addChipGap(cr1); cr1.addView(chip(f.typeLabel(), chipBg, colText(), 11.5f));
+        if (f.level != null && !f.level.isEmpty()) { addChipGap(cr1); cr1.addView(chip(f.level, chipBg, colText(), 11.5f)); }
+        if (f.status != null && !f.status.isEmpty()) { addChipGap(cr1); cr1.addView(chip(f.status, chipBg, colText(), 11.5f)); }
+        LinearLayout cr2 = new LinearLayout(this);
+        cr2.setOrientation(LinearLayout.HORIZONTAL);
+        LinearLayout.LayoutParams cr2lp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        cr2lp.topMargin = dp(this, 6);
+        body.addView(cr2, cr2lp);
+        cr2.addView(chip(f.bank, chipBg, colText(), 11.5f));
+        if (f.tier != null && !f.tier.isEmpty()) { addChipGap(cr2); cr2.addView(chip(f.tier, chipBg, colText(), 11.5f)); }
+        addChipGap(cr2);
+        cr2.addView(chip(f.verifyLabel(), f.coreVerified() ? accentColor() : chipBg, f.coreVerified() ? Color.WHITE : colText2(), 11.5f));
+
+        // 核实状态卡
+        body.addView(detailSectionTitle("核实状态"));
+        LinearLayout vBox = detailInfoCard();
+        body.addView(vBox, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        vBox.addView(tv(this, f.coreVerified() ? "核心字段已按发卡行官网核实" : "产品存在已确认，部分核心字段待官方文件补核，不作推荐依据", 12.5f, colText(), false));
+        if (f.verifiedAt != null && !f.verifiedAt.isEmpty()) {
+            TextView vt = tv(this, "核实日期：" + f.verifiedAt, 12, colText2(), false);
+            LinearLayout.LayoutParams vtlp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            vtlp.topMargin = dp(this, 6);
+            vBox.addView(vt, vtlp);
+        }
+        if (!f.missing.isEmpty()) {
+            StringBuilder sb = new StringBuilder("待核字段：");
+            for (int i = 0; i < f.missing.size(); i++) {
+                if (i > 0) sb.append("、");
+                sb.append(fxMissingLabel(f.missing.get(i)));
+            }
+            TextView mt = tv(this, sb.toString(), 12, colText2(), false);
+            LinearLayout.LayoutParams mtlp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            mtlp.topMargin = dp(this, 6);
+            vBox.addView(mt, mtlp);
+        }
+
+        // 规格
+        if (f.specs != null && f.specs.length() > 0) {
+            body.addView(detailSectionTitle("规格"));
+            LinearLayout specBox = detailInfoCard();
+            body.addView(specBox, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+            String[] order = {"年費", "免年費條件", "貨幣轉換費", "幣種支持", "申請資格", "發行情況", "境外ATM取現手續費", "主要權益", "數據狀態", "數據來源"};
+            java.util.List<String[]> rows = new ArrayList<>();
+            java.util.Set<String> used = new java.util.HashSet<>();
+            for (String k : order) {
+                String val = f.specs.optString(k, "");
+                if (val != null && !val.isEmpty() && !"null".equals(val)) { rows.add(new String[]{k, val}); used.add(k); }
+            }
+            java.util.Iterator<String> ks = f.specs.keys();
+            while (ks.hasNext()) {
+                String k = ks.next();
+                if (used.contains(k)) continue;
+                String val = f.specs.optString(k, "");
+                if (val != null && !val.isEmpty() && !"null".equals(val)) rows.add(new String[]{k, val});
+            }
+            for (int i = 0; i < rows.size(); i++) {
+                LinearLayout row = new LinearLayout(this);
+                row.setOrientation(LinearLayout.HORIZONTAL);
+                row.setGravity(Gravity.TOP);
+                row.setPadding(0, dp(this, 8), 0, dp(this, 8));
+                specBox.addView(row);
+                row.addView(tv(this, rows.get(i)[0], 12.5f, colText3(), false),
+                    new LinearLayout.LayoutParams(dp(this, 108), ViewGroup.LayoutParams.WRAP_CONTENT));
+                TextView vt = tv(this, rows.get(i)[1], 12.5f, colText(), false);
+                vt.setGravity(Gravity.END);
+                row.addView(vt, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+                if (i < rows.size() - 1) {
+                    View div = new View(this);
+                    div.setBackgroundColor(darkEff() ? Color.rgb(0x3A, 0x3A, 0x3C) : Color.rgb(0xE6, 0xE6, 0xEB));
+                    specBox.addView(div, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, Math.max(1, dp(this, 1) / 2)));
+                }
+            }
+        }
+
+        // 点评
+        if (f.review != null && !f.review.isEmpty()) {
+            body.addView(detailSectionTitle("点评"));
+            TextView rv = tv(this, f.review, 13, inkBody(), false);
+            bodyLH(rv);
+            body.addView(rv);
+        }
+
+        // 官方链接
+        if (f.url != null && !f.url.isEmpty()) {
+            TextView link = tv(this, "打开官方产品页 ↗", 13.5f, accentColor(), true);
+            link.setBackground(rippleBg(colSurface(), 16));
+            link.setPadding(dp(this, 14), dp(this, 13), dp(this, 14), dp(this, 13));
+            LinearLayout.LayoutParams llp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            llp.topMargin = dp(this, 16);
+            body.addView(link, llp);
+            final String fu = f.url;
+            link.setOnClickListener(v -> {
+                haptic();
+                try { startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(fu))); } catch (Exception e) { /* 无浏览器时静默 */ }
+            });
+        }
+
+        TextView foot = tv(this, "外卡专区为独立数据集，与主卡库分开维护；评分模型未定，暂不出分。", 11, colText3(), false);
+        LinearLayout.LayoutParams flp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        flp.topMargin = dp(this, 14);
+        body.addView(foot, flp);
+
+        root.setAlpha(0f); root.setTranslationY(dp(this, 4));
+        root.animate().alpha(1f).translationY(0f).setDuration(ANIM_DUR_FADE).setInterpolator(ANIM_ENTER).start();
+        return root;
+    }
+
+    void addChipGap(LinearLayout row) {
+        View sp = new View(this);
+        row.addView(sp, new LinearLayout.LayoutParams(dp(this, 6), 1));
     }
 
     // ---------- 自定义卡片（Phase 3b，对照 app.js 的 CUSTOM_STYLES / customCards） ----------
@@ -12622,6 +13102,10 @@ public class MainActivity extends Activity {
             (Runnable) () -> openExtendedSearch()});
         cells.add(new Object[]{"binquery", "在线查询卡信息", "BIN 认行",
             (Runnable) () -> openBinQuery()});
+        if (fxzoneEnabled()) { // Q132（2.44）：外卡专区入口，模块开关关掉即不见
+            cells.add(new Object[]{"fxzone", "外卡专区", FxStore.all != null ? ("香港 · " + FxStore.all.size() + " 张") : "香港银行卡",
+                (Runnable) () -> openFxZone()});
+        }
         if (cells.isEmpty()) return new View(this);
         LinearLayout card = new LinearLayout(this);
         card.setOrientation(LinearLayout.VERTICAL);
@@ -20553,7 +21037,7 @@ public class MainActivity extends Activity {
         panel.addView(box);
     }
 
-    static final String[] FEATURE_KEYS = {"showcase_enabled", "simkeep_enabled", "subfollow_enabled", "footprint_enabled", "owncard_enabled", "ownact_enabled"};
+    static final String[] FEATURE_KEYS = {"showcase_enabled", "simkeep_enabled", "subfollow_enabled", "footprint_enabled", "owncard_enabled", "ownact_enabled", "fxzone_enabled"};
 
     int featureOnCount() {
         int n = 0;
@@ -20590,7 +21074,7 @@ public class MainActivity extends Activity {
         LinearLayout hcol = new LinearLayout(this);
         hcol.setOrientation(LinearLayout.VERTICAL);
         hcol.addView(tv(this, S("sec_features"), 14, colText(), true));
-        final TextView sumTv = tv(this, isEn() ? "6 items · " + featureOnCount() + " on" : "6 项 · 已开 " + featureOnCount() + " 项", 11.5f, colText2(), false); // Q114：英文计数行
+        final TextView sumTv = tv(this, isEn() ? "7 items · " + featureOnCount() + " on" : "7 项 · 已开 " + featureOnCount() + " 项", 11.5f, colText2(), false); // Q114：英文计数行（Q132：外卡专区入列 6→7）
         LinearLayout.LayoutParams sumLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         sumLp.topMargin = dp(this, 2);
         sumTv.setLayoutParams(sumLp);
@@ -20603,7 +21087,7 @@ public class MainActivity extends Activity {
         final LinearLayout body = new LinearLayout(this);
         body.setOrientation(LinearLayout.VERTICAL);
         body.setVisibility(open[0] ? View.VISIBLE : View.GONE);
-        final Runnable refreshSummary = () -> sumTv.setText(isEn() ? "6 items · " + featureOnCount() + " on" : "6 项 · 已开 " + featureOnCount() + " 项");
+        final Runnable refreshSummary = () -> sumTv.setText(isEn() ? "7 items · " + featureOnCount() + " on" : "7 项 · 已开 " + featureOnCount() + " 项");
         String[][] feats = {
             {"展柜", "我的卡片页的纯卡面展示（堆叠 / 平放自由画布）", "showcase_enabled"},
             {"保号管家", "电话卡 / eSIM 保号到期管理，关掉后入口不出现", "simkeep_enabled"},
@@ -20611,6 +21095,7 @@ public class MainActivity extends Activity {
             {"玩卡足迹", "申请 / 开卡 / 提额等持卡事件时间线，关掉后入口不出现", "footprint_enabled"},
             {"持卡总览", "我的卡片页的额度汇总与还款日历", "owncard_enabled"},
             {"活动追踪", "开卡任务与刷卡达标登记，关掉后入口不出现", "ownact_enabled"},
+            {"外卡专区", "香港银行卡专区，独立数据不混入主卡库，关掉后入口不出现", "fxzone_enabled"},
         };
         for (int i = 0; i < feats.length; i++) {
             if (i > 0) addHair(body);
@@ -21080,6 +21565,8 @@ public class MainActivity extends Activity {
         if (cardMenuPop != null) { closeCardMenu(); return; }
         if (changelogOpen) { closeChangelog(); return; } // Q130（件三）：日志压在关于之上，先关日志回关于（旧序 about 检查在前、系统返回把两层一起吞掉）；左上 ‹ 与系统键同走 closeChangelog 同一落点
         if (aboutPageOpen) { closeAbout(); return; }
+        if (fxDetailOpen) { closeFxDetail(); return; } // Q132：外卡详情压在专区之上，先回专区
+        if (fxZoneOpen) { closeFxZone(); return; }
         if (helloOpen) { closeHello(); return; }
         if (placeholderPickerView != null) { closePlaceholderPicker(); return; }
         if (glossarySheetView != null) { closeGlossarySheet(); return; } // Q122（件十三）：常识浮层压在最上，先关它再回向导/详情
