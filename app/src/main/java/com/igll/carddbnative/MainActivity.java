@@ -2,6 +2,8 @@ package com.igll.carddbnative;
 
 import android.animation.ValueAnimator;
 import android.app.Activity;
+import android.app.AlarmManager;
+import android.app.PendingIntent;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
@@ -1794,6 +1796,20 @@ public class MainActivity extends Activity {
         g.setCornerRadius(dp(this, radiusDp));
         return g;
     }
+
+    // Q131（2.43，件五，用户 13:22 纠正口径）：四角黑边是全 App 普遍现象、不挑图——
+    // 凡真实卡图以圆角帧呈现处（瓷砖/详情/展柜/选卡/学生/在线结果），帧的底衬、
+    // 占位垫层与图未覆盖的角区一律承此调：与详情图廊 Q126 定调逐值一致的承托面
+    // （浅 #F1F1F4／深 #2A2A2E），浅色场景即与页面/卡面同调，绝不留黑。今后任何
+    // 新图（哪怕四角非白）落到任何一处，角区露出的都只会是这层承托色；与图侧的
+    // 白填充（数据线）叠加生效、互不替代。圆角半径口径一字不动。
+    int cardFrameTone131() { return darkEff() ? Color.rgb(0x2A, 0x2A, 0x2E) : Color.rgb(0xF1, 0xF1, 0xF4); }
+    GradientDrawable cardFrameBg131(float radiusDp) {
+        GradientDrawable g = new GradientDrawable();
+        g.setColor(cardFrameTone131());
+        g.setCornerRadius(dp(this, Math.round(radiusDp)));
+        return g;
+    }
     /** 柔面＋按压涟漪（涟漪色随主题色，与 rippleBg 同口径）。 */
     Drawable softFaceRipple(float radiusDp) {
         int ac = accentColor();
@@ -2302,6 +2318,12 @@ public class MainActivity extends Activity {
     // 任一 frozen 窗从无到有只放行一帧 captureBackdrop 抓冻结帧后置 false，窗在场期间
     // tick 不再整树重抓＋三遍模糊。false→无窗时自然重新武装（见 captureBackdropTick 尾段）。
     boolean frozenFrameArmed130 = true;
+    // Q131（2.43）：色带拖动排序的末次触摸打点（开拖与每次 MOVE 刷新）——tick 在
+    // 350ms 窗内跳过背板抓图/录制，防拖动帧与抓图抢主线程、松手瞬间挤帧（件一）。
+    long dragReorderTouchMs131 = 0;
+    // Q131：色带落位动画代次——落位未稳时再起拖，旧落位的收尾（摘拖动态框/影）
+    // 回调凭此作废，不许把新拖动态的框误摘（件一）。
+    int customDragGen131 = 0;
     // Q98：滚动冻结与失败自愈的状态位——lastScrollEventMs 由根视图滚动监听打点，
     // preDraw 抓图在滚动活跃期（末次滚动事件 200ms 内）跳过，背板稳定冻结、滚动
     // 零采样不抢主线程，停稳由既有 650ms 防抖强制重抓一帧；backdropFailStreak 数
@@ -2439,15 +2461,26 @@ public class MainActivity extends Activity {
      * 自然恢复跟随，且既有 650ms 停稳防抖会强制重抓一帧对齐。强制抓图（切页/开关窗/
      * 设置变更）走 captureBackdrop() 直调，不受冻结影响。 */
     void captureBackdropTick() {
-        // Q108：硬件背板随 preDraw 逐帧录制（实时跟随正是实验目的；录制函数自带
-        // helloOpen/开关/16ms 地板守卫）。但 ⋯ 菜单开窗冻结（Q102）必须尊重：开窗
-        // 那一帧已由 captureBackdrop 末尾的结构性录制存好，动画期间不再重录，否则
-        // 菜单玻璃会把开窗动画中的自身染色面录进节点自引用。节点内容即本帧场景，
-        // 试点件在本帧 onDraw 画出的就是当前帧，无旧帧残影。
-        if (!moreMenuBackdropFrozen) recordHwBackdrop();
+        // Q131（2.43，件四）：守卫顺序调整——hello/菜单/详情三道 return 提前到
+        // recordHwBackdrop 之前。旧序下只要 preDraw 在跑，recordHwBackdrop 每帧先把
+        // 根视图整树录一遍 RenderNode（HW_BACKDROP_SCALE 0.5）才轮到守卫 return：
+        // 详情窗内滑动时与 Q118「窗内零重抓」自相矛盾（软件路已冻结、硬件路还在逐帧
+        // 整树录制）。详情冻结帧由 openDetail 的 +300ms 结构性抓帧供齐（含
+        // captureBackdrop 末尾的节点录制），此处不再逐帧录。record 自带 helloOpen
+        // 守卫、菜单由 moreMenuBackdropFrozen 同闸，提前 return 净效果不变。
         if (helloOpen) return; // Q99：你好页入场动画全程冻结背板采样，不与飞入抢主线程
         if (moreMenuBackdropFrozen) return; // Q102：⋯ 菜单开窗期间背板冻结（开窗瞬间已同步抓存静止帧），不许动画期逐帧整屏重抓＋三遍模糊抖背景
         if (detailCard != null) return; // Q118（2.31）：详情窗在场——冻结玻璃只用开窗落定那一帧（openDetail 已排一次结构性重抓），窗内上下滑动绝不再逐帧整树重抓＋三遍模糊（慢拖中途停顿逾 200ms 即被本 tick 抓一帧，正是详情页滑动卡顿主源）
+        boolean frozenShown130 = anyFrozenGlassShown();
+        // Q131：frozen 窗在场且冻结帧已备齐（武装位已落）时，硬件录制与软件抓图同
+        // 口径停录——窗玻璃消费的是冻结帧，逐帧重录纯耗主线程且会把动画中的窗体
+        // 录进节点自引用。无窗或正处武装帧（开窗跃迁）时照旧录。
+        if (!frozenShown130 || frozenFrameArmed130) recordHwBackdrop();
+        // Q131：我的卡片色带拖动排序期间同冻结——拖动每帧 setTranslationY 都触发
+        // root preDraw，此刻抓图/录制与拖动帧抢主线程，松手瞬间又恰逢落位重排，
+        // 两股活挤在一帧即用户所见「放下闪」。以末次拖动触摸打点 350ms 为界（覆盖
+        // 140ms 落位动画），超时自动失效防 finish 未达时永久冻结。
+        if (android.os.SystemClock.uptimeMillis() - dragReorderTouchMs131 < 350) return;
         if (android.os.SystemClock.uptimeMillis() - lastScrollEventMs < 200) return;
         // Q99：屏上只有 live 玻璃且文档条带有效时，屏幕快照不必逐帧重抓——live 玻璃走
         // 条带按 scrollY 同帧取景；重抓整根只剩抢主线程。有 frozen 玻璃（底表/弹层）
@@ -2459,7 +2492,6 @@ public class MainActivity extends Activity {
         // 现泛化到全部 frozen 窗：从无到有只放行一帧抓冻结帧（与窗自带的直接结构性抓帧
         // 同帧同图、互不叠加），之后冻结至无窗在场再重新武装。玻璃参数/默认值/硬件录制
         // （recordHwBackdrop）一字未动，只改执行时机。
-        boolean frozenShown130 = anyFrozenGlassShown();
         if (!frozenShown130) {
             frozenFrameArmed130 = true;
             if (bandScroll() != null) {
@@ -2471,6 +2503,20 @@ public class MainActivity extends Activity {
         }
         captureBackdrop();
         if (frozenShown130) frozenFrameArmed130 = false;
+    }
+
+    // Q131（2.43，件四）：开窗前预抓冻结帧——Q130 的武装位只保证开窗后「不再逐帧
+    // 重抓」，但从无窗到有窗的跃迁帧仍放行一次整树软件绘制＋三遍盒式模糊，恰落在
+    // 约 280ms 进场动画的首帧上，动画被堵成「蹲一下再升起」（用户 2.42 终审仍报
+    // 筛选/常识开窗卡）。改：开窗方在窗上屏之前（点击事件内、动画时钟未启）同步把
+    // 这一帧抓掉，落点无窗的纯页面、正是要冻结的身后场景；抓成即同步落武装位，
+    // 首个 preDraw 起 tick 零重抓、动画全程只剩已备帧绘制。被 50ms 节流挡下且无
+    // 旧帧时不动武装位，tick 仍按 Q130 放行一帧兜底（旧行为）。
+    void prepareFrozenBackdrop131() {
+        if (glassDisabled || helloOpen || detailCard != null || moreMenuBackdropFrozen) return;
+        if (anyFrozenGlassShown()) return; // 已有 frozen 窗在场：背板已冻结，复用现帧
+        try { captureBackdrop(); } catch (Throwable ignored) {}
+        if (backdropBmp != null) frozenFrameArmed130 = false;
     }
 
     /** Q98：背板失败计数——单次抓图/绘制异常只丢这一帧（旧帧继续垫着），连续 3 次
@@ -3017,7 +3063,11 @@ public class MainActivity extends Activity {
                       : "已暂停（排期最后）：全部玻璃走安全软件磨砂；功能与 UI 收官后再议。手动打开可能闪退，闪退后重开自动退回") + hwPieceStatus();
     }
 
-    /** 手写盒式模糊（三遍滑动窗均值近似高斯，边缘钳制取样）；直接在像素数组上原地进行。 */
+    /** 手写盒式模糊（三遍滑动窗均值近似高斯，边缘钳制取样）；直接在像素数组上原地进行。
+     * Q131（2.43，件四）：通道拆装改位运算——原实现每像素每趟约 40 次 Color.alpha/
+     * red/green/blue/argb 静态调用（三遍×横竖 6 趟、约 23 万像素），在开窗抓帧里是
+     * 与整树绘制并列的主线程大头。位移/掩码与 android.graphics.Color 的实现逐位
+     * 等价（ARGB_8888 打包、除数同为 win），产出像素逐位不变、玻璃观感一字不动。 */
     static void boxBlurPass(int[] px, int w, int h, int r, int[] tmp) {
         if (r < 1 || w <= 0 || h <= 0) return;
         int win = 2 * r + 1;
@@ -3027,16 +3077,16 @@ public class MainActivity extends Activity {
             long sa = 0, sr = 0, sg = 0, sb = 0;
             for (int i = -r; i <= r; i++) {
                 int c = px[row + Math.max(0, Math.min(w - 1, i))];
-                sa += Color.alpha(c); sr += Color.red(c); sg += Color.green(c); sb += Color.blue(c);
+                sa += c >>> 24; sr += (c >> 16) & 0xFF; sg += (c >> 8) & 0xFF; sb += c & 0xFF;
             }
             for (int x = 0; x < w; x++) {
-                tmp[row + x] = Color.argb((int) (sa / win), (int) (sr / win), (int) (sg / win), (int) (sb / win));
+                tmp[row + x] = ((int) (sa / win) << 24) | ((int) (sr / win) << 16) | ((int) (sg / win) << 8) | (int) (sb / win);
                 int cout = px[row + Math.max(0, Math.min(w - 1, x - r))];
                 int cin = px[row + Math.max(0, Math.min(w - 1, x + r + 1))];
-                sa += Color.alpha(cin) - Color.alpha(cout);
-                sr += Color.red(cin) - Color.red(cout);
-                sg += Color.green(cin) - Color.green(cout);
-                sb += Color.blue(cin) - Color.blue(cout);
+                sa += (cin >>> 24) - (cout >>> 24);
+                sr += ((cin >> 16) & 0xFF) - ((cout >> 16) & 0xFF);
+                sg += ((cin >> 8) & 0xFF) - ((cout >> 8) & 0xFF);
+                sb += (cin & 0xFF) - (cout & 0xFF);
             }
         }
         // 纵向
@@ -3044,16 +3094,16 @@ public class MainActivity extends Activity {
             long sa = 0, sr = 0, sg = 0, sb = 0;
             for (int i = -r; i <= r; i++) {
                 int c = tmp[Math.max(0, Math.min(h - 1, i)) * w + x];
-                sa += Color.alpha(c); sr += Color.red(c); sg += Color.green(c); sb += Color.blue(c);
+                sa += c >>> 24; sr += (c >> 16) & 0xFF; sg += (c >> 8) & 0xFF; sb += c & 0xFF;
             }
             for (int y = 0; y < h; y++) {
-                px[y * w + x] = Color.argb((int) (sa / win), (int) (sr / win), (int) (sg / win), (int) (sb / win));
+                px[y * w + x] = ((int) (sa / win) << 24) | ((int) (sr / win) << 16) | ((int) (sg / win) << 8) | (int) (sb / win);
                 int cout = tmp[Math.max(0, Math.min(h - 1, y - r)) * w + x];
                 int cin = tmp[Math.max(0, Math.min(h - 1, y + r + 1)) * w + x];
-                sa += Color.alpha(cin) - Color.alpha(cout);
-                sr += Color.red(cin) - Color.red(cout);
-                sg += Color.green(cin) - Color.green(cout);
-                sb += Color.blue(cin) - Color.blue(cout);
+                sa += (cin >>> 24) - (cout >>> 24);
+                sr += ((cin >> 16) & 0xFF) - ((cout >> 16) & 0xFF);
+                sg += ((cin >> 8) & 0xFF) - ((cout >> 8) & 0xFF);
+                sb += (cin & 0xFF) - (cout & 0xFF);
             }
         }
     }
@@ -5193,6 +5243,17 @@ public class MainActivity extends Activity {
         });
 
         showTab("home");
+        // Q131（2.43，件二）：桌面图标切换重启后的回落——冷启首帧直接落设置页，
+        // 滚动位经既有 pageScrollSaveY 机制在建页时恢复（buildSettingsPage 的
+        // keepY 口径），再 post 一次同值 scrollTo 兜底（建页恢复被布局时机吞时）。
+        if (prefs != null && prefs.getBoolean("icon_restart_return131", false)) {
+            final int iconBackY131 = prefs.getInt("icon_restart_scroll131", 0);
+            try { prefs.edit().putBoolean("icon_restart_return131", false).commit(); } catch (Throwable ignored) {}
+            pageScrollSaveY.put("settings", iconBackY131);
+            showTab("settings");
+            if (settingsScroll != null && iconBackY131 > 0)
+                settingsScroll.post(() -> { if (settingsScroll != null) settingsScroll.scrollTo(0, iconBackY131); });
+        }
         // Q121（2.33 插队，站规矩复犯纠正）：「启动时自动检测更新」旧默认 true——
         // 打开 App 即自动联网检测，用户多次立规矩「不许打开就自动更、默认关」。
         // 默认改 false；从未手动拨过（prefs 无此键）即按关生效，手动开过（键=true）
@@ -6617,6 +6678,23 @@ public class MainActivity extends Activity {
             if (beforeOpen != null) beforeOpen.run();
             box.setVisibility(View.VISIBLE);
             int w = box.getWidth();
+            if (w <= 0) {
+                // Q131（2.43，件四）：新挂的盒还没布局时 getWidth()=0，旧兜底取整屏宽
+                // 减 28dp，比盒的真实宽度（页边距＋卡内边距两重收窄）宽一截——按过
+                // 宽量出的目标高偏小，弹簧冲到假目标后落定改回 WRAP_CONTENT 又当场
+                // 弹回真高：展开「顿一下再跳」与高度对不齐的根源。改按父容器内容宽
+                // （减父内边距与自身左右 margin，即盒布局后必得的宽）量，未知时才
+                // 回落旧口径。盒已布局的常态路径（w>0）一字不变。
+                View p131 = (box.getParent() instanceof View) ? (View) box.getParent() : null;
+                if (p131 != null) {
+                    int pw131 = p131.getWidth() - p131.getPaddingLeft() - p131.getPaddingRight();
+                    if (lp instanceof ViewGroup.MarginLayoutParams) {
+                        ViewGroup.MarginLayoutParams mlp131 = (ViewGroup.MarginLayoutParams) lp;
+                        pw131 -= mlp131.leftMargin + mlp131.rightMargin;
+                    }
+                    if (pw131 > 0) w = pw131;
+                }
+            }
             if (w <= 0) w = getResources().getDisplayMetrics().widthPixels - dp(this, 28);
             box.measure(View.MeasureSpec.makeMeasureSpec(w, View.MeasureSpec.EXACTLY),
                 View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED));
@@ -6647,6 +6725,29 @@ public class MainActivity extends Activity {
                     if (onSettled130 != null) onSettled130.run();
                 });
         }
+    }
+
+    // Q131（2.43，件四）：视图在滚动内容坐标系中的顶（逐层累加 getTop 至滚动容器止）。
+    int contentTopInScroll131(View v, ScrollView sv) {
+        int t = 0;
+        View cur = v;
+        while (cur != null && cur != sv && cur.getParent() instanceof View) {
+            t += cur.getTop();
+            cur = (View) cur.getParent();
+        }
+        return t;
+    }
+
+    // Q131：收起落定回锚——收起开始时记滚动位与盒顶/盒高，落定摘盒后按「视口上方
+    // 被摘走的高度」把滚动位回拨同等距离：收起前后视口里的同一行内容钉在同一屏幕
+    // 位置（收起＝回初见）。旧实现摘盒后任由 ScrollView 在内容变矮时自行钳位/留白，
+    // 临界处整页跳一截、落点对不齐，正是用户所说「收起后回不到原位置」。盒在视口
+    // 内或下方时回拨量为 0、位置不动；最终值仍由 scrollTo 钳到合法范围。
+    void restoreFoldScroll131(final ScrollView sv, final int svY0, final int boxTop, final int boxH) {
+        if (sv == null) return;
+        int removedAbove = Math.max(0, Math.min(boxH, svY0 - boxTop));
+        final int target = Math.max(0, svY0 - removedAbove);
+        sv.post(() -> { try { sv.scrollTo(0, target); } catch (Throwable ignored) {} });
     }
 
     // hand-written damped spring (no libs), Q38 tuning: stiffness 210, damping ratio ~0.68 -> about 500ms
@@ -8027,6 +8128,7 @@ public class MainActivity extends Activity {
         roundClip(box, tileR, this);
         int imgH = Math.max(dp(this, 40), Math.round(tileW / 1.586f));
         FrameLayout art = new FrameLayout(this);
+        art.setBackground(cardFrameBg131(tileR)); // Q131（件五）：图区底衬改承托面——图未覆盖/裁切边缘露出的角区只见此调，绝不露黑（旧为透明、透出下层不定调）
         topSheetClip(art, tileR, this); // Q48 排查补强：图区容器同半径顶圆底直裁切，顶图四角不靠瓷砖外框单层 outline
         box.addView(art, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, imgH));
         ImageView iv = new ImageView(this);
@@ -9413,6 +9515,7 @@ public class MainActivity extends Activity {
         closeFilterSheetNow();
         // P2e/P2c：右下双钮退场，不与筛选窗叠压
         hideChrome(); // Q12
+        prepareFrozenBackdrop131(); // Q131：冻结帧在窗上屏前抓好，进场动画不付整树绘制＋三遍模糊（件四）
         final FrameLayout sheet = new FrameLayout(this);
         sheet.setBackgroundColor(Color.argb(102, 15, 20, 40)); // Q77b：窗外再压暗一档（对齐混合版 .dlg-backdrop rgba(0,0,0,.4)），与玻璃窗体明暗分明
         sheet.setOnClickListener(v -> closeFilterSheet());
@@ -10529,6 +10632,7 @@ public class MainActivity extends Activity {
         row.setLayoutParams(rlp);
 
         FrameLayout wizThumb = new FrameLayout(this);
+        wizThumb.setBackground(cardFrameBg131(cardSmallR129(9f))); // Q131（件五）：缩略框底衬承托面，角区不露黑
         row.addView(wizThumb, new LinearLayout.LayoutParams(dp(this, 76), dp(this, 48)));
         ImageView iv = new ImageView(this);
         iv.setScaleType(ImageView.ScaleType.CENTER_CROP);
@@ -11283,15 +11387,7 @@ public class MainActivity extends Activity {
             // outline 同半径裁切一把弧（Q48 的控件裁切本已双装，位图二层自此退役）。
             float cardR = cardR129(Math.max(16f, cardRadiusDp(imgW / getResources().getDisplayMetrics().density))); // Q129：卡图类收口
             FrameLayout imgFrame = new FrameLayout(this);
-            // Q126（2.38，件十，用户 04:48 点名）：大卡图四角兜底定调——旧外框/图层双双
-            // TRANSPARENT，outline 在个别机型/层级失效或抗锯齿边缘时角部露出未定调的下
-            // 层，读作一眼黑角（无图占位面自带渐变、四角干净，真卡图才犯，正与图证合）。
-            // 外框改画廊同调圆角面（与 gal 渐变同源：浅 #F1F1F4／深 #2A2A2E），角部无论
-            // 露出哪一层都是页面调。圆角大小与图片内容一字不动，不恢复位图二层切角。
-            GradientDrawable frameTone126 = new GradientDrawable();
-            frameTone126.setColor(darkEff() ? Color.rgb(0x2A, 0x2A, 0x2E) : Color.rgb(0xF1, 0xF1, 0xF4));
-            frameTone126.setCornerRadius(dp(this, Math.round(cardR)));
-            imgFrame.setBackground(frameTone126);
+            imgFrame.setBackground(cardFrameBg131(cardR)); // Q126 定调（浅 #F1F1F4／深 #2A2A2E）自 Q131 起收进全 App 共用助手 cardFrameBg131，值逐位一致
             if (Build.VERSION.SDK_INT >= 21) imgFrame.setElevation(dp(this, 6));
             roundClip(imgFrame, cardR, this);
             ImageView iv = new ImageView(this);
@@ -11820,6 +11916,7 @@ public class MainActivity extends Activity {
             top.setGravity(Gravity.CENTER_VERTICAL);
             cardBox.addView(top);
             FrameLayout stuThumb = new FrameLayout(this);
+            stuThumb.setBackground(cardFrameBg131(cardSmallR129(9f))); // Q131（件五）：缩略框底衬承托面，角区不露黑
             top.addView(stuThumb, new LinearLayout.LayoutParams(dp(this, 72), dp(this, 44)));
             ImageView iv = new ImageView(this);
             iv.setScaleType(ImageView.ScaleType.CENTER_CROP);
@@ -13024,10 +13121,21 @@ public class MainActivity extends Activity {
 
     // Q56 对照混合版 endTileDrag→restyleTiles(wrap)：只就地重算编号/渐变衔接/首尾圆角/钮态，不整页重建、不闪
     void restyleCustomTilesInPlace() {
-        ViewGroup box = customTilesBox;
+        // Q131（2.43，件一）：全量重衔接只保留给 ↑/↓ 钮换位（moveCustom）——拖动落位
+        // 改走 restyleCustomRange131 的区间重染，不再整列重造背景（见 finishCustomDrag）。
+        if (customTilesBox == null) return;
+        restyleCustomRange131(customTilesBox, 0, customTilesBox.getChildCount() - 1);
+    }
+
+    // Q131：区间重衔接——只处理 [lo, hi] 内的色带：带体渲染取决于自身位次（首/末
+    // 旗标、上叠 margin、序号、钮态）与下一张的样式（底部淡接），换序后受影响的
+    // 恰是移动区间连同两侧各一条，区间外逐位不变、重染纯属白费且是落位闪一帧的
+    // 帮凶。循环体与旧全量实现逐字一致，只缩范围。
+    void restyleCustomRange131(ViewGroup box, int lo, int hi) {
         if (box == null) return;
         int n = Math.min(box.getChildCount(), customCards.size());
-        for (int i = 0; i < n; i++) {
+        int from131 = Math.max(0, lo), to131 = Math.min(n - 1, hi);
+        for (int i = from131; i <= to131; i++) {
             View child = box.getChildAt(i);
             if (!(child instanceof FrameLayout)) continue;
             FrameLayout tile = (FrameLayout) child;
@@ -13106,6 +13214,8 @@ public class MainActivity extends Activity {
     // P-deck ① 长按拖动：跟手平移+放大，松手按位移换序并保存（对照混合版 startTileDrag）
     void startCustomDrag(final View tile, final int fromIdx) {
         haptic();
+        customDragGen131++; // Q131：新拖作废上一落位未完的收尾回调（防误摘新拖动态框）
+        dragReorderTouchMs131 = android.os.SystemClock.uptimeMillis(); // Q131：拖动态背板冻结计时起跑（tick 同名守卫）
         final Drawable origBg = tile.getBackground();
         tile.setTag(origBg);
         setCustomTileDragFrame(tile, true, origBg);
@@ -13129,6 +13239,7 @@ public class MainActivity extends Activity {
                         if (dragTop127[0] < 0) dragTop127[0] = v.getTop();
                         return true;
                     case MotionEvent.ACTION_MOVE:
+                        dragReorderTouchMs131 = android.os.SystemClock.uptimeMillis(); // Q131：拖动中持续刷新背板冻结计时
                         if (downY < 0) downY = e.getRawY();
                         if (dragTop127[0] < 0) dragTop127[0] = v.getTop();
                         v.setTranslationY(e.getRawY() - downY);
@@ -13197,11 +13308,19 @@ public class MainActivity extends Activity {
 
     void finishCustomDrag(View tile, int fromIdx, float dy) {
         tile.setOnTouchListener(null);
-        // Q56：落位不瞬跳——保留当前平移量，待物理子序定稿后 140ms 滑入槽位（见下）
-        tile.animate().scaleX(1f).scaleY(1f).alpha(1f).setDuration(140).setInterpolator(ANIM_EXIT).start();
-        Object tag = tile.getTag();
-        if (tag instanceof Drawable) setCustomTileDragFrame(tile, false, (Drawable) tag);
+        // Q131（2.43，件一）：松手放下闪的落点收口——旧顺序是先把拖动态的蓝框/圆角
+        // 裁切/18dp elevation 一瞬全摘（影子与框先于带体消失），再把整列每条带的
+        // 背景 Drawable 全量重造一遍，同时缩放/平移还在 140ms 动画里：三股变化挤在
+        // 落位首帧，正是「放下闪一帧」。改：框与影保留到落位动画终点才随 animator
+        // 的 endAction 一起摘（代次守卫防与新拖冲突）；重衔接只染真正受影响的带
+        // （移动区间及两侧各一），原位拖回恒零重染。数据落位口径（Q7 子序优先）不变。
+        final Object dragBg131 = tile.getTag();
         tile.setTag(null);
+        final int gen131 = ++customDragGen131;
+        final Runnable frameOff131 = () -> {
+            if (gen131 == customDragGen131 && dragBg131 instanceof Drawable)
+                setCustomTileDragFrame(tile, false, (Drawable) dragBg131);
+        };
         if (mineScrollView != null) mineScrollView.requestDisallowInterceptTouchEvent(false);
         lastDragEndAt = System.currentTimeMillis();
         // Q7：以拖动手势中就地换位后的实际子序为准（dy 仅作兜底），避免实时换位与按位移换算双重作用
@@ -13230,14 +13349,29 @@ public class MainActivity extends Activity {
                 if (cur >= 0 && cur != toIdx) { box.removeView(tile); box.addView(tile, Math.min(toIdx, box.getChildCount())); }
                 // Q127：子数与数据对不齐（拖动中途异常）时整盒按新序重填，不许带病落位
                 if (box.getChildCount() != customCards.size()) { box.removeAllViews(); fillCustomTiles124((LinearLayout) box); }
-                restyleCustomTilesInPlace();
-                if (liveSettled) tile.animate().translationY(0f).setDuration(140).setInterpolator(ANIM_EXIT).start();
-                else tile.setTranslationY(0);
+                else if (toIdx != fromIdx) {
+                    // Q131：换序只染移动区间及两侧各一条（首尾旗标/淡接指向/序号/钮态
+                    // 只受这些带影响），不再全列重造背景；原位拖回（toIdx==fromIdx）零重染
+                    int lo131 = Math.max(0, Math.min(fromIdx, toIdx) - 1);
+                    int hi131 = Math.min(box.getChildCount() - 1, Math.max(fromIdx, toIdx) + 1);
+                    restyleCustomRange131(box, lo131, hi131);
+                }
+                if (liveSettled) {
+                    // Q131：缩放/透明/平移并作一支 140ms 落位动画，终点才摘框影（见上）
+                    tile.animate().scaleX(1f).scaleY(1f).alpha(1f).translationY(0f)
+                        .setDuration(140).setInterpolator(ANIM_EXIT).withEndAction(frameOff131).start();
+                } else {
+                    tile.animate().scaleX(1f).scaleY(1f).alpha(1f).setDuration(140).setInterpolator(ANIM_EXIT).start();
+                    tile.setTranslationY(0);
+                    frameOff131.run();
+                }
             } else {
+                tile.animate().scaleX(1f).scaleY(1f).alpha(1f).setDuration(140).setInterpolator(ANIM_EXIT).start();
                 tile.setTranslationY(0);
+                frameOff131.run();
                 refreshMineKeepScroll();
             }
-        } catch (Throwable ignored) { tile.setTranslationY(0); refreshMineKeepScroll(); }
+        } catch (Throwable ignored) { tile.setTranslationY(0); frameOff131.run(); refreshMineKeepScroll(); }
     }
 
     TextView customActBtn(String label, boolean disabled, View.OnClickListener onClick) {
@@ -15303,6 +15437,7 @@ public class MainActivity extends Activity {
     }
     FrameLayout buildUpdateSheet(String title, String msg, String cancelTxt, String okTxt, Runnable onOk) {
         hideChrome();
+        prepareFrozenBackdrop131(); // Q131：确认为同族 frozen 浮卡窗，冻结帧先行（件四；桌面图标切换确认窗亦经此，件二）
         final FrameLayout sheet = new FrameLayout(this);
         View shade = new View(this); shade.setBackgroundColor(Color.argb(102,0,0,0)); shade.setAlpha(0f);
         sheet.addView(shade, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
@@ -15641,6 +15776,7 @@ public class MainActivity extends Activity {
         ensureGlossary();
         try { fetchGlossaryUpdate(); } catch (Throwable ignored) {}
         hideChrome(); // Q122（件十一）：浮层开窗底栏退场
+        prepareFrozenBackdrop131(); // Q131：同筛选窗——冻结帧先行，进场弹簧不被抓图堵首帧（件四）
         final FrameLayout overlay = new FrameLayout(this);
         View shade = new View(this);
         shade.setBackgroundColor(Color.argb(102, 0, 0, 0));
@@ -16119,6 +16255,11 @@ public class MainActivity extends Activity {
                     arrow.setText("展开 ›");
                     foldBusy130.add(g.id);
                     final LinearLayout boxNow127 = boxRef127[0];
+                    // Q131：同资讯条——收起前锚记（盒与尾注同摘，总高并计），落定回锚
+                    final int foldSvY131g = newsScroll != null ? newsScroll.getScrollY() : 0;
+                    final int foldBoxTop131g = (boxNow127 != null && newsScroll != null) ? contentTopInScroll131(boxNow127, newsScroll) : 0;
+                    final int foldBoxH131g = (boxNow127 != null ? boxNow127.getHeight() : 0)
+                        + (noteRef127[0] != null ? noteRef127[0].getHeight() : 0);
                     if (boxNow127 != null) foldHeightSpring(boxNow127, false, null, () -> {
                         // Q127：落定摘附加盒＋尾注，正文翻回 2 行截断——存活视图与初始
                         // 渲染同一套量测，卡高精确落回初始收起态（不多露一行、不留残高）
@@ -16126,6 +16267,7 @@ public class MainActivity extends Activity {
                         boxRef127[0] = null;
                         if (noteRef127[0] != null) { card.removeView(noteRef127[0]); noteRef127[0] = null; }
                         if (bdRef127[0] != null) { bdRef127[0].setMaxLines(2); bdRef127[0].setEllipsize(android.text.TextUtils.TruncateAt.END); }
+                        restoreFoldScroll131(newsScroll, foldSvY131g, foldBoxTop131g, foldBoxH131g); // Q131
                     }, new SpringDriver(), () -> foldBusy130.remove(g.id)); // Q127：逐卡独立驱动，不再共用一支互相摘任务
                     else {
                         if (noteRef127[0] != null) { card.removeView(noteRef127[0]); noteRef127[0] = null; }
@@ -16614,7 +16756,13 @@ public class MainActivity extends Activity {
             iv.setScaleType(cropFill127 ? ImageView.ScaleType.CENTER_CROP : ImageView.ScaleType.FIT_CENTER); // Q122（2.34，件十五补）：小面整幅等比可见；Q127 放大面铺满裁切
             roundClip(iv, r, this); // Q130（件六）：卡图自身补与外框同一把弧——旧实现只靠 face 外框单层 outline，个别机型失效时方图四角直出（右角最显）；只加裁切，缩放/显示区/半径公式（cardR129 随圆角 t 同步）一字未动
             Bitmap b = Img.getSized(this, it.card.image, Math.max(64, wPx)); // Q105：展柜面按实际显示宽解码（旧全量解码；源宽恒 ≥ 显示宽，画面不变）
-            if (b != null) { iv.setImageBitmap(b); if (darkEff()) iv.setAlpha(0.92f); }
+            if (b != null) {
+                // Q131（件五）：有真实卡图时面底衬换承托面（旧为按卡配色的占位渐变垫在
+                // 图下，FIT_CENTER 整幅可见时图未覆盖的四边/角区露出的正是这层深浅
+                // 不定的渐变，深色配色即读作黑边）；无图时仍走占位面本色，不动占位口径。
+                face.setBackground(cardFrameBg131(r));
+                iv.setImageBitmap(b); if (darkEff()) iv.setAlpha(0.92f);
+            }
             face.addView(iv, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
             // Q104/2.18：卡面组织小标全撤（展柜库内卡同口径）
         } else {
@@ -18593,12 +18741,17 @@ public class MainActivity extends Activity {
                     arrow.setText("展开 ›");
                     foldBusy130.add(n.id);
                     final LinearLayout detNow124 = detRef123[0];
+                    // Q131：收起前锚记（滚动位/盒顶/盒高），落定摘盒后回锚，收起回初见位置
+                    final int foldSvY131 = newsScroll != null ? newsScroll.getScrollY() : 0;
+                    final int foldBoxTop131 = (detNow124 != null && newsScroll != null) ? contentTopInScroll131(detNow124, newsScroll) : 0;
+                    final int foldBoxH131 = detNow124 != null ? detNow124.getHeight() : 0;
                     if (detNow124 != null) foldHeightSpring(detNow124, false, null, () -> {
                         // Q124（件七）：落定就地摘详情盒＋恢复标题/摘要两行预览，不整表重渲染
                         card.removeView(detNow124);
                         detRef123[0] = null;
                         ttl.setMaxLines(2);
                         if (smRef124[0] != null) { smRef124[0].setMaxLines(2); smRef124[0].setEllipsize(android.text.TextUtils.TruncateAt.END); }
+                        restoreFoldScroll131(newsScroll, foldSvY131, foldBoxTop131, foldBoxH131); // Q131
                     }, new SpringDriver(), () -> foldBusy130.remove(n.id));
                     else { renderNews(); foldBusy130.remove(n.id); }
                 } else {
@@ -19425,12 +19578,21 @@ public class MainActivity extends Activity {
     }
 
     View buildChangelogPage() {
-        LinearLayout root = new LinearLayout(this);
-        root.setOrientation(LinearLayout.VERTICAL);
+        // Q131（2.43，件三）：整页沉浸式——根改 FrameLayout，页底 softPageBg 一通到底
+        // （状态栏后/标题区/滚动区/底带身后是同一张底）；底部动作带改以 BOTTOM 锚死
+        // 在窗口物理底边，不再靠纵向 LinearLayout 的权重分配落位（2.42 真机图证：带子
+        // 与屏底之间断开一截，见「白带断层」）。带高落位后回填为滚动区底边距，滚动
+        // 几何与 2.42（头＋滚动区＋带）逐位一致；日志内容、文案、滚动条方案、两钮
+        // 功能一字未动，手势区留白仍是带内 navBarH（全 App 既有沉浸口径）。
+        final FrameLayout root = new FrameLayout(this);
         root.setBackground(softPageBg()); // Q94 铺开：雾蓝页底（原 Q72）
+        LinearLayout col = new LinearLayout(this);
+        col.setOrientation(LinearLayout.VERTICAL);
+        root.addView(col, new FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
 
         // Q92：全站二级页头（圆形细线返回钮 + 标题），废原生白药丸返回钮
-        root.addView(pageBackHead("更新日志", () -> { haptic(); closeChangelog(); }),
+        col.addView(pageBackHead("更新日志", () -> { haptic(); closeChangelog(); }),
             new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
 
         changelogScroll = new ScrollView(this);
@@ -19445,7 +19607,7 @@ public class MainActivity extends Activity {
         FrameLayout logWrap = new FrameLayout(this);
         logWrap.addView(changelogScroll, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         attachDragBar(logWrap, changelogScroll, false, 8, 8);
-        root.addView(logWrap, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
+        col.addView(logWrap, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
 
         List<LogEntry> logs = loadChangelog();
         if (logs.isEmpty()) {
@@ -19490,12 +19652,24 @@ public class MainActivity extends Activity {
             }
         }
 
-        LinearLayout actions = changelogActions(
+        final LinearLayout actions = changelogActions(
             () -> { if (changelogScroll != null) changelogScroll.smoothScrollTo(0, 0); },
             () -> closeChangelog());
         // 独立页 dock 已藏，底部避让手势条一次算清，两钮完整可见不半埋
         actions.setPadding(actions.getPaddingLeft(), actions.getPaddingTop(), actions.getPaddingRight(), actions.getPaddingBottom() + navBarH());
-        root.addView(actions);
+        // Q131：带以 BOTTOM 锚死窗口底边（见函数头注释）；带高落位后回填为滚动区
+        // 底边距，滚动视口止于带上沿、拖条止点随之同旧位，几何与 2.42 一致。
+        FrameLayout.LayoutParams alp131 = new FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        alp131.gravity = Gravity.BOTTOM;
+        root.addView(actions, alp131);
+        actions.post(() -> {
+            int bh131 = actions.getHeight();
+            if (bh131 > 0 && logWrap.getLayoutParams() instanceof LinearLayout.LayoutParams) {
+                LinearLayout.LayoutParams llp131 = (LinearLayout.LayoutParams) logWrap.getLayoutParams();
+                if (llp131.bottomMargin != bh131) { llp131.bottomMargin = bh131; logWrap.setLayoutParams(llp131); }
+            }
+        });
         return root;
     }
 
@@ -20712,6 +20886,53 @@ public class MainActivity extends Activity {
                 android.content.pm.PackageManager.COMPONENT_ENABLED_STATE_ENABLED, android.content.pm.PackageManager.DONT_KILL_APP);
         } catch (Throwable ignored) { /* 自检失败不拦启动：经典款在 manifest 里恒 enabled */ }
     }
+    // Q131（2.43，件二）：桌面图标切换确认窗——复用全 App 统一玻璃确认为同一基建
+    // （buildUpdateSheet：冻结玻璃浮卡＋进出场动画＋取消/确认双钮），不新造样式。
+    // 旧流程点 tile 直接启停 activity-alias＋rebuildPages：桌面刷新与页重建的接缝
+    // 在真机上读作一次闪屏（用户 13:06 自诊）。新流程：确认才动手，取消什么都不动。
+    FrameLayout iconConfirmSheet131 = null;
+
+    void confirmLauncherIcon131(final String targetId) {
+        if (iconConfirmSheet131 != null && iconConfirmSheet131.getParent() != null) return; // 在场则不叠开
+        iconConfirmSheet131 = null; // 已被摘除的旧窗（取消/点遮罩）不占位
+        final FrameLayout sheet = buildUpdateSheet("切换桌面图标",
+            "切换桌面图标需要重启软件生效，数据不会丢失。",
+            "取消", "确认重启", () -> {
+                iconConfirmSheet131 = null;
+                // 先记回落点（重启后回设置页原滚动位），再启停 alias（先启新后禁旧
+                // 的老铁则在 applyLauncherIcon129 内），最后重启拉起新图标。回落点
+                // 用 commit 同步落盘——进程随即被杀，apply 的异步写盘赶不上。
+                try {
+                    if (prefs != null) prefs.edit()
+                        .putBoolean("icon_restart_return131", true)
+                        .putInt("icon_restart_scroll131", settingsScroll != null ? settingsScroll.getScrollY() : 0)
+                        .commit();
+                } catch (Throwable ignored) {}
+                applyLauncherIcon129(targetId);
+                restartApp131();
+            });
+        iconConfirmSheet131 = sheet;
+        content.addView(sheet);
+        animateUpdateSheetIn(sheet);
+    }
+
+    // Q131：重启本应用——经 AlarmManager 的 PendingIntent 在进程退出后拉起主
+    // Activity（直接 startActivity 后自杀在个别 ROM 上会被吞，闹钟 intent 由系统
+    // 托管必达）。清任务栈保证回来的是干净首帧；用户数据（prefs/文件）不碰。
+    void restartApp131() {
+        try {
+            Intent i = new Intent(this, MainActivity.class);
+            i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
+            PendingIntent pi = PendingIntent.getActivity(this, 131243, i,
+                PendingIntent.FLAG_CANCEL_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+            AlarmManager am = (AlarmManager) getSystemService(ALARM_SERVICE);
+            if (am != null) am.set(AlarmManager.RTC, System.currentTimeMillis() + 120, pi);
+            else startActivity(i);
+        } catch (Throwable ignored) {}
+        finish();
+        android.os.Process.killProcess(android.os.Process.myPid());
+    }
+
     void launcherInner129(LinearLayout panel) {
         LinearLayout box = new LinearLayout(this);
         box.setOrientation(LinearLayout.VERTICAL);
@@ -20746,9 +20967,8 @@ public class MainActivity extends Activity {
             tile.setLayoutParams(tlp);
             tile.setOnClickListener(v -> {
                 if (tl[0].equals(launcherIcon129)) return;
-                applyLauncherIcon129(tl[0]);
                 haptic();
-                rebuildPages(); // 选中态以 applyLauncherIcon129 的实际结果为准（失败兜底时仍显经典）
+                confirmLauncherIcon131(tl[0]); // Q131（2.43，件二）：先弹玻璃确认窗，明说要重启、数据不丢；确认才启停 alias＋重启，不再不打招呼直接刷新露闪
             });
             row.addView(tile);
         }
