@@ -19618,6 +19618,40 @@ public class MainActivity extends Activity {
     // ③收起高 closedH 改临时量：同步换到收起态量高再换回展开态（同一调用栈、
     // 无帧插入），不许拿展开态的量测近似。验收口径：n1–n6 逐条展开/收起单调、
     // 无首帧突变、无末帧跳；常识 foldHeightSpring 与其调用点仍一行未动。
+    // Q142（2.53）：收起落定滚动锚——逐项对表取证的结论与治法。把「展开再收起
+    // 落定」与「从未展开的初始渲染」逐项比对（资讯六条＋常识成员卡）：卡总高
+    // （落定回 WRAP_CONTENT 后自然量测）、标题/摘要/正文 maxLines 与 ellipsize
+    // （落定单帧复 2 行＋END，与初始渲染同写法）、详情盒/附加盒/尾注摘除（同实
+    // 例 removeView、子视图次序与插入位恒等）、padding/margin（只在建卡/建子
+    // 视图时写、折展路径零写入）、钉高与临时参数（折展只写 clp.height 且落定
+    // 必回 WRAP，无 translation/clip 临时写）——五项全恒等，卡体落定与初始渲
+    // 染逐像素一致（Q138/Q139 设计目标复核成立）。唯一不恒等项＝页面滚动位：
+    // 收起使内容总高减少 Δ（整卡收缩量），「全程不写滚动位」口径下，落定
+    // scrollY 完全由 ScrollView 在内容变矮时的钳位/漂移决定（近页底被钳到新
+    // maxScroll、卡在视口上方时视口内容随收缩漂移），条目落定位置对不上展开
+    // 前——即用户 01:07 所报「没能收起，回到没展开前的样子」。Q131 旧回锚方向
+    // 本对、两病：Δ 只按附加盒高计（漏正文塌量）、落定后 post 异步写（布局钳
+    // 位先行再补一刀＝双重计账）。本轮：收起开始捕获锚（当前页 ScrollView 的
+    // scrollY＋卡顶内容坐标，卡上方内容收起全程不变、故其顶坐标落定仍成立），
+    // Δ 取整卡 curH−closedH；落定回调内、状态翻转后、onDone 前，同帧同步写一
+    // 次绝对值 scrollTo——卡在视口下方回拨 0、不动；卡（部分）在视口上方按上
+    // 方消失高度回拨；target 超落定合法域时随后的布局钳位收在 maxScroll（即
+    // 「从未展开滚到底」同态）。一次绝对写、先于本帧布局遍历，无双计账。展开/
+    // 深链入场只增高不减、scrollY 恒合法，无病不动（经查落定位同理恒等）。
+    // 已知取舍：锚以点收起瞬间为准，动画约 0.4s 内手动滚动会被落定锚覆盖一次
+    // （foldBusy 已锁本条点击，与 Q131 当年取舍同）。
+    int[] captureFoldScroll142(final LinearLayout card) {
+        if (newsScroll == null) return null;
+        return new int[]{ newsScroll.getScrollY(), contentTopInScroll131(card, newsScroll) };
+    }
+
+    void settleFoldScroll142(final int[] cap142, final int shrink142) {
+        if (cap142 == null || newsScroll == null || shrink142 <= 0) return;
+        int removedAbove142 = Math.max(0, Math.min(shrink142, cap142[0] - cap142[1]));
+        int target142 = Math.max(0, cap142[0] - removedAbove142);
+        if (newsScroll.getScrollY() != target142) newsScroll.scrollTo(0, target142);
+    }
+
     void collapseNewsCard135(final LinearLayout card, final TextView ttl, final TextView sm,
                              final LinearLayout det, final Runnable onDone) {
         final int wSpec = newsCardWidthSpec135(card);
@@ -19625,6 +19659,7 @@ public class MainActivity extends Activity {
         int curH = card.getHeight();
         if (curH <= 0) { card.measure(wSpec, uSpec); curH = card.getMeasuredHeight(); }
         if (det == null || curH <= 0) { if (onDone != null) onDone.run(); return; }
+        final int[] foldCap142 = captureFoldScroll142(card); // Q142：收起开始先记滚动锚
         // 临时量收起高：换到收起态量一次，立即换回展开态（同步完成、不可见）
         final int detIdx = card.indexOfChild(det);
         card.removeView(det);
@@ -19632,6 +19667,7 @@ public class MainActivity extends Activity {
         if (sm != null) { sm.setMaxLines(2); sm.setEllipsize(android.text.TextUtils.TruncateAt.END); }
         card.measure(wSpec, uSpec);
         final int closedH = card.getMeasuredHeight();
+        final int shrink142 = curH - closedH; // Q142：整卡收缩量（落定回锚的 Δ）
         ttl.setMaxLines(Integer.MAX_VALUE);
         if (sm != null) { sm.setMaxLines(Integer.MAX_VALUE); sm.setEllipsize(null); }
         if (detIdx >= 0) card.addView(det, detIdx); else card.addView(det);
@@ -19640,6 +19676,7 @@ public class MainActivity extends Activity {
             card.removeView(det);
             ttl.setMaxLines(2);
             if (sm != null) { sm.setMaxLines(2); sm.setEllipsize(android.text.TextUtils.TruncateAt.END); }
+            settleFoldScroll142(foldCap142, shrink142); // Q142：落定同帧回锚（先于本帧布局钳位、无双计账；Q138「收起全程不写滚动位」至此修正——不写过程位、只落定对一次账）
             if (onDone != null) onDone.run();
         });
     }
@@ -19730,6 +19767,7 @@ public class MainActivity extends Activity {
         final int uSpec = View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED);
         int curH = card.getHeight();
         if (curH <= 0) { card.measure(wSpec, uSpec); curH = card.getMeasuredHeight(); }
+        final int[] foldCap142 = captureFoldScroll142(card); // Q142：收起开始先记滚动锚（与资讯同治）
         final int boxIdx = box != null ? card.indexOfChild(box) : -1;
         final int noteIdx = note != null ? card.indexOfChild(note) : -1;
         if (box != null) card.removeView(box);
@@ -19737,6 +19775,7 @@ public class MainActivity extends Activity {
         if (bd != null) { bd.setMaxLines(2); bd.setEllipsize(android.text.TextUtils.TruncateAt.END); }
         card.measure(wSpec, uSpec);
         final int closedH = card.getMeasuredHeight();
+        final int shrink142 = curH - closedH; // Q142：整卡收缩量（落定回锚的 Δ）
         if (bd != null) { bd.setMaxLines(Integer.MAX_VALUE); bd.setEllipsize(null); }
         if (box != null) { if (boxIdx >= 0) card.addView(box, boxIdx); else card.addView(box); }
         if (note != null) { if (noteIdx >= 0) card.addView(note, noteIdx); else card.addView(note); }
@@ -19744,6 +19783,7 @@ public class MainActivity extends Activity {
             if (box != null) card.removeView(box);
             if (note != null) card.removeView(note);
             if (bd != null) { bd.setMaxLines(2); bd.setEllipsize(android.text.TextUtils.TruncateAt.END); }
+            settleFoldScroll142(foldCap142, shrink142); // Q142：落定同帧回锚（算法与已知取舍见 captureFoldScroll142 上方）
             if (onDone != null) onDone.run();
         });
     }
