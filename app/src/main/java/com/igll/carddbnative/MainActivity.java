@@ -956,7 +956,7 @@ public class MainActivity extends Activity {
         // Q23：与 Q3 悬浮钮同款玻璃底（glassFabBg + applyGlassFabShadow + live 玻璃层），对照混合版 .qf-top/.qf-btn
         // 同语言：44dp 圆钮、白色 .5 描边、深色细线箭头；玻璃模糊由 glassLayer 垫底。
         fab.setBackground(glassFabBg());
-        fab.addView(glassLayer(fab, -1, true), new FrameLayout.LayoutParams(
+        fab.addView(glassLayer(fab, fabClipR146(), true), new FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         // Q23 固定浅白染色托底（盖在模糊层之上、箭头之下）：对照混合版 .qf-top 的 background:rgba(255,255,255,.32)
         // Q53：改用与搜索/筛选钮同一 fabFrostWash() 提亮层，三钮黑底白底同一口径。
@@ -1578,6 +1578,11 @@ public class MainActivity extends Activity {
     static float inputR143(float base) { return inputR143(base, cornerT129); }
     static float pillR143(float t) { return t == 0.5f ? 999f : Math.min(999f, 56f * t); }
     static float pillR143() { return pillR143(cornerT129); }
+    // Q146（2.57，甲组）：悬浮正圆钮（搜索/筛选/回顶/加卡＋搜索框内清除钮）的钮体半径
+    // 收口——标准档（t==0.5f）回 -1 哨兵，调用方走既有 OVAL 原路逐位不变；偏离档回
+    // pillR143 的圆角矩形半径：方形档呈圆角方钮、圆润档半径过钮高一半自然仍是圆。
+    // 玻璃染色/糊层/描边的色值与透明度一字不动，只换钮体形状（用户 02:08 点名件）。
+    static float fabClipR146() { return cornerT129 == 0.5f ? -1f : pillR143(); }
     // 通用面助手 roundRect 的唯一分档口：按基准值归类——≥900 整圆药丸、10–40 面板、
     // 4–9.99 胶囊（capsuleR129）、<4 功能微圆角豁免（滚动条/页点/抓柄，不成形面）。
     static float autoR143(float base) {
@@ -1913,7 +1918,7 @@ public class MainActivity extends Activity {
                 new int[]{Color.argb(168, 255, 255, 255), Color.argb(156, 243, 247, 252)});
             g.setStroke(dp(this, 1), Color.argb(170, 255, 255, 255));
         }
-        g.setCornerRadius(dp(this, 999));
+        g.setCornerRadius(dp(this, pillR143())); // Q146：搜索胶囊面随药丸类收口（标准档 999 逐位不变）
         return g;
     }
     /** Q94 dock 染色去花：比通用玻璃染色更白更匀，糊色不抢眼（用户 19:08 点名）。 */
@@ -7562,7 +7567,9 @@ public class MainActivity extends Activity {
     Drawable glassFabBg() {
         // Q73: unified oval thin tint; when glass is disabled this is the fallback face, so keep
         // it light enough to stand on pure-black cards (Q53) without turning into solid plastic.
-        GradientDrawable g = glassTintDrawable(-1, true);
+        // Q146：钮体形状随圆角一杆（标准档 OVAL 原路；偏离档圆角矩形），染色/关态兜底色不变。
+        float fr146 = fabClipR146();
+        GradientDrawable g = fr146 < 0 ? glassTintDrawable(-1, true) : glassTintDrawable(fr146, false);
         if (glassDisabled) {
             try { g.setColors(darkEff()
                 ? new int[]{Color.argb(210, 52, 52, 58), Color.argb(200, 40, 40, 46)}
@@ -7579,18 +7586,19 @@ public class MainActivity extends Activity {
         // Q103（2.17）：深色单档提亮——旧 wash 深档仅 argb34/22 白，压在深色背板上钮面
         // 近黑、细线图标看不清（用户 20:52 点名）；深色改乳白提亮＋白边光，钮面成可辨的
         // 深灰玻璃、图标转近白细线（iconInk）。浅色仍走原 glassWashView，像素不变。
+        float fr146w = fabClipR146(); // Q146：提亮层钮体形状与钮底同口径（标准档 OVAL 原路）
         if (darkEff()) {
             View v = new View(this);
             v.setClickable(false); v.setFocusable(false);
             v.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
             GradientDrawable g = new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
                 new int[]{Color.argb(96, 255, 255, 255), Color.argb(62, 238, 244, 252)});
-            g.setShape(GradientDrawable.OVAL);
+            if (fr146w < 0) g.setShape(GradientDrawable.OVAL); else g.setCornerRadius(dp(this, fr146w));
             g.setStroke(dp(this, 1), Color.argb(92, 255, 255, 255));
             v.setBackground(g);
             return v;
         }
-        return glassWashView(-1, true);
+        return fr146w < 0 ? glassWashView(-1, true) : glassWashView(fr146w, false);
     }
     void applyGlassFabShadow(View v) {
         if (Build.VERSION.SDK_INT >= 21) v.setElevation(dp(this, 12));
@@ -7802,7 +7810,8 @@ public class MainActivity extends Activity {
         FrameLayout fab = new FrameLayout(this);
         GradientDrawable bg = new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
             new int[]{Color.rgb(0x2F, 0x7D, 0xFF), Color.rgb(0x0A, 0x5C, 0xD6)});
-        bg.setShape(GradientDrawable.OVAL);
+        float fr146a = fabClipR146(); // Q146：加卡圆钮钮体形状随圆角一杆（标准档 OVAL 原路，渐变色不变）
+        if (fr146a < 0) bg.setShape(GradientDrawable.OVAL); else bg.setCornerRadius(dp(this, fr146a));
         fab.setBackground(bg);
         applyGlassFabShadow(fab);
         TextView plus = tv(this, "\uFF0B", 28, Color.WHITE, false);
@@ -7925,7 +7934,7 @@ public class MainActivity extends Activity {
         fab.setClipToPadding(false);
         int n0 = activeFilterCount() + scoreDimsSel.size(); // Q130（件九）：初始角标与 updateFilterFabBadge 同一公式——旧实现漏加评分维度，只选维度时角标少数/不显
         fab.setBackground(glassFabBg());
-        fab.addView(glassLayer(fab, -1, true), new FrameLayout.LayoutParams(
+        fab.addView(glassLayer(fab, fabClipR146(), true), new FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         fab.addView(fabFrostWash(), new FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
@@ -7972,7 +7981,7 @@ public class MainActivity extends Activity {
     View buildSearchFab() {
         FrameLayout fab = new FrameLayout(this);
         fab.setBackground(glassFabBg());
-        fab.addView(glassLayer(fab, -1, true), new FrameLayout.LayoutParams(
+        fab.addView(glassLayer(fab, fabClipR146(), true), new FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         fab.addView(fabFrostWash(), new FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
@@ -8700,7 +8709,7 @@ public class MainActivity extends Activity {
         // 顶图 cover 铺满不变（Q24 优先级：铺满第一、圆角第二），四角靠外框同半径裁切、无图占位同半径。
         // Q94：首页柔面圆角下限抬到 22dp（Soft 语言 20–28 档），图区裁切同半径自动跟随。
         // Q94 铺开：全站瓷砖统一柔面（原 softFace 仅首页）——柔面涟漪＋柔影，圆角下限 20dp。
-        float tileR = Math.max(softFace ? 22f : 20f, cardR129(cardRadiusDp(tileW / getResources().getDisplayMetrics().density))); // Q129：卡图类收口（公式源 cardRadiusDp 与下限不动，只缩放公式结果；瓷砖三层同值跟随）
+        float tileR = cardR129(Math.max(softFace ? 22f : 20f, cardRadiusDp(tileW / getResources().getDisplayMetrics().density))); // Q129：卡图类收口；Q146（2.57）：下限并入基准再过一杆——旧写法下限压在收口函数之外，滑杆偏离标准档时瓷砖恒 ≥20/22dp 与全屏脱钩（用户 02:08 双列红圈实证「圆角不对」）；并入后 t==0.5f 逐位回原值、方形档可真方。图与块同值同源 tileR（art 贴块顶边、内衬距 0）
         box.setBackground(softFaceRipple(tileR));
         softShadow(box, 6);
         roundClip(box, tileR, this);
@@ -9313,7 +9322,7 @@ public class MainActivity extends Activity {
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         // Q61：顶部下拉刷新指示（素净细线胶囊，默认隐藏；拉动渐显、松手触发后转「正在检查…」）
         homePullBar = new FrameLayout(this);
-        homePullBar.setBackground(roundRect(Color.argb(238, 255, 255, 255), 999, this));
+        // Q146：白底托盘撤除——容器只承载弧线本体定位与渐显，不设任何背景
         homePullBar.setVisibility(View.GONE);
         homePullIcon = new PullSpinView(this); // Q126：文字胶囊改无字转圈图标
         homePullBar.addView(homePullIcon, new FrameLayout.LayoutParams(dp(this, 34), dp(this, 34)));
@@ -9430,7 +9439,7 @@ public class MainActivity extends Activity {
         FrameLayout inlineWrap = new FrameLayout(this);
         inlineWrap.setBackground(softSearchTint()); // Q94：内嵌搜索胶囊玻璃收淡（近白低饱和，不再一团蓝）
         if (Build.VERSION.SDK_INT >= 21) inlineWrap.setElevation(dp(this, 6));
-        inlineWrap.addView(glassLayer(inlineWrap, 28, true), new FrameLayout.LayoutParams(
+        inlineWrap.addView(glassLayer(inlineWrap, floatR129(28f), true), new FrameLayout.LayoutParams( // Q146：糊层裁切随悬浮类收口（标准档 28 逐位不变）
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         LinearLayout inlineRow = new LinearLayout(this);
         inlineRow.setOrientation(LinearLayout.HORIZONTAL);
@@ -9454,7 +9463,8 @@ public class MainActivity extends Activity {
         inlineRow.addView(searchBox, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
         FrameLayout clearWrap = new FrameLayout(this);
         GradientDrawable cbg = new GradientDrawable();
-        cbg.setShape(GradientDrawable.OVAL);
+        float fr146c = fabClipR146(); // Q146：清除圆钮随钮体半径收口（标准档 OVAL 原路）
+        if (fr146c < 0) cbg.setShape(GradientDrawable.OVAL); else cbg.setCornerRadius(dp(this, fr146c));
         cbg.setColor(Color.rgb(0xD1, 0xD1, 0xD6));
         clearWrap.setBackground(cbg);
         CloseIconView clearIcon = new CloseIconView(this);
@@ -9491,7 +9501,7 @@ public class MainActivity extends Activity {
         FrameLayout floatWrap = new FrameLayout(this);
         floatWrap.setBackground(softSearchTint()); // Q94：悬浮搜索胶囊同口径收淡
         if (Build.VERSION.SDK_INT >= 21) floatWrap.setElevation(dp(this, 14));
-        floatWrap.addView(glassLayer(floatWrap, 28, true), new FrameLayout.LayoutParams(
+        floatWrap.addView(glassLayer(floatWrap, floatR129(28f), true), new FrameLayout.LayoutParams( // Q146：同 inlineWrap 口径
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         LinearLayout floatRow = new LinearLayout(this);
         floatRow.setOrientation(LinearLayout.HORIZONTAL);
@@ -9514,7 +9524,8 @@ public class MainActivity extends Activity {
         if (darkEff()) { floatSearchBox.setTextColor(colText()); floatSearchBox.setHintTextColor(colText2()); } floatSearchBox.setShadowLayer(0, 0, 0, 0); // Q103
         FrameLayout closeWrap = new FrameLayout(this);
         GradientDrawable xbg = new GradientDrawable();
-        xbg.setShape(GradientDrawable.OVAL);
+        float fr146x = fabClipR146(); // Q146：关闭圆钮随钮体半径收口（标准档 OVAL 原路）
+        if (fr146x < 0) xbg.setShape(GradientDrawable.OVAL); else xbg.setCornerRadius(dp(this, fr146x));
         xbg.setColor(Color.argb(46, 120, 120, 128));
         closeWrap.setBackground(xbg);
         CloseIconView closeIcon = new CloseIconView(this);
@@ -9630,6 +9641,11 @@ public class MainActivity extends Activity {
     // 不填色、不挂箭头，留一道缺口让转角/自转可读；线宽在旧 2dp 上加粗一档
     // （2.6dp），与全 App 细线图标同族同墨色（accent 蓝）；进度转角/触发自转/
     // 复位的驱动口径（setRotation/startPullSpin）一字不动。
+    // Q146（2.57，乙组，用户 02:13 定规格）：白底托盘整块撤除（两处 bar 不再设背景，
+    // 只剩弧线本体浮在页面上——此前滑杆方形档还会把白托盘压成白方块）；弧线在 2.6dp
+    // 上再加粗至 3.4dp；Q127 摘掉的箭头按用户本轮明令恢复——弧端一枚填充小三角沿
+    // 切线指向旋转方向，整枚呈环形箭头。驱动口径（进度转角/触发自转/复位）一字未动。
+    // 首页分块加载转圈（maybeShowHomeLoading）共用本面、无底（本就透明）自动同治。
     class PullSpinView extends View {
         PullSpinView(Context c) { super(c); }
         @Override protected void onDraw(Canvas cv) {
@@ -9637,13 +9653,27 @@ public class MainActivity extends Activity {
             Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);
             p.setStyle(Paint.Style.STROKE);
             p.setStrokeCap(Paint.Cap.ROUND);
-            p.setStrokeWidth(Math.max(2f, dp(getContext(), 2.6f)));
+            p.setStrokeWidth(Math.max(2f, dp(getContext(), 3.4f))); // Q146：2.6→3.4dp 加粗
             p.setColor(Color.rgb(0x0A, 0x5C, 0xFF));
             float cx = getWidth() / 2f, cy = getHeight() / 2f;
-            float r = Math.min(cx, cy) - dp(getContext(), 3.5f);
+            float r = Math.min(cx, cy) - dp(getContext(), 4.5f); // Q146：内收给箭头根部让位，旋转全程不触钮界
             if (r <= 2f) return;
             RectF o = new RectF(cx - r, cy - r, cx + r, cy + r);
             cv.drawArc(o, -90f, 300f, false, p);
+            // Q146：弧端箭头——填充小三角，尖端沿切线（角度增大向＝旋转向），根部骑弧线。
+            double ae = Math.toRadians(-90f + 300f);
+            float co = (float) Math.cos(ae), si = (float) Math.sin(ae);
+            float ex = cx + r * co, ey = cy + r * si; // 弧端点
+            float al = dp(getContext(), 6.8f);       // 箭长
+            Path tri = new Path();
+            tri.moveTo(ex - si * al, ey + co * al);  // 尖端（切线向）
+            tri.lineTo(ex + si * al * 0.40f + co * al * 0.58f, ey - co * al * 0.40f + si * al * 0.58f);
+            tri.lineTo(ex + si * al * 0.40f - co * al * 0.58f, ey - co * al * 0.40f - si * al * 0.58f);
+            tri.close();
+            Paint fp = new Paint(Paint.ANTI_ALIAS_FLAG);
+            fp.setStyle(Paint.Style.FILL);
+            fp.setColor(Color.rgb(0x0A, 0x5C, 0xFF));
+            cv.drawPath(tri, fp);
         }
     }
     final java.util.Map<View, Runnable> pullSpinLoops = new java.util.HashMap<>();
@@ -9709,7 +9739,7 @@ public class MainActivity extends Activity {
     // Q125（2.37，件一）：其余三页下拉改清缓存，两条线在触发处分岔，互不串扰。
     void attachPullRefresh123(final FrameLayout page, final ScrollView sv, final boolean newsMode) {
         final FrameLayout bar = new FrameLayout(this);
-        bar.setBackground(roundRect(Color.argb(238, 255, 255, 255), 999, this));
+        // Q146：同首页下拉——白底托盘撤除，只剩弧线本体
         bar.setVisibility(View.GONE);
         final PullSpinView txt = new PullSpinView(this); // Q126（件二）：文字改无字转圈图标（变量名沿用 txt 免动下方分发）
         bar.addView(txt, new FrameLayout.LayoutParams(dp(this, 34), dp(this, 34)));
