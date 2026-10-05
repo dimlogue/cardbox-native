@@ -529,6 +529,7 @@ public class MainActivity extends Activity {
             || subfollowView != null || subfollowFormSheet != null
             || footprintView != null || footprintFormSheet != null
             || placeholderPickerView != null
+            || fxSheetView150 != null // Q150（2.61）：外卡详情窗升起同列覆盖（与 Q122 补挂口径一致，防回顶钮/底栏在窗在场时被召回压窗）
             || delConfirmSheet != null || updateTipSheet != null || updateConfirmSheet != null;
     }
     void hideFabsNow() {
@@ -1141,7 +1142,7 @@ public class MainActivity extends Activity {
         STR.put("icon_pack_geometric", new String[]{"几何","Geometric"}); // Q148：去 G 后缀
         STR.put("org_badge_style", new String[]{"组织小标","Network Badges"});
         STR.put("org_badge_cur", new String[]{"现行","Current"});
-        STR.put("org_badge_b", new String[]{"B 扁平","B Flat"});
+        STR.put("org_badge_b", new String[]{"扁平","Flat"}); // Q150（2.61，N3）：去内部代号字母 B，只留正经名字（prefs 值 "b" 不变）
         STR.put("launcher_icon", new String[]{"桌面图标","App Icon"});
         STR.put("launcher_classic", new String[]{"经典蓝卡","Classic"});
         STR.put("launcher_stacked", new String[]{"叠卡","Stacked"});
@@ -1811,14 +1812,20 @@ public class MainActivity extends Activity {
         // 默认原样）——全 App 页底只此一处收口，原样路径色值逐位不变；柔和档
         // 仍在雾蓝同族内整体提亮一档（浅档向白靠、深档同步提亮，深浅两外观都
         // 分得出），卡面/柔面/token 一律不跟。
+        // Q150（2.61，N2）：柔和档与原样色差过小、真机看不出（Q148 旧柔和浅档
+        // #EAF2FB/#F3F8FD/#FBFDFE、深档 #1D2940/#162135/#11192B，与原样只差一档）——
+        // 柔和档再向白提亮并降饱和（浅档近白带一息蓝、深档同步提亮），一眼可辨、
+        // 仍雾蓝同族不刺眼；原样档色值逐位不动（浅 #D7E7F8/#E8F1FB/#F6F9FD、
+        // 深 #151E2E/#101725/#0C121E）。新柔和：浅 #F0F7FE/#FAFCFF/#FFFFFF、
+        // 深 #26334E/#1D2942/#172136。
         if (darkEff()) {
             if (pageBgSoft148) return new GradientDrawable(GradientDrawable.Orientation.TL_BR,
-                new int[]{Color.rgb(0x1D, 0x29, 0x40), Color.rgb(0x16, 0x21, 0x35), Color.rgb(0x11, 0x19, 0x2B)});
+                new int[]{Color.rgb(0x26, 0x33, 0x4E), Color.rgb(0x1D, 0x29, 0x42), Color.rgb(0x17, 0x21, 0x36)});
             return new GradientDrawable(GradientDrawable.Orientation.TL_BR,
                 new int[]{Color.rgb(0x15, 0x1E, 0x2E), Color.rgb(0x10, 0x17, 0x25), Color.rgb(0x0C, 0x12, 0x1E)});
         }
         if (pageBgSoft148) return new GradientDrawable(GradientDrawable.Orientation.TL_BR,
-            new int[]{Color.rgb(0xEA, 0xF2, 0xFB), Color.rgb(0xF3, 0xF8, 0xFD), Color.rgb(0xFB, 0xFD, 0xFE)});
+            new int[]{Color.rgb(0xF0, 0xF7, 0xFE), Color.rgb(0xFA, 0xFC, 0xFF), Color.rgb(0xFF, 0xFF, 0xFF)});
         return new GradientDrawable(GradientDrawable.Orientation.TL_BR,
             new int[]{Color.rgb(0xD7, 0xE7, 0xF8), Color.rgb(0xE8, 0xF1, 0xFB), Color.rgb(0xF6, 0xF9, 0xFD)});
     }
@@ -2515,6 +2522,7 @@ public class MainActivity extends Activity {
         if (helloOpen) return; // Q99：你好页入场动画全程冻结背板采样，不与飞入抢主线程
         if (moreMenuBackdropFrozen) return; // Q102：⋯ 菜单开窗期间背板冻结（开窗瞬间已同步抓存静止帧），不许动画期逐帧整屏重抓＋三遍模糊抖背景
         if (detailCard != null) return; // Q118（2.31）：详情窗在场——冻结玻璃只用开窗落定那一帧（openDetail 已排一次结构性重抓），窗内上下滑动绝不再逐帧整树重抓＋三遍模糊（慢拖中途停顿逾 200ms 即被本 tick 抓一帧，正是详情页滑动卡顿主源）
+        if (fxSheetView150 != null) return; // Q150（2.61）：外卡详情窗与主详情同类——窗在场同闸冻结，冻结帧由 openFxDetail 的空闲门控结构性抓帧供齐（见 scheduleSheetBackdrop150）
         boolean frozenShown130 = anyFrozenGlassShown();
         // Q131：frozen 窗在场且冻结帧已备齐（武装位已落）时，硬件录制与软件抓图同
         // 口径停录——窗玻璃消费的是冻结帧，逐帧重录纯耗主线程且会把动画中的窗体
@@ -3256,12 +3264,22 @@ public class MainActivity extends Activity {
 
     // Q133（2.45，件三）：开窗后唯一一次结构性抓帧（冻结背板刷新）的空闲门控调度——
     // 见 openDetail 调用点注释。tries=0 为首判（延迟 300ms，沿旧口径），之后每次顺延 220ms。
+    // Q150（2.61）：调度本体收口 scheduleSheetBackdrop150 与外卡详情窗共用一份
+    // （存活判据/触摸打点由调用方注入），本转调参数逐位同旧版，详情行为不变。
     void scheduleDetailBackdrop133(final Card dc118, final int tries133) {
+        scheduleSheetBackdrop150(() -> detailCard == dc118 && !detailClosing,
+            () -> detailTouchDown133, tries133);
+    }
+
+    // Q150（2.61）：贴底详情类窗共用的空闲门控抓帧——窗已关/已换则任务自尽；手指
+    // 按着或近 180ms 内有滚动事件则顺延 220ms，最多 8 次兜底必抓（冻结帧最终必达）。
+    void scheduleSheetBackdrop150(final java.util.function.BooleanSupplier alive150,
+            final java.util.function.BooleanSupplier touching150, final int tries133) {
         mainHandler.postDelayed(() -> {
-            if (detailCard != dc118 || detailClosing) return; // 窗已关/已换，旧任务自尽
-            boolean busy133 = detailTouchDown133
+            if (!alive150.getAsBoolean()) return; // 窗已关/已换，旧任务自尽
+            boolean busy133 = touching150.getAsBoolean()
                 || (android.os.SystemClock.uptimeMillis() - lastScrollEventMs < 180);
-            if (busy133 && tries133 < 8) { scheduleDetailBackdrop133(dc118, tries133 + 1); return; }
+            if (busy133 && tries133 < 8) { scheduleSheetBackdrop150(alive150, touching150, tries133 + 1); return; }
             backdropLastCapMs = 0;
             try { captureBackdrop(); } catch (Throwable ignored) {}
         }, tries133 == 0 ? 300 : 220);
@@ -3413,6 +3431,7 @@ public class MainActivity extends Activity {
         // （captureGlassSnapshot/applyGlass/条带）仅剩 API<31 时代的登记路径调用，
         // 玻璃件现全是 GlassBackdropView，不再经它成像，代码留仓封存。
         if (detailCard != null) return; // Q118（2.31）：详情窗在场同 captureBackdropTick 闸——650ms 停稳防抖（glassRefreshTask）不许在窗内滚动的停顿间隙整帧重抓，冻结帧用开窗落定那一存档
+        if (fxSheetView150 != null) return; // Q150（2.61）：外卡详情窗同为详情类冻结窗，同闸（见 captureBackdropTick 的 fx 守卫）
         if (glassDisabled || rootView == null || rootView.getWidth() <= 0) return;
         backdropLastCapMs = 0;
         captureBackdrop();
@@ -4352,6 +4371,14 @@ public class MainActivity extends Activity {
     }
 
     boolean fxZoneOpen = false, fxDetailOpen = false;
+    // Q150（2.61）：外卡详情改主卡同款贴底悬浮窗（与 openDetail 同一套窗机制，见 openFxDetail）——
+    // 窗体四件与主详情同构登记，fxDetailOpen 沿旧语义（窗在场，含收窗动画中）供 onBackPressed 判。
+    View fxSheetView150 = null;        // overlay（遮罩＋窗体 wrap）
+    View fxSheetWrap150 = null;
+    View fxSheetShade150 = null;
+    ScrollView fxSheetScroll150 = null;
+    boolean fxSheetClosing150 = false;
+    boolean fxSheetTouchDown150 = false; // 抓帧空闲门控打点（attachSheetDrag150 回填）
     String fxQuery = "";
     boolean fxCoreOnly = false;
     int fxZoneKeepY = 0;
@@ -4581,36 +4608,159 @@ public class MainActivity extends Activity {
         }
     }
 
-    void openFxDetail(FxCard f) {
-        if (fxZoneScroll != null) fxZoneKeepY = fxZoneScroll.getScrollY();
+    // Q150（2.61，用户 2026-10-06 02:16 定）：外卡详情改与主卡详情同款贴底悬浮窗——
+    // 整页大面板（旧 buildFxDetailPage＋pageBackHead 整页）退役。窗体同 openDetail 一套
+    // 机制：88vh 封顶测高、softSheetTopBg(26) 窗身、sheetR129(26f) 同步、elevation 24、
+    // topSheetClip、垫底冻结玻璃 glassLayerHw "fxdetail"（高出窗体 20dp 底圆沉窗外）、
+    // 遮罩 argb(102,0,0,0) 点击关、窗内右上 ✕（Q30 同款 34dp 半透圆随窗同行）、拖拽
+    // 关闭走 attachSheetDrag150（与主详情共用一份）、进出场曲线族同主详情（遮罩
+    // SHADE_IN/OUT、窗体 SHEET_IN/OUT、✕ 延迟 70ms 淡入）、冻结帧走 scheduleSheetBackdrop150
+    // （与主详情共用一份；tick/refreshLiveGlass 已加 fx 守卫同 detailCard 闸）。不另起
+    // 一套窗机制；主卡详情本体一字未动。fx 专属内容一字不丢，由 buildFxDetailBody150
+    // 原样供稿（英雄图/信息胶囊/核实状态/规格/点评/官方链接/页脚）。专区页不再拆建：
+    // 窗浮在专区页之上，关窗后专区滚动位原样（旧口径拆页重建＋fxZoneKeepY 回滚退役）。
+    void openFxDetail(final FxCard f) {
+        if (f == null || fxSheetView150 != null || fxSheetClosing150) return;
         fxDetailOpen = true;
-        if (fullScreenPage != null && fullScreenPage.getParent() == content) content.removeView(fullScreenPage);
-        fullScreenPage = buildFxDetailPage(f);
-        content.addView(fullScreenPage);
+        fxSheetClosing150 = false;
+        fxSheetTouchDown150 = false;
+
+        final FrameLayout overlay = new FrameLayout(this);
+        overlay.setBackgroundColor(Color.TRANSPARENT);
+        final View shade = new View(this);
+        shade.setBackgroundColor(Color.argb(102, 0, 0, 0)); // rgba(0,0,0,.4)，同 openDetail
+        shade.setAlpha(0f);
+        shade.setOnClickListener(v -> closeFxDetail());
+        overlay.addView(shade, new FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        fxSheetShade150 = shade;
+
+        final FrameLayout wrap = new FrameLayout(this);
+        int screenW = getResources().getDisplayMetrics().widthPixels;
+        int screenH = getResources().getDisplayMetrics().heightPixels;
+        final int maxH = (int) (screenH * 0.88); // 同主详情测高封顶
+
+        final LinearLayout sheetCard = new LinearLayout(this);
+        sheetCard.setOrientation(LinearLayout.VERTICAL);
+        GradientDrawable sheetBg = softSheetTopBg(26); // 同主详情窗身 Soft 柔面（顶圆 26）
+        sheetCard.setBackground(sheetBg);
+        if (Build.VERSION.SDK_INT >= 21) { sheetCard.setElevation(dp(this, 24)); topSheetClip(sheetCard, sheetR129(26f), this); }
+        sheetCard.setOnClickListener(v -> {}); // 窗体吃点击防穿透遮罩
+
+        ScrollView sc = new ScrollView(this);
+        thinScrollbar(sc);
+        sc.setBackgroundColor(Color.TRANSPARENT);
+        sc.setFillViewport(false);
+        fxSheetScroll150 = sc;
+        sc.addView(buildFxDetailBody150(f));
+        sheetCard.addView(sc, new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
+
+        // 先量高再定版（内容可能短于封顶），同主详情
+        sheetCard.measure(View.MeasureSpec.makeMeasureSpec(screenW, View.MeasureSpec.EXACTLY),
+            View.MeasureSpec.makeMeasureSpec(maxH, View.MeasureSpec.AT_MOST));
+        int sheetH = Math.min(sheetCard.getMeasuredHeight(), maxH);
+        FrameLayout.LayoutParams wlp = new FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, sheetH);
+        wlp.gravity = Gravity.BOTTOM;
+        // 垫底冻结玻璃：与主详情同——高出窗体 20dp、底圆角沉到窗外由 wrap 裁掉
+        FrameLayout.LayoutParams fxGlassLp = new FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, sheetH + dp(this, 20));
+        View fxGlass = glassLayerHw(sheetCard, sheetR129(26f), false, "fxdetail");
+        topSheetClip(fxGlass, sheetR129(26f), this); // 玻璃轮廓与窗体同（顶圆底直）
+        wrap.addView(fxGlass, fxGlassLp);
+        wrap.addView(sheetCard, new FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        overlay.addView(wrap, wlp);
+        fxSheetWrap150 = wrap;
+
+        // Q30 关闭钮：长在窗体内部随窗同升同降（34dp 半透炭灰圆＋白半透描边＋白细线 ✕，与主详情逐值同款）
+        final FrameLayout glyphFrame = new FrameLayout(this);
+        glyphFrame.setClipChildren(false); glyphFrame.setClipToPadding(false);
+        glyphFrame.setAlpha(0f);
+        View circle = new View(this);
+        GradientDrawable cg = new GradientDrawable();
+        cg.setShape(GradientDrawable.OVAL);
+        cg.setColor(Color.argb(142, 54, 56, 64));
+        cg.setStroke(dp(this, 1), Color.argb(110, 255, 255, 255));
+        circle.setBackground(cg);
+        softShadow(circle, 5); // Soft 蓝灰柔影，同主详情
+        FrameLayout.LayoutParams clp2 = new FrameLayout.LayoutParams(dp(this, 34), dp(this, 34));
+        clp2.gravity = Gravity.CENTER;
+        glyphFrame.addView(circle, clp2);
+        CloseIconView x = new CloseIconView(this);
+        x.iconColor = Color.WHITE;
+        x.lineDp = 1.9f;
+        x.shadow = true;
+        x.setLayerType(View.LAYER_TYPE_SOFTWARE, null);
+        int xPad = dp(this, 4);
+        x.setPadding(xPad, xPad, xPad, xPad);
+        FrameLayout.LayoutParams xlp = new FrameLayout.LayoutParams(dp(this, 34), dp(this, 34));
+        xlp.gravity = Gravity.CENTER;
+        glyphFrame.addView(x, xlp);
+        glyphFrame.setOnClickListener(v -> { haptic(); closeFxDetail(); });
+        FrameLayout.LayoutParams glp = new FrameLayout.LayoutParams(dp(this, 48), dp(this, 48));
+        glp.gravity = Gravity.TOP | Gravity.END;
+        glp.topMargin = dp(this, 5);
+        glp.rightMargin = dp(this, 5);
+        wrap.addView(glyphFrame, glp);
+
+        // 拖拽关闭：与主详情共用一份 attachSheetDrag150（fx 窗无浮钮，pill 传 null）
+        attachSheetDrag150(wrap, sheetCard, sc, null,
+            () -> fxSheetClosing150, d -> fxSheetTouchDown150 = d, this::closeFxDetail);
+
+        content.addView(overlay, new FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        overlay.bringToFront();
+        fxSheetView150 = overlay;
         syncTopFab();
+        // 升起：遮罩淡入＋窗体自下方滑入＋✕ 略延迟淡入（与主详情同曲线家族）
+        shade.animate().alpha(1f).setDuration(ANIM_DUR_SHADE_IN).setInterpolator(ANIM_ENTER).start();
+        wrap.setTranslationY(sheetH);
+        wrap.animate().translationY(0f).setDuration(ANIM_DUR_SHEET_IN).setInterpolator(ANIM_ENTER).start();
+        glyphFrame.animate().alpha(1f).setDuration(ANIM_DUR_FADE).setStartDelay(70).setInterpolator(ANIM_ENTER).start();
+        // 冻结玻璃帧：开窗落定后空闲门控抓一帧存档（与主详情同一份调度；存活判据＝本窗未换未关）
+        scheduleSheetBackdrop150(() -> fxSheetView150 == overlay && !fxSheetClosing150,
+            () -> fxSheetTouchDown150, 0);
     }
 
     void closeFxDetail() {
-        fxDetailOpen = false;
-        if (fullScreenPage != null && fullScreenPage.getParent() == content) content.removeView(fullScreenPage);
-        fullScreenPage = buildFxZonePage();
-        content.addView(fullScreenPage);
-        syncTopFab();
+        if (fxSheetView150 == null || fxSheetClosing150) return;
+        fxSheetClosing150 = true;
+        final View overlay = fxSheetView150;
+        final View wrap = fxSheetWrap150;
+        final View shade = fxSheetShade150;
+        final boolean[] finishRan = { false };
+        Runnable finish = () -> {
+            if (finishRan[0]) return; // Q98 同口径：endAction 与兜底双通道只许跑一次
+            finishRan[0] = true;
+            if (overlay != null && overlay.getParent() instanceof ViewGroup)
+                ((ViewGroup) overlay.getParent()).removeView(overlay);
+            if (fxSheetView150 == overlay) {
+                fxSheetView150 = null; fxSheetWrap150 = null; fxSheetShade150 = null; fxSheetScroll150 = null;
+            }
+            fxSheetClosing150 = false;
+            fxSheetTouchDown150 = false;
+            fxDetailOpen = false;
+            syncTopFab(); // 专区页一直在窗下未拆建：关窗只同步回顶钮（dock 由专区页自理，同旧口径）
+        };
+        if (overlay == null || wrap == null) { finish.run(); return; }
+        // ✕ 是 wrap 子层，随窗同降不单独摘（Q30 同口径）；窗体下滑＋遮罩淡出并行，落定才拆浮层
+        int targetY = wrap.getHeight() > 0 ? wrap.getHeight() : dp(this, 420);
+        if (shade != null) shade.animate().alpha(0f).setDuration(ANIM_DUR_SHADE_OUT).setInterpolator(ANIM_EXIT).start();
+        wrap.animate().translationY(targetY).setDuration(ANIM_DUR_SHEET_OUT).setInterpolator(ANIM_EXIT)
+            .withEndAction(finish).start();
+        // Q98 兜底：动画被取消时 320ms 后强制走完同一 finish（同 closeDetail）
+        mainHandler.postDelayed(() -> { if (fxSheetView150 == overlay && fxSheetClosing150) finish.run(); }, ANIM_DUR_SHEET_OUT + 130);
     }
 
-    View buildFxDetailPage(final FxCard f) {
-        LinearLayout root = new LinearLayout(this);
-        root.setOrientation(LinearLayout.VERTICAL);
-        root.setBackground(softPageBg());
-        root.addView(pageBackHead(f.name, () -> { haptic(); closeFxDetail(); }),
-            new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
-        ScrollView sc = new ScrollView(this);
-        thinScrollbar(sc);
+    // Q150（2.61）：fx 详情供稿——旧整页的全部内容（英雄图→页脚）原样搬进悬浮窗的
+    // 滚动正文；窗身柔面由 sheetCard 承担，正文透明（同 buildDetailSheetBody 口径）。
+    LinearLayout buildFxDetailBody150(final FxCard f) {
         LinearLayout body = new LinearLayout(this);
         body.setOrientation(LinearLayout.VERTICAL);
-        body.setPadding(dp(this, 16), dp(this, 10), dp(this, 16), dp(this, 24) + navBarH());
-        sc.addView(body);
-        root.addView(sc, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
+        body.setBackgroundColor(Color.TRANSPARENT);
+        body.setPadding(dp(this, 16), dp(this, 16), dp(this, 16), dp(this, 24) + navBarH());
 
         // Q133（2.45，件一）：卡面大图框按图自身宽高比定高——整宽铺满、按位图比
         // 算高、260dp 封顶后缩宽居中（与核心详情图廊 Q100/Q122 同口径，框比＝图比、
@@ -4759,9 +4909,7 @@ public class MainActivity extends Activity {
         flp.topMargin = dp(this, 14);
         body.addView(foot, flp);
 
-        root.setAlpha(0f); root.setTranslationY(dp(this, 4));
-        root.animate().alpha(1f).translationY(0f).setDuration(ANIM_DUR_FADE).setInterpolator(ANIM_ENTER).start();
-        return root;
+        return body;
     }
 
     void addChipGap(LinearLayout row) {
@@ -5378,6 +5526,11 @@ public class MainActivity extends Activity {
     int homeChunkPending = 0;
     View homeLoadingLayer = null;
     PullSpinView homeLoadingSpin = null;
+    // Q150（2.61，N1）：首页列表在本进程内是否已完整搭完过一次——居中「加载中」兜底层
+    // 只许在首屏分块真未搭完（冷启首建）时露；此后任何重搭（切页回来/数据应用/外观
+    // 变更重建/筛选变更）不许再露（首 4 行恒同步在屏、余下分帧补齐，无圈可看）。
+    // 触发条件剖单见 PROGRESS Q150。进程内不复位，冷启自然归零。
+    boolean homeBootBuilt150 = false;
     final SpringDriver tabAnim = new SpringDriver();       // Q120：切页过渡弹簧驱动（单回路）
     final Spring1D tabSpring = new Spring1D(1f);            // Q120：切页过渡进度 0→1
     View tabAnimOut;                                       // Q120：过渡中正在退场的旧页（连切时强制收尾它）
@@ -10056,7 +10209,7 @@ public class MainActivity extends Activity {
             if (next[0] < rows) mainHandler.post(step[0]);
             else { // Q127（2.39，审计 B1）：本轮续搭落定——计数归零则摘加载提示层
                 if (homeChunkPending > 0) homeChunkPending--;
-                if (homeChunkPending <= 0) hideHomeLoading();
+                if (homeChunkPending <= 0) { hideHomeLoading(); homeBootBuilt150 = true; } // Q150（2.61，N1）：首建落定置闩，此后切页/重搭不再露居中转圈
             }
         };
         mainHandler.post(step[0]);
@@ -10067,6 +10220,7 @@ public class MainActivity extends Activity {
     // 不触发（欢迎停留期预建通常已搭完）；层在场时 captureBackdrop 走隐藏名单同口
     // （见 captureBackdrop 内 homeLoadingLayer 处理），不许被拍进玻璃背板。
     void maybeShowHomeLoading() {
+        if (homeBootBuilt150) return; // Q150（2.61，N1）：列表已完整搭完过——切页/重搭永不再露居中转圈，只许首屏首建时出现
         if (homeChunkPending <= 0 || helloOpen || !"home".equals(tab)) return;
         if (homePullRefreshing) return; // Q148：下拉同步在场时下拉指示独占反馈，不许居中再起一个转圈（用户点名双转圈）
         if (content == null || homeLoadingLayer != null) return;
@@ -11681,18 +11835,25 @@ public class MainActivity extends Activity {
         scheduleDetailBackdrop133(dc118, 0);
     }
 
-    void attachDetailDrag(final View wrap, final View sheetCard) {
+    // Q150（2.61）：贴底窗拖拽关闭收口为全 App 唯一一份——openDetail 经下方
+    // attachDetailDrag 转调、外卡详情窗（openFxDetail）直调，武装判定/Q123 注释口径
+    // （内容在顶＋纵向占优 1.4 倍才记 armY、只算武装后纯下拉段、80dp 阈值、0.6 跟随）
+    // 逐位共用一份实现，不许两窗各写一套（同类同逻辑）。pill150 为随窗联动的浮钮
+    // （主详情主钮；fx 窗无浮钮传 null）。
+    void attachSheetDrag150(final View wrap, final View sheetCard, final ScrollView sc150,
+            final View pill150, final java.util.function.BooleanSupplier closing150,
+            final java.util.function.Consumer<Boolean> touchMark150, final Runnable closeFn150) {
         final float[] downY = {0f};
         final float[] downX = {0f};
         final float[] armY = {-1f};
         final boolean[] dragging = {false};
         // 抓手条在滚动内容顶部，拖它下滑关窗；其余区域仍可正常滚动
         sheetCard.setOnTouchListener((v, e) -> false);
-        if (detailScroll != null) {
-            detailScroll.setOnTouchListener((v, e) -> {
-                if (detailClosing) return false;
-                if (e.getActionMasked() == MotionEvent.ACTION_DOWN) detailTouchDown133 = true; // Q133：抓帧门控打点（放行照旧）
-                if (e.getActionMasked() == MotionEvent.ACTION_UP || e.getActionMasked() == MotionEvent.ACTION_CANCEL) detailTouchDown133 = false;
+        if (sc150 != null) {
+            sc150.setOnTouchListener((v, e) -> {
+                if (closing150.getAsBoolean()) return false;
+                if (e.getActionMasked() == MotionEvent.ACTION_DOWN) touchMark150.accept(Boolean.TRUE); // Q133：抓帧门控打点（放行照旧）
+                if (e.getActionMasked() == MotionEvent.ACTION_UP || e.getActionMasked() == MotionEvent.ACTION_CANCEL) touchMark150.accept(Boolean.FALSE);
                 switch (e.getActionMasked()) {
                     case MotionEvent.ACTION_DOWN:
                         downY[0] = e.getRawY(); downX[0] = e.getRawX();
@@ -11708,14 +11869,14 @@ public class MainActivity extends Activity {
                             // armY，拖关距离只算武装后的纯下拉段；横滑（图廊）永不武装。
                             float dyAll = e.getRawY() - downY[0];
                             float dxAll = e.getRawX() - downX[0];
-                            if (detailScroll.getScrollY() > 0) { armY[0] = -1f; return false; }
+                            if (sc150.getScrollY() > 0) { armY[0] = -1f; return false; }
                             if (dyAll > dp(this, 6) && Math.abs(dyAll) > Math.abs(dxAll) * 1.4f) {
                                 if (armY[0] < 0) armY[0] = e.getRawY();
                                 if (e.getRawY() - armY[0] > dp(this, 14)) {
                                     dragging[0] = true;
                                     float dyA = (e.getRawY() - armY[0]) * 0.6f;
                                     if (wrap != null) wrap.setTranslationY(dyA);
-                                    if (detailPillWrap != null) detailPillWrap.setTranslationY(dyA); // 主钮随窗同行，不留错位（旧实现钮钉原地＝错位主因之一）
+                                    if (pill150 != null) pill150.setTranslationY(dyA); // 主钮随窗同行，不留错位（旧实现钮钉原地＝错位主因之一）
                                     return true; // 武装后消费 MOVE：内容只在顶、不许再滚
                                 }
                             } else if (dyAll < dp(this, 2)) {
@@ -11725,7 +11886,7 @@ public class MainActivity extends Activity {
                         }
                         float dy = Math.max(0f, e.getRawY() - armY[0]);
                         if (wrap != null) wrap.setTranslationY(dy * 0.6f);
-                        if (detailPillWrap != null) detailPillWrap.setTranslationY(dy * 0.6f);
+                        if (pill150 != null) pill150.setTranslationY(dy * 0.6f);
                         return true;
                     }
                     case MotionEvent.ACTION_UP:
@@ -11735,15 +11896,15 @@ public class MainActivity extends Activity {
                         dragging[0] = false; armY[0] = -1f;
                         if (was && wrap != null) {
                             if (dy > dp(this, 80)) { // 明确下拉过 80dp 才关窗（武装后纯下拉距）
-                                View pv123 = detailPillWrap;
+                                View pv123 = pill150;
                                 if (pv123 != null) pv123.animate().translationY(wrap.getHeight() > 0 ? wrap.getHeight() : dp(this, 420))
                                     .setDuration(ANIM_DUR_SHEET_OUT).setInterpolator(ANIM_EXIT).start(); // 钮随窗同降，关窗动画完整不留半截
-                                closeDetail();
+                                closeFn150.run();
                                 return true;
                             }
                             wrap.animate().translationY(0f).setDuration(ANIM_DUR_FADE)
                                 .setInterpolator(ANIM_ENTER).start();
-                            if (detailPillWrap != null) detailPillWrap.animate().translationY(0f)
+                            if (pill150 != null) pill150.animate().translationY(0f)
                                 .setDuration(ANIM_DUR_FADE).setInterpolator(ANIM_ENTER).start();
                             return true;
                         }
@@ -11753,6 +11914,12 @@ public class MainActivity extends Activity {
                 }
             });
         }
+    }
+
+    // Q150（2.61）：主详情拖关转调共用实现（参数与旧 attachDetailDrag 逐位同值，行为不变）
+    void attachDetailDrag(final View wrap, final View sheetCard) {
+        attachSheetDrag150(wrap, sheetCard, detailScroll, detailPillWrap,
+            () -> detailClosing, d -> detailTouchDown133 = d, this::closeDetail);
     }
 
     void closeDetail() {
