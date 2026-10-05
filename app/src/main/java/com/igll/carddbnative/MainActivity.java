@@ -4844,7 +4844,7 @@ public class MainActivity extends Activity {
     TextView showcaseDensityLab = null;              // Q122：密度行标签（随底色刷新对比）
     android.widget.SeekBar showcaseSeek = null;     // Q122：密度滑杆（轨道/圆点随底色描色）
     View showcaseZoomView = null;                    // Q122（件十四②）：点卡放大看卡面（纯展示层）
-    int showcaseContentW = 0, showcaseContentH = 0;  // Q122（件十六）：内容实界（平移防丢夹取用）
+    int showcaseMinX = 0, showcaseMinY = 0, showcaseMaxX = 0, showcaseMaxY = 0; // Q141（2.52）：内容矩形（world 坐标，随卡落位向四边扩，平移够得着判据；旧 Q122 contentW/H 退役）
     View showcaseDensityRow = null;
     // Q84 电话卡保号管家：模块自成一块（simkeep_ 前缀），设置「功能启用」可关，关掉入口与界面彻底不出现、不占位。
     // 数据模板参考：GitHub 开源卡包类应用的电话卡保号模型（号码/运营商/到期日/动作/周期/提醒提前量），代码自写。
@@ -8814,6 +8814,9 @@ public class MainActivity extends Activity {
     // 按住 450ms 触发；被按卡大小不变、原地 1:1 快照浮在轻暗遮罩上 + 2.5dp 蓝框 + 浮起阴影，其余内容被遮罩压暗；
     // 贴着被按卡浮出 224dp 小菜单（查看详情 / 添加到我的卡片 或 从我的卡片移除，细线图标禁用 emoji），菜单出现时底栏让开。
     // Q11 起菜单下已垫冻结真模糊层；其余背景仍以 rgba(18,22,36,.14) 轻暗（混合版为 blur+轻暗）。
+    // Q141（2.52，甲组）：长按触发矩阵不变（全部卡片/选卡行/学生向导＝450ms 出菜单；
+    // 我的卡片＝长按起拖，瓷砖触摸在 addMineCardRows 处已清）；本轮只治「菜单开着背景
+    // 还能滚」：点火冻结拦截＋fired 后 MOVE 吞＋遮罩吞拖（见 CardMenuTouch 与 openCardMenu）。
     class CardMenuTouch implements View.OnTouchListener {
         final View anchor;
         final Card card;
@@ -8826,6 +8829,10 @@ public class MainActivity extends Activity {
             fireTask = () -> {
                 if (!armed) return;
                 fired = true;
+                // Q141（2.52，甲组②）：菜单在手指未抬时点火，当前手势目标链已定型——
+                // 点火瞬间冻结上层拦截，本手势余下事件只走本监听（fired 后 MOVE 吞掉），
+                // 背景 ScrollView 再也捞不到这串滑动；新起的背景手势另由遮罩吞掉。
+                if (anchor.getParent() != null) anchor.getParent().requestDisallowInterceptTouchEvent(true);
                 openCardMenu(card, anchor, fromWiz);
             };
         }
@@ -8838,8 +8845,11 @@ public class MainActivity extends Activity {
                     mainHandler.postDelayed(fireTask, 450);
                     return false;
                 case MotionEvent.ACTION_MOVE:
+                    // Q141（2.52，甲组②）：菜单已点火则余下移动全吞——旧写法一律
+                    // return false 把整串滑动漏给背景 ScrollView，菜单开着背景照滚。
+                    if (fired) return true;
                     // 移动超过 10dp 视为滑动，取消（对照混合版）
-                    if (armed && !fired && (Math.abs(e.getRawX() - downX) > dp(MainActivity.this, 10)
+                    if (armed && (Math.abs(e.getRawX() - downX) > dp(MainActivity.this, 10)
                         || Math.abs(e.getRawY() - downY) > dp(MainActivity.this, 10))) {
                         armed = false;
                         mainHandler.removeCallbacks(fireTask);
@@ -8853,8 +8863,9 @@ public class MainActivity extends Activity {
                 }
                 case MotionEvent.ACTION_CANCEL:
                     mainHandler.removeCallbacks(fireTask);
+                    boolean wasFired141 = fired;
                     armed = false; fired = false;
-                    return false;
+                    return wasFired141;
                 default:
                     return false;
             }
@@ -8924,6 +8935,10 @@ public class MainActivity extends Activity {
         backdrop.setBackgroundColor(Color.argb(36, 18, 22, 36));
         backdrop.setClickable(true);
         backdrop.setOnClickListener(v -> closeCardMenu());
+        // Q141（2.52，甲组②）：遮罩吞掉一切拖拽（MOVE 消费）——菜单开着时新起的背景
+        // 手势（在遮罩/克隆上起的拖）死在遮罩上、不落页面 ScrollView；DOWN/UP 放行，
+        // 保留「点遮罩关闭」的既有点击语义（消费 DOWN 会连点击一起吞掉，故只吞 MOVE）。
+        backdrop.setOnTouchListener((bv141, be141) -> be141.getActionMasked() == MotionEvent.ACTION_MOVE);
         rootView.addView(backdrop, new FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         cardMenuBackdrop = backdrop;
@@ -13644,29 +13659,136 @@ public class MainActivity extends Activity {
         }
     }
 
+    // Q141（2.52，甲组③）：「我的卡片」长按拖动排序 FLIP 化。旧实现：被拖卡只加
+    // translation、兄弟纹丝不动，松手瞬时清零变换＋showTab("mine") 整页重建——重建帧
+    // 与落位对冲即闪屏（用户图二半透明卡错位压在别卡上、无让位即此）。新实现照自定义
+    // 带 Q127 解析账本＋Q133 FLIP 回填搬到网格：起拖按行实测几何解析槽位；抓握锚＝首个
+    // 事件处「手指－被拖卡视觉左上」（吃掉长按延迟的坐标漂移）；被拖卡中心过槽中心即
+    // 实时换序（list 同步变序）、兄弟 160ms 平移滑入新槽；被拖卡手势中不换父（跨行搬
+    // 视图留待落位帧，中途摘父会断触摸事件流），出身行临时提 elevation 保被拖卡压在
+    // 下行之上；落位跨行重排＋translation 归零动画，全程不重建页面、不调 showTab。
     void startMineTileDrag(final View tile, final List<MineRow> list, final int fromIdx, final ScrollView sv) {
+        final int mineCols141 = (cols >= 1 && cols <= 4) ? cols : 2;
+        final int mineGap141 = mineCols141 >= 4 ? dp(this, 8) : dp(this, 10);
+        if (fromIdx < 0 || fromIdx >= list.size()) return;
+        if (!(tile.getParent() instanceof ViewGroup)) return;
+        final ViewGroup homeRow141 = (ViewGroup) tile.getParent();
+        if (!(homeRow141.getParent() instanceof ViewGroup)) return;
+        final ViewGroup grid141 = (ViewGroup) homeRow141.getParent();
+        final int n141 = list.size();
+        final int tileW141 = tile.getWidth(), tileH141 = tile.getHeight();
+        if (tileW141 <= 0 || tileH141 <= 0) return;
+        // 瓷砖⇄条目对照：按行序扫描在册瓷砖（末行 1px spacer 按高排除），下标与 list 同序
+        final java.util.IdentityHashMap<MineRow, View> tileOf141 = new java.util.IdentityHashMap<>();
+        for (int r = 0; r < grid141.getChildCount(); r++) {
+            if (!(grid141.getChildAt(r) instanceof ViewGroup)) continue;
+            ViewGroup row141 = (ViewGroup) grid141.getChildAt(r);
+            int slotIdx141 = r * mineCols141;
+            for (int j = 0; j < row141.getChildCount(); j++) {
+                View child141 = row141.getChildAt(j);
+                if (child141.getHeight() <= 2) continue; // 末行补位 spacer，不入账
+                if (slotIdx141 < n141) tileOf141.put(list.get(slotIdx141), child141);
+                slotIdx141++;
+            }
+        }
+        if (tileOf141.get(list.get(fromIdx)) != tile) return; // 账实不符：不接管手势
+        // 槽位账本（grid 坐标系）：行顶/行高按实测，列左缘由被拖卡当前布局反推第 0 列
+        final int rowCount141 = grid141.getChildCount();
+        final int[] rowTop141 = new int[rowCount141];
+        final int[] rowH141 = new int[rowCount141];
+        for (int r = 0; r < rowCount141; r++) {
+            rowTop141[r] = grid141.getChildAt(r).getTop();
+            rowH141[r] = Math.max(tileH141, grid141.getChildAt(r).getHeight());
+        }
+        final int homeTlX141 = homeRow141.getLeft() + tile.getLeft();
+        final int colBaseX141 = homeTlX141 - (fromIdx % mineCols141) * (tileW141 + mineGap141);
+        final int[] liveIdx141 = { fromIdx };
+        final float[] anchor141 = { 0f, 0f, 0f, 0f }; // 锚：rawX、rawY、视觉左上 X、视觉左上 Y
+        final boolean[] anchorSet141 = { false };
+        tile.animate().cancel();
         tile.setScaleX(1.04f); tile.setScaleY(1.04f); tile.setAlpha(0.92f);
         tile.setElevation(dp(this, 8));
-        if (tile.getParent() instanceof ViewGroup) ((ViewGroup) tile.getParent()).bringChildToFront(tile);
+        homeRow141.setElevation(dp(this, 12)); // 出身行整行提 z：被拖卡压在下行之上（不 bringChildToFront，Q56 同课）
         if (sv != null) sv.requestDisallowInterceptTouchEvent(true);
         tile.setOnTouchListener(new View.OnTouchListener() {
-            float downX = -1, downY = -1;
             public boolean onTouch(View v, MotionEvent e) {
                 switch (e.getActionMasked()) {
                     case MotionEvent.ACTION_DOWN:
-                        downX = e.getRawX(); downY = e.getRawY();
+                        if (!anchorSet141[0]) {
+                            anchor141[0] = e.getRawX(); anchor141[1] = e.getRawY();
+                            anchor141[2] = colBaseX141 + (liveIdx141[0] % mineCols141) * (tileW141 + mineGap141) + v.getTranslationX();
+                            anchor141[3] = rowTop141[liveIdx141[0] / mineCols141] + v.getTranslationY();
+                            anchorSet141[0] = true;
+                        }
                         return true;
                     case MotionEvent.ACTION_MOVE: {
-                        if (downX < 0) { downX = e.getRawX(); downY = e.getRawY(); }
-                        v.setTranslationX(e.getRawX() - downX);
-                        v.setTranslationY(e.getRawY() - downY);
+                        if (!anchorSet141[0]) { // 长按点火后首事件多为 MOVE：就此取锚，被拖卡起步零跳
+                            anchor141[0] = e.getRawX(); anchor141[1] = e.getRawY();
+                            anchor141[2] = colBaseX141 + (liveIdx141[0] % mineCols141) * (tileW141 + mineGap141) + v.getTranslationX();
+                            anchor141[3] = rowTop141[liveIdx141[0] / mineCols141] + v.getTranslationY();
+                            anchorSet141[0] = true;
+                        }
+                        float visX141 = anchor141[2] + (e.getRawX() - anchor141[0]);
+                        float visY141 = anchor141[3] + (e.getRawY() - anchor141[1]);
+                        float cx141 = visX141 + tileW141 / 2f;
+                        float cy141 = visY141 + tileH141 / 2f;
+                        int target141 = liveIdx141[0];
+                        while (target141 + 1 < n141) {
+                            int k141 = target141 + 1;
+                            float scx141 = colBaseX141 + (k141 % mineCols141) * (tileW141 + mineGap141) + tileW141 / 2f;
+                            float scy141 = rowTop141[k141 / mineCols141] + rowH141[k141 / mineCols141] / 2f;
+                            boolean passed141 = cy141 > scy141
+                                || (Math.abs(cy141 - scy141) < rowH141[k141 / mineCols141] / 2f && cx141 > scx141);
+                            if (!passed141) break;
+                            target141 = k141;
+                        }
+                        while (target141 - 1 >= 0) {
+                            int k141 = target141 - 1;
+                            float scx141 = colBaseX141 + (k141 % mineCols141) * (tileW141 + mineGap141) + tileW141 / 2f;
+                            float scy141 = rowTop141[k141 / mineCols141] + rowH141[k141 / mineCols141] / 2f;
+                            boolean passed141 = cy141 < scy141
+                                || (Math.abs(cy141 - scy141) < rowH141[k141 / mineCols141] / 2f && cx141 < scx141);
+                            if (!passed141) break;
+                            target141 = k141;
+                        }
+                        if (target141 != liveIdx141[0]) {
+                            MineRow moved141 = list.remove(liveIdx141[0]);
+                            list.add(target141, moved141);
+                            liveIdx141[0] = target141;
+                            // 兄弟 FLIP：平移目标＝各自现槽位－自身布局位，160ms 滑入（被拖卡不参与，继续贴手）
+                            for (int i141 = 0; i141 < n141; i141++) {
+                                View sib141 = tileOf141.get(list.get(i141));
+                                if (sib141 == null || sib141 == tile) continue;
+                                ViewGroup sibRow141 = (ViewGroup) sib141.getParent();
+                                int sibTlX141 = (sibRow141 != null ? sibRow141.getLeft() : 0) + sib141.getLeft();
+                                int sibTlY141 = (sibRow141 != null ? sibRow141.getTop() : 0) + sib141.getTop();
+                                float ntx141 = (colBaseX141 + (i141 % mineCols141) * (tileW141 + mineGap141)) - sibTlX141;
+                                float nty141 = rowTop141[i141 / mineCols141] - sibTlY141;
+                                sib141.animate().cancel();
+                                sib141.animate().translationX(ntx141).translationY(nty141)
+                                    .setDuration(160).setInterpolator(ANIM_ENTER).start();
+                            }
+                        }
+                        v.setTranslationX(visX141 - (colBaseX141 + (liveIdx141[0] % mineCols141) * (tileW141 + mineGap141)));
+                        v.setTranslationY(visY141 - rowTop141[liveIdx141[0] / mineCols141]);
                         return true;
                     }
                     case MotionEvent.ACTION_UP:
                     case MotionEvent.ACTION_CANCEL: {
-                        float dx = downX < 0 ? 0 : e.getRawX() - downX;
-                        float dy = downY < 0 ? 0 : e.getRawY() - downY;
-                        finishMineTileDrag(tile, list, fromIdx, dx, dy, sv);
+                        tile.setOnTouchListener(null);
+                        if (sv != null) sv.requestDisallowInterceptTouchEvent(false);
+                        lastDragEndAt = System.currentTimeMillis(); // 450ms 拖后点击锁，既有口径
+                        if (liveIdx141[0] != fromIdx) {
+                            // 条目顺序即 mineEntries 中这些条目的相对顺序：抽出后按新序插回原段首位（既有口径逐字沿用）
+                            java.util.List<MineEntry> ordered = new ArrayList<>();
+                            for (MineRow r : list) ordered.add(r.entry);
+                            int insertAt = ordered.isEmpty() ? 0 : Math.max(0, mineEntries.indexOf(ordered.get(0)));
+                            mineEntries.removeAll(ordered);
+                            mineEntries.addAll(Math.min(insertAt, mineEntries.size()), ordered);
+                            saveMineEntries();
+                            showFloatToast("顺序已保存");
+                        }
+                        settleMineDrag141(tile, homeRow141, list, tileOf141, grid141, sv, mineCols141, mineGap141, colBaseX141, rowTop141, tileW141);
                         return true;
                     }
                 }
@@ -13675,36 +13797,63 @@ public class MainActivity extends Activity {
         });
     }
 
-    void finishMineTileDrag(View tile, List<MineRow> list, int fromIdx, float dx, float dy, ScrollView sv) {
-        tile.setOnTouchListener(null);
-        tile.setTranslationX(0); tile.setTranslationY(0);
-        tile.setScaleX(1f); tile.setScaleY(1f); tile.setAlpha(1f);
-        tile.setElevation(0);
-        if (sv != null) sv.requestDisallowInterceptTouchEvent(false);
-        lastDragEndAt = System.currentTimeMillis();
-        // Q75：拖动落位换算与网格同列数/同列间距，四列下按 4 列网格换位
-        final int mineCols = (cols >= 1 && cols <= 4) ? cols : 2;
-        int tw = tile.getWidth(), th = tile.getHeight();
-        int rowH = th + dp(this, 10), colW = tw + (mineCols >= 4 ? dp(this, 8) : dp(this, 10));
-        int dRow = rowH > 0 ? Math.round(dy / (float) rowH) : 0;
-        int dCol = colW > 0 ? Math.round(dx / (float) colW) : 0;
-        int rows = (list.size() + mineCols - 1) / mineCols;
-        int toRow = Math.max(0, Math.min(fromIdx / mineCols + dRow, rows - 1));
-        int toCol = Math.max(0, Math.min(fromIdx % mineCols + dCol, mineCols - 1));
-        int toIdx = Math.max(0, Math.min(toRow * mineCols + toCol, list.size() - 1));
-        if (toIdx != fromIdx) {
-            MineRow moved = list.remove(fromIdx);
-            list.add(toIdx, moved);
-            // 条目顺序即 mineEntries 中这些条目的相对顺序：抽出后按新序插回原段首位
-            java.util.List<MineEntry> ordered = new ArrayList<>();
-            for (MineRow r : list) ordered.add(r.entry);
-            int insertAt = ordered.isEmpty() ? 0 : Math.max(0, mineEntries.indexOf(ordered.get(0)));
-            mineEntries.removeAll(ordered);
-            mineEntries.addAll(Math.min(insertAt, mineEntries.size()), ordered);
-            saveMineEntries();
-            showFloatToast("顺序已保存");
+    // Q141 落位：按最终序跨行重排视图（行数/每行容量/末行 spacer 不变式与 addMineCardRows
+    // 一致），每卡先回填「当前视觉－新槽位」偏移再 160ms 归零——不重建页面、落位不跳。
+    // 长按监听的下标在重排后逐卡按新位重绑（监听闭包里的旧 idx 会过期，点击监听只认
+    // 卡与条目本身、不随位过期，不动）。
+    void settleMineDrag141(final View dragTile, final View homeRow, final List<MineRow> list,
+            final java.util.IdentityHashMap<MineRow, View> tileOf141, final ViewGroup grid141, final ScrollView sv,
+            final int mineCols141, final int mineGap141, final int colBaseX141, final int[] rowTop141, final int tileW141) {
+        final int n141 = list.size();
+        final java.util.IdentityHashMap<View, float[]> visTl141 = new java.util.IdentityHashMap<>();
+        for (int i = 0; i < n141; i++) {
+            View t141 = tileOf141.get(list.get(i));
+            if (t141 == null) continue;
+            ViewGroup p141 = (ViewGroup) t141.getParent();
+            float lx141 = (p141 != null ? p141.getLeft() : 0) + t141.getLeft() + t141.getTranslationX();
+            float ly141 = (p141 != null ? p141.getTop() : 0) + t141.getTop() + t141.getTranslationY();
+            visTl141.put(t141, new float[]{ lx141, ly141 });
         }
-        showTab("mine");
+        for (int r = 0; r < grid141.getChildCount(); r++) {
+            if (grid141.getChildAt(r) instanceof ViewGroup) ((ViewGroup) grid141.getChildAt(r)).removeAllViews();
+        }
+        for (int i = 0; i < n141; i++) {
+            View t141 = tileOf141.get(list.get(i));
+            if (t141 == null) continue;
+            ViewGroup row141 = (ViewGroup) grid141.getChildAt(i / mineCols141);
+            LinearLayout.LayoutParams tlp141 = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+            if (i % mineCols141 > 0) tlp141.leftMargin = mineGap141;
+            t141.setLayoutParams(tlp141);
+            row141.addView(t141);
+        }
+        int rows141 = (n141 + mineCols141 - 1) / mineCols141;
+        for (int s141 = n141; s141 < rows141 * mineCols141; s141++) {
+            ViewGroup row141 = (ViewGroup) grid141.getChildAt(s141 / mineCols141);
+            View spacer141 = new View(this);
+            LinearLayout.LayoutParams slp141 = new LinearLayout.LayoutParams(0, 1, 1f);
+            if (s141 % mineCols141 > 0) slp141.leftMargin = mineGap141;
+            spacer141.setLayoutParams(slp141);
+            row141.addView(spacer141);
+        }
+        for (int i = 0; i < n141; i++) {
+            final View t141 = tileOf141.get(list.get(i));
+            if (t141 == null) continue;
+            final int fi141 = i;
+            t141.setOnLongClickListener(v -> { startMineTileDrag(t141, list, fi141, sv); return true; });
+            float[] vis141 = visTl141.get(t141);
+            if (vis141 == null) continue;
+            float offX141 = vis141[0] - (colBaseX141 + (i % mineCols141) * (tileW141 + mineGap141));
+            float offY141 = vis141[1] - rowTop141[i / mineCols141];
+            t141.animate().cancel();
+            t141.setTranslationX(offX141); t141.setTranslationY(offY141);
+            if (t141 == dragTile) {
+                t141.animate().translationX(0f).translationY(0f).scaleX(1f).scaleY(1f).alpha(1f)
+                    .setDuration(160).setInterpolator(ANIM_ENTER)
+                    .withEndAction(() -> { dragTile.setElevation(0); if (homeRow != null) homeRow.setElevation(0); }).start();
+            } else {
+                t141.animate().translationX(0f).translationY(0f).setDuration(160).setInterpolator(ANIM_ENTER).start();
+            }
+        }
     }
 
     // ---------- 自定义卡片（Phase 3b） ----------
@@ -17675,7 +17824,7 @@ public class MainActivity extends Activity {
         View v = showcaseView;
         showcaseView = null; showcaseBody = null; showcaseWorld = null;
         showcaseStackChip = null; showcaseCanvasChip = null; showcaseGroupChip = null; showcaseDensityRow = null; showcaseTitleTv = null;
-        showcaseZoomView = null; showcaseDensityLab = null; showcaseSeek = null; showcaseContentW = 0; showcaseContentH = 0; // Q122：放大层/密度行/内容界随关清
+        showcaseZoomView = null; showcaseDensityLab = null; showcaseSeek = null; showcaseMinX = 0; showcaseMinY = 0; showcaseMaxX = 0; showcaseMaxY = 0; // Q141：放大层/密度行/内容矩形随关清（旧 Q122 contentW/H 退役）
         showcaseDragging = false; showcaseTouching140 = false; // Q140：关柜复位手势旗
         showcaseClosing = false;
         if (v != null && v.getParent() != null) ((ViewGroup) v.getParent()).removeView(v);
@@ -17692,27 +17841,39 @@ public class MainActivity extends Activity {
         mainHandler.postDelayed(() -> { if (showcaseView == v && showcaseClosing) { closeShowcaseNow(); restoreChrome(); } }, ANIM_DUR_SHEET_OUT + 130);
     }
 
-    /** Q122（2.34，件十六）：平移夹取——只留防丢底线：内容与视口至少重叠 64dp，
-     * 整幅内容不许拖出到找不回；其余范围自由拖、跟手不回弹（旧世界平移其实无夹取，
-     * 撞墙感来自单卡 −faceW/2 夹取与排布半出界，已分别在拖卡/排布处收口）。 */
+    /** Q122（2.34，件十六）平移防丢底线、Q141（2.52，乙组⑥）内容矩形换算：
+     * 内容矩形（showcaseMinX/MinY/MaxX/MaxY，world 坐标）随卡落位向四边扩；平移界由
+     * 「可见窗与内容矩形在屏上至少重叠 64dp」反解——屏面点 c 与 world 坐标 w 满足
+     * c = t + p + s·(w − p)（t 平移、p pivot、s 当前缩放）。X 轴：内容右沿上屏 ≥ 64dp
+     * 给下界 t ≥ 64dp − p − s·(maxX − p)；内容左沿上屏 ≤ 屏宽 − 64dp 给上界
+     * t ≤ (屏宽 − 64dp) − p − s·(minX − p)。结果区间恒并入 0（回正位永远可达、
+     * 恢复存位后首滑不跳变）。卡拖多远矩形扩多远、平移就够得着多远，不丢卡；
+     * Q127 的「内容不超视口只许 24dp 呼吸」随 Q141 任意放口径一并退役。 */
     float clampShowcasePanX(float tx) {
-        if (showcaseBody == null) return tx;
+        if (showcaseBody == null || showcaseWorld == null) return tx;
         int aw = showcaseBody.getWidth();
         if (aw <= 0) return tx;
-        int cw = Math.max(showcaseContentW, aw);
-        // Q127（2.39）：内容不超视口宽时平移只留 24dp 呼吸——旧口径内容再小也
-        // 许整屏横拖（max(内容,视口) 后界仍近一屏），一小片卡能被整片拖出界、
-        // 只剩半张贴在屏边（用户图证的空气墙＋切边）；超视口时原防丢口径不变。
-        if (cw <= aw) { int m127 = dp(this, 24); return Math.max(-m127, Math.min(tx, m127)); }
-        return Math.max(-(cw - dp(this, 64)), Math.min(tx, aw - dp(this, 64)));
+        float p141 = showcaseWorld.getPivotX();
+        float s141 = Math.max(0.05f, showcaseWorld.getScaleX());
+        float m141 = dp(this, 64);
+        float lo141 = m141 - p141 - s141 * (showcaseMaxX - p141);
+        float hi141 = (aw - m141) - p141 - s141 * (showcaseMinX - p141);
+        if (lo141 > 0f) lo141 = 0f;
+        if (hi141 < 0f) hi141 = 0f;
+        return Math.max(lo141, Math.min(tx, hi141));
     }
     float clampShowcasePanY(float ty) {
-        if (showcaseBody == null) return ty;
+        if (showcaseBody == null || showcaseWorld == null) return ty;
         int ah = showcaseBody.getHeight();
         if (ah <= 0) return ty;
-        int ch = Math.max(showcaseContentH, ah);
-        if (ch <= ah) { int m127 = dp(this, 24); return Math.max(-m127, Math.min(ty, m127)); } // Q127：同 clampShowcasePanX
-        return Math.max(-(ch - dp(this, 64)), Math.min(ty, ah - dp(this, 64)));
+        float p141 = showcaseWorld.getPivotY();
+        float s141 = Math.max(0.05f, showcaseWorld.getScaleY());
+        float m141 = dp(this, 64);
+        float lo141 = m141 - p141 - s141 * (showcaseMaxY - p141);
+        float hi141 = (ah - m141) - p141 - s141 * (showcaseMinY - p141);
+        if (lo141 > 0f) lo141 = 0f;
+        if (hi141 < 0f) hi141 = 0f;
+        return Math.max(lo141, Math.min(ty, hi141));
     }
     /** Q122（件十六补）：一键回正——点展柜标题或双击画布，平移/缩放回原点兜底。 */
     void resetShowcaseView() {
@@ -18852,7 +19013,13 @@ public class MainActivity extends Activity {
             return;
         }
         String mode = prefs == null ? "stack" : prefs.getString("showcase_mode", "stack");
-        if ("canvas".equals(mode)) buildShowcaseCanvas(items); else buildShowcaseStack(items);
+        // Q141（2.52，乙组③「卡片保持完整」）：平放时 showcaseBody 与其父 col 放开裁剪——
+        // 卡拖到屏面任意处整卡渲染不缺角（压头/压控区的视觉重叠，用户 00:13「无所谓」；
+        // 控区在 col 绘制序靠后、钮仍在上层）；堆叠式 clip 维持 true，与旧版一致。
+        boolean canvas141 = "canvas".equals(mode);
+        showcaseBody.setClipChildren(!canvas141);
+        if (showcaseBody.getParent() instanceof ViewGroup) ((ViewGroup) showcaseBody.getParent()).setClipChildren(!canvas141);
+        if (canvas141) buildShowcaseCanvas(items); else buildShowcaseStack(items);
         if (animate) {
             showcaseBody.setAlpha(0f);
             showcaseBody.setTranslationX(dp(this, 14));
@@ -18926,7 +19093,7 @@ public class MainActivity extends Activity {
 
     void buildShowcaseCanvas(java.util.List<ShowcaseItem> items) {
         final FrameLayout clip = new FrameLayout(this);
-        clip.setClipChildren(true);
+        clip.setClipChildren(false); // Q141（2.52，乙组③）：平放不裁——卡拖到哪儿整卡渲染不缺角（showcaseBody/col 裁剪在 buildShowcaseBody 按 mode 开；world 本就 clipChildren=false）
         showcaseBody.addView(clip, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         final FrameLayout world = new FrameLayout(this);
         world.setClipChildren(false);
@@ -18951,6 +19118,9 @@ public class MainActivity extends Activity {
                     // 的卡框上起手）；MOVE/UP 一律走完——旧写法把落在控件条上松手的
                     // UP 也吞掉，落位不保存、showcaseDragging 永久卡真（拖到一半就
                     // 「死了」）。是否在界内改作 UP 时点判（只决定点开是否算数）。
+                    // Q141（2.52，乙组①④）：2.51 的落位钳位已拆（任意 world 坐标照存
+                    // 照回，见 MOVE 段），此界内判据只余 DOWN 起手与点开两职，与拆墙
+                    // 不冲突、原样保留（卡拖出视口后靠平移画布够回再抓）。
                     int[] bl140 = new int[2];
                     if (showcaseBody != null) showcaseBody.getLocationOnScreen(bl140);
                     boolean inBody140 = showcaseBody != null
@@ -18967,37 +19137,24 @@ public class MainActivity extends Activity {
                             if (v.getParent() instanceof ViewGroup) ((ViewGroup) v.getParent()).bringChildToFront(v);
                             return true;
                         case MotionEvent.ACTION_MOVE: {
-                            float sc = Math.max(0.3f, world.getScaleX());
+                            // Q141（2.52，乙组①拆墙）：落位零钳位——卡可拖到任意 world
+                            // 坐标（含整张出当前视口），松手照存 showcase_positions；
+                            // 2.51 的 Q140「可见窗口整卡钳位」经用户 2026-10-06 00:13
+                            // 亲口纠正整条作废（「不要设置空气墙，它拖动到什么位置卡片
+                            // 都要保持完整……任意放都可以」）。拖远后靠内容矩形随落位
+                            // 扩界保证平移够得着（见 clampShowcasePan* 与下方扩界）。
+                            float sc = Math.max(0.05f, world.getScaleX()); // Q141：与缩放护栏同下限
                             int nx = startL + Math.round((ev.getRawX() - downRawX) / sc);
                             int ny = startT + Math.round((ev.getRawY() - downRawY) / sc);
                             if (Math.abs(ev.getRawX() - downRawX) + Math.abs(ev.getRawY() - downRawY) > dp(MainActivity.this, 4)) moved = true;
-                            // Q140（2.51，用户点名「空气墙」）：落位钳位改按当前可见
-                            // 窗口算——world 经平移/缩放后，可见区在 world 坐标里是
-                            // 一个随变换走的矩形；旧钳位钉死在 world 原始边距＋「只
-                            // 剩 56dp 在界内」，缩放缩小/平移后卡拖到屏面中途就撞
-                            // 一堵看不见的墙，落位又许半张出屏还存进记忆位。新口径：
-                            // 渲染整卡恒在 showcaseBody 可见矩形内（四边最远落位整
-                            // 卡可见不裁），墙即屏边。窗口换算：屏面点 c → world
-                            // 坐标 w = pivot + (c − translation − pivot) / scale。
-                            int bw140 = showcaseBody != null ? showcaseBody.getWidth() : 0;
-                            int bh140 = showcaseBody != null ? showcaseBody.getHeight() : 0;
-                            if (bw140 > 0 && bh140 > 0) {
-                                float px140 = world.getPivotX(), py140 = world.getPivotY();
-                                float vx0 = px140 + (0f - world.getTranslationX() - px140) / sc;
-                                float vy0 = py140 + (0f - world.getTranslationY() - py140) / sc;
-                                float vx1 = px140 + (bw140 - world.getTranslationX() - px140) / sc;
-                                float vy1 = py140 + (bh140 - world.getTranslationY() - py140) / sc;
-                                int lo140 = Math.round(vx0), to140 = Math.round(vy0);
-                                int hi140 = Math.round(vx1) - faceW, bi140 = Math.round(vy1) - faceH;
-                                nx = hi140 < lo140 ? lo140 : Math.max(lo140, Math.min(nx, hi140));
-                                ny = bi140 < to140 ? to140 : Math.max(to140, Math.min(ny, bi140));
-                            }
                             lp.leftMargin = nx;
                             lp.topMargin = ny;
                             v.setLayoutParams(lp);
-                            int m140 = dp(MainActivity.this, 10);
-                            showcaseContentW = Math.max(showcaseContentW, nx + faceW + m140);
-                            showcaseContentH = Math.max(showcaseContentH, ny + faceH + m140);
+                            int m141 = dp(MainActivity.this, 10);
+                            showcaseMinX = Math.min(showcaseMinX, nx - m141);
+                            showcaseMinY = Math.min(showcaseMinY, ny - m141);
+                            showcaseMaxX = Math.max(showcaseMaxX, nx + faceW + m141);
+                            showcaseMaxY = Math.max(showcaseMaxY, ny + faceH + m141);
                             return true;
                         }
                         case MotionEvent.ACTION_UP:
@@ -19023,7 +19180,9 @@ public class MainActivity extends Activity {
         final android.view.ScaleGestureDetector sgd = new android.view.ScaleGestureDetector(this,
             new android.view.ScaleGestureDetector.SimpleOnScaleGestureListener() {
                 @Override public boolean onScale(android.view.ScaleGestureDetector d) {
-                    float s = Math.max(0.5f, Math.min(2.2f, world.getScaleX() * d.getScaleFactor()));
+                    // Q141（2.52，乙组②）：缩放护栏 0.05–20（近无限「一整个屏幕可以
+                    // 无限缩小和放大」，只留防数值爆掉的极宽界）；旧 0.5–2.2 随拆墙作废。
+                    float s = Math.max(0.05f, Math.min(20f, world.getScaleX() * d.getScaleFactor()));
                     world.setPivotX(d.getFocusX()); world.setPivotY(d.getFocusY());
                     world.setScaleX(s); world.setScaleY(s);
                     return true;
@@ -19104,35 +19263,39 @@ public class MainActivity extends Activity {
                     FrameLayout.LayoutParams lp122 = (FrameLayout.LayoutParams) f122.getLayoutParams();
                     int x122 = -1, yy122 = -1;
                     String saved122 = (showcasePosJson == null || grp) ? null : showcasePosJson.optString(it122.key, null);
+                    boolean hasSaved141 = false; // Q141（2.52，乙组④）：存位逐字恢复——解析成功即合法落位
                     if (saved122 != null && saved122.contains(",")) {
                         try {
                             String[] parts122 = saved122.split(",");
                             x122 = Integer.parseInt(parts122[0].trim()); yy122 = Integer.parseInt(parts122[1].trim());
-                        } catch (Throwable t122) { x122 = -1; yy122 = -1; }
+                            hasSaved141 = true;
+                        } catch (Throwable t122) { x122 = -1; yy122 = -1; hasSaved141 = false; }
                     }
-                    // Q127（2.39，用户 05:25 点名）：记忆位先验当前舞台——旧会话在别的
-                    // 密度/卡宽下存的坐标若按现卡宽已放不进舞台（x 超右界），旧口径靠
-                    // 下面的 clamp 把它们统一压到同一右列叠成一坨（卡被关在中间一小块、
-                    // 互相压盖的真身）；过期记忆位一律作废、回落全屏宽流式位重排。
-                    if (x122 >= 0 && (x122 > Math.max(0, aw - faceW) || yy122 < 0)) { x122 = -1; yy122 = -1; }
-                    if (x122 < 0 || yy122 < 0) {
+                    // Q127 的「过期记忆位作废＋落位双向夹取」随 Q141 拆墙一并作废：
+                    // 旧密度/卡宽下存的出界位、半出界残位、负坐标都照原坐标回来，不再
+                    // 被压到同一列叠成一坨；未存位才走整幅入界流式排布，分组模式仍不
+                    // 吃存位（saved122 已按 grp 置空，同旧口径）。
+                    if (!hasSaved141) {
                         x122 = m122 + (idx122 % perRow122) * (faceW + gap122);
                         yy122 = y122 + (idx122 / perRow122) * (faceH + gap122);
                     }
-                    lp122.leftMargin = Math.max(m122, Math.min(x122, Math.max(m122, aw - faceW - m122)));
-                    lp122.topMargin = Math.max(m122, yy122); // 纵向不夹视口高：内容可超一屏、整卡靠平移到达（夹进视口只会逼出互压）
+                    lp122.leftMargin = x122;
+                    lp122.topMargin = yy122;
                     f122.setLayoutParams(lp122);
                     idx122++;
                 }
                 int rows122 = (e122.getValue().size() + perRow122 - 1) / perRow122;
                 y122 += rows122 * (faceH + gap122) + dp(MainActivity.this, 14);
             }
-            showcaseContentW = aw;
-            showcaseContentH = Math.max(ah, y122);
-            for (View f122 : faces) { // 记忆位可能落在流式行高之外，按卡实位扩内容界（平移够得着、防丢夹取有据）
+            // Q141（2.52，乙组⑥）：内容矩形初值＝整幅 world，卡实位（含出界存位）向
+            // 四边扩——平移界由它反解，卡拖多远都够得回来；旧 Q122 contentW/H 退役。
+            showcaseMinX = 0; showcaseMinY = 0; showcaseMaxX = aw; showcaseMaxY = Math.max(ah, y122);
+            for (View f122 : faces) {
                 FrameLayout.LayoutParams lp122 = (FrameLayout.LayoutParams) f122.getLayoutParams();
-                showcaseContentW = Math.max(showcaseContentW, lp122.leftMargin + faceW + m122);
-                showcaseContentH = Math.max(showcaseContentH, lp122.topMargin + faceH + m122);
+                showcaseMinX = Math.min(showcaseMinX, lp122.leftMargin - m122);
+                showcaseMinY = Math.min(showcaseMinY, lp122.topMargin - m122);
+                showcaseMaxX = Math.max(showcaseMaxX, lp122.leftMargin + faceW + m122);
+                showcaseMaxY = Math.max(showcaseMaxY, lp122.topMargin + faceH + m122);
             }
         });
         showcaseLastTouchMs = System.currentTimeMillis();
