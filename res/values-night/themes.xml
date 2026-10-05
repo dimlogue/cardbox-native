@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Q148（2.59）：系统深色时 starting window 走深雾蓝（与深色页底 softPageBg
+     同族），冷启不再先白闪再转深。应用内强制深/浅与系统不一致时以系统档为准，
+     首帧后即由 rootView 的 softPageBg 接管。 -->
+<resources>
+    <style name="Theme.CardDB" parent="@android:style/Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">#121B2A</item>
+        <item name="android:statusBarColor">#121B2A</item>
+        <item name="android:navigationBarColor">#121B2A</item>
+    </style>
+</resources>

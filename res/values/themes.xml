@@ -1,8 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- Q148（2.59）：窗底改雾蓝页底同族色——冷启 starting window 不再纯白闪屏
+     （用户点名「点开一片空白」）；widget 默认仍走浅色框架主题与原先逐位一致，
+     只换 windowBackground 一项。深档见 values-night。 -->
 <resources>
-    <style name="Theme.CardDB" parent="@android:style/Theme.Material.NoActionBar">
-        <item name="android:windowBackground">@android:color/white</item>
-        <item name="android:statusBarColor">@android:color/white</item>
-        <item name="android:navigationBarColor">@android:color/white</item>
+    <style name="Theme.CardDB" parent="@android:style/Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">#E2EDF9</item>
+        <item name="android:statusBarColor">#E2EDF9</item>
+        <item name="android:navigationBarColor">#E2EDF9</item>
     </style>
 </resources>
