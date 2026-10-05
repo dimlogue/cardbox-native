@@ -19851,8 +19851,16 @@ public class MainActivity extends Activity {
         animateGlossaryCard139(card, closedH, card.getMeasuredHeight(), onDone);
     }
 
-    // 收起：box/note 为当前挂着的附加盒与独立尾注（同实例摘下、量高、原位挂回，
-    // 动画全程内容保持展开态）；落定单帧内才真正摘除并把正文复 2 行。
+    // 收起：box/note 为当前挂着的附加盒与独立尾注。Q145（2.56）修正形态——Q138/Q139
+    // 的「内容保持展开态、钉高窗口渐隐」对成员型词条不成立：成员盒挂在正文上方
+    // （bodyStart123 插入位），收缩窗口内它留存最久且醒目，用户真机帧（269642/
+    // 269643，02:11）实证——卡已回「展开 ›」收起态，蓝色成员盒仍压在卡内覆标题
+    // 下沿、约 1 秒后才随落定翻态消失。故收起开始在同一同步段内（先于首个动画帧、
+    // 绘制不可见、无中途帧）即摘盒摘注、正文复 2 行并以此态量收起高——动画全程卡
+    // 内只有「标题＋副标＋正文两行」随钉高单调收拢，落定只回 WRAP_CONTENT＋Q142
+    // 回锚，形态与「从未展开」逐像素一致。资讯 collapse 的 det 挂卡尾、随窗口下沿
+    // 退出（Q138 形态真机未见同类残留），不预摘、形态不动。展开侧不预藏成员盒
+    // （终态本含盒、随钉高升起为自然揭示序）；enter 入场不动。
     void collapseGlossaryCard139(final LinearLayout card, final TextView bd,
                                  final LinearLayout box, final View note,
                                  final Runnable onDone) {
@@ -19862,21 +19870,15 @@ public class MainActivity extends Activity {
         int curH = card.getHeight();
         if (curH <= 0) { card.measure(wSpec, uSpec); curH = card.getMeasuredHeight(); }
         final int[] foldCap142 = captureFoldScroll142(card); // Q142：收起开始先记滚动锚（与资讯同治）
-        final int boxIdx = box != null ? card.indexOfChild(box) : -1;
-        final int noteIdx = note != null ? card.indexOfChild(note) : -1;
+        // Q145：摘盒摘注＋正文复 2 行在此一步到位，此态即动画全程与落定形态——不再
+        // 像 Q139 那样量完高把展开态挂回（成员盒会赖在窗口里到落定才走）。
         if (box != null) card.removeView(box);
         if (note != null) card.removeView(note);
         if (bd != null) { bd.setMaxLines(2); bd.setEllipsize(android.text.TextUtils.TruncateAt.END); }
         card.measure(wSpec, uSpec);
         final int closedH = card.getMeasuredHeight();
         final int shrink142 = curH - closedH; // Q142：整卡收缩量（落定回锚的 Δ）
-        if (bd != null) { bd.setMaxLines(Integer.MAX_VALUE); bd.setEllipsize(null); }
-        if (box != null) { if (boxIdx >= 0) card.addView(box, boxIdx); else card.addView(box); }
-        if (note != null) { if (noteIdx >= 0) card.addView(note, noteIdx); else card.addView(note); }
         animateGlossaryCard139(card, curH, closedH, () -> {
-            if (box != null) card.removeView(box);
-            if (note != null) card.removeView(note);
-            if (bd != null) { bd.setMaxLines(2); bd.setEllipsize(android.text.TextUtils.TruncateAt.END); }
             settleFoldScroll142(foldCap142, shrink142); // Q142：落定同帧回锚（算法与已知取舍见 captureFoldScroll142 上方）
             if (onDone != null) onDone.run();
         });
