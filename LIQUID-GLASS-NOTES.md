@@ -44,3 +44,31 @@
 - **C（别做）** 转场/滑动期间全屏实时折射：背景对齐必错位，转场保持现行动画不贴玻璃。
 
 性能纪律：捕获只一份、半分辨率、脏了才重录；玻璃件仅在「背景世代号或自身位置变化」时重绘；**玻璃子树必须从捕获中自排除**，否则显示列表自引用会把渲染线程递归爆栈。
+
+---
+
+## 2026-10-05 补充调研（用户要求再翻开源）
+
+> 背景：用户 2026-10-05 发来液态玻璃底栏截图并明确要求「去开源里面找」。本节为新增量，10-03 结论不变；仍只记机制、不动代码，玻璃攻坚待用户解封。
+
+### 新增参考
+
+| 仓库 | 新增价值 | 体系 | 门槛 |
+|---|---|---|---|
+| Abdullajon1881/LiquidGlass | 模块分 `liquidglass-core`（纯 Kotlin：SDF 透镜数学、AGSL 着色器、uniform 打包、分级逻辑）+ `liquidglass-compose` + **`liquidglass-view`（经典 View 渲染器）**；带液态形状融合（smooth-min SDF、最多 8 形）与 gel 按压（缩放+局部隆起+边缘 flare）；光学数学有 Kotlin 镜像与 80+ 测试 | Compose + **经典 View** + RN | **3 级降级至 API 21** |
+| Lucent（meller2 的 EPUB 阅读器实践） | 基于 Kyant backdrop 的三档预设可借鉴：Chrome（底栏/工具栏：强透镜+边缘高光）、Panel（卡片/设置组：浅透镜保可读）、Control（图标钮/选中指示：紧透镜、无阴影）；一条结构铁律——读背景的玻璃件必须是被捕获层的**兄弟**、不能是其后代，否则会录到正在录制的层本身 | Compose | API 33+（AGSL） |
+| tianli0/fluidglass（Flutter 移植） | Kyant 结构逐文件对应表（`Shaders.kt` 的折射/色散/高光着色器 ↔ 独立 .frag 文件），可作「Kyant 数学到底在哪几个文件」的索引 | Flutter | 同 Kyant |
+
+### 真机崩溃坑（新证据，施工时必避）
+
+- lanlan13-14/zephyr 的修复提交（2026-09-05）：Kyant AGSL 在小米 Adreno 上，首帧岛尺寸 0×0、胶囊中心 SDF 梯度为零向量时，`normalize()` 触发 SIGSEGV 直接崩进程。对策：normalize 前做长度守卫、跳过 0×0 的层录制、AGSL/RenderEffect 失败时禁用 GPU 玻璃路径降级而不是拖垮 Activity。**这条与 10-03 笔记里「RuntimeShader 构造 try/catch 降级」是同一纪律的延伸：着色器内部的零向量同样要守。**
+
+### 对卡盒的适配判断（不变 + 补强）
+
+- 用户机 vivo X200 Pro mini（OriginOS 6 / Android 15，API 35），AGSL `RuntimeShader` 可跑，门槛不是问题；App 最低支持 Android 7.0（API 24），所以**分级降级**才是真问题：API 33+ 全功能、31–32 模糊+手绘高光、<31 半透兜底——Abdullajon 的三级划分与 10-03 路线一致，可对照其 tier logic 的分法。
+- 卡盒是 Java 手写 View、零三方、无 Gradle。Kyant 与 Lucent 都是 Compose，接不进来，只能读 AGSL 数学自写（与 10-03 结论一致）；QmDeve/AndroidLiquidGlassView（Java View）与 Abdullajon 的 `liquidglass-view` 是仅有的两个「经典 View 渲染器」参照，解封施工时先看这两个的捕获/渲染接法、再看 Kyant 的着色器数学。
+- Kyant 结构铁律（玻璃件与被捕获层互为兄弟、玻璃子树自排除）在 View 体系同样成立，`GlassKit` 设计时先定这条层级关系。
+
+### 未查到
+
+- 用户截图里酷安拼图「功能」模块的液态底栏出自哪个开源项目：公开搜索未定位到对应仓库，不硬猜；后续若用户给出 App 名或作者再补查。
