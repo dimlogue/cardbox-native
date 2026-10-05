@@ -244,7 +244,7 @@ public class MainActivity extends Activity {
         GradientDrawable g = new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
             new int[]{accentColor(), accentColor()});
         g.setColor(accentColor());
-        g.setCornerRadius(dp(this, 20)); // Q94 定版 token：按钮大圆角向 20dp 档靠拢、柔影低透明
+        g.setCornerRadius(dp(this, btnR143(20f))); // Q94 定版 token：按钮大圆角向 20dp 档靠拢、柔影低透明；Q143：按钮类收口
         b.setBackground(new RippleDrawable(ColorStateList.valueOf(Color.argb(36, 255, 255, 255)), g, null));
         softShadow(b, 2); // Q125 补（按钮黑边扫查）：同 circleIconBtn，默认黑影改 Soft 柔影
         b.setPadding(dp(this, 16), 0, dp(this, 16), 0);
@@ -269,7 +269,7 @@ public class MainActivity extends Activity {
             Math.min(255, Color.green(acc) + (255 - Color.green(acc)) * 22 / 100),
             Math.min(255, Color.blue(acc) + (255 - Color.blue(acc)) * 22 / 100));
         GradientDrawable g = new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM, new int[]{hi, acc});
-        g.setCornerRadius(dp(this, 16));
+        g.setCornerRadius(dp(this, btnR143(16f))); // Q143：按钮类收口
         g.setStroke(Math.max(1, dp(this, 0.6f)), Color.argb(70, 255, 255, 255));
         b.setBackground(new RippleDrawable(ColorStateList.valueOf(Color.argb(36, 255, 255, 255)), g, null));
         softShadow(b, 2); // Q125 补（按钮黑边扫查）：默认黑影改 Soft 柔影（描边本为白色发丝，不动）
@@ -305,7 +305,7 @@ public class MainActivity extends Activity {
         b.setPadding(0, dp(this, 9), 0, dp(this, 9));
         if (primary) {
             GradientDrawable g = new GradientDrawable();
-            g.setColor(accentColor()); g.setCornerRadius(dp(this, 10));
+            g.setColor(accentColor()); g.setCornerRadius(dp(this, btnR143(10f))); // Q143：按钮类收口
             b.setBackground(new RippleDrawable(ColorStateList.valueOf(Color.argb(36, 255, 255, 255)), g, null));
         } else b.setBackground(rippleBg(colChipOff(), 10));
         b.setOnTouchListener((v, e) -> {
@@ -980,9 +980,13 @@ public class MainActivity extends Activity {
         // Q94 铺开：全站白卡收口——凡以纯白/语义面色作底的圆角卡，一律换 Soft 柔面
         // （半透明浅蓝白渐变＋白色发丝边），各页不必逐处改建面代码即同语言；
         // 彩色底（胶囊/状态色/强调色）不拦截，仍走平色。
-        if (color == Color.WHITE || color == colSurface()) return softFaceBg(radiusDp);
+        // Q143（2.54）：半径先过 autoR143 一杆分档（t==0.5f 逐位回原值）——全站经本
+        // 助手与 rippleBg 出的面（设置面板/工具格/点评规格盒/筛选钮/列表卡等）自此
+        // 全部跟随 ui_corner_t；调用方须传未收口的基准值（原 capsuleR129 直传点已改直传）。
+        float r143 = autoR143(radiusDp);
+        if (color == Color.WHITE || color == colSurface()) return softFaceBg(r143);
         GradientDrawable g = new GradientDrawable();
-        g.setColor(color); g.setCornerRadius(dp(c, radiusDp));
+        g.setColor(color); g.setCornerRadius(dp(c, r143));
         return g;
     }
     // P5 视觉细修：图片占位改柔和渐变（混合版无灰块口径）——浅蓝→浅紫对角渐变，不再用整块灰蓝
@@ -1563,6 +1567,34 @@ public class MainActivity extends Activity {
     static float cardR129(float base) { return cardR129(base, cornerT129); }
     static float cardSmallR129(float base, float t) { return t == 0.5f ? base : Math.min(base * (2f * t), 16f); }
     static float cardSmallR129(float base) { return cardSmallR129(base, cornerT129); }
+    // Q143（2.54）圆角普查补类：面板/按钮/输入/整圆药丸——Q129 一杆此前只连弹层/悬浮/
+    // 胶囊/dock/卡图五类，设置大面板、工具格、点评规格盒、详情主钮、输入框等未接（用户
+    // 01:09–01:19 连环截图实证：分段钮变方而旁边面板没变）。四类均守 t==0.5f 精确回基准。
+    static float panelR143(float base, float t) { return t == 0.5f ? base : Math.min(base * (2f * t), 40f); }
+    static float panelR143(float base) { return panelR143(base, cornerT129); }
+    static float btnR143(float base, float t) { return t == 0.5f ? base : Math.min(base * (2f * t), 32f); }
+    static float btnR143(float base) { return btnR143(base, cornerT129); }
+    static float inputR143(float base, float t) { return t == 0.5f ? base : Math.min(base * (2f * t), 32f); }
+    static float inputR143(float base) { return inputR143(base, cornerT129); }
+    static float pillR143(float t) { return t == 0.5f ? 999f : Math.min(999f, 56f * t); }
+    static float pillR143() { return pillR143(cornerT129); }
+    // 通用面助手 roundRect 的唯一分档口：按基准值归类——≥900 整圆药丸、10–40 面板、
+    // 4–9.99 胶囊（capsuleR129）、<4 功能微圆角豁免（滚动条/页点/抓柄，不成形面）。
+    static float autoR143(float base) {
+        if (base >= 900f) return pillR143();
+        if (base >= 10f) return panelR143(base);
+        if (base >= 4f) return capsuleR129(base);
+        return base;
+    }
+    // Q143（2.54，丙组）评分四档固定语义色，与主题色（accentColor）脱钩：用户选青绿后
+    // 8.5 与 3.7 同色、分不出高低（01:20 截图）。顶级 ≥8.5 / 优质 7.0–8.4 / 一般
+    // 5.5–6.9 / 谨慎 <5.5，白字；深色模式同色值（四色明度居中、深底上可读，不微调）。
+    static int scoreBandColor143(double s) {
+        if (s >= 8.5) return Color.rgb(0x1E, 0x9E, 0x5A);
+        if (s >= 7.0) return Color.rgb(0x6A, 0xA8, 0x4F);
+        if (s >= 5.5) return Color.rgb(0xE8, 0xA3, 0x3D);
+        return Color.rgb(0xD9, 0x53, 0x4F);
+    }
     // 图标包风格层：只动线头/转角。现行包空转（各图标原本即 ROUND 线头），rounded 强制
     // 全 ROUND，geometric 改 SQUARE 线头 + MITER 硬角；字形层另在 NavIconView/ToolIconView 分支。
     static void styleIconPaint129(Paint p) {
@@ -1812,6 +1844,9 @@ public class MainActivity extends Activity {
     // 新图（哪怕四角非白）落到任何一处，角区露出的都只会是这层承托色；与图侧的
     // 白填充（数据线）叠加生效、互不替代。圆角半径口径一字不动。
     int cardFrameTone131() { return darkEff() ? Color.rgb(0x2A, 0x2A, 0x2E) : Color.rgb(0xF1, 0xF1, 0xF4); }
+    // Q143（2.54，乙组）：瓷砖/详情/英雄/三处缩略的承托底板已全撤（图铺满框边+同半径
+    // 裁切断根）；本助手仅剩展柜卡面一处调用——展柜 FIT_CENTER 整幅口径与手势层不在
+    // 本轮落点内（丁组只铺手势命中层），原样保留，待用户点名再议。
     GradientDrawable cardFrameBg131(float radiusDp) {
         GradientDrawable g = new GradientDrawable();
         g.setColor(cardFrameTone131());
@@ -4497,7 +4532,7 @@ public class MainActivity extends Activity {
                 if (thH133 > thMax133) { thH133 = thMax133; thW133 = Math.round(thMax133 * ar133); }
             }
             FrameLayout thumb = new FrameLayout(this);
-            thumb.setBackground(cardFrameBg131(cardSmallR129(9f))); // Q131：缩略框底衬承托面，角区不露黑
+            // Q143（2.54，乙组）撤 Q131 承托底板：图 CENTER_CROP 铺满框边、框与图同半径（cardSmallR129）裁切，角外是行面不是底板（深色卡不再一圈黑边、卡不再显缩一号）。
             top.addView(thumb, new LinearLayout.LayoutParams(thW133, thH133));
             ImageView iv = new ImageView(this);
             iv.setScaleType(ImageView.ScaleType.CENTER_CROP);
@@ -4594,7 +4629,7 @@ public class MainActivity extends Activity {
         }
         float cardR = cardR129(Math.max(16f, cardRadiusDp(imgW / getResources().getDisplayMetrics().density)));
         FrameLayout hero = new FrameLayout(this);
-        hero.setBackground(cardFrameBg131(cardR));
+        // Q143（2.54，乙组）撤 Q131 承托底板：图铺满框边、双 outline 同半径裁切（外卡英雄图）。
         if (Build.VERSION.SDK_INT >= 21) hero.setElevation(dp(this, 6));
         roundClip(hero, cardR, this);
         ImageView hiv = new ImageView(this);
@@ -5889,7 +5924,7 @@ public class MainActivity extends Activity {
             act.setGravity(Gravity.CENTER);
             GradientDrawable ab = new GradientDrawable();
             ab.setColor(accentColor()); // Q94：动作钮回主色实面（旧蓝→紫高饱和渐变收掉，与柔面同语言）
-            ab.setCornerRadius(dp(this, 999));
+            ab.setCornerRadius(dp(this, pillR143())); // Q143：整圆药丸类收口
             act.setBackground(ab);
             act.setPadding(dp(this, 14), dp(this, 7), dp(this, 14), dp(this, 7));
             LinearLayout.LayoutParams alp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
@@ -6310,7 +6345,7 @@ public class MainActivity extends Activity {
         GradientDrawable frameBg126 = new GradientDrawable();
         frameBg126.setColor(Color.TRANSPARENT);
         frameBg126.setStroke(dp(this, 3), Color.rgb(0x0A, 0x5C, 0xD6));
-        frameBg126.setCornerRadius(dp(this, 15));
+        frameBg126.setCornerRadius(dp(this, panelR143(15f))); // Q143：面板类收口
         selFrame126.setBackground(frameBg126);
         selFrame126.setVisibility(View.INVISIBLE);
         gridWrap126.addView(selFrame126, new FrameLayout.LayoutParams(1, 1));
@@ -6328,7 +6363,7 @@ public class MainActivity extends Activity {
                 int[] pair = PLACEHOLDER_PALETTE[idx];
                 GradientDrawable sw = new GradientDrawable(GradientDrawable.Orientation.TL_BR,
                     new int[]{Color.rgb(Color.red(pair[0]), Color.green(pair[0]), Color.blue(pair[0])), Color.rgb(Color.red(pair[1]), Color.green(pair[1]), Color.blue(pair[1]))});
-                sw.setCornerRadius(dp(this, 12));
+                sw.setCornerRadius(dp(this, panelR143(12f))); // Q143：面板类收口
                 boolean sel = curCustom != null && curCustom == idx;
                 boolean isAuto = curCustom == null && autoIdx == idx;
                 if (sel) sw.setStroke(dp(this, 3), Color.rgb(0x0A, 0x5C, 0xD6));
@@ -8671,7 +8706,7 @@ public class MainActivity extends Activity {
         roundClip(box, tileR, this);
         int imgH = Math.max(dp(this, 40), Math.round(tileW / 1.586f));
         FrameLayout art = new FrameLayout(this);
-        art.setBackground(cardFrameBg131(tileR)); // Q131（件五）：图区底衬改承托面——图未覆盖/裁切边缘露出的角区只见此调，绝不露黑（旧为透明、透出下层不定调）
+        // Q143（2.54，乙组）撤 Q131 承托底板：图 CENTER_CROP 铺满 art 全框、art 与 iv 同半径（tileR）裁切——角区只透出瓷砖柔面，不再垫深色板（用户 01:19 工行星座图实证：一圈黑边＋卡显缩一号）。
         topSheetClip(art, tileR, this); // Q48 排查补强：图区容器同半径顶圆底直裁切，顶图四角不靠瓷砖外框单层 outline
         box.addView(art, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, imgH));
         ImageView iv = new ImageView(this);
@@ -8718,7 +8753,10 @@ public class MainActivity extends Activity {
             chips.addView(chip(c.hasScore ? (isEn() ? "Score " : "总分 ") + fmtScoreNum(c.score) : "总分待评分",
                 Color.rgb(0xEE, 0xF0, 0xF3), Color.rgb(0x63, 0x63, 0x66), chipSp));
         } else {
-            chips.addView(chip(fmtScoreInt(c.score), accentSoftBg(), accentColor(), chipSp));
+            // Q143：评分小胶囊与详情同治——有分走四档语义色（白字），未评分维持中性灰不冒充低分。
+            chips.addView(chip(fmtScoreInt(c.score),
+                c.hasScore ? scoreBandColor143(c.score) : Color.rgb(0xEE, 0xF0, 0xF3),
+                c.hasScore ? Color.WHITE : Color.rgb(0x63, 0x63, 0x66), chipSp));
         }
         chips.addView(chip("已停发".equals(c.status) ? "已停发" : "在发",
             "已停发".equals(c.status) ? Color.rgb(0xF3, 0xE8, 0xE8) : Color.rgb(0xE6, 0xF6, 0xEC),
@@ -9191,7 +9229,7 @@ public class MainActivity extends Activity {
     TextView chip(String s, int bg, int fg, float sp) {
         TextView t = tv(this, s, sp, fg, true);
         pinFixedText125(t); // Q125：胶囊钉角色行高（字体件）
-        t.setBackground(roundRect(bg, capsuleR129(7f), this)); // Q129：小徽标胶囊走胶囊类收口
+        t.setBackground(roundRect(bg, 7f, this)); // Q129：小徽标胶囊走胶囊类收口
         t.setPadding(dp(this, 6), dp(this, 3), dp(this, 6), dp(this, 3));
         LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         lp.rightMargin = dp(this, 5);
@@ -9342,7 +9380,7 @@ public class MainActivity extends Activity {
         // Q94：英雄卡转雾蓝深渐变（旧 #00A3C8 高饱和青尾收掉），圆角 24、柔影蓝灰
         GradientDrawable hg = new GradientDrawable(GradientDrawable.Orientation.TL_BR,
             new int[]{Color.rgb(0x24, 0x46, 0x6E), Color.rgb(0x3D, 0x6C, 0xA8), Color.rgb(0x7F, 0xA8, 0xCC)});
-        hg.setCornerRadius(dp(this, 24));
+        hg.setCornerRadius(dp(this, panelR143(24f))); // Q143：面板类收口（Q94 24dp 档为基准）
         hero.setBackground(hg);
         softShadow(hero, 8);
         hero.setPadding(dp(this, 20), dp(this, 20), dp(this, 20), dp(this, 20));
@@ -9516,7 +9554,7 @@ public class MainActivity extends Activity {
         t.setOrientation(LinearLayout.VERTICAL);
         GradientDrawable bg = new GradientDrawable();
         bg.setShape(GradientDrawable.RECTANGLE);
-        bg.setCornerRadius(dp(this, 14));
+        bg.setCornerRadius(dp(this, panelR143(14f))); // Q143：面板类收口
         bg.setColor(Color.argb(33, 255, 255, 255));
         bg.setStroke(dp(this, 1), Color.argb(41, 255, 255, 255));
         t.setBackground(bg);
@@ -10198,7 +10236,7 @@ public class MainActivity extends Activity {
         TextView clearT = tv(this, "\u6e05\u7a7a", 13, colText(), false);
         clearT.setGravity(Gravity.CENTER);
         GradientDrawable clearBg = new GradientDrawable();
-        clearBg.setColor(colChipOff()); clearBg.setCornerRadius(dp(this, 999));
+        clearBg.setColor(colChipOff()); clearBg.setCornerRadius(dp(this, pillR143())); // Q143：整圆药丸类收口
         clearBg.setStroke(dp(this, 1), colDivider());
         clearT.setBackground(clearBg);
         clearT.setMinWidth(dp(this, 62)); clearT.setMinHeight(dp(this, 34));
@@ -10229,7 +10267,7 @@ public class MainActivity extends Activity {
         doneT.setGravity(Gravity.CENTER);
         GradientDrawable doneBg = new GradientDrawable(GradientDrawable.Orientation.LEFT_RIGHT,
             new int[]{Color.rgb(0x0A, 0x84, 0xFF), Color.rgb(0x00, 0x66, 0xE6)});
-        doneBg.setCornerRadius(dp(this, 999));
+        doneBg.setCornerRadius(dp(this, pillR143())); // Q143：整圆药丸类收口
         doneT.setBackground(doneBg);
         doneT.setMinWidth(dp(this, 68)); doneT.setMinHeight(dp(this, 34));
         doneT.setPadding(dp(this, 16), dp(this, 7), dp(this, 16), dp(this, 7));
@@ -10516,7 +10554,7 @@ public class MainActivity extends Activity {
             t.setTextColor(on ? Color.rgb(0x6B, 0x7D, 0x94) : Color.rgb(0x9A, 0x9A, 0xA0));
             GradientDrawable dg = new GradientDrawable();
             dg.setColor(on ? Color.rgb(0xD9, 0xE4, 0xF2) : Color.rgb(0xE8, 0xEA, 0xEF));
-            dg.setCornerRadius(dp(this, 999));
+            dg.setCornerRadius(dp(this, pillR143())); // Q143：整圆药丸类收口
             dg.setStroke(dp(this, 1), Color.argb(10, 20, 30, 60));
             t.setBackground(dg);
             t.setAlpha(0.75f);
@@ -10528,13 +10566,13 @@ public class MainActivity extends Activity {
         if (on) {
             GradientDrawable g = new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
                 new int[]{Color.rgb(0x0A, 0x84, 0xFF), Color.rgb(0x00, 0x66, 0xE6)});
-            g.setCornerRadius(dp(this, 999));
+            g.setCornerRadius(dp(this, pillR143())); // Q143：整圆药丸类收口（筛选 chip）
             t.setBackground(g);
             softShadow(t, 2); // Q125 补（按钮黑边扫查，用户 04:11 截图主犯）：蓝 pill 默认 elevation 黑影在下沿/角部发硬，改 Soft 蓝灰柔影
         } else {
             GradientDrawable g = new GradientDrawable();
             g.setColor(colChipOff());
-            g.setCornerRadius(dp(this, 999));
+            g.setCornerRadius(dp(this, pillR143())); // Q143：整圆药丸类收口（筛选 chip）
             g.setStroke(dp(this, 1), colDivider());
             t.setBackground(g);
         }
@@ -10632,9 +10670,9 @@ public class MainActivity extends Activity {
         // Q94：横幅降饱和转雾蓝靛（旧蓝→紫→粉三段高饱和收掉），圆角 18→22 与柔面同语言
         GradientDrawable bg = new GradientDrawable(GradientDrawable.Orientation.TL_BR,
             new int[]{Color.rgb(0x4E, 0x7F, 0xB8), Color.rgb(0x6E, 0x8F, 0xC4), Color.rgb(0x93, 0xA9, 0xD4)});
-        bg.setCornerRadius(dp(this, 22));
+        bg.setCornerRadius(dp(this, panelR143(22f))); // Q143：面板类收口（Q94 22dp 档为基准）
         b.setBackground(bg);
-        roundClip(b, 22, this); // Q122（2.34，件二）：补 outline 与底图同半径 22——旧只 bg 圆角＋裸 elevation 黑影，四角读作黑白楔；改走 softShadow 蓝灰柔影同口径
+        roundClip(b, panelR143(22f), this); // Q122（2.34，件二）：补 outline 与底图同半径——旧只 bg 圆角＋裸 elevation 黑影，四角读作黑白楔；改走 softShadow 蓝灰柔影同口径；Q143：半径同值跟随
         softShadow(b, 6);
         b.setPadding(dp(this, 14), dp(this, 13), dp(this, 14), dp(this, 13));
         LinearLayout.LayoutParams blp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
@@ -11040,7 +11078,7 @@ public class MainActivity extends Activity {
             // 废旧整行厚绿 #E9F7EE（改浅底细边，层级标签改绿 chip、值 600、「修改」改灰字）
             GradientDrawable trailBg = new GradientDrawable();
             trailBg.setColor(Color.rgb(0xF2, 0xFB, 0xF4));
-            trailBg.setCornerRadius(dp(this, 13));
+            trailBg.setCornerRadius(dp(this, panelR143(13f))); // Q143：面板类收口
             trailBg.setStroke(Math.max(1, dp(this, 1)), Color.argb(41, 46, 140, 60));
             row.setBackground(trailBg);
             row.setPadding(dp(this, 12), dp(this, 10), dp(this, 12), dp(this, 10));
@@ -11156,7 +11194,7 @@ public class MainActivity extends Activity {
                     // 部分机型默认轮廓退化为直角矩形，elevation 阴影按直角打出、圆角背景外
                     // 在底部两角露出灰楔（用户 16:47 实拍）；roundClip 给 18dp 圆角轮廓，
                     // 裁切与阴影同形（与 wizResultRow 外其他圆角卡同一口径）。
-                    roundClip(tile, 18, this);
+                    roundClip(tile, panelR143(18f), this); // Q143：面板类收口（与 rippleBg 白面经 roundRect 同值）
                     // Q103：不叠 elevation 投影——柔面描边＋投影两层轮廓叠出「两张纸」错位感（用户点名），只留单层柔面定形
                     tile.setPadding(dp(this, 14), dp(this, 15), dp(this, 14), dp(this, 15));
                     LinearLayout.LayoutParams tlp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
@@ -11225,7 +11263,7 @@ public class MainActivity extends Activity {
                 // Q14：选项照混合版 .wiz-opt——#F4F5F9 浅底+rgba(20,30,60,.06) 描边、圆角 14、内边距 14/13
                 GradientDrawable optBgBase = new GradientDrawable();
                 optBgBase.setColor(darkEff() ? Color.argb(44, 255, 255, 255) : Color.rgb(0xF4, 0xF5, 0xF9));
-                optBgBase.setCornerRadius(dp(this, 14));
+                optBgBase.setCornerRadius(dp(this, panelR143(14f))); // Q143：面板类收口
                 optBgBase.setStroke(Math.max(1, dp(this, 1)), darkEff() ? Color.argb(38, 255, 255, 255) : Color.argb(15, 20, 30, 60));
                 opt.setBackground(new RippleDrawable(
                     android.content.res.ColorStateList.valueOf(Color.argb(38, 10, 92, 214)), optBgBase, null));
@@ -11290,7 +11328,7 @@ public class MainActivity extends Activity {
         row.setLayoutParams(rlp);
 
         FrameLayout wizThumb = new FrameLayout(this);
-        wizThumb.setBackground(cardFrameBg131(cardSmallR129(9f))); // Q131（件五）：缩略框底衬承托面，角区不露黑
+        // Q143（2.54，乙组）撤 Q131 承托底板：图铺满框边、同半径裁切（同 fx 缩略口径）。
         row.addView(wizThumb, new LinearLayout.LayoutParams(dp(this, 76), dp(this, 48)));
         ImageView iv = new ImageView(this);
         iv.setScaleType(ImageView.ScaleType.CENTER_CROP);
@@ -11517,13 +11555,13 @@ public class MainActivity extends Activity {
         // （不用 WRAP_CONTENT+MATCH_PARENT 玻璃的模糊测量链），钮下贴安全距避手势条。
         FrameLayout pillWrap = new FrameLayout(this);
         int pillH = dp(this, 50);
-        pillWrap.addView(glassLayer(detailPrimaryBtn, 999, false),
+        pillWrap.addView(glassLayer(detailPrimaryBtn, pillR143(), false), // Q143：整圆药丸类收口（详情主钮）
             new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, pillH));
-        pillWrap.addView(glassWashView(999, false),
+        pillWrap.addView(glassWashView(pillR143(), false), // Q143：整圆药丸类收口（详情主钮）
             new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, pillH));
         pillWrap.addView(detailPrimaryBtn, new FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, pillH));
-        roundClip(pillWrap, 999, this); // Q125 补（按钮黑边扫查）：先给药丸轮廓，elevation 影随钮形走，不再露方形黑角
+        roundClip(pillWrap, pillR143(), this); // Q125 补（按钮黑边扫查）：先给药丸轮廓，elevation 影随钮形走，不再露方形黑角；Q143：半径跟随药丸类
         softShadow(pillWrap, 6); // Q125 补：主钮影改 Soft 蓝灰柔影（旧默认黑影 6dp 在钮下沿发硬；钮尺寸/位置/形态不动）
         FrameLayout.LayoutParams pillLp = new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, pillH);
         pillLp.gravity = Gravity.BOTTOM;
@@ -12065,7 +12103,7 @@ public class MainActivity extends Activity {
             // outline 同半径裁切一把弧（Q48 的控件裁切本已双装，位图二层自此退役）。
             float cardR = cardR129(Math.max(16f, cardRadiusDp(imgW / getResources().getDisplayMetrics().density))); // Q129：卡图类收口
             FrameLayout imgFrame = new FrameLayout(this);
-            imgFrame.setBackground(cardFrameBg131(cardR)); // Q126 定调（浅 #F1F1F4／深 #2A2A2E）自 Q131 起收进全 App 共用助手 cardFrameBg131，值逐位一致（Q136 曾改透明无影，Q138 逐行恢复）
+            // Q143（2.54，乙组）撤 Q131 承托底板：详情大图铺满 imgFrame 框边、frame 与 iv 双 outline 同半径（cardR）裁切，角外透窗面——深色卡不再被底板勒出一圈黑边（Q138 的承托形制只撤底色、内缩/封顶/海拔不变）。
             if (Build.VERSION.SDK_INT >= 21) imgFrame.setElevation(dp(this, 6));
             roundClip(imgFrame, cardR, this);
             ImageView iv = new ImageView(this);
@@ -12303,7 +12341,7 @@ public class MainActivity extends Activity {
         chips.add(chip(c.isCredit() ? "信用卡" : "借记卡", chipBg, colText(), 12f));
         if (c.status != null && !c.status.isEmpty()) chips.add(chip(c.status, chipBg, colText(), 12f));
         if (c.bank != null && !c.bank.isEmpty()) chips.add(chip(c.bank, chipBg, colText(), 12f));
-        if (c.hasScore) chips.add(chip((isEn() ? "Score " : "评分 ") + String.format(java.util.Locale.US, "%.1f", c.score), accentColor(), Color.WHITE, 12f));
+        if (c.hasScore) chips.add(chip((isEn() ? "Score " : "评分 ") + String.format(java.util.Locale.US, "%.1f", c.score), scoreBandColor143(c.score), Color.WHITE, 12f)); // Q143：评分档色脱钩主题色（旧 accentColor 误染：换主题后高低分同色）
         for (String[] f : FEATS) if (featMatch(c, f[0])) chips.add(chip(EN_MODE ? featLabelEn(f[0]) : f[1], chipBg, colText(), 12f)); // Q114：英文缩略表，与瓷砖同口径
         if (c.studentPick) chips.add(chip("学生推荐", accentColor(), Color.WHITE, 12f));
         // Q133（2.45，件四）：AI 重绘小标原与本行胶囊同档一枚；Q136（2.48）用户点名挪走，
@@ -12364,14 +12402,14 @@ public class MainActivity extends Activity {
                 darkEff() ? new int[]{Color.rgb(30, 39, 56), Color.rgb(22, 30, 45)}
                           : new int[]{Color.rgb(253, 254, 255), Color.rgb(240, 246, 252)});
             joinedBg.setStroke(dp(this, 1), darkEff() ? Color.argb(80, 255, 255, 255) : Color.argb(170, 255, 255, 255));
-            joinedBg.setCornerRadius(dp(this, 999));
+            joinedBg.setCornerRadius(dp(this, pillR143())); // Q143：整圆药丸类收口（详情主钮已加入态）
             detailPrimaryBtn.setBackground(joinedBg);
         } else {
             detailPrimaryBtn.setText(S("add_to_mine"));
             detailPrimaryBtn.setTextColor(Color.WHITE);
             GradientDrawable g = new GradientDrawable(GradientDrawable.Orientation.LEFT_RIGHT,
                 new int[]{Color.rgb(0x0A, 0x84, 0xFF), Color.rgb(0x5E, 0x5C, 0xE6)});
-            g.setCornerRadius(dp(this, 999));
+            g.setCornerRadius(dp(this, pillR143())); // Q143：整圆药丸类收口（详情主钮）
             detailPrimaryBtn.setBackground(g);
         }
     }
@@ -12626,7 +12664,7 @@ public class MainActivity extends Activity {
             top.setGravity(Gravity.CENTER_VERTICAL);
             cardBox.addView(top);
             FrameLayout stuThumb = new FrameLayout(this);
-            stuThumb.setBackground(cardFrameBg131(cardSmallR129(9f))); // Q131（件五）：缩略框底衬承托面，角区不露黑
+            // Q143（2.54，乙组）撤 Q131 承托底板：图铺满框边、同半径裁切（同 fx 缩略口径）。
             top.addView(stuThumb, new LinearLayout.LayoutParams(dp(this, 72), dp(this, 44)));
             ImageView iv = new ImageView(this);
             iv.setScaleType(ImageView.ScaleType.CENTER_CROP);
@@ -12826,7 +12864,7 @@ public class MainActivity extends Activity {
         hero.setOrientation(LinearLayout.VERTICAL);
         GradientDrawable hg = new GradientDrawable(GradientDrawable.Orientation.TL_BR,
             new int[]{Color.rgb(0x14, 0x1C, 0x2C), Color.rgb(0x1D, 0x2F, 0x4D)});
-        hg.setCornerRadius(dp(this, 20)); // P5：对照混合版 .mine-bento 圆角 20
+        hg.setCornerRadius(dp(this, panelR143(20f))); // P5：对照混合版 .mine-bento 圆角 20（基准）；Q143：面板类收口
         hero.setBackground(hg);
         hero.setPadding(dp(this, 14), dp(this, 14), dp(this, 14), dp(this, 14));
         wrap.addView(hero, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
@@ -12924,7 +12962,7 @@ public class MainActivity extends Activity {
         t.setOrientation(LinearLayout.VERTICAL);
         GradientDrawable tg = new GradientDrawable();
         tg.setColor(Color.argb(20, 255, 255, 255));
-        tg.setCornerRadius(dp(this, 14));
+        tg.setCornerRadius(dp(this, panelR143(14f))); // Q143：面板类收口
         tg.setStroke(Math.max(1, dp(this, 1)), Color.argb(26, 255, 255, 255));
         t.setBackground(tg);
         t.setPadding(dp(this, 13), dp(this, 13), dp(this, 13), dp(this, 13));
@@ -14048,7 +14086,7 @@ public class MainActivity extends Activity {
             if (on) {
                 Drawable cur = tile.getBackground();
                 if (cur instanceof GradientDrawable) ((GradientDrawable) cur).setStroke(dp(this, 2), Color.argb(178, 0, 122, 255));
-                roundClip(tile, 16, this);
+                roundClip(tile, panelR143(16f), this); // Q143：面板类收口（拖拽框）
                 if (Build.VERSION.SDK_INT >= 21) tile.setElevation(dp(this, 18));
             } else {
                 if (orig instanceof GradientDrawable) ((GradientDrawable) orig).setStroke(0, 0);
@@ -14580,7 +14618,7 @@ public class MainActivity extends Activity {
         editBtn.setGravity(Gravity.CENTER);
         GradientDrawable eg = new GradientDrawable();
         eg.setColor(Color.WHITE);
-        eg.setCornerRadius(dp(this, 999));
+        eg.setCornerRadius(dp(this, pillR143())); // Q143：整圆药丸类收口
         eg.setStroke(dp(this, 1), Color.rgb(0xD8, 0xD8, 0xDE));
         editBtn.setBackground(eg);
         editBtn.setPadding(dp(this, 14), dp(this, 6), dp(this, 14), dp(this, 6));
@@ -14735,7 +14773,7 @@ public class MainActivity extends Activity {
         t.setEllipsize(android.text.TextUtils.TruncateAt.END);
         GradientDrawable g = new GradientDrawable();
         g.setColor(Color.rgb(0xF7, 0xF8, 0xFA));
-        g.setCornerRadius(dp(this, 14));
+        g.setCornerRadius(dp(this, btnR143(14f))); // Q143：按钮类收口
         g.setStroke(dp(this, 1), Color.rgb(0xE8, 0xE8, 0xEE));
         t.setBackground(g);
         t.setOnTouchListener((v, e) -> {
@@ -14855,7 +14893,7 @@ public class MainActivity extends Activity {
             // Q92/Q123：未聚焦也留 1dp 本色描边（浅档 #C2CDDA、深档 argb115 白）圈出框体，
             // 填充仍走语义柔色；聚焦描边转主色（输入大圆角 16dp 不变）。
             g.setColor(foc ? colSurface() : colChipOff());
-            g.setCornerRadius(dp(this, 16)); // Q94 token：输入大圆角
+            g.setCornerRadius(dp(this, inputR143(16f))); // Q94 token：输入大圆角；Q143：输入类收口
             g.setStroke(dp(this, 1), foc ? accentColor() : (darkEff() ? Color.argb(115, 255, 255, 255) : Color.rgb(0xC2, 0xCD, 0xDA)));
             e.setBackground(g);
         };
@@ -15759,13 +15797,13 @@ public class MainActivity extends Activity {
             GradientDrawable g = new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
                 darkEff() ? new int[]{Color.rgb(0x37, 0x54, 0x82), Color.rgb(0x2B, 0x45, 0x6B)}
                           : new int[]{Color.rgb(0xE2, 0xEE, 0xFC), Color.rgb(0xC9, 0xDF, 0xF7)});
-            g.setCornerRadius(dp(this, 999));
+            g.setCornerRadius(dp(this, pillR143())); // Q143：整圆药丸类收口（表单 chip 选中态）
             g.setStroke(dp(this, 1), darkEff() ? Color.argb(70, 255, 255, 255) : Color.argb(170, 255, 255, 255));
             t.setBackground(g);
             t.setTextColor(darkEff() ? Color.WHITE : Color.rgb(0x1F, 0x5F, 0xA8));
             try { t.setTypeface(weightTypeface(this, 700)); } catch (Throwable ignored) {}
         } else {
-            t.setBackground(softFaceBg(999));
+            t.setBackground(softFaceBg(pillR143())); // Q143：整圆药丸类收口（表单 chip 未选态）
             t.setTextColor(colText());
             try { t.setTypeface(weightTypeface(this, 400)); } catch (Throwable ignored) {}
         }
@@ -15950,12 +15988,12 @@ public class MainActivity extends Activity {
             for (int i = 0; i < swatchInners.size(); i++) {
                 boolean on = i == styleSel[0];
                 GradientDrawable g = customGradient(i);
-                g.setCornerRadius(dp(this, 12)); // Q94：色块圆角 8→12 随柔面语言
+                g.setCornerRadius(dp(this, panelR143(12f))); // Q94：色块圆角 8→12 随柔面语言（基准）；Q143：面板类收口
                 g.setStroke(dp(this, 2), on ? Color.rgb(0x00, 0x7A, 0xFF) : Color.TRANSPARENT);
                 swatchInners.get(i).setBackground(g);
                 GradientDrawable ring = new GradientDrawable();
                 ring.setColor(on ? Color.argb(64, 0, 122, 255) : Color.TRANSPARENT);
-                ring.setCornerRadius(dp(this, 14));
+                ring.setCornerRadius(dp(this, panelR143(14f))); // Q143：面板类收口（与内块同歩）
                 swatchCells.get(i).setBackground(ring);
             }
         };
@@ -15996,7 +16034,7 @@ public class MainActivity extends Activity {
         nfcBtn.setPadding(0, dp(this, 12), 0, dp(this, 12));
         GradientDrawable nfcBg = new GradientDrawable();
         nfcBg.setColor(darkEff() ? Color.rgb(0x24, 0x34, 0x4E) : Color.rgb(0xE9, 0xF2, 0xFD)); // Q94：浅雾蓝面
-        nfcBg.setCornerRadius(dp(this, 14));
+        nfcBg.setCornerRadius(dp(this, btnR143(14f))); // Q143：按钮类收口
         nfcBg.setStroke(dp(this, 1), darkEff() ? Color.argb(70, 255, 255, 255) : Color.rgb(0xC9, 0xDF, 0xFA));
         nfcBtn.setBackground(nfcBg);
         LinearLayout.LayoutParams nfcLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
@@ -16798,7 +16836,7 @@ public class MainActivity extends Activity {
                 } else pillTxt = tg.dTerm();
                 TextView pill = tv(this, pillTxt, 12.5f, on ? accentColor() : colText(), on);
                 pill.setGravity(Gravity.CENTER);
-                pill.setBackground(on ? softCapsuleBg(9) : roundRect(colChipOff(), capsuleR129(9f), this));
+                pill.setBackground(on ? softCapsuleBg(9) : roundRect(colChipOff(), 9f, this));
                 pill.setSingleLine(true); pill.setMaxLines(1); pill.setEllipsize(android.text.TextUtils.TruncateAt.END);
                 pill.setPadding(dp(this, 4), dp(this, 8), dp(this, 4), dp(this, 8));
                 LinearLayout.LayoutParams plp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
@@ -16960,7 +16998,7 @@ public class MainActivity extends Activity {
         for (final GlossaryItem mm : g.members) {
             boolean on = mm == selMember;
             TextView mrow = tv(this, mm.dTerm(), 13, on ? accentColor() : colText(), on);
-            mrow.setBackground(on ? softCapsuleBg(10) : roundRect(colChipOff(), capsuleR129(10f), this));
+            mrow.setBackground(on ? softCapsuleBg(10) : roundRect(colChipOff(), 10f, this));
             mrow.setPadding(dp(this, 12), dp(this, 9), dp(this, 12), dp(this, 9));
             LinearLayout.LayoutParams mrp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
             mrp.topMargin = dp(this, 8);
@@ -17001,7 +17039,7 @@ public class MainActivity extends Activity {
             } else pillTxt = tg.dTerm();
             TextView pill = tv(this, pillTxt, 12.5f, on ? accentColor() : colText(), on);
             pill.setGravity(Gravity.CENTER);
-            pill.setBackground(on ? softCapsuleBg(9) : roundRect(colChipOff(), capsuleR129(9f), this));
+            pill.setBackground(on ? softCapsuleBg(9) : roundRect(colChipOff(), 9f, this));
             pill.setSingleLine(true); pill.setMaxLines(1); pill.setEllipsize(android.text.TextUtils.TruncateAt.END);
             pill.setPadding(dp(this, 4), dp(this, 8), dp(this, 4), dp(this, 8));
             LinearLayout.LayoutParams plp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
@@ -17519,7 +17557,7 @@ public class MainActivity extends Activity {
             if (added) addBtn.setBackground(roundRect(Color.rgb(0xE9, 0xE9, 0xED), 999, this));
             else {
                 GradientDrawable g = new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM, new int[]{Color.rgb(0x0A, 0x84, 0xFF), Color.rgb(0x00, 0x66, 0xE6)});
-                g.setCornerRadius(dp(this, 999));
+                g.setCornerRadius(dp(this, pillR143())); // Q143：整圆药丸类收口（扩展库加入钮）
                 addBtn.setBackground(g);
             }
             LinearLayout.LayoutParams alp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
@@ -18092,7 +18130,7 @@ public class MainActivity extends Activity {
             final boolean urgent = left <= remindDays;
             LinearLayout card = new LinearLayout(this); card.setOrientation(LinearLayout.VERTICAL);
             // Q73/Q84：高斯玻璃面口径——冻结模糊垫底 + 薄染色 + 提亮层（glassTintDrawable/glassClip 同规范）
-            card.setBackground(glassTintDrawable(16, false)); card.setClipToOutline(true); glassClip(card, 16, false);
+            card.setBackground(glassTintDrawable(panelR143(16f), false)); card.setClipToOutline(true); glassClip(card, panelR143(16f), false);
             try { if (Build.VERSION.SDK_INT >= 21) card.setElevation(dp(this, 4)); } catch (Throwable ignored) {}
             card.setPadding(dp(this, 14), dp(this, 12), dp(this, 14), dp(this, 12));
             LinearLayout.LayoutParams cardLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT); cardLp.topMargin = dp(this, 10);
@@ -18123,7 +18161,7 @@ public class MainActivity extends Activity {
             acts.addView(done, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
             done.setOnClickListener(v -> { haptic(); markSimKeepDone(it); });
             TextView edit = tv(this, "编辑", 13, colText(), true); edit.setGravity(Gravity.CENTER);
-            edit.setPadding(0, dp(this, 9), 0, dp(this, 9)); edit.setBackground(roundRect(colChipOff(), capsuleR129(10f), this));
+            edit.setPadding(0, dp(this, 9), 0, dp(this, 9)); edit.setBackground(roundRect(colChipOff(), 10f, this));
             LinearLayout.LayoutParams edLp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f); edLp.leftMargin = dp(this, 8);
             acts.addView(edit, edLp);
             edit.setOnClickListener(v -> { haptic(); openSimKeepForm(it); });
@@ -18386,7 +18424,7 @@ public class MainActivity extends Activity {
         java.util.List<SubFollowItem> items = subfollowSorted();
         double monthly = 0; for (SubFollowItem it : items) monthly += subMonthlyEstimate(it);
         LinearLayout sumCard = new LinearLayout(this); sumCard.setOrientation(LinearLayout.VERTICAL);
-        sumCard.setBackground(glassTintDrawable(16, false)); sumCard.setClipToOutline(true); glassClip(sumCard, 16, false);
+        sumCard.setBackground(glassTintDrawable(panelR143(16f), false)); sumCard.setClipToOutline(true); glassClip(sumCard, panelR143(16f), false);
         sumCard.setPadding(dp(this, 14), dp(this, 12), dp(this, 14), dp(this, 12));
         inner.addView(sumCard, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
         sumCard.addView(tvW(this, items.isEmpty() ? "还没有订阅" : (items.size() + " 项订阅"), 14, colText(), 600));
@@ -18423,7 +18461,7 @@ public class MainActivity extends Activity {
             final int left = simkeepDaysLeft(it.nextDue);
             final boolean urgent = left <= remindDays;
             LinearLayout card = new LinearLayout(this); card.setOrientation(LinearLayout.VERTICAL);
-            card.setBackground(glassTintDrawable(16, false)); card.setClipToOutline(true); glassClip(card, 16, false);
+            card.setBackground(glassTintDrawable(panelR143(16f), false)); card.setClipToOutline(true); glassClip(card, panelR143(16f), false);
             try { if (Build.VERSION.SDK_INT >= 21) card.setElevation(dp(this, 4)); } catch (Throwable ignored) {}
             card.setPadding(dp(this, 14), dp(this, 12), dp(this, 14), dp(this, 12));
             LinearLayout.LayoutParams cardLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT); cardLp.topMargin = dp(this, 10);
@@ -18454,7 +18492,7 @@ public class MainActivity extends Activity {
             acts.addView(done, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
             done.setOnClickListener(v -> { haptic(); markSubFollowDone(it); });
             TextView edit = tv(this, "编辑", 13, colText(), true); edit.setGravity(Gravity.CENTER);
-            edit.setPadding(0, dp(this, 9), 0, dp(this, 9)); edit.setBackground(roundRect(colChipOff(), capsuleR129(10f), this));
+            edit.setPadding(0, dp(this, 9), 0, dp(this, 9)); edit.setBackground(roundRect(colChipOff(), 10f, this));
             LinearLayout.LayoutParams edLp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f); edLp.leftMargin = dp(this, 8);
             acts.addView(edit, edLp);
             edit.setOnClickListener(v -> { haptic(); openSubFollowForm(it); });
@@ -18733,7 +18771,7 @@ public class MainActivity extends Activity {
         int okN = 0, failN = 0;
         for (FootItem it : all) { if ("ok".equals(it.status)) okN++; else if ("fail".equals(it.status)) failN++; }
         LinearLayout sumCard = new LinearLayout(this); sumCard.setOrientation(LinearLayout.VERTICAL);
-        sumCard.setBackground(glassTintDrawable(16, false)); sumCard.setClipToOutline(true); glassClip(sumCard, 16, false);
+        sumCard.setBackground(glassTintDrawable(panelR143(16f), false)); sumCard.setClipToOutline(true); glassClip(sumCard, panelR143(16f), false);
         sumCard.setPadding(dp(this, 14), dp(this, 12), dp(this, 14), dp(this, 12));
         inner.addView(sumCard, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
         sumCard.addView(tvW(this, all.isEmpty() ? "还没有足迹" : ("共 " + all.size() + " 条 · 成功 " + okN + " · 拒绝 " + failN), 14, colText(), 600));
@@ -18793,7 +18831,7 @@ public class MainActivity extends Activity {
         }
         for (final FootItem it : items) {
             LinearLayout card = new LinearLayout(this); card.setOrientation(LinearLayout.VERTICAL);
-            card.setBackground(glassTintDrawable(16, false)); card.setClipToOutline(true); glassClip(card, 16, false);
+            card.setBackground(glassTintDrawable(panelR143(16f), false)); card.setClipToOutline(true); glassClip(card, panelR143(16f), false);
             try { if (Build.VERSION.SDK_INT >= 21) card.setElevation(dp(this, 4)); } catch (Throwable ignored) {}
             card.setPadding(dp(this, 14), dp(this, 12), dp(this, 14), dp(this, 12));
             LinearLayout.LayoutParams cardLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT); cardLp.topMargin = dp(this, 10);
@@ -19091,13 +19129,41 @@ public class MainActivity extends Activity {
         }
     }
 
+    // Q143（2.54，丁组）展柜平放满屏命中层：world 是被平移/缩放的变换层，系统命中测试
+    // 按 world 变换后的框判定——缩放越小，可点可拖的区域跟着缩得越小（用户 2026-10-06
+    // 01:16 三连报：旧区域之外的空白拖不动、拖出旧区域的卡点不了也拖不动，根子都在
+    // 这）。本层自身不带任何变换、铺满 showcaseBody：事件先进本层，按 world 当前变换
+    // 矩阵的逆矩阵换回 world 本地坐标，再直分发给 world——脸部/world 既有监听（Q140
+    // 手势互斥、Q141 落位零钳位存位、点开判据）收到的坐标口径一字不变（getRawX 屏坐标
+    // 不受 transform 影响，拖拽/缩放数学逐字守恒）；命中区自此恒等于 showcaseBody 全域：
+    // 任意空白可拖平移、任意位置的卡（包括部分出屏者）可点可拖。堆叠式不经本层。
+    class ShowcaseHitLayout143 extends FrameLayout {
+        View hitChild143;
+        ShowcaseHitLayout143(Context c) { super(c); }
+        @Override public boolean dispatchTouchEvent(MotionEvent ev) {
+            if (hitChild143 != null && hitChild143.getVisibility() == View.VISIBLE) {
+                MotionEvent t143 = MotionEvent.obtain(ev);
+                try {
+                    t143.offsetLocation(-hitChild143.getLeft(), -hitChild143.getTop());
+                    android.graphics.Matrix inv143 = new android.graphics.Matrix();
+                    if (hitChild143.getMatrix().invert(inv143)) t143.transform(inv143);
+                    return hitChild143.dispatchTouchEvent(t143);
+                } catch (Throwable ignored) {
+                    // 逆矩阵/分发异常回落系统分发，不为命中层冒崩点
+                } finally { t143.recycle(); }
+            }
+            return super.dispatchTouchEvent(ev);
+        }
+    }
+
     void buildShowcaseCanvas(java.util.List<ShowcaseItem> items) {
-        final FrameLayout clip = new FrameLayout(this);
+        final ShowcaseHitLayout143 clip = new ShowcaseHitLayout143(this); // Q143（丁组）：命中层铺满（见类注）
         clip.setClipChildren(false); // Q141（2.52，乙组③）：平放不裁——卡拖到哪儿整卡渲染不缺角（showcaseBody/col 裁剪在 buildShowcaseBody 按 mode 开；world 本就 clipChildren=false）
         showcaseBody.addView(clip, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         final FrameLayout world = new FrameLayout(this);
         world.setClipChildren(false);
         clip.addView(world, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        clip.hitChild143 = world; // Q143（丁组）：world 的命中改走满屏逆变换分发（类注）
         showcaseWorld = world;
         float dens = prefs == null ? 1f : prefs.getFloat("showcase_density", 1f);
         final int faceW = Math.round(dp(this, 190) * Math.max(0.6f, Math.min(1.3f, dens)));
@@ -20158,7 +20224,7 @@ public class MainActivity extends Activity {
         } else {
             GradientDrawable hg = new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
                 new int[]{Color.rgb(0xF7, 0xFA, 0xFD), Color.rgb(0xEE, 0xF4, 0xFA)});
-            hg.setCornerRadius(dp(this, 16));
+            hg.setCornerRadius(dp(this, panelR143(16f))); // Q143：面板类收口
             hg.setStroke(dp(this, 1), Color.rgb(0xDB, 0xE7, 0xF3));
             hero.setBackground(hg);
         }
@@ -20245,7 +20311,7 @@ public class MainActivity extends Activity {
         toggle.setGravity(Gravity.CENTER_VERTICAL);
         toggle.setClipToOutline(true);
         GradientDrawable tg = new GradientDrawable();
-        tg.setColor(colSurface()); tg.setCornerRadius(dp(this, 14));
+        tg.setColor(colSurface()); tg.setCornerRadius(dp(this, panelR143(14f))); // Q143：面板类收口
         tg.setStroke(dp(this, 1), colDivider());
         toggle.setBackground(new RippleDrawable(ColorStateList.valueOf(Color.argb(38, 10, 92, 214)), tg, null));
         toggle.setPadding(dp(this, 16), dp(this, 13), dp(this, 16), dp(this, 13));
@@ -20512,7 +20578,7 @@ public class MainActivity extends Activity {
             GradientDrawable g = new GradientDrawable(GradientDrawable.Orientation.TL_BR,
                 new int[]{Color.rgb(Color.red(cols[i][0]), Color.green(cols[i][0]), Color.blue(cols[i][0])),
                           Color.rgb(Color.red(cols[i][1]), Color.green(cols[i][1]), Color.blue(cols[i][1]))});
-            g.setCornerRadius(dp(this, 14));
+            g.setCornerRadius(dp(this, panelR143(14f))); // Q143：面板类收口（欢迎页卡）
             g.setStroke(dp(this, 1), Color.argb(70, 255, 255, 255));
             card.setBackground(g);
             if (Build.VERSION.SDK_INT >= 21) card.setElevation(dp(this, 6));
@@ -21347,7 +21413,7 @@ public class MainActivity extends Activity {
             TextView t = tv(this, o[1], 12.5f, on ? accentColor() : colText(), on);
             t.setGravity(Gravity.CENTER);
             // Q94 铺开：选中改浅雾蓝胶囊＋强调色字（试点选片同语言），废原整坨实心蓝
-            t.setBackground(on ? softCapsuleBg(9) : roundRect(colChipOff(), capsuleR129(9f), this));
+            t.setBackground(on ? softCapsuleBg(9) : roundRect(colChipOff(), 9f, this));
             t.setSingleLine(true); t.setMaxLines(1); t.setEllipsize(android.text.TextUtils.TruncateAt.END); // Q114：分段钮单行钉死，等分行内不许折行突出（用户 22:17 点名）
             pinFixedText125(t); // Q125：分段钮钉角色行高（字体件）
             t.setPadding(dp(this, 4), dp(this, 8), dp(this, 4), dp(this, 8));
@@ -21453,7 +21519,7 @@ public class MainActivity extends Activity {
             TextView t = tv(this, o[1], 12.5f, on ? accentColor() : colText(), on);
             t.setGravity(Gravity.CENTER);
             // Q94 铺开：同 segRow 浅雾蓝胶囊选中态
-            t.setBackground(on ? softCapsuleBg(9) : roundRect(colChipOff(), capsuleR129(9f), this));
+            t.setBackground(on ? softCapsuleBg(9) : roundRect(colChipOff(), 9f, this));
             t.setSingleLine(true); t.setMaxLines(1); t.setEllipsize(android.text.TextUtils.TruncateAt.END); // Q114：分段钮单行钉死，等分行内不许折行突出（用户 22:17 点名）
             pinFixedText125(t); // Q125：分段钮钉角色行高（字体件）
             t.setPadding(dp(this, 4), dp(this, 8), dp(this, 4), dp(this, 8));
@@ -21650,7 +21716,7 @@ public class MainActivity extends Activity {
             final boolean on = segOn(o[0], cur);
             TextView t = tv(this, o[1], 12.5f, on ? accentColor() : colText(), on);
             t.setGravity(Gravity.CENTER);
-            t.setBackground(on ? softCapsuleBg(9) : roundRect(colChipOff(), capsuleR129(9f), this));
+            t.setBackground(on ? softCapsuleBg(9) : roundRect(colChipOff(), 9f, this));
             t.setSingleLine(true); t.setMaxLines(1); t.setEllipsize(android.text.TextUtils.TruncateAt.END); // Q114：分段钮单行钉死，等分行内不许折行突出（用户 22:17 点名）
             pinFixedText125(t); // Q125：分段钮钉角色行高（字体件）
             t.setPadding(dp(this, 4), dp(this, 8), dp(this, 4), dp(this, 8));
@@ -21919,7 +21985,7 @@ public class MainActivity extends Activity {
             final boolean on = o[0].equals(iconPack129);
             TextView t = tv(this, o[1], 12.5f, on ? accentColor() : colText(), on);
             t.setGravity(Gravity.CENTER);
-            t.setBackground(on ? softCapsuleBg(9) : roundRect(colChipOff(), capsuleR129(9f), this));
+            t.setBackground(on ? softCapsuleBg(9) : roundRect(colChipOff(), 9f, this));
             t.setSingleLine(true); t.setMaxLines(1); t.setEllipsize(android.text.TextUtils.TruncateAt.END);
             pinFixedText125(t);
             t.setPadding(dp(this, 4), dp(this, 8), dp(this, 4), dp(this, 8));
@@ -21982,7 +22048,7 @@ public class MainActivity extends Activity {
             final boolean on = o[0].equals(orgStyle129);
             TextView t = tv(this, o[1], 12.5f, on ? accentColor() : colText(), on);
             t.setGravity(Gravity.CENTER);
-            t.setBackground(on ? softCapsuleBg(9) : roundRect(colChipOff(), capsuleR129(9f), this));
+            t.setBackground(on ? softCapsuleBg(9) : roundRect(colChipOff(), 9f, this));
             t.setSingleLine(true); t.setMaxLines(1); t.setEllipsize(android.text.TextUtils.TruncateAt.END);
             pinFixedText125(t);
             t.setPadding(dp(this, 4), dp(this, 8), dp(this, 4), dp(this, 8));
@@ -22141,7 +22207,7 @@ public class MainActivity extends Activity {
             tile.setOrientation(LinearLayout.VERTICAL);
             tile.setGravity(Gravity.CENTER_HORIZONTAL);
             tile.setPadding(dp(this, 6), dp(this, 10), dp(this, 6), dp(this, 8));
-            tile.setBackground(on ? softCapsuleBg(10) : roundRect(colChipOff(), capsuleR129(10f), this));
+            tile.setBackground(on ? softCapsuleBg(10) : roundRect(colChipOff(), 10f, this));
             ImageView iv = new ImageView(this);
             try { iv.setImageDrawable(getResources().getDrawable(iconRes129(tl[0]), null)); } catch (Throwable ignored) {}
             tile.addView(iv, new LinearLayout.LayoutParams(dp(this, 52), dp(this, 52)));
