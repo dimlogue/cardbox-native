@@ -4373,6 +4373,8 @@ public class MainActivity extends Activity {
     static class FxCard {
         String id, name, nameEn, bank, org, type, level, status, review, url, image, tier;
         String verifyStatus, verifiedAt;
+        String region = "香港"; // Q152（2.63）：地区分区（foreign region 字段，缺省香港兜底）
+        boolean aiRedraw = false; // Q152：AI 重绘标记（foreign ai_redraw，与主卡同标同说明）
         JSONObject specs;
         java.util.List<String> keywords = new ArrayList<>();
         java.util.List<String> aliases = new ArrayList<>();
@@ -4412,6 +4414,8 @@ public class MainActivity extends Activity {
                     f.level = nz125(o.optString("card_level")); f.status = nz125(o.optString("status"));
                     f.review = nz125(o.optString("review")); f.url = nz125(o.optString("url"));
                     f.image = nz125(o.optString("image")); f.tier = nz125(o.optString("priority_tier"));
+                    f.region = nz125(o.optString("region")); if (f.region.isEmpty()) f.region = "香港"; // Q152：缺 region 默认归香港兜底
+                    f.aiRedraw = o.optBoolean("ai_redraw", false); // Q152：外卡 AI 重绘标解析（此前未解析、详情不显）
                     JSONObject v = o.optJSONObject("verification");
                     f.verifyStatus = v == null ? "" : nz125(v.optString("status"));
                     f.verifiedAt = v == null ? "" : nz125(v.optString("verified_at"));
@@ -4494,7 +4498,7 @@ public class MainActivity extends Activity {
         root.addView(pageBackHead("外卡专区", () -> { haptic(); closeFxZone(); }),
             new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
 
-        TextView intro = tv(this, "首批香港银行卡 · 独立数据，不混入主卡库搜索", 11.5f, colText2(), false);
+        TextView intro = tv(this, "香港 · 澳门银行卡专区 · 独立数据，不混入主卡库搜索", 11.5f, colText2(), false); // Q152：分区后头部不再把专区等同香港
         intro.setPadding(dp(this, 16), dp(this, 2), dp(this, 16), 0);
         root.addView(intro);
 
@@ -4612,7 +4616,31 @@ public class MainActivity extends Activity {
             fxListBox.addView(e);
             return;
         }
-        for (final FxCard f : shown) {
+        // Q152（2.63，外卡分区）：按 region 并排分区——香港在前、澳門随后，
+        // 其余地区按数据序跟随；搜索/核实筛选先过滤、分区只管排布，空区不出
+        // 标题（搜澳门卡时只剩澳门区）。缺 region 已在 FxStore 兜底香港。
+        java.util.LinkedHashMap<String, java.util.List<FxCard>> zones152 = new java.util.LinkedHashMap<>();
+        for (FxCard fz152 : shown) {
+            java.util.List<FxCard> zl152 = zones152.get(fz152.region);
+            if (zl152 == null) { zl152 = new ArrayList<>(); zones152.put(fz152.region, zl152); }
+            zl152.add(fz152);
+        }
+        java.util.List<String> zoneOrder152 = new ArrayList<>();
+        if (zones152.containsKey("香港")) zoneOrder152.add("香港");
+        if (zones152.containsKey("澳門")) zoneOrder152.add("澳門");
+        for (String zk152 : zones152.keySet()) if (!zoneOrder152.contains(zk152)) zoneOrder152.add(zk152);
+        boolean multiZone152 = zoneOrder152.size() > 1;
+        boolean firstZone152 = true;
+        for (String zone152 : zoneOrder152) {
+            if (multiZone152) {
+                TextView zh152 = tvW(this, zone152 + " · " + zones152.get(zone152).size() + " 张", 15, colText(), 700);
+                LinearLayout.LayoutParams zhLp152 = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+                zhLp152.topMargin = dp(this, firstZone152 ? 10 : 22);
+                zhLp152.leftMargin = dp(this, 2);
+                fxListBox.addView(zh152, zhLp152);
+            }
+            firstZone152 = false;
+            for (final FxCard f : zones152.get(zone152)) {
             LinearLayout cardBox = new LinearLayout(this);
             cardBox.setOrientation(LinearLayout.VERTICAL);
             cardBox.setBackground(rippleBg(colSurface(), 18));
@@ -4649,6 +4677,7 @@ public class MainActivity extends Activity {
             thumb.addView(iv, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
             roundClip(thumb, cardSmallR129(9f), this);
             if (fb133 != null) iv.setImageBitmap(fb133);
+            addOrgBadgeTopRight152(thumb, normOrgKey152(f.org), false, 0.55f); // Q152：组织标统一右上（外卡列表图）
             LinearLayout tx = new LinearLayout(this);
             tx.setOrientation(LinearLayout.VERTICAL);
             LinearLayout.LayoutParams txLp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
@@ -4684,6 +4713,7 @@ public class MainActivity extends Activity {
                 LinearLayout.LayoutParams mtlp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
                 mtlp.leftMargin = dp(this, 8);
                 metaRow.addView(mt, mtlp);
+            }
             }
         }
     }
@@ -4856,27 +4886,34 @@ public class MainActivity extends Activity {
         // 竖带、两边大白」；横图则被压进 180dp 矮框里显小（图源白边已由数据侧
         // 逐张裁净，显示侧框比脱钩仍须在本版治）。无图占位沿旧 180dp 整宽框。
         int availW = getResources().getDisplayMetrics().widthPixels - dp(this, 32);
-        Bitmap hb = (f.image != null && !f.image.isEmpty()) ? Img.getSized(this, f.image, availW) : null;
-        hb = portraitToLandscape151(hb); // Q151（第 14 件）：外卡窗竖图同横摆（与主卡图廊同一函数同一方向，同类同逻辑）
-        int imgW = availW, imgH = dp(this, 180);
-        if (hb != null && hb.getWidth() > 0 && hb.getHeight() > 0) {
-            float ratio133 = (float) hb.getHeight() / (float) hb.getWidth();
-            imgH = Math.round(availW * ratio133);
-            int maxH133 = dp(this, 260);
-            if (imgH > maxH133) { imgH = maxH133; imgW = Math.round(imgH / ratio133); }
-        }
+        // Q152（2.63，前单⑥）：外卡英雄图与主图廊同治——固定框（整宽×卡比
+        // 1.586，280dp 封顶）＋CENTER_CROP 统一填充＋异步取图（开窗首帧不付
+        // 同步解码）；Q133 的「按图自比定框」随用户本批新令退役。竖图横摆在
+        // 异步收口内同走（转图不转标）。
+        int imgW = availW, imgH = Math.round(availW / 1.586f);
+        int maxH152 = dp(this, 280);
+        if (imgH > maxH152) { imgH = maxH152; imgW = Math.round(imgH * 1.586f); }
         float cardR = cardR129(Math.max(16f, cardRadiusDp(imgW / getResources().getDisplayMetrics().density)));
         FrameLayout hero = new FrameLayout(this);
         // Q143（2.54，乙组）撤 Q131 承托底板：图铺满框边、角外透窗面（外卡英雄图）。
         if (Build.VERSION.SDK_INT >= 21) hero.setElevation(dp(this, 6));
         roundClip(hero, cardR, this);
         ImageView hiv = new ImageView(this);
-        hiv.setScaleType(ImageView.ScaleType.CENTER_CROP); // 框比＝图比，铺满无裁切（Q122 同理）
-        // Q151（N5）：hiv 第二把 outline 撤除——与主卡图廊组件化单裁同口径（见
-        // buildDetailSheetBody 处注），圆角只由组件外框 hero 一把收口。
-        if (hb != null) hiv.setImageBitmap(hb);
-        else hiv.setBackground(placeholderGradFor(f.id, cardR, this));
+        hiv.setScaleType(ImageView.ScaleType.CENTER_CROP);
+        // Q151（N5）：hiv 第二把 outline 撤除——与主卡图廊组件化单裁同口径，
+        // 圆角只由组件外框 hero 一把收口（Q152 固定框后此口径不变）。
+        hiv.setBackground(placeholderGradFor(f.id, cardR, this)); // 占位先行（无图终态同此）
         hero.addView(hiv, new FrameLayout.LayoutParams(imgW, imgH));
+        bindGalleryBitmap152(hiv, f.image, imgW, true, null);
+        // Q152（组织标统一右上＋外卡 AI 标）：组织标右上；ai_redraw 的卡左上
+        // 挂「AI 重绘」矢量标（与主卡同标同位），说明灰字在名下另行（见下）。
+        addOrgBadgeTopRight152(hero, normOrgKey152(f.org), false, 1.0f, 8);
+        if (f.aiRedraw) {
+            FrameLayout.LayoutParams aiLp152 = new FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            aiLp152.gravity = Gravity.TOP | Gravity.LEFT;
+            aiLp152.leftMargin = dp(this, 8); aiLp152.topMargin = dp(this, 8);
+            hero.addView(vectorBadge152(S("ai_redraw_badge"), false), aiLp152);
+        }
         LinearLayout.LayoutParams heroLp133 = new LinearLayout.LayoutParams(imgW, imgH);
         heroLp133.gravity = Gravity.CENTER_HORIZONTAL;
         body.addView(hero, heroLp133);
@@ -4886,6 +4923,12 @@ public class MainActivity extends Activity {
         nlp.topMargin = dp(this, 14);
         body.addView(nm, nlp);
         if (f.nameEn != null && !f.nameEn.isEmpty()) body.addView(tv(this, f.nameEn, 12, colText2(), false));
+        if (f.aiRedraw) { // Q152：与主卡同口径的 AI 重绘说明灰字（有标才出，无标不显）
+            TextView aiNote152 = tv(this, S("ai_redraw_note"), 12f, colText3(), false);
+            LinearLayout.LayoutParams anLp152 = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            anLp152.topMargin = dp(this, 8);
+            body.addView(aiNote152, anLp152);
+        }
 
         // 信息胶囊两行（组织/卡种/等级/发行状态；银行/优先级）
         int chipBg = darkEff() ? Color.rgb(0x2E, 0x2E, 0x33) : Color.rgb(0xEF, 0xF1, 0xF6);
@@ -8945,6 +8988,93 @@ public class MainActivity extends Activity {
         } catch (Throwable ignored) { }
     }
 
+    // Q152（2.63，组织标统一右上·全 App 收口）：卡面/结果图右上角一处加标——
+    // 同一 OrgBadgeView、同 48×24dp 画幅（scale 缩放）、同 6dp 内距，各落点
+    // （详情图廊/瓷砖/学生/外卡列表/BIN 命中行/外卡英雄图）只许走这一处，不许
+    // 再各写一套。标是宿主内的姊妹视图：图廊竖图横摆只转位图、标不随转，
+    // 视觉右上恒定（本件对旋转路径的自查结论）。Q104「卡面撤标」旧口径自此
+    // 被用户 2026-10-06 08:37 新令覆盖（见 Q152）。
+    void addOrgBadgeTopRight152(FrameLayout host, String org, boolean darkBg, float scale) {
+        addOrgBadgeTopRight152(host, org, darkBg, scale, 6);
+    }
+    void addOrgBadgeTopRight152(FrameLayout host, String org, boolean darkBg, float scale, int topMarginDp) {
+        if (host == null || !hasOrgBadge(org)) return;
+        try {
+            OrgBadgeView badge152 = new OrgBadgeView(this, org, darkBg);
+            int bw152 = Math.round(dp(this, orgBadgeWidthDp(org) * scale));
+            int bh152 = Math.round(dp(this, 24 * scale));
+            FrameLayout.LayoutParams lp152 = new FrameLayout.LayoutParams(bw152, bh152);
+            lp152.gravity = Gravity.TOP | Gravity.RIGHT;
+            lp152.rightMargin = dp(this, 6);
+            lp152.topMargin = dp(this, topMarginDp);
+            host.addView(badge152, lp152);
+        } catch (Throwable ignored) { }
+    }
+
+    // 组织键归一：数据里 amex 与小标画板键 amex-cn 两写并存，落标前一处归一。
+    static String normOrgKey152(String org) {
+        if (org == null) return "";
+        String o152 = org.trim();
+        if ("amex".equals(o152)) return "amex-cn";
+        return o152;
+    }
+
+    // Q152（2.63，前单④·角标矢量自绘）：文字角标（存疑/AI 重绘）一律 TextView
+    // 矢量绘制——旧 imgBadge 拿磨砂位图小样（makeDoubtFrost 按位图裁片放大）
+    // 作底，真机读作发糊（用户点名）。改：半透深底＋白字＋发丝白描边的矢量
+    // 胶囊，任意密度任意缩放恒清晰；同类角标全走这一处（详情图廊存疑/AI、
+    // 瓷砖存疑、外卡 AI），与既有 tv 直绘角标同为矢量语言。
+    TextView vectorBadge152(String label, boolean doubt) {
+        TextView t152 = tv(this, label, 10.5f, Color.WHITE, true);
+        t152.setSingleLine(true);
+        t152.setGravity(Gravity.CENTER);
+        t152.setPadding(dp(this, 9), dp(this, 4), dp(this, 9), dp(this, 4));
+        GradientDrawable g152 = new GradientDrawable();
+        g152.setColor(doubt ? Color.argb(196, 146, 88, 12) : Color.argb(186, 30, 30, 36));
+        g152.setStroke(dp(this, 1), Color.argb(110, 255, 255, 255));
+        g152.setCornerRadius(dp(this, pillR143())); // Q143 药丸类收口（角标弧随圆角杆）
+        t152.setBackground(g152);
+        t152.setClickable(false);
+        t152.setFocusable(false);
+        t152.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
+        return t152;
+    }
+
+    // Q152（2.63，流畅·图廊/英雄图异步取图收口）：缓存命中同步直贴；未命中只
+    // 留占位、后台解码（Img.decodePool 同池同桶）后回主线程按 tag 换入——详情
+    // 开窗首帧不再逐 slide 在主线程付整幅解码（旧 getSized 同步路径是开窗可感
+    // 卡顿的主项，见 Q152 流畅段）。rotatePortrait：与图廊横摆口径共存（转图
+    // 不转标）。解码无果走 onNoBitmap（占位终态/长按配色等旧落点接续）。
+    void bindGalleryBitmap152(final ImageView iv, final String path, final int targetW,
+                              final boolean rotatePortrait, final Runnable onNoBitmap) {
+        if (iv == null) return;
+        if (path == null || path.isEmpty()) { if (onNoBitmap != null) onNoBitmap.run(); return; }
+        iv.setTag(path);
+        Bitmap hit152 = null;
+        try { hit152 = Img.cacheGet(path + "@" + Img.bucketFor(targetW)); } catch (Throwable ignored) {}
+        if (hit152 != null) {
+            iv.setImageBitmap(rotatePortrait ? portraitToLandscape151(hit152) : hit152);
+            return;
+        }
+        final android.content.Context appCtx152 = getApplicationContext();
+        try {
+            Img.decodePool.execute(() -> {
+                Bitmap b152 = null;
+                try { b152 = Img.getSized(appCtx152, path, targetW); } catch (Throwable ignored) {}
+                final Bitmap fb152 = b152;
+                mainHandler.post(() -> {
+                    if (!path.equals(iv.getTag())) return; // 视图已换图，错位不贴
+                    if (fb152 != null) iv.setImageBitmap(rotatePortrait ? portraitToLandscape151(fb152) : fb152);
+                    else if (onNoBitmap != null) onNoBitmap.run();
+                });
+            });
+        } catch (Throwable t152) {
+            Bitmap b152 = Img.getSized(this, path, targetW); // 池异常回落同步，宁卡不缺图
+            if (b152 != null) iv.setImageBitmap(rotatePortrait ? portraitToLandscape151(b152) : b152);
+            else if (onNoBitmap != null) onNoBitmap.run();
+        }
+    }
+
     class MineAddBtn extends View {
         boolean on = false;
         MineFrost frost = null;
@@ -9060,52 +9190,9 @@ public class MainActivity extends Activity {
         return (lum / Math.max(1, pair.length)) > 168;
     }
 
-    // Q89「存疑」毛玻璃标：用户 2026-10-04 点名——没证实的数据给卡加个标签式记号放卡面左上角，
-    // 必须是高斯模糊毛玻璃（同 Q47 ＋/✓ 磨砂钮、Q73 统一玻璃规范：身后卡图裁片磨砂 + 薄染色 +
-    // 浅提亮 + 白色柔边，深色模式同规范换深色档），不许实白塑料块。纯展示层：数据核实后自动消失。
-    View doubtBadge(final Card c, Bitmap bmp, float textSp, int padH, int padV) {
-        return imgBadge(c, bmp, S("doubt"), textSp, padH, padV);
-    }
-
-    // Q136（2.48）抽出、Q138（2.49）保留：与「存疑」同一套磨砂胶囊的通用角标（身后卡图裁片
-    // 磨砂 + 薄染色 + 提亮 + 柔边，字色按裁片明暗定），供详情大卡图上的「AI 重绘」标复用——
-    // 两标同套样式、同位置逻辑（竖排，见图廊），不另造实底块。doubtBadge 转调至此、渲染不变。
-    View imgBadge(final Card c, Bitmap bmp, String label, float textSp, int padH, int padV) {
-        FrameLayout badge = new FrameLayout(this);
-        badge.setClickable(false); badge.setFocusable(false);
-        badge.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
-        MineFrost frost = bmp != null ? makeDoubtFrost(bmp, "doubtfrost:" + c.image) : null;
-        // Q97 根因修复（用户 16:48 实拍详情英雄图大椭圆）：本胶囊是 WRAP_CONTENT 容器，
-        // 旧写法把磨砂/染色/提亮三层全以 MATCH_PARENT 塞入——MATCH_PARENT 子层按
-        // AT_MOST 上限把胶囊顶满整个父容器（详情英雄图/瓷砖图区），glassClip(999)
-        // 再把这块巨面圆成盖满卡面的大椭圆（真图卡为磨砂椭圆、占位卡为乳白椭圆）。
-        // 与 Q92 全屏糊层同病：WRAP_CONTENT 容器里不许留 MATCH_PARENT 子层。
-        // 改：先量文字实尺寸，三层与文字全部钉死该像素尺寸，胶囊只有字面大小。
-        boolean lightBg = !darkEff() && (frost != null ? frost.lum > 168 : placeholderLightBg(c.id));
-        TextView t = tv(this, label, textSp, lightBg ? Color.rgb(0x1C, 0x1C, 0x1E) : Color.WHITE, true);
-        t.setGravity(Gravity.CENTER);
-        t.setPadding(dp(this, padH), dp(this, padV), dp(this, padH), dp(this, padV));
-        if (!lightBg) t.setShadowLayer(dp(this, 1.5f), 0, dp(this, 0.5f), Color.argb(110, 0, 0, 0));
-        t.measure(View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED),
-                  View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED));
-        int tw = Math.max(1, t.getMeasuredWidth());
-        int th = Math.max(1, t.getMeasuredHeight());
-        if (frost != null && frost.bmp != null && !frost.bmp.isRecycled()) {
-            ImageView fiv = new ImageView(this);
-            fiv.setScaleType(ImageView.ScaleType.CENTER_CROP);
-            fiv.setImageBitmap(frost.bmp);
-            fiv.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
-            badge.addView(fiv, new FrameLayout.LayoutParams(tw, th));
-        }
-        View tint = new View(this);
-        tint.setBackground(glassTintDrawable(999, false));
-        tint.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
-        badge.addView(tint, new FrameLayout.LayoutParams(tw, th));
-        badge.addView(glassWashView(999, false), new FrameLayout.LayoutParams(tw, th));
-        badge.addView(t, new FrameLayout.LayoutParams(tw, th));
-        glassClip(badge, 999, false);
-        return badge;
-    }
+    // Q152（2.63）：imgBadge/doubtBadge 随矢量角标上位整段退役（存疑/AI 两标
+    // 全改 vectorBadge152 的 TextView 矢量绘制，旧磨砂位图小样裁片作底即用户
+    // 点名的「AI 重绘标识发糊」根源；makeDoubtFrost 本体仍供 MineFrost 等用）。
 
     // P-grid：瓷砖规格统一——图区按 1.586 卡面比例定高（同列同宽同高）、卡名预留两行、行内等高拉伸，底边齐平
     // Q24：卡图改全幅 cover 铺满图区（对照混合版 .art/.art-img object-fit:cover，图区贴瓷砖顶边满宽、不留白、
@@ -9285,13 +9372,18 @@ public class MainActivity extends Activity {
         blp2.gravity = Gravity.TOP | Gravity.RIGHT;
         blp2.topMargin = btnEdge; blp2.rightMargin = btnEdge;
         art.addView(mineBtn, blp2);
+        // Q152（组织标统一右上）：瓷砖组织标落右上列、加卡钮正下方（钮是既有
+        // 控件不挪位，标在其下同列成串）；scale 随列数收。Q104 撤标被用户
+        // 2026-10-06 新令覆盖，参数表/文字行的组织呈现不变。
+        addOrgBadgeTopRight152(art, normOrgKey152(c.org), false,
+            nc >= 4 ? 0.5f : nc == 3 ? 0.65f : 0.85f, (btnEdge + btnSize) / Math.max(1, dp(this, 1)) + 4);
         // Q89：未核实卡在卡图左上角压一枚「存疑」毛玻璃标（与右上加卡钮对角分工、不遮卡名）
         if (c.hasUnverified()) {
             FrameLayout.LayoutParams dlp = new FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
             dlp.gravity = Gravity.TOP | Gravity.LEFT;
             dlp.topMargin = btnEdge; dlp.leftMargin = btnEdge;
-            art.addView(doubtBadge(c, b, nc >= 4 ? 7.5f : 8.5f, nc >= 4 ? 5 : 7, nc >= 4 ? 2 : 3), dlp);
+            art.addView(vectorBadge152(S("doubt"), true), dlp); // Q152：矢量角标（旧位图磨砂标发糊退役）
         }
         mineBtn.setOnTouchListener((v, e) -> {
             if (e.getAction() == MotionEvent.ACTION_DOWN) pressBounce(v, true);
@@ -12646,18 +12738,19 @@ public class MainActivity extends Activity {
             slide.setPadding(dp(this, 26), dp(this, 16), dp(this, 26), dp(this, 4)); // Q33：大图略内缩留呼吸边（对照 .p-slide padding 16/22 再放宽 4dp），不死贴窗边（Q136 曾改整幅平展，Q138 按 5e6ac95 逐行恢复，用户 20:09 斥丑点名收回）
             track.addView(slide, new LinearLayout.LayoutParams(screenW, ViewGroup.LayoutParams.WRAP_CONTENT));
             int availW = screenW - dp(this, 52);
-            // Q125（2.37，流畅度·详情开窗）：图廊按显示宽尺寸解码——旧 Img.get
-            // 全量解码（2160 级源图采样后仍约 1080）在开窗首帧逐 slide 同步付；
-            // getSized 同裁切同比例（insetFaceCrop 等比内裁、宽高比不变），画面不变。
-            Bitmap b = Img.getSized(this, imgPath, availW);
-            b = portraitToLandscape151(b); // Q151（第 14 件）：竖图先横摆，框比/封顶按转后宽高比走（同下一段口径）
-            int imgW = availW, imgH = dp(this, 168);
-            if (b != null && b.getWidth() > 0 && b.getHeight() > 0) {
-                float ratio = (float) b.getHeight() / (float) b.getWidth();
-                imgH = Math.round(availW * ratio);
-                int maxH = dp(this, 260);
-                if (imgH > maxH) { imgH = maxH; imgW = Math.round(imgH / ratio); } // Q138：封顶缩宽回算恢复 5e6ac95 原行（Q136 的整幅裁满已撤销）
-            }
+            // Q152（2.63，前单③＋流畅）：图廊统一固定框——同廊每图同框（宽
+            // availW、高 availW/1.586 标准卡比，280dp 封顶等比缩宽），
+            // CENTER_CROP 统一填充、底边齐平、圆角一把（cardR 按框宽算全廊
+            // 同值）。旧按图自比定框＋封顶缩宽：同廊尺寸各异、缩宽者留黑边、
+            // 中间图底角下沉（用户图证），本段整段换掉。竖图横摆与固定框共
+            // 存：转后为横比图，CROP 铺满不拉伸（bindGalleryBitmap152 内转）。
+            // 取图改异步（缓存命中直贴、未命中占位＋后台解码换入），开窗首帧
+            // 不再逐 slide 主线程同步解码（Q125 的 getSized 尺寸口径并入异步收口）。
+            int imgW = availW, imgH = Math.round(availW / 1.586f);
+            int maxH152 = dp(this, 280);
+            if (imgH > maxH152) { imgH = maxH152; imgW = Math.round(imgH * 1.586f); }
+            final String slidePath152 = imgPath;
+            final int slideW152 = imgW;
             // Q48：控件级圆角裁切为主——用户定性「控件是正方形、图要裁成圆弧边框」；旧实现仅靠 roundBitmap
             // 副本切角，副本分配失败或个别 OEM 的 outline 退化时方图四角（源图深色角）直接露黑。改：外框
             // FrameLayout 与 ImageView 双双装同半径 outline 裁切（四角透出窗体/画廊底，不垫任何黑底），
@@ -12695,10 +12788,10 @@ public class MainActivity extends Activity {
                 badgeCol.setOrientation(LinearLayout.VERTICAL);
                 badgeCol.setClickable(false); badgeCol.setFocusable(false);
                 badgeCol.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
-                if (c.hasUnverified()) badgeCol.addView(doubtBadge(c, b, 10.5f, 9, 4),
+                if (c.hasUnverified()) badgeCol.addView(vectorBadge152(S("doubt"), true),
                     new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT));
                 if (c.aiRedraw133) {
-                    View aiBadge = imgBadge(c, b, S("ai_redraw_badge"), 10.5f, 9, 4);
+                    View aiBadge = vectorBadge152(S("ai_redraw_badge"), false); // Q152：矢量自绘（旧磨砂位图标发糊退役，imgBadge/doubtBadge 一并删）
                     LinearLayout.LayoutParams alp = new LinearLayout.LayoutParams(
                         ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
                     if (c.hasUnverified()) alp.topMargin = dp(this, 6);
@@ -12710,14 +12803,14 @@ public class MainActivity extends Activity {
                 dlp.leftMargin = dp(this, 8); dlp.topMargin = dp(this, 8);
                 imgFrame.addView(badgeCol, dlp);
             }
-            if (b == null) { iv.setBackground(placeholderGradFor(c.id, cardR, this)); // Q104/2.18：卡面组织小标全撤（详情图廊同口径，参数表组织字段保留）
+            // Q152（组织标统一右上）：详情图廊组织标落 imgFrame 右上——位图横摆
+            // 只转 iv 里的图，角标是框内姊妹视图不随转，视觉右上恒定。子版本无
+            // 独立组织字段（数据实查：variants 仅 bin/image/name/note），全廊用本卡组织。
+            addOrgBadgeTopRight152(imgFrame, normOrgKey152(c.org), false, 1.0f, 8);
+            iv.setBackground(placeholderGradFor(c.id, cardR, this)); // 占位先行（无图终态同此，异步换入后被位图盖住）
+            bindGalleryBitmap152(iv, slidePath152, slideW152, true, () -> {
                 if (placeholderCustomEnabled) imgFrame.setOnLongClickListener(v -> { haptic(); openPlaceholderColorPicker(c); return true; });
-            }
-            else {
-                // Q122（2.34，件二）：位图直贴不再 roundBitmap 二层切角——单弧口径（见上 cardR 处），
-                // 四角只由 imgFrame/iv 双 outline 同半径裁切决定，不再两遍抗锯齿出楔。
-                iv.setImageBitmap(b);
-            }
+            });
             if (slideName != null && !slideName.isEmpty()) {
                 TextView sn = tv(this, slideName, 12, colText3(), true);
                 sn.setGravity(Gravity.CENTER);
@@ -13246,7 +13339,8 @@ public class MainActivity extends Activity {
             stuThumb.addView(iv, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
             roundClip(stuThumb, cardSmallR129(9f), this);
             Bitmap b = Img.getSized(this, c.image, dp(this, 72)); // Q105：72dp 拇指按显示尺寸解码（旧 Img.get 全量解码）
-            if (b != null) iv.setImageBitmap(b); // Q104/2.18：卡面组织小标全撤（学生瓷砖同口径）
+            if (b != null) iv.setImageBitmap(b);
+            addOrgBadgeTopRight152(stuThumb, normOrgKey152(c.org), false, 0.5f); // Q152：组织标统一右上（学生列表图）
             LinearLayout tx = new LinearLayout(this);
             tx.setOrientation(LinearLayout.VERTICAL);
             LinearLayout.LayoutParams txLp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
@@ -16214,7 +16308,12 @@ public class MainActivity extends Activity {
             closeBinQueryNow();
             openDetail(target);
         });
-        return box;
+        // Q152（组织标统一右上）：BIN 命中行外包一层，组织标落行右上（行内
+        // 点击仍走 box 本体，标不拦截）。
+        FrameLayout hitWrap152 = new FrameLayout(this);
+        hitWrap152.addView(box, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        addOrgBadgeTopRight152(hitWrap152, normOrgKey152(c.org), false, 0.62f, 4);
+        return hitWrap152;
     }
 
     void openBinQuery() {
