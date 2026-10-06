@@ -6808,6 +6808,7 @@ public class MainActivity extends Activity {
 
     // Q65 选择窗：不标/一类/二类三选 + 一句说明；manage=true 时多一条移除已有（全部）
     void openAcctClassPicker(final Card c, final String title, final boolean manage, final Runnable uiRefresh) {
+        final long pickerPerfT0_152 = System.nanoTime(); // Q152 打点：加卡选择窗
         if (c == null) return;
         closeAcctClassPicker();
         if (rootView == null) { addMineEntry(c, "", uiRefresh); return; }
@@ -12397,6 +12398,7 @@ public class MainActivity extends Activity {
 
         content.addView(overlay, new FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        perfMark152("picker.show", pickerPerfT0_152); // Q152
         overlay.getViewTreeObserver().addOnPreDrawListener(new android.view.ViewTreeObserver.OnPreDrawListener() {
             public boolean onPreDraw() {
                 overlay.getViewTreeObserver().removeOnPreDrawListener(this);
