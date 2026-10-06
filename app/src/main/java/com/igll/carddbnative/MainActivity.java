@@ -7816,6 +7816,11 @@ public class MainActivity extends Activity {
     // 都回执一次，供资讯/常识条目按条上「动画中」锁、落定才放行下一次点击。5 参旧签名
     // 转调至此、onSettled 为 null 时行为与旧实现逐字一致，其他调用方（功能启用/我的卡片
     // /玻璃从属块）一字未动。
+    // Q152（折展同套对齐）：盒式折展收起时子视图显隐快照——收起点击帧先把内容
+    // 子视图 GONE（内容摘除与动画同帧、无残影），展开时按下标恢复（子视图已被
+    // beforeOpen 重建/清扫过则计数对不齐自动跳过，新子视图自带 VISIBLE 不受扰）。
+    final java.util.Map<LinearLayout, int[]> foldChildVis152 = new java.util.WeakHashMap<>();
+
     void foldHeightSpring(final LinearLayout box, final boolean open,
                           final Runnable beforeOpen, final Runnable afterHidden,
                           final SpringDriver driver, final Runnable onSettled130) {
@@ -7824,6 +7829,10 @@ public class MainActivity extends Activity {
         if (lp == null) { box.setVisibility(open ? View.VISIBLE : View.GONE); if (onSettled130 != null) onSettled130.run(); return; }
         if (open) {
             if (beforeOpen != null) beforeOpen.run();
+            int[] vis152 = foldChildVis152.remove(box); // Q152：展开恢复收起时摘除的内容子视图（计数对齐才恢复）
+            if (vis152 != null && vis152.length == box.getChildCount()) {
+                for (int i152 = 0; i152 < vis152.length; i152++) box.getChildAt(i152).setVisibility(vis152[i152]);
+            }
             box.setVisibility(View.VISIBLE);
             int w = box.getWidth();
             if (w <= 0) {
@@ -7854,21 +7863,31 @@ public class MainActivity extends Activity {
                 x -> { int h = Math.round(x); if (lp.height != h) { lp.height = h; box.setLayoutParams(lp); } },
                 () -> { lp.height = ViewGroup.LayoutParams.WRAP_CONTENT; box.setLayoutParams(lp); if (onSettled130 != null) onSettled130.run(); });
         } else {
-            driver.cancel();
+            driver.cancel(); // 审查三①：先杀在飞弹簧
+            box.setLayerType(View.LAYER_TYPE_NONE, null); // 审查三①：清硬件层缓存，残影不借层驻留
+            // Q152：内容摘除与收起同帧——子视图先快照后 GONE（展开按快照恢复）；
+            // 高度钉在当前值再由弹簧收 0，点击帧无突变、无展开内容残影帧。
+            // afterHidden 的落定清行语义（Q117 只补高度、落定清行）原样保留。
+            int[] vis152 = new int[box.getChildCount()];
+            for (int i152 = 0; i152 < vis152.length; i152++) { vis152[i152] = box.getChildAt(i152).getVisibility(); box.getChildAt(i152).setVisibility(View.GONE); }
+            foldChildVis152.put(box, vis152);
             final Spring1D s = new Spring1D(lp.height > 0 ? lp.height : box.getHeight());
             if (s.x <= 0f) {
                 box.setVisibility(View.GONE);
                 lp.height = ViewGroup.LayoutParams.WRAP_CONTENT; box.setLayoutParams(lp);
+                box.jumpDrawablesToCurrentState(); box.invalidate(); // 审查三④
                 if (afterHidden != null) afterHidden.run();
                 if (onSettled130 != null) onSettled130.run();
                 return;
             }
             lp.height = Math.round(s.x); box.setLayoutParams(lp);
+            box.requestLayout(); // Q152：全程只此一轮布局请求起步，后续帧由弹簧逐帧 setLayoutParams 驱动（审查三②同帧原子）
             driver.drive(s, 0f, SPRING_FOLD_K, SPRING_FOLD_Z,
                 x -> { int h = Math.max(0, Math.round(x)); if (lp.height != h) { lp.height = h; box.setLayoutParams(lp); } },
                 () -> {
                     box.setVisibility(View.GONE);
                     lp.height = ViewGroup.LayoutParams.WRAP_CONTENT; box.setLayoutParams(lp);
+                    box.setLayerType(View.LAYER_TYPE_NONE, null); box.jumpDrawablesToCurrentState(); box.invalidate(); // 审查三①④收尾
                     if (afterHidden != null) afterHidden.run();
                     if (onSettled130 != null) onSettled130.run();
                 });
@@ -21255,7 +21274,7 @@ public class MainActivity extends Activity {
         final Spring1D s = new Spring1D(fromH);
         new SpringDriver().drive(s, toH, SPRING_FOLD_K, SPRING_FOLD_Z,
             x -> { int h = Math.round(x); if (clp.height != h) { clp.height = h; card.setLayoutParams(clp); } },
-            () -> { setFoldClip144(card, false); clp.height = ViewGroup.LayoutParams.WRAP_CONTENT; card.setLayoutParams(clp); if (onDone != null) onDone.run(); });
+            () -> { setFoldClip144(card, false); clp.height = ViewGroup.LayoutParams.WRAP_CONTENT; card.setLayoutParams(clp); card.setLayerType(View.LAYER_TYPE_NONE, null); if (onDone != null) onDone.run(); });
     }
 
     void expandNewsCard135(final LinearLayout card, final TextView ttl, final TextView sm,
@@ -21360,14 +21379,15 @@ public class MainActivity extends Activity {
         card.measure(wSpec, uSpec);
         final int closedH = card.getMeasuredHeight();
         final int shrink142 = curH - closedH; // Q142：整卡收缩量（落定回锚的 Δ）
-        ttl.setMaxLines(Integer.MAX_VALUE);
-        if (sm != null) { sm.setMaxLines(Integer.MAX_VALUE); sm.setEllipsize(null); }
-        if (detIdx >= 0) card.addView(det, detIdx); else card.addView(det);
-        // 内容保持展开态，卡高 curH→closedH 单调收拢；落定单帧内翻收起态
+        // Q152（2.63，折展残影，用户 08:17 点名＋审查三①②）：翻态时机改点击帧——
+        // 标题/摘要即刻复 2 行＋省略号就位、详单当帧摘除（不再落定才翻）；卡高先
+        // 由 animateNewsCard135 钉在 curH 再单调收至 closedH，故点击帧无高度突
+        // 变（与 Q145 常识旧病「点即塌」的区别正在这根钉）、无展开内容残影帧、
+        // 省略号不再迟到约 1 秒。Q135/Q148「内容保持展开态收拢、落定翻态」自此
+        // 退役：彼设计在帧率不足时展开内容随窗口久驻，正是本轮残影投诉本体。
+        card.setLayerType(View.LAYER_TYPE_NONE, null); // 审查三①：先清可能在飞的硬件层缓存，落定同理（见 animate 收尾）
         animateNewsCard135(card, curH, closedH, () -> {
-            card.removeView(det);
-            ttl.setMaxLines(2);
-            if (sm != null) { sm.setMaxLines(2); sm.setEllipsize(android.text.TextUtils.TruncateAt.END); }
+            card.jumpDrawablesToCurrentState(); card.invalidate(); // 审查三④收尾
             settleFoldScroll142(foldCap142, shrink142); // Q142：落定同帧回锚（先于本帧布局钳位、无双计账；Q138「收起全程不写滚动位」至此修正——不写过程位、只落定对一次账）
             if (onDone != null) onDone.run();
         });
@@ -21430,7 +21450,7 @@ public class MainActivity extends Activity {
         final Spring1D s = new Spring1D(fromH);
         new SpringDriver().drive(s, toH, SPRING_FOLD_K, SPRING_FOLD_Z,
             x -> { int h = Math.round(x); if (clp.height != h) { clp.height = h; card.setLayoutParams(clp); } },
-            () -> { setFoldClip144(card, false); clp.height = ViewGroup.LayoutParams.WRAP_CONTENT; card.setLayoutParams(clp); if (onDone != null) onDone.run(); });
+            () -> { setFoldClip144(card, false); clp.height = ViewGroup.LayoutParams.WRAP_CONTENT; card.setLayoutParams(clp); card.setLayerType(View.LAYER_TYPE_NONE, null); if (onDone != null) onDone.run(); });
     }
 
     // 展开：调用前卡须处于收起态（正文 2 行、无附加盒/尾注）；box/boxIdx 为待挂的
@@ -21497,22 +21517,18 @@ public class MainActivity extends Activity {
         card.measure(wSpec, uSpec);
         final int closedH = card.getMeasuredHeight();
         final int shrink142 = curH - closedH; // Q142：整卡收缩量（落定回锚的 Δ）
-        if (bd != null) { bd.setMaxLines(Integer.MAX_VALUE); bd.setEllipsize(null); }
-        if (box != null) { if (boxIdx >= 0) card.addView(box, boxIdx); else card.addView(box); }
-        if (note != null) { if (noteIdx >= 0) card.addView(note, noteIdx); else card.addView(note); }
-        // 内容保持展开态，卡高 curH→closedH 单调收拢；落定单帧内翻收起态（与资讯同构）
+        // Q152（2.63，折展残影，与资讯 collapseNewsCard135 同帧对齐）：翻态改点
+        // 击帧——正文即刻复 2 行＋省略号就位、附加盒/尾注当帧摘除（含 Q151 标记
+        // 清扫同帧执行）；卡高由 animateGlossaryCard139 钉 curH 再收至 closedH，
+        // 点击帧无高度突变。Q148「落定翻态」自此退役（理由同资讯侧注）。
+        for (int i151 = card.getChildCount() - 1; i151 >= 0; i151--) {
+            View ch151 = card.getChildAt(i151);
+            if (ch151 != null && "glossaryBox151".equals(ch151.getTag())) card.removeView(ch151);
+        }
+        if (bd != null) { bd.setMaxLines(2); bd.setEllipsize(android.text.TextUtils.TruncateAt.END); }
+        card.setLayerType(View.LAYER_TYPE_NONE, null); // 审查三①：清硬件层缓存（落定同理）
         animateGlossaryCard139(card, curH, closedH, () -> {
-            if (box != null) card.removeView(box);
-            if (note != null) card.removeView(note);
-            // Q151（N6）：孤盒清扫兜底——落定帧按构造标记把卡内任何残留附加盒一并
-            // 摘净（成员盒/档位盒/单条尾注盒建时已打 glossaryBox151 标记）。正常路径
-            // 上面按实例摘除已足，此扫专治实例身份在任何时序下对不齐的残留（用户图
-            // 证「货币转换费一条留置未摘」类），与实例摘除同帧执行、无绘制中间帧。
-            for (int i151 = card.getChildCount() - 1; i151 >= 0; i151--) {
-                View ch151 = card.getChildAt(i151);
-                if (ch151 != null && "glossaryBox151".equals(ch151.getTag())) card.removeView(ch151);
-            }
-            if (bd != null) { bd.setMaxLines(2); bd.setEllipsize(android.text.TextUtils.TruncateAt.END); }
+            card.jumpDrawablesToCurrentState(); card.invalidate(); // 审查三④收尾
             settleFoldScroll142(foldCap142, shrink142); // Q142：落定同帧回锚（先于本帧布局钳位、无双计账）
             if (onDone != null) onDone.run();
         });
