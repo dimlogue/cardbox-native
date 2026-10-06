@@ -6894,6 +6894,7 @@ public class MainActivity extends Activity {
         wrap.addView(cardBox, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, pickerH));
         overlay.addView(wrap, clp);
         rootView.addView(overlay, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        perfMark152("picker.show", pickerPerfT0_152); // Q152：选择窗上屏打点
         acctPickerView = overlay;
         hideChrome(); // Q122（件十一）：选择窗开窗底栏整件退场（01:36 图证 dock 与窗底叠读），关窗 restoreChrome
         // Q122（件五）：背后详情蓝钮整颗藏死（GONE、非降透明）——2.33 只提窗面到近实，
@@ -12398,7 +12399,6 @@ public class MainActivity extends Activity {
 
         content.addView(overlay, new FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
-        perfMark152("picker.show", pickerPerfT0_152); // Q152
         overlay.getViewTreeObserver().addOnPreDrawListener(new android.view.ViewTreeObserver.OnPreDrawListener() {
             public boolean onPreDraw() {
                 overlay.getViewTreeObserver().removeOnPreDrawListener(this);
