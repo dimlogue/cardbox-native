@@ -5106,7 +5106,6 @@ public class MainActivity extends Activity {
     boolean showcaseClosing = false;
     FrameLayout showcaseBody = null;
     FrameLayout showcaseWorld = null;
-    TextView showcaseTitleTv = null;
     org.json.JSONObject showcasePosJson = null;
     Runnable showcaseDriftTask = null;
     float showcaseDriftVx = 0.35f, showcaseDriftVy = 0.22f;
@@ -5114,13 +5113,23 @@ public class MainActivity extends Activity {
     boolean showcaseDragging = false;
     boolean showcaseTouching140 = false; // Q140：任一手指在展柜画布上（漂移让路判据）
     TextView showcaseStackChip = null, showcaseCanvasChip = null, showcaseGroupChip = null;
-    TextView showcaseDensityLab = null;              // Q122：密度行标签（随底色刷新对比）
+    TextView showcaseDensityLab = null;              // Q152：密度面板数值标签（随底色刷新对比）
     ShowcaseDensitySlider151 showcaseSlider151 = null; // Q151（S2）：密度自绘滑杆（替系统 SeekBar）
-    View showcaseHead151 = null, showcaseRail151 = null; // Q151（S1）：浮顶栏/浮竖栏（换底色时重套软条底）
-    TextView showcaseRestoreChip151 = null;          // Q151（S4）：恢复默认胶囊
+    View showcaseHead151 = null; // Q151（S1）：浮顶栏（换底色时重套软条底）
+    // Q152（2.63，展柜重做）：右侧竖栏整条退役（色点/竖滑杆/竖排胶囊全撤，连代码
+    // 删净）——头部改：返回圆钮＋调色板圆钮＋堆叠/平放段选组＋密度钮＋分组钮＋
+    // 关闭圆钮；色板/密度/分组改为「点头部钮→弹面板选」。面板与头部钮引用留此，
+    // 换底色时统一重套（restyleShowcaseHead152/updateShowcaseChips 一把收口）。
+    FrameLayout showcasePanel152 = null;
+    String showcasePanelKind152 = null; // palette/density/group，null=未开
+    View showcaseBackBtn152 = null, showcasePaletteBtn152 = null, showcaseSegBox152 = null,
+         showcaseDensityBtn152 = null, showcaseCloseBtn152 = null;
+    BackChevronView showcaseBackIcon152 = null;
+    CloseIconView showcaseCloseIcon152 = null;
+    ShowcasePaletteIcon152 showcasePaletteIcon152 = null;
+    TextView showcaseDensityBtnTv152 = null;
     View showcaseZoomView = null;                    // Q122（件十四②）：点卡放大看卡面（纯展示层）
     int showcaseMinX = 0, showcaseMinY = 0, showcaseMaxX = 0, showcaseMaxY = 0; // Q141（2.52）：内容矩形（world 坐标，随卡落位向四边扩，平移够得着判据；旧 Q122 contentW/H 退役）
-    View showcaseDensityRow = null;
     // Q84 电话卡保号管家：模块自成一块（simkeep_ 前缀），设置「功能启用」可关，关掉入口与界面彻底不出现、不占位。
     // 数据模板参考：GitHub 开源卡包类应用的电话卡保号模型（号码/运营商/到期日/动作/周期/提醒提前量），代码自写。
     static class SimKeepItem {
@@ -18535,7 +18544,19 @@ public class MainActivity extends Activity {
         // 点过任一色点即落 showcase_bg、此后逐字按存档，浅色默认仍 0 档不变。
         return darkEff() ? SHOWCASE_BGS.length - 1 : 0;
     }
-    boolean showcaseDarkBg() { return showcaseBgIdx() >= 4; }
+    boolean showcaseDarkBg() {
+        // Q152（展柜③）：深浅判据改按当前实际底色亮度（自定义色板色同样适用）；
+        // 预设 6 档下与旧 idx>=4 规则逐档等价（深档仅末两档）。
+        int c152 = showcaseBgColor152();
+        double lum152 = (0.299 * Color.red(c152) + 0.587 * Color.green(c152) + 0.114 * Color.blue(c152)) / 255.0;
+        return lum152 < 0.5;
+    }
+    // Q152（展柜③）：当前展柜底色——色板自定义色优先，否则预设档（showcaseBgIdx）。
+    int showcaseBgColor152() {
+        if (prefs != null && prefs.getBoolean("showcase_bg_custom_on", false))
+            return prefs.getInt("showcase_bg_custom", SHOWCASE_BGS[0]);
+        return SHOWCASE_BGS[showcaseBgIdx()];
+    }
     int showcaseOnBg() { return showcaseDarkBg() ? Color.WHITE : Color.rgb(0x1C, 0x1C, 0x1E); }
     int showcaseOnBg2() { return showcaseDarkBg() ? Color.argb(170, 255, 255, 255) : Color.rgb(0x8E, 0x8E, 0x93); }
 
@@ -18577,23 +18598,310 @@ public class MainActivity extends Activity {
     }
 
     void updateShowcaseChips() {
+        // Q152（展柜②）：堆叠/平放为头部段选组（选中实心蓝、未选透底）；分组为
+        // 头部钮（选中同样实心蓝示开）。圆角一律 999 药丸经 roundRect 的
+        // autoR143 收口随圆角滑杆变（组件化一把收口，同全 App 钮语言）。
         String mode = prefs == null ? "stack" : prefs.getString("showcase_mode", "stack");
         boolean canvas = "canvas".equals(mode);
         if (showcaseStackChip != null) {
-            showcaseStackChip.setBackground(roundRect(!canvas ? accentColor() : (showcaseDarkBg() ? Color.argb(70, 255, 255, 255) : Color.rgb(0xE9, 0xEC, 0xF2)), 999, this));
+            if (!canvas) showcaseStackChip.setBackground(roundRect(accentColor(), 999, this));
+            else showcaseStackChip.setBackground(null);
             showcaseStackChip.setTextColor(!canvas ? Color.WHITE : showcaseOnBg());
         }
         if (showcaseCanvasChip != null) {
-            showcaseCanvasChip.setBackground(roundRect(canvas ? accentColor() : (showcaseDarkBg() ? Color.argb(70, 255, 255, 255) : Color.rgb(0xE9, 0xEC, 0xF2)), 999, this));
+            if (canvas) showcaseCanvasChip.setBackground(roundRect(accentColor(), 999, this));
+            else showcaseCanvasChip.setBackground(null);
             showcaseCanvasChip.setTextColor(canvas ? Color.WHITE : showcaseOnBg());
         }
         boolean grp = prefs != null && prefs.getBoolean("showcase_bank_group", false);
         if (showcaseGroupChip != null) {
-            showcaseGroupChip.setBackground(roundRect(grp ? accentColor() : (showcaseDarkBg() ? Color.argb(70, 255, 255, 255) : Color.rgb(0xE9, 0xEC, 0xF2)), 999, this));
+            showcaseGroupChip.setBackground(roundRect(grp ? accentColor() : (showcaseDarkBg() ? Color.argb(70, 255, 255, 255) : Color.argb(220, 255, 255, 255)), 999, this));
             showcaseGroupChip.setTextColor(grp ? Color.WHITE : showcaseOnBg());
         }
-        if (showcaseDensityRow != null) showcaseDensityRow.setVisibility(canvas ? View.VISIBLE : View.GONE);
         tintShowcaseSeek(); // Q122：换底/换模式后密度行对比同步刷新
+    }
+
+    // Q152（展柜③·调色板图标）：自绘调色板——圆盘细线轮廓＋五枚色点＋拇指孔，
+    // 与全 App 细线图标同语言（不用 emoji/图片）。ink152 随展柜底色深浅取墨。
+    class ShowcasePaletteIcon152 extends View {
+        int ink152 = Color.rgb(0x1C, 0x1C, 0x1E);
+        ShowcasePaletteIcon152(Context c) { super(c); }
+        @Override protected void onDraw(Canvas cv) {
+            float w = getWidth(), h = getHeight();
+            if (w <= 0 || h <= 0) return;
+            float cx = w / 2f, cy = h / 2f, r = Math.min(w, h) / 2f - dp(MainActivity.this, 1);
+            Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);
+            p.setStyle(Paint.Style.STROKE);
+            p.setStrokeWidth(dp(MainActivity.this, 1.4f));
+            p.setColor(ink152);
+            cv.drawCircle(cx, cy, r, p);
+            // 五色点（颜料盘孔位）＋一枚墨色拇指孔
+            int[] cols152 = { Color.rgb(0xFF, 0x5A, 0x52), Color.rgb(0xFF, 0xB3, 0x40), Color.rgb(0xFF, 0xD9, 0x4D), Color.rgb(0x4C, 0xC7, 0x64), Color.rgb(0x4A, 0x90, 0xE2) };
+            double[] ang152 = { -90, -18, 54, 126, 198 };
+            p.setStyle(Paint.Style.FILL);
+            float dotR = r * 0.21f, ringR = r * 0.55f;
+            for (int i = 0; i < cols152.length; i++) {
+                double a = Math.toRadians(ang152[i]);
+                p.setColor(cols152[i]);
+                cv.drawCircle(cx + (float) (ringR * Math.cos(a)), cy + (float) (ringR * Math.sin(a)), dotR, p);
+            }
+            p.setColor(ink152);
+            cv.drawCircle(cx + r * 0.18f, cy + r * 0.30f, dotR * 0.8f, p);
+        }
+    }
+
+    // Q152（展柜③·渐变点阵色板）：照相机选色板语言自绘——横轴色相、纵轴上浅
+    // 下深的点阵，点/拖即选色（colorSink152 回主类落盘并换底）；选中点描白环。
+    // 纯 Canvas 绘制，不引图片、不拿原生控件凑数。
+    class ShowcasePaletteView152 extends View {
+        java.util.function.Consumer<Integer> colorSink152;
+        float selFx152 = -1f, selFy152 = -1f;
+        ShowcasePaletteView152(Context c) { super(c); setClickable(true); }
+        int colorAt152(float fx, float fy) {
+            float hue = Math.max(0f, Math.min(1f, fx)) * 360f;
+            float sat = 0.15f + 0.85f * Math.max(0f, Math.min(1f, fy));
+            float val = 1.0f - 0.45f * Math.max(0f, Math.min(1f, fy));
+            return Color.HSVToColor(new float[]{ hue, sat, val });
+        }
+        @Override protected void onDraw(Canvas cv) {
+            int w = getWidth(), h = getHeight();
+            if (w <= 0 || h <= 0) return;
+            int cols152 = 28, rows152 = 11;
+            float cellW = w / (float) cols152, cellH = h / (float) rows152;
+            float dotR = Math.min(cellW, cellH) * 0.36f;
+            Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);
+            p.setStyle(Paint.Style.FILL);
+            for (int y = 0; y < rows152; y++) {
+                for (int x = 0; x < cols152; x++) {
+                    p.setColor(colorAt152((x + 0.5f) / cols152, (y + 0.5f) / rows152));
+                    cv.drawCircle((x + 0.5f) * cellW, (y + 0.5f) * cellH, dotR, p);
+                }
+            }
+            if (selFx152 >= 0f) {
+                p.setStyle(Paint.Style.STROKE);
+                p.setStrokeWidth(dp(MainActivity.this, 2));
+                p.setColor(Color.WHITE);
+                cv.drawCircle(selFx152 * w, selFy152 * h, dotR + dp(MainActivity.this, 2.5f), p);
+                p.setStrokeWidth(dp(MainActivity.this, 1));
+                p.setColor(Color.argb(160, 0, 0, 0));
+                cv.drawCircle(selFx152 * w, selFy152 * h, dotR + dp(MainActivity.this, 4f), p);
+            }
+        }
+        @Override public boolean onTouchEvent(MotionEvent ev) {
+            int w = getWidth(), h = getHeight();
+            if (w <= 0 || h <= 0) return true;
+            switch (ev.getActionMasked()) {
+                case MotionEvent.ACTION_DOWN:
+                case MotionEvent.ACTION_MOVE: {
+                    selFx152 = Math.max(0f, Math.min(1f, ev.getX() / (float) w));
+                    selFy152 = Math.max(0f, Math.min(1f, ev.getY() / (float) h));
+                    invalidate();
+                    if (colorSink152 != null) colorSink152.accept(colorAt152(selFx152, selFy152));
+                    return true;
+                }
+                case MotionEvent.ACTION_UP:
+                case MotionEvent.ACTION_CANCEL:
+                    return true;
+            }
+            return true;
+        }
+    }
+
+    // Q152（展柜③）：换底统一出口——设 overlay 底色＋头部整套重套对比＋面板
+    // （色板开着时）重建保态；所有选色路径（点阵/预设/默认）只许走这一处。
+    void applyShowcaseBg152() {
+        if (showcaseView != null) showcaseView.setBackgroundColor(showcaseBgColor152());
+        restyleShowcaseHead152();
+        updateShowcaseChips();
+        if (showcasePanel152 != null && showcasePanel152.getVisibility() == View.VISIBLE && "palette".equals(showcasePanelKind152)) {
+            showcasePanel152.removeAllViews();
+            LinearLayout box152 = new LinearLayout(this);
+            box152.setOrientation(LinearLayout.VERTICAL);
+            box152.setPadding(dp(this, 14), dp(this, 12), dp(this, 14), dp(this, 12));
+            showcasePanel152.addView(box152, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+            buildShowcasePalettePanel152(box152);
+        }
+    }
+
+    void restyleShowcaseHead152() {
+        int ink152 = showcaseOnBg();
+        int btnBg152 = showcaseDarkBg() ? Color.argb(70, 255, 255, 255) : Color.argb(220, 255, 255, 255);
+        if (showcaseHead151 != null) showcaseHead151.setBackground(showcaseBarBg151(20));
+        if (showcaseBackBtn152 != null) showcaseBackBtn152.setBackground(roundRect(btnBg152, 999, this));
+        if (showcasePaletteBtn152 != null) showcasePaletteBtn152.setBackground(roundRect(btnBg152, 999, this));
+        if (showcaseSegBox152 != null) showcaseSegBox152.setBackground(roundRect(btnBg152, 999, this));
+        if (showcaseCloseBtn152 != null) showcaseCloseBtn152.setBackground(roundRect(btnBg152, 999, this));
+        if (showcaseBackIcon152 != null) { showcaseBackIcon152.iconColor = ink152; showcaseBackIcon152.invalidate(); }
+        if (showcaseCloseIcon152 != null) { showcaseCloseIcon152.iconColor = ink152; showcaseCloseIcon152.invalidate(); }
+        if (showcasePaletteIcon152 != null) { showcasePaletteIcon152.ink152 = ink152; showcasePaletteIcon152.invalidate(); }
+        if (showcaseDensityBtnTv152 != null) {
+            showcaseDensityBtnTv152.setBackground(roundRect(btnBg152, 999, this));
+            showcaseDensityBtnTv152.setTextColor(ink152);
+        }
+        if (showcasePanel152 != null) showcasePanel152.setBackground(showcaseBarBg151(20));
+    }
+
+    // Q152（展柜②③）：头部钮→弹面板（一次只开一类，同钮再点收起；换类直换
+    // 内容）。面板内容每次打开按当前偏好新搭，状态不靠残留视图。
+    void toggleShowcasePanel152(String kind) {
+        if (showcasePanel152 == null) return;
+        if (kind != null && kind.equals(showcasePanelKind152) && showcasePanel152.getVisibility() == View.VISIBLE) {
+            closeShowcasePanel152();
+            return;
+        }
+        showcasePanelKind152 = kind;
+        showcasePanel152.removeAllViews();
+        LinearLayout box152 = new LinearLayout(this);
+        box152.setOrientation(LinearLayout.VERTICAL);
+        box152.setPadding(dp(this, 14), dp(this, 12), dp(this, 14), dp(this, 12));
+        showcasePanel152.addView(box152, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        if ("palette".equals(kind)) buildShowcasePalettePanel152(box152);
+        else if ("density".equals(kind)) buildShowcaseDensityPanel152(box152);
+        else buildShowcaseGroupPanel152(box152);
+        showcasePanel152.setVisibility(View.VISIBLE);
+        showcasePanel152.setAlpha(0f);
+        showcasePanel152.animate().alpha(1f).setDuration(ANIM_DUR_FADE).setInterpolator(ANIM_ENTER).start();
+    }
+
+    void closeShowcasePanel152() {
+        showcasePanelKind152 = null;
+        if (showcasePanel152 != null) showcasePanel152.setVisibility(View.GONE);
+    }
+
+    void buildShowcasePalettePanel152(LinearLayout box152) {
+        TextView cap152 = tv(this, "展柜底色", 13, showcaseOnBg(), true);
+        box152.addView(cap152);
+        ShowcasePaletteView152 pal152 = new ShowcasePaletteView152(this);
+        LinearLayout.LayoutParams palLp152 = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(this, 118));
+        palLp152.topMargin = dp(this, 10);
+        pal152.setLayoutParams(palLp152);
+        pal152.colorSink152 = color152 -> {
+            if (prefs != null) prefs.edit().putInt("showcase_bg_custom", color152).putBoolean("showcase_bg_custom_on", true).apply();
+            applyShowcaseBg152();
+        };
+        box152.addView(pal152);
+        // 预设色点行（现有 6 档）＋「默认」（清手动档：未选过回深浅默认口径）
+        LinearLayout row152 = new LinearLayout(this);
+        row152.setOrientation(LinearLayout.HORIZONTAL);
+        row152.setGravity(Gravity.CENTER_VERTICAL);
+        LinearLayout.LayoutParams rowLp152 = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        rowLp152.topMargin = dp(this, 12);
+        box152.addView(row152, rowLp152);
+        boolean customOn152 = prefs != null && prefs.getBoolean("showcase_bg_custom_on", false);
+        for (int i = 0; i < SHOWCASE_BGS.length; i++) {
+            final int bi152 = i;
+            View dot152 = new View(this);
+            GradientDrawable dg152 = new GradientDrawable();
+            dg152.setShape(GradientDrawable.OVAL);
+            dg152.setColor(SHOWCASE_BGS[i]);
+            boolean sel152 = !customOn152 && showcaseBgIdx() == i;
+            dg152.setStroke(dp(this, sel152 ? 2 : 1), showcaseDotStroke122(sel152));
+            dot152.setBackground(dg152);
+            LinearLayout.LayoutParams dLp152 = new LinearLayout.LayoutParams(dp(this, 24), dp(this, 24));
+            if (i > 0) dLp152.leftMargin = dp(this, 10);
+            dot152.setLayoutParams(dLp152);
+            dot152.setOnClickListener(v -> {
+                haptic();
+                if (prefs != null) prefs.edit().putInt("showcase_bg", bi152).putBoolean("showcase_bg_custom_on", false).apply();
+                applyShowcaseBg152();
+            });
+            row152.addView(dot152);
+        }
+        TextView def152 = tv(this, "默认", 12, showcaseOnBg(), true);
+        def152.setGravity(Gravity.CENTER);
+        def152.setPadding(dp(this, 10), dp(this, 5), dp(this, 10), dp(this, 5));
+        def152.setBackground(roundRect(showcaseDarkBg() ? Color.argb(70, 255, 255, 255) : Color.argb(220, 255, 255, 255), 999, this));
+        LinearLayout.LayoutParams defLp152 = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        defLp152.leftMargin = dp(this, 12);
+        def152.setLayoutParams(defLp152);
+        def152.setOnClickListener(v -> {
+            haptic();
+            if (prefs != null) prefs.edit().remove("showcase_bg").putBoolean("showcase_bg_custom_on", false).apply();
+            applyShowcaseBg152();
+        });
+        row152.addView(def152);
+        row152.addView(new View(this), new LinearLayout.LayoutParams(0, 1, 1f));
+        // 恢复默认（Q151 S4 语义守恒：清存位回默认排布；自竖栏胶囊迁入本面板）
+        TextView rst152 = tv(this, "恢复默认排布", 12, showcaseOnBg(), true);
+        rst152.setGravity(Gravity.CENTER);
+        rst152.setPadding(dp(this, 10), dp(this, 5), dp(this, 10), dp(this, 5));
+        rst152.setBackground(roundRect(showcaseDarkBg() ? Color.argb(70, 255, 255, 255) : Color.argb(220, 255, 255, 255), 999, this));
+        rst152.setOnClickListener(v -> { haptic(); resetShowcaseDefault151(); });
+        row152.addView(rst152);
+    }
+
+    void buildShowcaseDensityPanel152(LinearLayout box152) {
+        LinearLayout row152 = new LinearLayout(this);
+        row152.setOrientation(LinearLayout.HORIZONTAL);
+        row152.setGravity(Gravity.CENTER_VERTICAL);
+        box152.addView(row152);
+        TextView cap152 = tv(this, "平放密度", 13, showcaseOnBg(), true);
+        row152.addView(cap152);
+        row152.addView(new View(this), new LinearLayout.LayoutParams(0, 1, 1f));
+        final TextView val152 = tv(this, "", 12.5f, showcaseOnBg2(), false);
+        row152.addView(val152);
+        showcaseDensityLab = val152;
+        LinearLayout srow152 = new LinearLayout(this);
+        srow152.setOrientation(LinearLayout.HORIZONTAL);
+        srow152.setGravity(Gravity.CENTER_VERTICAL);
+        LinearLayout.LayoutParams srowLp152 = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        srowLp152.topMargin = dp(this, 8);
+        box152.addView(srow152, srowLp152);
+        TextView lo152 = tv(this, "疏", 12, showcaseOnBg2(), false);
+        srow152.addView(lo152);
+        final ShowcaseDensitySlider151 slider152 = new ShowcaseDensitySlider151(this);
+        slider152.horizontal152 = true; // Q152：面板内改横置（同一自绘类横竖两用）
+        float dens152 = prefs == null ? 1f : prefs.getFloat("showcase_density", 1f);
+        slider152.setDensity151(Math.max(0.6f, Math.min(1.3f, dens152)));
+        val152.setText(Math.round(slider152.density151 * 100) + "%");
+        slider152.densitySink151 = nd152 -> {
+            applyShowcaseDensity149(nd152); // Q149 就地改尺寸口径守恒：拖动中只改各卡 LP，不重建不闪
+            val152.setText(Math.round(nd152 * 100) + "%");
+        };
+        slider152.densityCommit151 = fd152 -> {
+            if (prefs != null) prefs.edit().putFloat("showcase_density", fd152).apply();
+        };
+        LinearLayout.LayoutParams slLp152 = new LinearLayout.LayoutParams(0, dp(this, 30), 1f);
+        slLp152.leftMargin = dp(this, 10); slLp152.rightMargin = dp(this, 10);
+        slider152.setLayoutParams(slLp152);
+        srow152.addView(slider152);
+        showcaseSlider151 = slider152;
+        TextView hi152 = tv(this, "密", 12, showcaseOnBg2(), false);
+        srow152.addView(hi152);
+    }
+
+    void buildShowcaseGroupPanel152(LinearLayout box152) {
+        boolean grp152 = prefs != null && prefs.getBoolean("showcase_bank_group", false);
+        box152.addView(showcaseGroupOption152("按银行分组", "卡按银行聚成组排布", grp152, () -> {
+            if (prefs != null) prefs.edit().putBoolean("showcase_bank_group", true).apply();
+            updateShowcaseChips(); buildShowcaseBody(true); closeShowcasePanel152();
+        }));
+        box152.addView(showcaseGroupOption152("自由排布", "全部卡连续排布，不分银行", !grp152, () -> {
+            if (prefs != null) prefs.edit().putBoolean("showcase_bank_group", false).apply();
+            updateShowcaseChips(); buildShowcaseBody(true); closeShowcasePanel152();
+        }));
+    }
+
+    LinearLayout showcaseGroupOption152(String title152, String desc152, boolean on152, final Runnable act152) {
+        LinearLayout row152 = new LinearLayout(this);
+        row152.setOrientation(LinearLayout.HORIZONTAL);
+        row152.setGravity(Gravity.CENTER_VERTICAL);
+        row152.setPadding(dp(this, 12), dp(this, 10), dp(this, 12), dp(this, 10));
+        row152.setBackground(rippleBg(on152 ? (darkEff() ? Color.rgb(0x2A, 0x3D, 0x5C) : Color.rgb(0xE8, 0xF1, 0xFD)) : (showcaseDarkBg() ? Color.argb(50, 255, 255, 255) : Color.argb(160, 255, 255, 255)), 14));
+        LinearLayout.LayoutParams rLp152 = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        rLp152.topMargin = dp(this, 8);
+        row152.setLayoutParams(rLp152);
+        LinearLayout tx152 = new LinearLayout(this);
+        tx152.setOrientation(LinearLayout.VERTICAL);
+        row152.addView(tx152, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+        tx152.addView(tv(this, title152, 13.5f, showcaseOnBg(), true));
+        tx152.addView(tv(this, desc152, 11.5f, showcaseOnBg2(), false));
+        if (on152) {
+            TextView ck152 = tv(this, "✓", 15, accentColor(), true);
+            row152.addView(ck152);
+        }
+        row152.setOnClickListener(v -> { haptic(); if (act152 != null) act152.run(); });
+        return row152;
     }
 
     void openShowcase() {
@@ -18604,7 +18912,7 @@ public class MainActivity extends Activity {
         try { showcasePosJson = new org.json.JSONObject(prefs == null ? "{}" : prefs.getString("showcase_positions", "{}")); }
         catch (Throwable t) { showcasePosJson = new org.json.JSONObject(); }
         final FrameLayout overlay = new FrameLayout(this);
-        overlay.setBackgroundColor(SHOWCASE_BGS[showcaseBgIdx()]);
+        overlay.setBackgroundColor(showcaseBgColor152()); // Q152：自定义底色同读一口
         // Q151（S1·层级换解法）：推翻 2.60 的「舞台裁剪」——旧结构顶栏/竖栏是布局
         // 里的实栏，画布被夹在中间，卡滑到栏边像撞一堵墙被切（用户红圈原话）。
         // 改三层浮叠：画布（showcaseBody）满幅垫底（只在屏幕边缘裁，卡身完整）、
@@ -18615,11 +18923,16 @@ public class MainActivity extends Activity {
         showcaseBody = new FrameLayout(this);
         showcaseBody.setClipChildren(true);
         overlay.addView(showcaseBody, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
-        // 头部浮条：标题 + 模式切换 + 关闭（细线自绘，禁用 emoji）
+        // 头部浮条（Q152 展柜重做）：去「展柜」标题（用户点名）——左起返回圆钮
+        // ＋调色板圆钮，中间堆叠/平放段选组，右侧密度钮、分组钮、关闭圆钮；
+        // 全部与全 App 钮语言一致（圆钮 circleIconBtn 同形制/药丸 roundRect 999
+        // 经 autoR143 随圆角滑杆收口），不拿原生控件凑数。右侧竖栏整条退役：
+        // 色点/密度/分组/恢复默认全收进「点头部钮→弹面板」（见 toggleShowcase-
+        // Panel152），画布上不再常驻杂件。
         LinearLayout head = new LinearLayout(this);
         head.setOrientation(LinearLayout.HORIZONTAL);
         head.setGravity(Gravity.CENTER_VERTICAL);
-        head.setPadding(dp(this, 14), dp(this, 8), dp(this, 10), dp(this, 8));
+        head.setPadding(dp(this, 8), dp(this, 6), dp(this, 8), dp(this, 6));
         head.setBackground(showcaseBarBg151(20));
         head.setClickable(true); // 浮条自身接住命中，不许漏给下层画布
         FrameLayout.LayoutParams headLp151 = new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
@@ -18628,135 +18941,92 @@ public class MainActivity extends Activity {
         headLp151.topMargin = pageTopPad();
         overlay.addView(head, headLp151);
         showcaseHead151 = head;
-        showcaseTitleTv = tvW(this, "展柜", 20, showcaseOnBg(), 800);
-        showcaseTitleTv.setOnClickListener(v -> { haptic(); resetShowcaseView(); }); // Q122（件十六补）：点标题一键回正
-        head.addView(showcaseTitleTv, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
-        showcaseStackChip = tv(this, "堆叠", 13, showcaseOnBg(), true);
+        // 返回圆钮（回我的卡片页语义＝关柜，同 pageBackHead 的 circleIconBtn 形制自绘）
+        FrameLayout backBtn152 = new FrameLayout(this);
+        backBtn152.setBackground(roundRect(showcaseDarkBg() ? Color.argb(70, 255, 255, 255) : Color.argb(220, 255, 255, 255), 999, this));
+        BackChevronView bcv152 = new BackChevronView(this);
+        bcv152.iconColor = showcaseOnBg();
+        backBtn152.addView(bcv152, new FrameLayout.LayoutParams(dp(this, 18), dp(this, 18), Gravity.CENTER));
+        backBtn152.setLayoutParams(new LinearLayout.LayoutParams(dp(this, 36), dp(this, 36)));
+        backBtn152.setOnClickListener(v -> { haptic(); closeShowcase(); });
+        head.addView(backBtn152);
+        showcaseBackBtn152 = backBtn152; showcaseBackIcon152 = bcv152;
+        // 调色板圆钮（左上角，点开色板面板：渐变点阵＋预设色点，见面板构建）
+        FrameLayout palBtn152 = new FrameLayout(this);
+        palBtn152.setBackground(roundRect(showcaseDarkBg() ? Color.argb(70, 255, 255, 255) : Color.argb(220, 255, 255, 255), 999, this));
+        ShowcasePaletteIcon152 pic152 = new ShowcasePaletteIcon152(this);
+        pic152.ink152 = showcaseOnBg();
+        palBtn152.addView(pic152, new FrameLayout.LayoutParams(dp(this, 20), dp(this, 20), Gravity.CENTER));
+        LinearLayout.LayoutParams palLp152 = new LinearLayout.LayoutParams(dp(this, 36), dp(this, 36));
+        palLp152.leftMargin = dp(this, 8);
+        palBtn152.setLayoutParams(palLp152);
+        palBtn152.setOnClickListener(v -> { haptic(); toggleShowcasePanel152("palette"); });
+        head.addView(palBtn152);
+        showcasePaletteBtn152 = palBtn152; showcasePaletteIcon152 = pic152;
+        // 堆叠/平放段选组（一枚药丸容器＋两枚段钮，选中实心蓝）
+        LinearLayout seg152 = new LinearLayout(this);
+        seg152.setOrientation(LinearLayout.HORIZONTAL);
+        seg152.setGravity(Gravity.CENTER_VERTICAL);
+        seg152.setBackground(roundRect(showcaseDarkBg() ? Color.argb(70, 255, 255, 255) : Color.argb(220, 255, 255, 255), 999, this));
+        seg152.setPadding(dp(this, 3), dp(this, 3), dp(this, 3), dp(this, 3));
+        LinearLayout.LayoutParams segLp152 = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        segLp152.leftMargin = dp(this, 8);
+        seg152.setLayoutParams(segLp152);
+        head.addView(seg152);
+        showcaseSegBox152 = seg152;
+        showcaseStackChip = tv(this, "堆叠", 12.5f, showcaseOnBg(), true);
         showcaseStackChip.setGravity(Gravity.CENTER);
-        showcaseStackChip.setPadding(dp(this, 14), dp(this, 7), dp(this, 14), dp(this, 7));
-        showcaseStackChip.setOnClickListener(v -> { haptic(); if (prefs != null) prefs.edit().putString("showcase_mode", "stack").apply(); updateShowcaseChips(); buildShowcaseBody(true); });
-        head.addView(showcaseStackChip);
-        showcaseCanvasChip = tv(this, "平放", 13, showcaseOnBg(), true);
+        showcaseStackChip.setPadding(dp(this, 11), dp(this, 5), dp(this, 11), dp(this, 5));
+        showcaseStackChip.setOnClickListener(v -> { haptic(); if (prefs != null) prefs.edit().putString("showcase_mode", "stack").apply(); closeShowcasePanel152(); updateShowcaseChips(); buildShowcaseBody(true); });
+        seg152.addView(showcaseStackChip);
+        showcaseCanvasChip = tv(this, "平放", 12.5f, showcaseOnBg(), true);
         showcaseCanvasChip.setGravity(Gravity.CENTER);
-        showcaseCanvasChip.setPadding(dp(this, 14), dp(this, 7), dp(this, 14), dp(this, 7));
-        LinearLayout.LayoutParams ccLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        ccLp.leftMargin = dp(this, 8);
-        showcaseCanvasChip.setLayoutParams(ccLp);
-        showcaseCanvasChip.setOnClickListener(v -> { haptic(); if (prefs != null) prefs.edit().putString("showcase_mode", "canvas").apply(); updateShowcaseChips(); buildShowcaseBody(true); });
-        head.addView(showcaseCanvasChip);
+        showcaseCanvasChip.setPadding(dp(this, 11), dp(this, 5), dp(this, 11), dp(this, 5));
+        showcaseCanvasChip.setOnClickListener(v -> { haptic(); if (prefs != null) prefs.edit().putString("showcase_mode", "canvas").apply(); closeShowcasePanel152(); updateShowcaseChips(); buildShowcaseBody(true); });
+        seg152.addView(showcaseCanvasChip);
+        // 中间弹性空当
+        head.addView(new View(this), new LinearLayout.LayoutParams(0, 1, 1f));
+        // 密度钮（点开密度面板：自绘横滑杆，就地改卡尺寸不闪、松手落盘）
+        showcaseDensityBtnTv152 = tv(this, "密度", 12.5f, showcaseOnBg(), true);
+        showcaseDensityBtnTv152.setGravity(Gravity.CENTER);
+        showcaseDensityBtnTv152.setPadding(dp(this, 11), dp(this, 7), dp(this, 11), dp(this, 7));
+        showcaseDensityBtnTv152.setBackground(roundRect(showcaseDarkBg() ? Color.argb(70, 255, 255, 255) : Color.argb(220, 255, 255, 255), 999, this));
+        showcaseDensityBtnTv152.setOnClickListener(v -> { haptic(); toggleShowcasePanel152("density"); });
+        head.addView(showcaseDensityBtnTv152);
+        showcaseDensityBtn152 = showcaseDensityBtnTv152;
+        // 分组钮（点开分组面板二选；选中态兼示当前开关）
+        showcaseGroupChip = tv(this, "分组", 12.5f, showcaseOnBg(), true);
+        showcaseGroupChip.setGravity(Gravity.CENTER);
+        showcaseGroupChip.setPadding(dp(this, 11), dp(this, 7), dp(this, 11), dp(this, 7));
+        LinearLayout.LayoutParams grpLp152 = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        grpLp152.leftMargin = dp(this, 8);
+        showcaseGroupChip.setLayoutParams(grpLp152);
+        showcaseGroupChip.setOnClickListener(v -> { haptic(); toggleShowcasePanel152("group"); });
+        head.addView(showcaseGroupChip);
+        // 关闭圆钮
         FrameLayout closeBtn = new FrameLayout(this);
         closeBtn.setBackground(roundRect(showcaseDarkBg() ? Color.argb(70, 255, 255, 255) : Color.argb(220, 255, 255, 255), 999, this));
         CloseIconView civ = new CloseIconView(this);
         civ.iconColor = showcaseOnBg();
         closeBtn.addView(civ, new FrameLayout.LayoutParams(dp(this, 18), dp(this, 18), Gravity.CENTER));
         LinearLayout.LayoutParams cbLp = new LinearLayout.LayoutParams(dp(this, 36), dp(this, 36));
-        cbLp.leftMargin = dp(this, 10);
+        cbLp.leftMargin = dp(this, 8);
         closeBtn.setLayoutParams(cbLp);
         closeBtn.setOnClickListener(v -> { haptic(); closeShowcase(); });
         head.addView(closeBtn);
-        // 右侧浮竖栏（Q151 S1/S2 照构图稿 widget-277bcb0f 一比一：一条圆角半透
-        // 软条，内收 6 档色点竖排、密度自绘滑杆、「密度」标签、「按银行分组」竖
-        // 排胶囊、「恢复默认」胶囊（S4，随栏样式不新增原生按钮）。画布满幅在其
-        // 下，卡可滑到栏底下、隔半透条整卡可见。）
-        LinearLayout rail149 = new LinearLayout(this);
-        rail149.setOrientation(LinearLayout.VERTICAL);
-        rail149.setGravity(Gravity.CENTER_HORIZONTAL);
-        rail149.setClickable(true); // Q127 口径沿用：控件区优先——色点/滑杆之间的空隙也由竖栏接住，不许漏给下层画布
-        rail149.setPadding(dp(this, 7), dp(this, 12), dp(this, 7), dp(this, 12));
-        rail149.setBackground(showcaseBarBg151(26));
-        FrameLayout.LayoutParams railLp151 = new FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        railLp151.gravity = Gravity.RIGHT | Gravity.TOP;
-        railLp151.rightMargin = dp(this, 10);
-        railLp151.topMargin = pageTopPad() + dp(this, 66);
-        overlay.addView(rail149, railLp151);
-        showcaseRail151 = rail149;
-        final java.util.List<View> bgDots = new ArrayList<>();
-        for (int i = 0; i < SHOWCASE_BGS.length; i++) {
-            final int bi = i;
-            View dot = new View(this);
-            GradientDrawable dg = new GradientDrawable();
-            dg.setShape(GradientDrawable.OVAL);
-            dg.setColor(SHOWCASE_BGS[i]);
-            dg.setStroke(dp(this, bi == showcaseBgIdx() ? 2 : 1), showcaseDotStroke122(bi == showcaseBgIdx())); // Q122：描边随底对比
-            dot.setBackground(dg);
-            LinearLayout.LayoutParams dLp = new LinearLayout.LayoutParams(dp(this, 22), dp(this, 22)); // Q151（S2 照稿）：软条内色点收至 22dp
-            if (i > 0) dLp.topMargin = dp(this, 8);
-            dot.setLayoutParams(dLp);
-            dot.setOnClickListener(v -> {
-                haptic();
-                if (prefs != null) prefs.edit().putInt("showcase_bg", bi).apply();
-                overlay.setBackgroundColor(SHOWCASE_BGS[bi]);
-                if (showcaseTitleTv != null) showcaseTitleTv.setTextColor(showcaseOnBg());
-                for (int k = 0; k < bgDots.size(); k++) {
-                    GradientDrawable nd = new GradientDrawable();
-                    nd.setShape(GradientDrawable.OVAL);
-                    nd.setColor(SHOWCASE_BGS[k]);
-                    nd.setStroke(dp(this, k == bi ? 2 : 1), showcaseDotStroke122(k == bi)); // Q122：描边随底对比
-                    bgDots.get(k).setBackground(nd);
-                }
-                updateShowcaseChips();
-            });
-            bgDots.add(dot);
-            rail149.addView(dot);
-        }
-        // 密度段（竖拖，只在平放显示，显隐仍由 updateShowcaseChips 统一管）
-        // Q151（S2·照稿自绘）：系统 SeekBar 旋转凑数作废（用户 06:04 点名「还是
-        // 原生的」）——换自绘竖滑杆 ShowcaseDensitySlider151（浅轨道＋圆钮，
-        // 往上拖变密），口径与全 App 自绘语言一致；拖动中即就地改卡尺寸
-        // （applyShowcaseDensity149，不闪），松手才落盘 showcase_density。
-        showcaseDensityRow = new LinearLayout(this);
-        ((LinearLayout) showcaseDensityRow).setOrientation(LinearLayout.VERTICAL);
-        ((LinearLayout) showcaseDensityRow).setGravity(Gravity.CENTER_HORIZONTAL);
-        LinearLayout.LayoutParams drLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        drLp.topMargin = dp(this, 14);
-        showcaseDensityRow.setLayoutParams(drLp);
-        rail149.addView(showcaseDensityRow);
-        float dens0 = prefs == null ? 1f : prefs.getFloat("showcase_density", 1f);
-        final ShowcaseDensitySlider151 slider151 = new ShowcaseDensitySlider151(this);
-        slider151.setDensity151(Math.max(0.6f, Math.min(1.3f, dens0)));
-        slider151.densitySink151 = newD151 -> {
-            applyShowcaseDensity149(newD151); // Q149 就地改尺寸口径守恒：拖动中只改各卡 LP，不重建不闪
-        };
-        slider151.densityCommit151 = finalD151 -> {
-            if (prefs != null) prefs.edit().putFloat("showcase_density", finalD151).apply();
-        };
-        LinearLayout.LayoutParams slLp151 = new LinearLayout.LayoutParams(dp(this, 30), dp(this, 112));
-        slider151.setLayoutParams(slLp151);
-        ((LinearLayout) showcaseDensityRow).addView(slider151);
-        showcaseSlider151 = slider151;
-        TextView dLab = tv(this, "密度", 12.5f, showcaseOnBg(), true); // Q122：标签用全量语义墨色保对比（旧 OnBg2 半透灰在浅底近隐形）
-        showcaseDensityLab = dLab;
-        LinearLayout.LayoutParams dlLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        dlLp.topMargin = dp(this, 6);
-        dLab.setLayoutParams(dlLp);
-        ((LinearLayout) showcaseDensityRow).addView(dLab);
-        showcaseGroupChip = tv(this, EN_MODE ? "Group\nby\nBank" : "按\n银\n行\n分\n组", 12.5f, showcaseOnBg(), true);
-        showcaseGroupChip.setGravity(Gravity.CENTER);
-        showcaseGroupChip.setPadding(dp(this, 7), dp(this, 10), dp(this, 7), dp(this, 10));
-        LinearLayout.LayoutParams gcLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        gcLp.topMargin = dp(this, 14);
-        showcaseGroupChip.setLayoutParams(gcLp);
-        showcaseGroupChip.setOnClickListener(v -> {
-            haptic();
-            boolean g = prefs != null && prefs.getBoolean("showcase_bank_group", false);
-            if (prefs != null) prefs.edit().putBoolean("showcase_bank_group", !g).apply();
-            updateShowcaseChips(); buildShowcaseBody(true);
-        });
-        rail149.addView(showcaseGroupChip);
-        // Q151（S4·恢复默认）：竖栏内加一枚同语言竖排胶囊——一键全卡回默认流式
-        // 排布、画布变换回正、清存位（resetShowcaseDefault151）。随栏样式，不新增
-        // 原生按钮；堆叠/平放两模式都在（平放清存位、堆叠回正无存位可清、同钮复用）。
-        TextView resetChip151 = tv(this, EN_MODE ? "Re\nset" : "恢\n复\n默\n认", 12.5f, showcaseOnBg(), true);
-        resetChip151.setGravity(Gravity.CENTER);
-        resetChip151.setPadding(dp(this, 7), dp(this, 10), dp(this, 7), dp(this, 10));
-        resetChip151.setBackground(roundRect(showcaseDarkBg() ? Color.argb(70, 255, 255, 255) : Color.rgb(0xE9, 0xEC, 0xF2), 999, this));
-        LinearLayout.LayoutParams rcLp151 = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        rcLp151.topMargin = dp(this, 10);
-        resetChip151.setLayoutParams(rcLp151);
-        resetChip151.setOnClickListener(v -> { haptic(); resetShowcaseDefault151(); });
-        rail149.addView(resetChip151);
-        showcaseRestoreChip151 = resetChip151;
-        tintShowcaseSeek(); // Q151：标签/滑杆按当前底色描色（自绘滑杆 invalidate 重绘）
+        showcaseCloseBtn152 = closeBtn; showcaseCloseIcon152 = civ;
+        // 弹出面板宿主（头部之下浮层，一次只开一类：palette/density/group）
+        FrameLayout panel152 = new FrameLayout(this);
+        panel152.setBackground(showcaseBarBg151(20));
+        panel152.setClickable(true); // 面板自身接住命中，不漏给画布
+        FrameLayout.LayoutParams panelLp152 = new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        panelLp152.gravity = Gravity.TOP;
+        panelLp152.leftMargin = dp(this, 10); panelLp152.rightMargin = dp(this, 10);
+        panelLp152.topMargin = pageTopPad() + dp(this, 58);
+        panel152.setVisibility(View.GONE);
+        overlay.addView(panel152, panelLp152);
+        showcasePanel152 = panel152;
+        tintShowcaseSeek(); // Q151：滑杆按当前底色描色（面板内自绘滑杆 invalidate 重绘）
         updateShowcaseChips();
         content.addView(overlay, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         showcaseView = overlay;
@@ -18769,8 +19039,12 @@ public class MainActivity extends Activity {
         stopShowcaseDrift();
         View v = showcaseView;
         showcaseView = null; showcaseBody = null; showcaseWorld = null;
-        showcaseStackChip = null; showcaseCanvasChip = null; showcaseGroupChip = null; showcaseDensityRow = null; showcaseTitleTv = null;
-        showcaseZoomView = null; showcaseDensityLab = null; showcaseSlider151 = null; showcaseHead151 = null; showcaseRail151 = null; showcaseRestoreChip151 = null; showcaseMinX = 0; showcaseMinY = 0; showcaseMaxX = 0; showcaseMaxY = 0; // Q141：放大层/密度行/内容矩形随关清（旧 Q122 contentW/H 退役）
+        showcaseStackChip = null; showcaseCanvasChip = null; showcaseGroupChip = null;
+        showcaseZoomView = null; showcaseDensityLab = null; showcaseSlider151 = null; showcaseHead151 = null; // Q141：放大层/内容矩形随关清（旧 Q122 contentW/H 退役）
+        showcasePanel152 = null; showcasePanelKind152 = null; // Q152：面板宿主随关清
+        showcaseBackBtn152 = null; showcasePaletteBtn152 = null; showcaseSegBox152 = null; showcaseDensityBtn152 = null; showcaseCloseBtn152 = null;
+        showcaseBackIcon152 = null; showcaseCloseIcon152 = null; showcasePaletteIcon152 = null; showcaseDensityBtnTv152 = null;
+        showcaseMinX = 0; showcaseMinY = 0; showcaseMaxX = 0; showcaseMaxY = 0;
         showcaseDragging = false; showcaseTouching140 = false; // Q140：关柜复位手势旗
         showcaseClosing = false;
         if (v != null && v.getParent() != null) ((ViewGroup) v.getParent()).removeView(v);
@@ -18868,8 +19142,7 @@ public class MainActivity extends Activity {
         if (showcaseSlider151 != null) showcaseSlider151.invalidate();
         // Q151（S1）：浮顶栏/浮竖栏软条底随展柜底色重套（深底亮透/浅底白透）
         if (showcaseHead151 != null) showcaseHead151.setBackground(showcaseBarBg151(20));
-        if (showcaseRail151 != null) showcaseRail151.setBackground(showcaseBarBg151(26));
-        if (showcaseRestoreChip151 != null) showcaseRestoreChip151.setBackground(roundRect(showcaseDarkBg() ? Color.argb(70, 255, 255, 255) : Color.rgb(0xE9, 0xEC, 0xF2), 999, this));
+        // Q152：竖栏/恢复胶囊已退役（连代码删净），换底不再重套其底。
     }
 
     // Q151（S1）：展柜浮条软底（dockBarBg 同族语言：薄透染色＋柔描边）——按展柜
@@ -18894,6 +19167,7 @@ public class MainActivity extends Activity {
     class ShowcaseDensitySlider151 extends View {
         float density151 = 1f;
         boolean dragging151 = false;
+        boolean horizontal152 = false; // Q152：面板内横置（左疏右密）；缺省竖置（上密下疏）
         java.util.function.Consumer<Float> densitySink151, densityCommit151;
         ShowcaseDensitySlider151(Context c) { super(c); setClickable(true); }
         void setDensity151(float d) { density151 = Math.max(0.6f, Math.min(1.3f, d)); invalidate(); }
@@ -18902,12 +19176,31 @@ public class MainActivity extends Activity {
             int w = getWidth(), h = getHeight();
             if (w <= 0 || h <= 0) return;
             boolean dark151 = showcaseDarkBg();
-            float cx = w / 2f;
             float thumbR = dp(MainActivity.this, 10);
+            Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);
+            // Q152：横置分支——轨道沿宽、圆钮按 frac 落位（绘制语言与竖置同一套）
+            if (horizontal152) {
+                float cy = h / 2f;
+                float left = thumbR + dp(MainActivity.this, 2), right = w - thumbR - dp(MainActivity.this, 2);
+                float thumbX = left + frac151() * (right - left);
+                p.setStyle(Paint.Style.FILL);
+                p.setColor(dark151 ? Color.argb(72, 255, 255, 255) : Color.argb(66, 20, 28, 48));
+                float tw = dp(MainActivity.this, 5);
+                cv.drawRoundRect(left, cy - tw / 2f, right, cy + tw / 2f, tw / 2f, tw / 2f, p);
+                p.setColor(dark151 ? Color.argb(150, 255, 255, 255) : Color.argb(130, 20, 28, 48));
+                cv.drawRoundRect(left, cy - tw / 2f, thumbX, cy + tw / 2f, tw / 2, tw / 2, p);
+                p.setColor(dark151 ? Color.rgb(0xF4, 0xF7, 0xFB) : Color.rgb(0x1C, 0x1C, 0x1E));
+                cv.drawCircle(thumbX, cy, thumbR, p);
+                p.setStyle(Paint.Style.STROKE);
+                p.setStrokeWidth(dp(MainActivity.this, 1.5f));
+                p.setColor(dragging151 ? accentColor() : (dark151 ? Color.argb(120, 0, 0, 0) : Color.argb(120, 255, 255, 255)));
+                cv.drawCircle(thumbX, cy, thumbR - dp(MainActivity.this, 0.75f), p);
+                return;
+            }
+            float cx = w / 2f;
             float top = thumbR + dp(MainActivity.this, 2), bot = h - thumbR - dp(MainActivity.this, 2);
             float thumbY = bot - frac151() * (bot - top);
-            Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);
-            // 浅轨道（全程）＋已行段（钮以下）稍实
+            // 浅轨道（全程）＋已行段（钮以下）稍实（Paint/圆钮半径与横置分支共用上方声明）
             p.setStyle(Paint.Style.FILL);
             p.setColor(dark151 ? Color.argb(72, 255, 255, 255) : Color.argb(66, 20, 28, 48));
             float tw = dp(MainActivity.this, 5);
@@ -18923,6 +19216,33 @@ public class MainActivity extends Activity {
             cv.drawCircle(cx, thumbY, thumbR - dp(MainActivity.this, 0.75f), p);
         }
         @Override public boolean onTouchEvent(MotionEvent ev) {
+            // Q152：横置按 X 取 frac（左疏右密），竖置原 Y 口径一字不变
+            if (horizontal152) {
+                int w = getWidth();
+                if (w <= 0) return true;
+                float thumbR = dp(MainActivity.this, 10);
+                float left = thumbR + dp(MainActivity.this, 2), right = w - thumbR - dp(MainActivity.this, 2);
+                switch (ev.getActionMasked()) {
+                    case MotionEvent.ACTION_DOWN:
+                    case MotionEvent.ACTION_MOVE: {
+                        dragging151 = true;
+                        float f = (ev.getX() - left) / Math.max(1f, right - left);
+                        f = Math.max(0f, Math.min(1f, f));
+                        float nd = 0.6f + f * 0.7f;
+                        if (Math.abs(nd - density151) > 0.003f) {
+                            density151 = nd; invalidate();
+                            if (densitySink151 != null) densitySink151.accept(nd);
+                        }
+                        return true;
+                    }
+                    case MotionEvent.ACTION_UP:
+                    case MotionEvent.ACTION_CANCEL:
+                        dragging151 = false; invalidate();
+                        if (densityCommit151 != null) densityCommit151.accept(density151);
+                        return true;
+                }
+                return true;
+            }
             int h = getHeight();
             if (h <= 0) return true;
             float thumbR = dp(MainActivity.this, 10);
@@ -18980,6 +19300,20 @@ public class MainActivity extends Activity {
             float cx = lp.leftMargin + faceW / 2f, cy = lp.topMargin + faceH / 2f;
             float sx = tx + px + s * (cx - px), sy = ty + py + s * (cy - py);
             float hw = faceW * s / 2f, hh = faceH * s / 2f;
+            // Q152（展柜④）：卡顶压状态栏的存位在开柜时拉回——屏上顶边高于状态
+            // 栏下沿（sy-hh < statusBarH）属不可达落位（用户图证「平放直接顶到
+            // 状态栏上」），整卡平移到浮顶栏之下并写回存位（与下方全出界同路）；
+            // 仅开柜校验时跑，用户在柜内任意拖放（零钳位口径）不受此限。
+            if (sy - hh < statusBarH()) {
+                float nsy152 = pageTopPad() + dp(this, 66) + hh;
+                int nt152 = Math.round(py + (nsy152 - ty - py) / s - faceH / 2f);
+                lp.topMargin = nt152;
+                f.setLayoutParams(lp);
+                if (showcasePosJson != null && f.getTag() != null) {
+                    try { showcasePosJson.put(String.valueOf(f.getTag()), lp.leftMargin + "," + nt152); dirty151 = true; } catch (Throwable ignored) {}
+                }
+                continue;
+            }
             if (sx + hw > 0 && sx - hw < aw && sy + hh > 0 && sy - hh < ah) continue; // 有交集＝合法（含部分出屏）
             float nsx = Math.max(inset, Math.min(aw - inset, sx));
             float nsy = Math.max(inset, Math.min(ah - inset * 2, sy)); // 顶部浮条区再让一档，拉回不藏栏下
@@ -20127,7 +20461,7 @@ public class MainActivity extends Activity {
         sv.setClipToPadding(false);
         LinearLayout col = new LinearLayout(this);
         col.setOrientation(LinearLayout.VERTICAL);
-        col.setPadding(dp(this, 16), pageTopPad() + dp(this, 66), dp(this, 16) + dp(this, 58), dp(this, 28) + navBarH()); // Q151（S1）：堆叠内容避开浮顶栏/浮竖栏（栏浮在上层，内容从其下滚过、首行不藏栏后）
+        col.setPadding(dp(this, 16), pageTopPad() + dp(this, 66), dp(this, 16), dp(this, 28) + navBarH()); // Q151（S1）：堆叠内容避开浮顶栏（栏浮在上层，内容从其下滚过、首行不藏栏后）；Q152：竖栏退役，右侧让位一并收回
         sv.addView(col, new ScrollView.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
         showcaseBody.addView(sv, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         boolean grp = prefs != null && prefs.getBoolean("showcase_bank_group", false);
@@ -20151,7 +20485,7 @@ public class MainActivity extends Activity {
             g.add(it);
         }
         int screenW = getResources().getDisplayMetrics().widthPixels;
-        int faceW = screenW - dp(this, 32) - dp(this, 58); // Q151（S1）：右侧让浮竖栏宽，卡整幅不压栏下
+        int faceW = screenW - dp(this, 32); // Q152：竖栏退役，堆叠卡恢复整幅宽（原 Q151 让栏宽收回）
         int faceH = Math.round(faceW / 1.586f);
         int strip = expanded ? Math.round(faceH * 0.88f) : dp(this, 52);
         for (java.util.Map.Entry<String, java.util.List<ShowcaseItem>> e : groups.entrySet()) {
@@ -20414,7 +20748,10 @@ public class MainActivity extends Activity {
                 if (g122 == null) { g122 = new ArrayList<>(); groups122.put(k122, g122); }
                 g122.add(i);
             }
-            int y122 = m122;
+            // Q152（展柜④）：未存位卡的流式初排从浮顶栏之下起——world 满屏含
+            // 状态栏区，旧 y=m122(10dp) 让首行卡直接顶到状态栏下（用户图证）。
+            // 存位仍逐字恢复（Q141 口径不变），顶栏之下的存位由 validate 开柜拉回。
+            int y122 = pageTopPad() + dp(MainActivity.this, 66);
             for (java.util.Map.Entry<String, java.util.List<Integer>> e122 : groups122.entrySet()) {
                 if (grp) {
                     TextView gl122 = tv(MainActivity.this, e122.getKey() + " · " + e122.getValue().size() + " 张", 12.5f, showcaseOnBg2(), true);
