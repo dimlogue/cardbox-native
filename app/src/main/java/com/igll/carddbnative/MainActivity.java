@@ -5963,6 +5963,17 @@ public class MainActivity extends Activity {
     static final int HOME_LOAD_BOOTING153 = 0; // 首屏未搭完：满足条件可露加载层
     static final int HOME_LOAD_READY153 = 1;   // 首屏已搭完：本进程内永不再露
     int homeLoadState153 = HOME_LOAD_BOOTING153;
+    // Q155（2.66，用户 2026-10-06 17:23 拍板·冷启动重置）：进程存活标记——
+    // 进程级 static，进程被杀即随类加载归零。onCreate 首行消费：未置位＝
+    // 本进程第一次建 Activity＝真冷启（冷启回首页顶部、不消费 onPause 落盘
+    // 的被动恢复状态，见 finishBoot151）；置位后本进程内再建 Activity（系
+    // 统杀 Activity 留进程、深链重建等）读到已置位＝非冷启，既有恢复链照
+    // 走、保位不变。转屏双保险：Manifest configChanges 已含
+    // orientation|screenSize，旋转根本不重建 Activity，static 更不会归零。
+    // 进程生死归系统/厂商 ROM 管（vivo OriginOS 保活/关联唤醒皆然），本标
+    // 记只判「进程是否换新」，不许宣称能控制进程被杀与否。
+    static boolean procAlive155 = false;
+    boolean coldBoot155 = false; // 本实例是否真冷启所建（finishBoot151 恢复链与 renderHomeLoading153 短路读）
     View homeLoadingLayer = null; // 全程唯一实例，buildHomeLoadingLayer153 只建一次
     PullSpinView homeLoadingSpin = null;
     View bootLayer151 = null; // Q151（N16）：冷启雾蓝加载层（数据备好即摘）
@@ -6275,6 +6286,7 @@ public class MainActivity extends Activity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        coldBoot155 = !procAlive155; procAlive155 = true; // Q155：冷启判定（消费即置位，见字段注）
         Window w = getWindow();
         // P2d 沉浸式状态栏：透明，内容顶到状态栏底下；各页顶部留白按 statusBarH() 补齐
         // Q26：导航栏一并透明做 edge-to-edge（内容铺到屏底，消灭底部白色断带），
@@ -6546,8 +6558,11 @@ public class MainActivity extends Activity {
         // Q151（P0·恢复状态机）：冷启先把上次 onPause 落盘的各页滚动位种回运行时
         // 记位表——建页时 restorePageScroll 自取，进程被杀重进不再回顶（落盘口径
         // 见 onPause；只存整数位置这类小状态，列表内容按现行数据重建）。
+        // Q155（2.66）分岔：真冷启（coldBoot155）＝全新打开，此段种回整段跳过
+        // ——退出前滑到哪不带进新进程，各页滚动归零；仅进程尚存的 Activity
+        // 重建（非冷启）才种回保位。落盘键的清除在下方读即清同笔 commit 里。
         try {
-            if (prefs != null) for (String k151 : new String[]{"home", "student", "mine", "news", "settings"}) {
+            if (prefs != null && !coldBoot155) for (String k151 : new String[]{"home", "student", "mine", "news", "settings"}) {
                 int y151 = prefs.getInt("scroll_y_" + k151, 0);
                 if (y151 > 0) notePageScroll152(k151, y151); // Q152
             }
@@ -6573,11 +6588,27 @@ public class MainActivity extends Activity {
                 android.content.SharedPreferences.Editor ed152 = prefs.edit();
                 ed152.remove("resume_tab151").remove("resume_detail_id151")
                      .putBoolean("icon_restart_return131", false);
+                // Q155（2.66）：真冷启把各页 scroll_y_* 落盘一并同笔清掉——
+                // 被动恢复残值不许留在盘上串进后续（进程尚存时的）热重建；
+                // 清除只许发生在此冷启消费点，onPause/onStop 落盘口径不动。
+                // 键名以本仓实际为准（DeepSeek 文中键名系其推测）：恢复类＝
+                // resume_tab151/resume_detail_id151/scroll_y_{home,student,
+                // mine,news,settings}；用户设置类偏好一律不碰。
+                if (coldBoot155) for (String k155 : new String[]{"home", "student", "mine", "news", "settings"})
+                    ed152.remove("scroll_y_" + k155);
                 ed152.commit();
+                // 胜出序（Q155 分岔）：①图标回落票照旧最高——它不是被动恢复
+                // 状态，而是用户点「确认重启」当场 commit 的一次性行动票，
+                // 且切图标本身必杀进程重启（confirmLauncherIcon131 注），
+                // 其回来必然是真冷启，冷启若连它也不消费，Q131 切图标回设
+                // 置页功能即整体废掉；②被动恢复 resume_tab 仅非冷启消费，
+                // 冷启落 home（boot-cold-reset-home）；③默认 home。
                 if (iconBack152) { bootTab152 = "settings"; bootReason152 = "boot-icon-restart-return"; }
-                else if ("student".equals(rt152) || "mine".equals(rt152) || "news".equals(rt152) || "settings".equals(rt152)) {
+                else if (!coldBoot155 && ("student".equals(rt152) || "mine".equals(rt152) || "news".equals(rt152) || "settings".equals(rt152))) {
                     bootTab152 = rt152; bootReason152 = "boot-resume-tab";
                 }
+                else if (coldBoot155) { bootReason152 = "boot-cold-reset-home"; }
+                if (coldBoot155) resumeDetail152 = null; // Q155：冷启详情不自开（键已读即清，此处显式弃用防漏）
             }
         } catch (Throwable ignored) {}
         if ("settings".equals(bootTab152) && iconBackY152 > 0) notePageScroll152("settings", iconBackY152);
@@ -11338,7 +11369,15 @@ public class MainActivity extends Activity {
     // 帧同步摘除（不再淡出延迟摘，杜绝残留窗口）。层在场时 captureBackdrop
     // 走隐藏名单同口（见 captureBackdrop 内 homeLoadingLayer 处理）。
     void renderHomeLoading153() {
+        // Q155（2.66）短路一条：真冷启且卡库已在内存（Store 恒为进程内已载
+        // 数据——finishBoot151 在 beginBootLoad151 后台 Store.load 完成后才回
+        // 主线程建页，走到续搭这一步数据必可同步直出首屏）→ 分帧续搭期间
+        // 不露居中层，内容直接流式成形，不让用户先看一眼转圈。状态机本体、
+        // 看门狗、令牌纪律一字未动；此短路只压 BOOTING 期的居中层，下拉刷
+        // 新与显式加载的反馈另有 homePullRefreshing 闸、不经此路。
+        boolean coldDataReady155 = coldBoot155 && Store.all != null && !Store.all.isEmpty();
         boolean shouldShow153 = homeLoadState153 == HOME_LOAD_BOOTING153
+                && !coldDataReady155
                 && !homeChunkTokens153.isEmpty()
                 && !helloOpen
                 && "home".equals(tab)
