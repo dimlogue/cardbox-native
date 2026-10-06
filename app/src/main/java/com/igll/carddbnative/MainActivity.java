@@ -4756,6 +4756,7 @@ public class MainActivity extends Activity {
     // 原样供稿（英雄图/信息胶囊/核实状态/规格/点评/官方链接/页脚）。专区页不再拆建：
     // 窗浮在专区页之上，关窗后专区滚动位原样（旧口径拆页重建＋fxZoneKeepY 回滚退役）。
     void openFxDetail(final FxCard f) {
+        haptic(); // Q152（追加C）：外卡详情打开触感收口（同主详情口径）
         final long fxPerfT0_152 = System.nanoTime(); // Q152 打点：外卡详情入口→首帧
         if (f == null || fxSheetView150 != null || fxSheetClosing150) return;
         fxDetailOpen = true;
@@ -4773,7 +4774,7 @@ public class MainActivity extends Activity {
         final View shade = new View(this);
         shade.setBackgroundColor(Color.argb(102, 0, 0, 0)); // rgba(0,0,0,.4)，同 openDetail
         shade.setAlpha(0f);
-        shade.setOnClickListener(v -> closeFxDetail());
+        shade.setOnClickListener(v -> { haptic(); closeFxDetail(); }); // Q152（追加C）：关闭钮/遮罩点按补触感
         overlay.addView(shade, new FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         fxSheetShade150 = shade;
@@ -6814,7 +6815,7 @@ public class MainActivity extends Activity {
         View shade = new View(this);
         shade.setBackgroundColor(Color.argb(102, 0, 0, 0));
         shade.setAlpha(0f);
-        shade.setOnClickListener(v -> closeAcctClassPicker());
+        shade.setOnClickListener(v -> { haptic(); closeAcctClassPicker(); }); // Q152（追加C）：关闭钮/遮罩点按补触感
         overlay.addView(shade, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         LinearLayout cardBox = new LinearLayout(this);
         cardBox.setOrientation(LinearLayout.VERTICAL);
@@ -6973,7 +6974,7 @@ public class MainActivity extends Activity {
         View shade = new View(this);
         shade.setBackgroundColor(Color.argb(102, 0, 0, 0));
         shade.setAlpha(0f);
-        shade.setOnClickListener(v -> closePlaceholderPicker());
+        shade.setOnClickListener(v -> { haptic(); closePlaceholderPicker(); }); // Q152（追加C）：关闭钮/遮罩点按补触感
         overlay.addView(shade, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         LinearLayout cardBox = new LinearLayout(this);
         cardBox.setOrientation(LinearLayout.VERTICAL);
@@ -9653,7 +9654,7 @@ public class MainActivity extends Activity {
         View backdrop = new View(this);
         backdrop.setBackgroundColor(Color.argb(36, 18, 22, 36));
         backdrop.setClickable(true);
-        backdrop.setOnClickListener(v -> closeCardMenu());
+        backdrop.setOnClickListener(v -> { haptic(); closeCardMenu(); }); // Q152（追加C）：关闭钮/遮罩点按补触感
         // Q141（2.52，甲组②）：遮罩吞掉一切拖拽（MOVE 消费）——菜单开着时新起的背景
         // 手势（在遮罩/克隆上起的拖）死在遮罩上、不落页面 ScrollView；DOWN/UP 放行，
         // 保留「点遮罩关闭」的既有点击语义（消费 DOWN 会连点击一起吞掉，故只吞 MOVE）。
@@ -10925,7 +10926,7 @@ public class MainActivity extends Activity {
         View rest = new View(this);
         bar.addView(rest, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, (float) Math.max(0, maxN - cs.size())));
         box.addView(bar);
-        box.setOnClickListener(v -> onToggle.run());
+        box.setOnClickListener(v -> { haptic(); onToggle.run(); }); // Q152（追加C）：银行组头点按补触感
         return box;
     }
 
@@ -10958,7 +10959,7 @@ public class MainActivity extends Activity {
         LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         lp.rightMargin = dp(this, 7);
         t.setLayoutParams(lp);
-        t.setOnClickListener(v -> onRemove.run());
+        t.setOnClickListener(v -> { haptic(); onRemove.run(); }); // Q152（追加C）：已选筛选签点删补触感
         return t;
     }
 
@@ -10970,7 +10971,7 @@ public class MainActivity extends Activity {
         prepareFrozenBackdrop131(); // Q131：冻结帧在窗上屏前抓好，进场动画不付整树绘制＋三遍模糊（件四）
         final FrameLayout sheet = new FrameLayout(this);
         sheet.setBackgroundColor(Color.argb(102, 15, 20, 40)); // Q77b：窗外再压暗一档（对齐混合版 .dlg-backdrop rgba(0,0,0,.4)），与玻璃窗体明暗分明
-        sheet.setOnClickListener(v -> closeFilterSheet());
+        sheet.setOnClickListener(v -> { haptic(); closeFilterSheet(); }); // Q152（追加C）：关闭钮/遮罩点按补触感
         // Q77 定版：B 真玻璃悬浮窗（与卡面 +/✓ 钮、底栏同一套 Q73 玻璃语言）——冻结模糊垫底 +
         // 薄染色 tint + 提亮 wash，禁止实白板；窗放大、排版放呼吸，chips 点选仍即时 refreshHome。
         LinearLayout card = new LinearLayout(this);
@@ -11694,7 +11695,7 @@ public class MainActivity extends Activity {
         final FrameLayout sheet = new FrameLayout(this);
         View shade = new View(this);
         shade.setBackgroundColor(Color.argb(117, 15, 20, 40));
-        shade.setOnClickListener(v -> closeWizard());
+        shade.setOnClickListener(v -> { haptic(); closeWizard(); }); // Q152（追加C）：关闭钮/遮罩点按补触感
         sheet.addView(shade, new FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         LinearLayout card = new LinearLayout(this);
@@ -12251,6 +12252,7 @@ public class MainActivity extends Activity {
         final long perfT0_152 = System.nanoTime(); // Q152 打点：入口→正文建成→首帧
         if (detailClosing) return; // 收窗途中再点既不重开也不入队（关窗意图已生效）
         if (detailCard != null) { detailQueue.add(c); return; } // 连点排队 FIFO，关一开一下一张
+        haptic(); // Q152（追加C）：详情打开触感收口——全 App 凡点卡行/瓷砖进详情都在此一处震（排队入队时不震、真正开窗才震，一次点选恰一次）
         dismissCardMenu();
         if (!fromWiz) captureCurrentPageScroll();
         detailFromWiz = fromWiz;
@@ -12264,7 +12266,7 @@ public class MainActivity extends Activity {
         final View shade = new View(this);
         shade.setBackgroundColor(Color.argb(102, 0, 0, 0)); // rgba(0,0,0,.4)
         shade.setAlpha(0f);
-        shade.setOnClickListener(v -> closeDetail());
+        shade.setOnClickListener(v -> { haptic(); closeDetail(); }); // Q152（追加C）：关闭钮/遮罩点按补触感
         overlay.addView(shade, new FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         detailShade = shade;
@@ -15367,7 +15369,7 @@ public class MainActivity extends Activity {
         LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         lp.rightMargin = dp(this, 6);
         b.setLayoutParams(lp);
-        if (!disabled) b.setOnClickListener(onClick);
+        if (!disabled) b.setOnClickListener(v -> { haptic(); if (onClick != null) onClick.onClick(v); }); // Q152（追加C）：自定义卡动作钮工厂收口补触感
         return b;
     }
 
@@ -15414,7 +15416,7 @@ public class MainActivity extends Activity {
         View shade = new View(this);
         shade.setBackgroundColor(Color.argb(102, 0, 0, 0)); // .dlg-backdrop rgba(0,0,0,.4)
         shade.setAlpha(0f);
-        shade.setOnClickListener(v -> closeDelConfirm());
+        shade.setOnClickListener(v -> { haptic(); closeDelConfirm(); }); // Q152（追加C）：关闭钮/遮罩点按补触感
         sheet.addView(shade, new FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         LinearLayout card = new LinearLayout(this);
@@ -15524,6 +15526,7 @@ public class MainActivity extends Activity {
     // .dlg-actions 双 ghost 钮（左「在卡库里搜这家银行」蓝、右「删除这张卡」#e03131 红），编辑入口
     // 以 hero 内半透描边小钮保留在窗内。开窗 hideChrome（Q12），关窗 restoreCurrentTabScroll 回原位。
     void openCustomDetail(final CustomCard c) {
+        haptic(); // Q152（追加C）：自定义卡详情打开触感收口
         if (c == null || customDetailSheet != null || customDetailClosing) return;
         closeCustomDetailNow();
         captureCurrentPageScroll();
@@ -15536,7 +15539,7 @@ public class MainActivity extends Activity {
         final View shade = new View(this);
         shade.setBackgroundColor(Color.argb(102, 0, 0, 0)); // .backdrop rgba(0,0,0,.4)
         shade.setAlpha(0f);
-        shade.setOnClickListener(v -> closeCustomDetail());
+        shade.setOnClickListener(v -> { haptic(); closeCustomDetail(); }); // Q152（追加C）：关闭钮/遮罩点按补触感
         overlay.addView(shade, new FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
 
@@ -16555,7 +16558,7 @@ public class MainActivity extends Activity {
         final FrameLayout sheet = new FrameLayout(this);
         View shade = new View(this);
         shade.setBackgroundColor(Color.argb(102, 0, 0, 0));
-        shade.setOnClickListener(v -> closeBinQuery());
+        shade.setOnClickListener(v -> { haptic(); closeBinQuery(); }); // Q152（追加C）：关闭钮/遮罩点按补触感
         sheet.addView(shade, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         LinearLayout card = new LinearLayout(this);
         card.setOrientation(LinearLayout.VERTICAL);
@@ -16895,7 +16898,7 @@ public class MainActivity extends Activity {
         final FrameLayout sheet = new FrameLayout(this);
         View shade = new View(this);
         shade.setBackgroundColor(Color.argb(102, 0, 0, 0)); // .dlg-backdrop rgba(0,0,0,.4)
-        shade.setOnClickListener(v -> closeCustomForm());
+        shade.setOnClickListener(v -> { haptic(); closeCustomForm(); }); // Q152（追加C）：关闭钮/遮罩点按补触感
         sheet.addView(shade, new FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
 
@@ -17513,7 +17516,7 @@ public class MainActivity extends Activity {
         View shade = new View(this);
         shade.setBackgroundColor(Color.argb(102, 0, 0, 0));
         shade.setAlpha(0f);
-        shade.setOnClickListener(v -> closeExitSheet151());
+        shade.setOnClickListener(v -> { haptic(); closeExitSheet151(); }); // Q152（追加C）：关闭钮/遮罩点按补触感
         sheet.addView(shade, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         LinearLayout card = new LinearLayout(this);
         card.setOrientation(LinearLayout.VERTICAL);
@@ -17903,7 +17906,7 @@ public class MainActivity extends Activity {
         View shade = new View(this);
         shade.setBackgroundColor(Color.argb(102, 0, 0, 0));
         shade.setAlpha(0f);
-        shade.setOnClickListener(v -> closeGlossarySheet());
+        shade.setOnClickListener(v -> { haptic(); closeGlossarySheet(); }); // Q152（追加C）：关闭钮/遮罩点按补触感
         overlay.addView(shade, new FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         final LinearLayout cardBox = new LinearLayout(this);
@@ -19456,7 +19459,7 @@ public class MainActivity extends Activity {
         FrameLayout.LayoutParams flp = new FrameLayout.LayoutParams(bigW, bigH);
         flp.gravity = Gravity.CENTER;
         z.addView(face, flp);
-        z.setOnClickListener(v -> closeShowcaseZoom());
+        z.setOnClickListener(v -> { haptic(); closeShowcaseZoom(); }); // Q152（追加C）：关闭钮/遮罩点按补触感
         ((ViewGroup) showcaseView).addView(z, new FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         showcaseZoomView = z;
@@ -19892,7 +19895,7 @@ public class MainActivity extends Activity {
         hideChrome();
         final FrameLayout sheet = new FrameLayout(this);
         View shade = new View(this); shade.setBackgroundColor(Color.argb(102, 0, 0, 0));
-        shade.setOnClickListener(v -> closeSimKeepForm());
+        shade.setOnClickListener(v -> { haptic(); closeSimKeepForm(); }); // Q152（追加C）：关闭钮/遮罩点按补触感
         sheet.addView(shade, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         LinearLayout card = new LinearLayout(this); card.setOrientation(LinearLayout.VERTICAL);
         GradientDrawable cg = glassWindowTint(sheetR129(22f), false); // Q104/2.18：窗级玻璃（同 BIN 窗口径）
@@ -20224,7 +20227,7 @@ public class MainActivity extends Activity {
         hideChrome();
         final FrameLayout sheet = new FrameLayout(this);
         View shade = new View(this); shade.setBackgroundColor(Color.argb(102, 0, 0, 0));
-        shade.setOnClickListener(v -> closeSubFollowForm());
+        shade.setOnClickListener(v -> { haptic(); closeSubFollowForm(); }); // Q152（追加C）：关闭钮/遮罩点按补触感
         sheet.addView(shade, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         LinearLayout card = new LinearLayout(this); card.setOrientation(LinearLayout.VERTICAL);
         GradientDrawable cg = glassWindowTint(sheetR129(22f), false); // Q104/2.18：窗级玻璃（同 BIN 窗口径）
@@ -20600,7 +20603,7 @@ public class MainActivity extends Activity {
         hideChrome();
         final FrameLayout sheet = new FrameLayout(this);
         View shade = new View(this); shade.setBackgroundColor(Color.argb(102, 0, 0, 0));
-        shade.setOnClickListener(v -> closeFootprintForm());
+        shade.setOnClickListener(v -> { haptic(); closeFootprintForm(); }); // Q152（追加C）：关闭钮/遮罩点按补触感
         sheet.addView(shade, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         LinearLayout card = new LinearLayout(this); card.setOrientation(LinearLayout.VERTICAL);
         GradientDrawable cg = glassWindowTint(sheetR129(22f), false); // Q104/2.18：窗级玻璃（同 BIN 窗口径）
@@ -21187,7 +21190,7 @@ public class MainActivity extends Activity {
         final FrameLayout sheet = new FrameLayout(this);
         View shade = new View(this);
         shade.setBackgroundColor(Color.argb(102, 0, 0, 0));
-        shade.setOnClickListener(v -> closeExtendedSearch());
+        shade.setOnClickListener(v -> { haptic(); closeExtendedSearch(); }); // Q152（追加C）：关闭钮/遮罩点按补触感
         sheet.addView(shade, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         LinearLayout card = new LinearLayout(this);
         card.setOrientation(LinearLayout.VERTICAL);
@@ -22633,7 +22636,7 @@ public class MainActivity extends Activity {
         hnp.topMargin = dp(this, 12);
         col.addView(hint, hnp);
 
-        root.setOnClickListener(v -> closeHello());
+        root.setOnClickListener(v -> { haptic(); closeHello(); }); // Q152（追加C）：关闭钮/遮罩点按补触感
         // 飞入：每张自四周带位移与缩小飞入，错峰错开，单张缓出（ANIM_ENTER）飞入；落定后笑脸与文案依次淡入。
         // Q98 调速（用户 17:08 点名太快没看清）：旧单张 ANIM_DUR_SHEET_IN(280ms)+错峰 120ms，五张
         // 约 0.76s 一闪而过；新单张 560ms、错峰 210ms，末张落定约 1.4s，文案尾序毕总时长约 2.0s。
@@ -22949,7 +22952,7 @@ public class MainActivity extends Activity {
         moreMenuBackdropFrozen = true;
         final FrameLayout overlay = new FrameLayout(this);
         overlay.setBackgroundColor(Color.TRANSPARENT);
-        overlay.setOnClickListener(v -> closeMoreMenu());
+        overlay.setOnClickListener(v -> { haptic(); closeMoreMenu(); }); // Q152（追加C）：关闭钮/遮罩点按补触感
         // Q122（2.34，件一，用户 01:18 亲口定「重新写这个组件、不要调暗」）：撤 2.32
         // 补的 117 遮罩——页面保持原亮度一字不压。方白芯的真身是强糊背板本色透过
         // α233 薄面（见下 menuFace 处），遮罩只是拿全页变暗换面板对比，用户已否。
@@ -23358,7 +23361,7 @@ public class MainActivity extends Activity {
             LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
             lp.rightMargin = dp(this, 8);
             t.setLayoutParams(lp);
-            t.setOnClickListener(v -> pick.onPick(o[0]));
+            t.setOnClickListener(v -> { haptic(); pick.onPick(o[0]); }); // Q152（追加C）：设置分段选补触感
             row.addView(t);
         }
         page.addView(box);
@@ -23499,7 +23502,7 @@ public class MainActivity extends Activity {
         final ToggleView sw = new ToggleView(this);
         sw.setOn(on, false);
         row.addView(sw, new LinearLayout.LayoutParams(dp(this, 46), dp(this, 28)));
-        row.setOnClickListener(v -> { boolean nv = !sw.on; sw.setOn(nv, true); set.onSet(nv); }); // Q104（2.18）：以开关自身状态为准——旧式捕获构建时 on，连点第二次写回同值拨不动（摘要计数与折叠组同修）
+        row.setOnClickListener(v -> { haptic(); boolean nv = !sw.on; sw.setOn(nv, true); set.onSet(nv); }); // Q104（2.18）：以开关自身状态为准——旧式捕获构建时 on，连点第二次写回同值拨不动（摘要计数与折叠组同修）
         page.addView(row);
         return row; // Q118：调用方需整行引用时取用（如玻璃主行副文案原地刷新），旧调用方忽略返回值不受影响
     }
@@ -23677,7 +23680,7 @@ public class MainActivity extends Activity {
             LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
             lp.rightMargin = dp(this, 8);
             t.setLayoutParams(lp);
-            t.setOnClickListener(v -> pick.onPick(o[0]));
+            t.setOnClickListener(v -> { haptic(); pick.onPick(o[0]); }); // Q152（追加C）：设置分段选补触感
             row.addView(t);
         }
         panel.addView(box);
@@ -23734,7 +23737,7 @@ public class MainActivity extends Activity {
         final ToggleView sw = new ToggleView(this);
         sw.setOn(on, false);
         row.addView(sw, new LinearLayout.LayoutParams(dp(this, 46), dp(this, 28)));
-        row.setOnClickListener(v -> { boolean nv = !sw.on; sw.setOn(nv, true); set.onSet(nv); }); // 同 switchRow 的 sw.on 口径
+        row.setOnClickListener(v -> { haptic(); boolean nv = !sw.on; sw.setOn(nv, true); set.onSet(nv); }); // 同 switchRow 的 sw.on 口径
         panel.addView(row);
     }
 
@@ -24302,7 +24305,7 @@ public class MainActivity extends Activity {
         panel.addView(fontImpRow);
         if (hasCustomFont(this)) {
             View fontDelRow = settingInner("删除自定义字体", "删掉后回到默认字体 ›");
-            fontDelRow.setOnClickListener(v -> { deleteCustomFont(); });
+            fontDelRow.setOnClickListener(v -> { haptic(); deleteCustomFont(); }); // Q152（追加C）
             panel.addView(fontDelRow);
         }
         addHair(panel);
