@@ -4586,6 +4586,48 @@ public class MainActivity extends Activity {
     boolean fxSheetTouchDown150 = false; // 抓帧空闲门控打点（attachSheetDrag150 回填）
     String fxQuery = "";
     boolean fxCoreOnly = false;
+    // Q153（2.64，件十二）：地区段选选中值（""＝全部）＋段选容器；段选项随
+    // FxStore 数据 region 动态生成，单区不显（不硬凑）。
+    String fxRegionSel153 = "";
+    LinearLayout fxRegionSeg153 = null;
+
+    String fxRegionLabel153(String region153) {
+        if (!isEn()) return region153;
+        if ("香港".equals(region153)) return "Hong Kong";
+        if ("澳門".equals(region153)) return "Macau";
+        return region153;
+    }
+
+    void refreshFxRegionSeg153() {
+        if (fxRegionSeg153 == null) return;
+        fxRegionSeg153.removeAllViews();
+        java.util.List<FxCard> all153 = FxStore.all == null ? new ArrayList<FxCard>() : FxStore.all;
+        java.util.LinkedHashSet<String> regs153 = new java.util.LinkedHashSet<>();
+        for (FxCard f153 : all153) if (f153.region != null && !f153.region.isEmpty()) regs153.add(f153.region);
+        java.util.List<String> order153 = new ArrayList<>();
+        if (regs153.contains("香港")) order153.add("香港");
+        if (regs153.contains("澳門")) order153.add("澳門");
+        for (String r153 : regs153) if (!order153.contains(r153)) order153.add(r153);
+        if (!fxRegionSel153.isEmpty() && !regs153.contains(fxRegionSel153)) fxRegionSel153 = "";
+        if (order153.size() <= 1) { fxRegionSeg153.setVisibility(View.GONE); return; }
+        fxRegionSeg153.setVisibility(View.VISIBLE);
+        java.util.List<String> keys153 = new ArrayList<>();
+        keys153.add("");
+        keys153.addAll(order153);
+        boolean firstSeg153 = true;
+        for (final String key153 : keys153) {
+            final boolean sel153 = key153.equals(fxRegionSel153);
+            TextView seg153 = chip(key153.isEmpty() ? (isEn() ? "All" : "全部") : fxRegionLabel153(key153),
+                sel153 ? accentColor() : (darkEff() ? Color.rgb(0x2E, 0x2E, 0x33) : Color.rgb(0xEF, 0xF1, 0xF6)),
+                sel153 ? Color.WHITE : colText(), 11.5f);
+            LinearLayout.LayoutParams sLp153 = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            if (!firstSeg153) sLp153.leftMargin = dp(this, 8);
+            firstSeg153 = false;
+            seg153.setLayoutParams(sLp153);
+            seg153.setOnClickListener(v -> { haptic(); fxRegionSel153 = key153; renderFxList(); });
+            fxRegionSeg153.addView(seg153);
+        }
+    }
     int fxZoneKeepY = 0;
     ScrollView fxZoneScroll = null;
     LinearLayout fxListBox = null;
@@ -4673,6 +4715,14 @@ public class MainActivity extends Activity {
             renderFxList();
         });
         chipRow.addView(coreChip);
+        // Q153（件十二）：地区段选行（全部／香港／澳門…随数据动态生成、单区
+        // 不显）；点选只看该区，与搜索/核实同为「先过滤后排布」的一层过滤。
+        LinearLayout regionSeg153 = new LinearLayout(this);
+        regionSeg153.setOrientation(LinearLayout.HORIZONTAL);
+        regionSeg153.setGravity(Gravity.CENTER_VERTICAL);
+        regionSeg153.setPadding(dp(this, 16), dp(this, 8), dp(this, 16), 0);
+        root.addView(regionSeg153);
+        fxRegionSeg153 = regionSeg153;
         fxCountTv = tv(this, "", 11.5f, colText2(), false);
         LinearLayout.LayoutParams ctlp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
         ctlp.leftMargin = dp(this, 10);
@@ -4714,11 +4764,13 @@ public class MainActivity extends Activity {
 
     void renderFxList() {
         if (fxListBox == null) return;
+        refreshFxRegionSeg153(); // Q153（件十二）：段选项与数据同步（单区自动隐）
         fxListBox.removeAllViews();
         java.util.List<FxCard> all = FxStore.all == null ? new ArrayList<FxCard>() : FxStore.all;
         java.util.List<FxCard> shown = new ArrayList<>();
         for (FxCard f : all) {
             if (fxCoreOnly && !f.coreVerified()) continue;
+            if (!fxRegionSel153.isEmpty() && !fxRegionSel153.equals(f.region)) continue; // Q153：地区段选同为先过滤
             if (!fxMatch(f, fxQuery)) continue;
             shown.add(f);
         }
@@ -4754,10 +4806,15 @@ public class MainActivity extends Activity {
         boolean firstZone152 = true;
         for (String zone152 : zoneOrder152) {
             if (multiZone152) {
-                TextView zh152 = tvW(this, zone152 + " · " + zones152.get(zone152).size() + " 张", 15, colText(), 700);
+                // Q153（件十二）：区标题升级为底色带分隔——16.5sp/800＋色带垫底
+                // ＋上下拉开间距，与卡面行拉开层级（旧 15sp 一行纯文字被用户判
+                // 「没有区分出很明显」）。EN 词条同步（地区名/计数）。
+                TextView zh152 = tvW(this, fxRegionLabel153(zone152) + " · " + zones152.get(zone152).size() + (isEn() ? " cards" : " 张"), 16.5f, colText(), 800);
+                zh152.setBackground(roundRect(darkEff() ? Color.rgb(0x2A, 0x2A, 0x30) : Color.rgb(0xE9, 0xEC, 0xF2), 8, this));
+                zh152.setPadding(dp(this, 10), dp(this, 6), dp(this, 10), dp(this, 6));
                 LinearLayout.LayoutParams zhLp152 = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-                zhLp152.topMargin = dp(this, firstZone152 ? 10 : 22);
-                zhLp152.leftMargin = dp(this, 2);
+                zhLp152.topMargin = dp(this, firstZone152 ? 12 : 26);
+                zhLp152.bottomMargin = dp(this, 4);
                 fxListBox.addView(zh152, zhLp152);
             }
             firstZone152 = false;
@@ -13139,13 +13196,22 @@ public class MainActivity extends Activity {
         return box;
     }
 
-    // Q151（第 14 件·竖卡横摆）：详情图源高>宽一律显示层转 90° 呈横向——方向定
-    // 顺时针 +90°（横卡被竖存时最常见的存法是逆时针存、文字自下而上，顺转回正；
-    // 真·竖版设计卡如 fxhk-003（中银 Chill，字横排）横摆后文字沿右边自上而下，
-    // 手机左倾横看可读）。全 App 同一方向只此一常量，真机若判反、改此一处符号
-    // 即全翻。源图文件不动、Img 缓存原图不动，只转本次显示副本（新位图不入缓存、
-    // 不 recycle 原图，Q21）。列表瓷砖/缩略图不转（不在此函数调用面）。
-    static final float ROT_PORTRAIT_DEG151 = 90f;
+    // Q151（第 14 件·竖卡横摆）：详情图源高>宽一律显示层转 90° 呈横向。
+    // Q153（2.64，件十一，用户 17:00 外卡截图实报＋定规）：方向改逆时针 −90°。
+    // 实证：2.63 的 +90°（顺时针）把源图右下角标送到横摆后左下角（滙豐
+    // Mastercard 扣賬卡 fxhk-012 双圆落左下，用户图证）；−90° 几何上右下→
+    // 右上，正合用户定规「竖卡横摆后卡组织标统一落在右上角」。全量核对（本
+    // 版 assets 实查）：被引用的竖版源图共 7 张全在外卡——fxhk-003/004/012/
+    // 014/023（万事达双圆右下）、fxhk-019/020（VISA 右下），逐张目检源图右
+    // 下，无一例外、无「标在顶部」例外图；主库 cards.json 引用图经尺寸普查
+    // 全为横版（images 下 ext-006.webp 等 10 张竖版文件已无条目引用、不在显
+    // 示面）。OTA 远端图不在 assets 普查面内，同按本几何通则（竖图一律
+    // −90°、右下源标→右上）。全 App 同一方向只此一常量。源图文件不动、Img
+    // 缓存原图不动，只转本次显示副本（新位图不入缓存、不 recycle 原图，
+    // Q21）。呈现差异记账（本件不顺改冻结处）：列表瓷砖/缩略图不转（竖图走
+    // COVER 居中裁切）、展柜面不转（小面 FIT 整幅/放大面 COVER），横摆只在
+    // 详情图廊与外卡英雄图（bindGalleryBitmap152 rotatePortrait=true）。
+    static final float ROT_PORTRAIT_DEG151 = -90f;
     Bitmap portraitToLandscape151(Bitmap b) {
         if (b == null || b.getHeight() <= b.getWidth()) return b;
         try {
