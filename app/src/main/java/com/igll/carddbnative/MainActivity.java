@@ -1051,11 +1051,10 @@ public class MainActivity extends Activity {
                 cornerT129 = (t129 >= 0f && t129 <= 1f && !Float.isNaN(t129)) ? t129 : 0.5f;
                 String ip129 = prefs.getString("icon_pack", "current");
                 iconPack129 = ("rounded".equals(ip129) || "geometric".equals(ip129)) ? ip129 : "current";
-                orgStyle129 = "b".equals(prefs.getString("org_badge_style", "current")) ? "b" : "current";
                 String li129 = prefs.getString("launcher_icon_id", "classic");
                 launcherIcon129 = ("stacked".equals(li129) || "rounded".equals(li129)) ? li129 : "classic";
             }
-        } catch (Throwable ignored) { cornerT129 = 0.5f; iconPack129 = "current"; orgStyle129 = "current"; launcherIcon129 = "classic"; }
+        } catch (Throwable ignored) { cornerT129 = 0.5f; iconPack129 = "current"; launcherIcon129 = "classic"; }
         try { pageBgSoft148 = prefs != null && prefs.getBoolean("page_bg_soft", false); } catch (Throwable ignored) { pageBgSoft148 = false; } // Q148：缺键默认关＝原样
     }
     // Q85 language: app_lang system(default)/zh/en, effective via Locale when system.
@@ -1139,8 +1138,6 @@ public class MainActivity extends Activity {
         STR.put("icon_pack_rounded", new String[]{"圆润","Rounded"}); // Q148（2.59）：去 R 后缀（用户点名「小点点」同批，标签不带字母）
         STR.put("icon_pack_geometric", new String[]{"几何","Geometric"}); // Q148：去 G 后缀
         STR.put("org_badge_style", new String[]{"组织小标","Network Badges"});
-        STR.put("org_badge_cur", new String[]{"现行","Current"});
-        STR.put("org_badge_b", new String[]{"扁平","Flat"}); // Q150（2.61，N3）：去内部代号字母 B，只留正经名字（prefs 值 "b" 不变）
         STR.put("launcher_icon", new String[]{"桌面图标","App Icon"});
         STR.put("launcher_classic", new String[]{"经典蓝卡","Classic"});
         STR.put("launcher_stacked", new String[]{"叠卡","Stacked"});
@@ -1560,7 +1557,7 @@ public class MainActivity extends Activity {
     // 卡图 28 / 卡图小缩略 16。二维码卡不在收口内（豁免，见设置页与 PROGRESS Q129）。
     static float cornerT129 = 0.5f;
     static String iconPack129 = "current";     // current | rounded | geometric
-    static String orgStyle129 = "current";     // current | b（B 版仅设置区预览，本单不做卡面落点）
+    // Q153（件六）：组织标样式切换（current/b）已删——全 App 只留一套画法，orgStyle129 与 org_badge_style 偏好一并退役
     static String launcherIcon129 = "classic"; // classic | stacked | rounded
     static float sheetR129(float base, float t) { return t == 0.5f ? base : Math.min(base * (2f * t), 44f); }
     static float sheetR129(float base) { return sheetR129(base, cornerT129); }
@@ -2315,6 +2312,16 @@ public class MainActivity extends Activity {
             ((GlassBackdropView) iv).hwPilot = true;
             ((GlassBackdropView) iv).hwKey = key;
         }
+        // Q153（件三）：全部 frozen 窗统一打开管线——玻璃件一挂载就只登记
+        // 「首帧后补背板」（deferSheetBackdrop153），不在构造/点击帧同步抓图。
+        // 内容先上屏、旧帧或染色先垫，背板首帧后 swap；各开窗方不再各写一份。
+        if (!live) {
+            final String keyF153 = key;
+            iv.addOnAttachStateChangeListener(new View.OnAttachStateChangeListener() {
+                @Override public void onViewAttachedToWindow(View v) { deferSheetBackdrop153(keyF153, v, 0L); }
+                @Override public void onViewDetachedFromWindow(View v) { }
+            });
+        }
         return iv;
     }
 
@@ -2370,6 +2377,76 @@ public class MainActivity extends Activity {
     // 任一 frozen 窗从无到有只放行一帧 captureBackdrop 抓冻结帧后置 false，窗在场期间
     // tick 不再整树重抓＋三遍模糊。false→无窗时自然重新武装（见 captureBackdropTick 尾段）。
     boolean frozenFrameArmed130 = true;
+    // Q153（2.64，件三）：背板缓存账本——key＝来源 View 身份（本 App 背板恒取
+    // rootView 单实例，身份恒定）＋尺寸（缩放后 bw×bh）＋内容版本号；命中须三者
+    // 全合且帧龄 ≤300ms。版本号只在「滚动停稳/数据重渲染/异步图落位/切页」时
+    // ++（见 noteBackdropContentChanged153 调用点），滚动中不逐事件涨，免得缓存
+    // 永远追不上。开窗统一走 deferSheetBackdrop153：首帧前零捕获（内容先行、
+    // 旧帧/stub 先垫），首帧绘出后才按需 capture+swap；参数（半径/降采样/透色）
+    // 一字未动。
+    int backdropContentVer153 = 0;
+    int backdropFrameVer153 = -1;
+    int backdropFrameW153 = 0;
+    int backdropFrameH153 = 0;
+    long backdropFrameMs153 = 0;
+    boolean sheetBackdropTask153 = false;
+    String sheetBackdropKey153 = "";
+    long sheetBackdropT0_153 = 0;
+    int sheetBackdropGen153 = 0;
+    void noteBackdropContentChanged153() { backdropContentVer153++; }
+    boolean backdropFrameFresh153() {
+        if (rootView == null || backdropBmp == null || backdropBmp.isRecycled()) return false;
+        int bw153 = Math.max(1, Math.round(rootView.getWidth() * BACKDROP_SCALE));
+        int bh153 = Math.max(1, Math.round(rootView.getHeight() * BACKDROP_SCALE));
+        return backdropFrameVer153 == backdropContentVer153
+            && backdropFrameW153 == bw153 && backdropFrameH153 == bh153
+            && android.os.SystemClock.uptimeMillis() - backdropFrameMs153 <= 300;
+    }
+    /** Q153：frozen 玻璃件挂载即喊——只登记「首帧后补背板」，不在点击帧/首帧
+     * 前同步抓。同一开窗回合多件玻璃（窗＋钮）只排一发；锚视图已摘/无 frozen
+     * 件在场则任务自尽并重新武装 tick。 */
+    void deferSheetBackdrop153(String key153, final View anchor153, long t0ns153) {
+        if (glassDisabled || anchor153 == null) return;
+        frozenFrameArmed130 = false; // 先封 tick 的跃迁帧放行，捕获改由首帧后这一发独占
+        if (t0ns153 != 0L) { sheetBackdropKey153 = key153; sheetBackdropT0_153 = t0ns153; }
+        else if (!key153.equals(sheetBackdropKey153)) { sheetBackdropKey153 = key153; sheetBackdropT0_153 = 0L; } // 别窗的旧基线不许串味
+        final int genF153 = ++sheetBackdropGen153; // 后到的一窗接管排队，前窗未达的监听自废
+        sheetBackdropTask153 = true;
+        final String keyF153 = key153;
+        try {
+            anchor153.getViewTreeObserver().addOnDrawListener(new android.view.ViewTreeObserver.OnDrawListener() {
+                @Override public void onDraw() {
+                    try { anchor153.getViewTreeObserver().removeOnDrawListener(this); } catch (Throwable ignored) {}
+                    if (genF153 != sheetBackdropGen153) return;
+                    // 已在首帧绘制内：投主线程队列尾，等本帧绘制收尾再抓，不抢首帧
+                    mainHandler.post(() -> { if (genF153 == sheetBackdropGen153) runSheetBackdrop153(keyF153, anchor153); });
+                }
+            });
+        } catch (Throwable ignored) {
+            sheetBackdropTask153 = false;
+            mainHandler.post(() -> { if (genF153 == sheetBackdropGen153) runSheetBackdrop153(keyF153, anchor153); });
+        }
+    }
+    void runSheetBackdrop153(String key153, View anchor153) {
+        sheetBackdropTask153 = false;
+        if (anchor153 == null || !anchor153.isAttachedToWindow() || !anyFrozenGlassShown()) {
+            if (!anyFrozenGlassShown()) frozenFrameArmed130 = true; // 窗已关：重新武装给下一窗
+            return;
+        }
+        long t0_153 = sheetBackdropT0_153;
+        sheetBackdropT0_153 = 0L; // 本回合打点基线只用一次，免得下一窗误用旧基线
+        if (t0_153 != 0L) perfMark152("sheet.t_firstFrame " + key153, t0_153);
+        if (backdropFrameFresh153()) {
+            if (t0_153 != 0L) {
+                perfMark152("sheet.cache_hit " + key153, t0_153);
+                perfMark152("sheet.t_backdropReady " + key153, t0_153);
+            }
+            return; // 命中缓存：背板零捕获，玻璃 onDraw 自取现帧
+        }
+        backdropLastCapMs = 0; // 绕 50ms 节流，这一发必须真抓
+        try { captureBackdrop(); } catch (Throwable ignored) {}
+        if (t0_153 != 0L) perfMark152("sheet.t_backdropReady " + key153, t0_153);
+    }
     // Q131（2.43）：色带拖动排序的末次触摸打点（开拖与每次 MOVE 刷新）——tick 在
     // 350ms 窗内跳过背板抓图/录制，防拖动帧与抓图抢主线程、松手瞬间挤帧（件一）。
     long dragReorderTouchMs131 = 0;
@@ -2410,12 +2487,13 @@ public class MainActivity extends Activity {
     boolean bandCapPending = false;
     final Runnable bandCapTask = new Runnable() {
         @Override public void run() {
-            // Q94：甩动期不再无限顺延（旧口径滚动活跃即 180ms 一路推迟，整场甩动条带
-            // 一次不刷，玻璃钳在过期旧帧上发黑发实）；距上次抓图已满 500ms 就照抓——
-            // 只画滚动子树、成本有界，条带新鲜度钉在半秒内，钳边垫帧转瞬即逝。
-            // 500ms 内的活跃滚动仍顺延，不与滚动帧抢主线程（Q98 抖动教训不回退）。
+            // Q153（2.64，件四）：滚动中冻结一切背板捕获——旧 Q94「活跃滚动满
+            // 500ms 仍照抓」在长甩动里每半秒一发子树绘制＋三遍模糊，正是滑动
+            // 路径的周期性主线程税。改：末次滚动事件 200ms 内一律顺延（与屏幕
+            // 背板 tick 同闸），停稳后本任务自然落定补抓；玻璃靠旧带垫帧，不回黑
+            // （bandOk 回落链既有）。条带新鲜度让位于滚动帧率，用户终审若否再议。
             long now = android.os.SystemClock.uptimeMillis();
-            if (now - lastScrollEventMs < 120 && now - lastBandCapMs < 500) {
+            if (now - lastScrollEventMs < 200) {
                 mainHandler.postDelayed(this, 180);
                 return;
             }
@@ -2565,19 +2643,10 @@ public class MainActivity extends Activity {
         if (frozenShown130) frozenFrameArmed130 = false;
     }
 
-    // Q131（2.43，件四）：开窗前预抓冻结帧——Q130 的武装位只保证开窗后「不再逐帧
-    // 重抓」，但从无窗到有窗的跃迁帧仍放行一次整树软件绘制＋三遍盒式模糊，恰落在
-    // 约 280ms 进场动画的首帧上，动画被堵成「蹲一下再升起」（用户 2.42 终审仍报
-    // 筛选/常识开窗卡）。改：开窗方在窗上屏之前（点击事件内、动画时钟未启）同步把
-    // 这一帧抓掉，落点无窗的纯页面、正是要冻结的身后场景；抓成即同步落武装位，
-    // 首个 preDraw 起 tick 零重抓、动画全程只剩已备帧绘制。被 50ms 节流挡下且无
-    // 旧帧时不动武装位，tick 仍按 Q130 放行一帧兜底（旧行为）。
-    void prepareFrozenBackdrop131() {
-        if (glassDisabled || helloOpen || detailCard != null || moreMenuBackdropFrozen) return;
-        if (anyFrozenGlassShown()) return; // 已有 frozen 窗在场：背板已冻结，复用现帧
-        try { captureBackdrop(); } catch (Throwable ignored) {}
-        if (backdropBmp != null) frozenFrameArmed130 = false;
-    }
+    // Q153（2.64，件三）：Q131 的 prepareFrozenBackdrop131（开窗前同步预抓）整段
+    // 退役删除——它把整树软件绘制＋三遍盒式模糊压在点击帧/首帧前，正是弹窗
+    // 「蹲一下再升起」的结构性来源。统一改走 deferSheetBackdrop153：内容先行
+    // 上屏、旧帧/染色先垫、首帧绘出后才 capture+swap（见 glassLayerHw 挂载钩子）。
 
     /** Q98：背板失败计数——单次抓图/绘制异常只丢这一帧（旧帧继续垫着），连续 3 次
      * 才走 disableGlassNow 一次性持久关停。旧口径「任一 Throwable 即永久关停」会让
@@ -3204,6 +3273,8 @@ public class MainActivity extends Activity {
         }
         if (!any) return; // 屏上无玻璃件则零开销：不抓、不占 CPU
         backdropLastCapMs = nowMs;
+        long capT153 = System.nanoTime(); // Q153：三段计时（alloc/draw/blur）供帧监对位
+        long capSeg153 = capT153;
         int bw = Math.max(1, Math.round(rootView.getWidth() * BACKDROP_SCALE));
         int bh = Math.max(1, Math.round(rootView.getHeight() * BACKDROP_SCALE));
         java.util.Map<View, Integer> saved = new java.util.HashMap<>();
@@ -3239,12 +3310,19 @@ public class MainActivity extends Activity {
                 || backdropBmp.getWidth() != bw || backdropBmp.getHeight() != bh) {
                 backdropBmp = Bitmap.createBitmap(bw, bh, Bitmap.Config.ARGB_8888); // 旧图只解引用（Q21）
             }
+            perfTask153("backdrop.alloc", capSeg153); capSeg153 = System.nanoTime();
             Canvas cv = new Canvas(backdropBmp);
             cv.drawColor(colBg()); // Q94：复用位图先整张垫页底色，玻璃宿主让开的空位不留上一帧残像素
             cv.scale(BACKDROP_SCALE, BACKDROP_SCALE);
             rootView.draw(cv); // 软件 Canvas 渲染整树（玻璃宿主已让开，画的是纯场景）
+            perfTask153("backdrop.draw", capSeg153); capSeg153 = System.nanoTime();
             stackBlur(backdropBmp, BACKDROP_BLUR_R[Math.max(0, Math.min(2, glassLevel))]);
+            perfTask153("backdrop.blur", capSeg153); capSeg153 = System.nanoTime();
             updateBackdropPaint();
+            // Q153：帧落账——版本号/尺寸/时刻入册，下一窗先查缓存命中（见 backdropFrameFresh153）
+            backdropFrameVer153 = backdropContentVer153;
+            backdropFrameW153 = bw; backdropFrameH153 = bh;
+            backdropFrameMs153 = android.os.SystemClock.uptimeMillis();
             backdropFailStreak = 0; // Q98：成功一帧即清零失败计数
             noteGlassSuccess();
         } catch (Throwable t) {
@@ -3258,6 +3336,7 @@ public class MainActivity extends Activity {
             }
             backdropCapturing = false;
         }
+        perfTask153("backdrop.capture", capT153); // Q153：总账（与三段同 tag 族供帧监对位）
         // Q108：结构性抓图点（切页/开窗/设置变更经此或 refreshLiveGlass 至此）同步录
         // 一帧硬件背板——⋯ 菜单开窗瞬间 captureBackdrop 先行、菜单玻璃随后建层首绘，
         // 节点里存的正是开窗前那一帧静止场景（frozen 语义与软件路一致）。
@@ -3288,6 +3367,9 @@ public class MainActivity extends Activity {
             boolean busy133 = touching150.getAsBoolean()
                 || (android.os.SystemClock.uptimeMillis() - lastScrollEventMs < 180);
             if (busy133 && tries133 < 8) { scheduleSheetBackdrop150(alive150, touching150, tries133 + 1); return; }
+            // Q153（件三）：统一管线首帧后多半已补好背板——帧仍新鲜就不再整树
+            // 重抓一发（旧口径 +300ms 无条件重抓与新管线叠加成双抓）。
+            if (backdropFrameFresh153()) return;
             backdropLastCapMs = 0;
             try { captureBackdrop(); } catch (Throwable ignored) {}
         }, tries133 == 0 ? 300 : 220);
@@ -3418,6 +3500,7 @@ public class MainActivity extends Activity {
      * 延迟刷新在新页淡入落定（旧页已摘除）后抓干净新帧。Q21 纪律：只解引用不 recycle。
      */
     void clearLiveGlassForTabSwitch() {
+        noteBackdropContentChanged153(); // Q153：切页＝内容版本++，旧页背板帧不许被新页窗命中
         glassTabGen++;
         glassSnapStale = true;
         glassTabSwitchMs = android.os.SystemClock.uptimeMillis();
@@ -4109,6 +4192,10 @@ public class MainActivity extends Activity {
         // Q151（P0·位图）：后台暂停闸（Activity onPause/onResume 拨）——预解码是
         // 锦上添花，后台不许与系统抢 CPU/内存（生命周期感知，学 Glide 的做法自写）。
         static volatile boolean decodePaused151 = false;
+        // Q153（2.64，件四）：滚动预取闸——根滚动监听在滚动活跃期置 true、停稳
+        // 250ms 后放行；prefetchSized 与已排队任务双查，甩动期不让后台解图与
+        // 渲染帧抢 CPU（解码池 2 线程亦然）。同步取图（构建兜底）不受此闸。
+        static volatile boolean scrollPrefetchHold153 = false;
         // Q133（2.45，件六）：远程图落盘成功回调（后台线程触发，实现方须自行转主线
         // 程）；由 Activity 初始化时登记。旧口径无此钩子：图下完了瓷砖仍顶着落盘
         // 前的过渡图，要等下一次整表重搭才换上。
@@ -4244,10 +4331,14 @@ public class MainActivity extends Activity {
             String key = path + "@" + bucket;
             Bitmap hit = cacheGet(key);
             if (hit != null) return hit;
+            // Q153（件四）：主线程同步解图计时——缓存未命中时瓷砖构建会在主线程
+            // 整张解码，这是滑动/建页掉帧的头号嫌疑，≥8ms 落 img.decode tag。
+            long decT153 = android.os.Looper.myLooper() == android.os.Looper.getMainLooper() ? System.nanoTime() : 0L;
             boolean remoteFirst = preferRemote();
             boolean provisional = remoteFirst && !remoteFileExists(c, path);
             Bitmap b = decodeSized(c, path, bucket, remoteFirst);
             if (b == null) b = decodeSized(c, path, bucket, !remoteFirst); // 主源解码失败换另一源（旧版双源兜底同语义）
+            if (decT153 != 0L) perfTask153("img.decode", decT153);
             if (b != null) { if (!provisional) cachePut(key, b); return b; }
             healRemoteFile151(c, path); // Q151（N17）：两源皆坏→坏文件自愈（删毒文件+退避重拉）
             return null;
@@ -4294,6 +4385,7 @@ public class MainActivity extends Activity {
 
         static void prefetchSized(final Context c, final String path, final int targetW) {
             if (decodePaused151) return; // Q151（P0）：后台不预解码（前台恢复后构建链自会补上）
+            if (scrollPrefetchHold153) return; // Q153（件四）：滚动中暂停预取，停稳由构建链/后续 prefetch 补上
             if (path == null || path.isEmpty() || targetW <= 0) return;
             final String key = path + "@" + bucketFor(targetW);
             if (cacheGet(key) != null) return;
@@ -4301,7 +4393,10 @@ public class MainActivity extends Activity {
             final Context app = c.getApplicationContext();
             try {
                 decodePool.execute(() -> {
-                    try { getSized(app, path, targetW); } catch (Throwable ignored) { /* 预热失败构建时同步解码兜底 */ }
+                    try {
+                        if (scrollPrefetchHold153) return; // Q153（件四）：排队期间已开滚——本发作罢，构建链会再喊
+                        getSized(app, path, targetW);
+                    } catch (Throwable ignored) { /* 预热失败构建时同步解码兜底 */ }
                     finally { decodeBusy.remove(key); }
                 });
             } catch (Throwable t) { decodeBusy.remove(key); }
@@ -4703,7 +4798,7 @@ public class MainActivity extends Activity {
             thumb.addView(iv, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
             roundClip(thumb, cardSmallR129(9f), this);
             if (fb133 != null) iv.setImageBitmap(fb133);
-            addOrgBadgeTopRight152(thumb, normOrgKey152(f.org), false, 0.55f); // Q152：组织标统一右上（外卡列表图）
+            if (fb133 == null) addOrgBadgeBottomRight153(thumb, normOrgKey152(f.org), false, 0.78f); // Q153：仅无图占位加组织标（右下·放大）；有图不加
             LinearLayout tx = new LinearLayout(this);
             tx.setOrientation(LinearLayout.VERTICAL);
             LinearLayout.LayoutParams txLp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
@@ -4933,16 +5028,16 @@ public class MainActivity extends Activity {
         // Q143（2.54，乙组）撤 Q131 承托底板：图铺满框边、角外透窗面（外卡英雄图）。
         if (Build.VERSION.SDK_INT >= 21) hero.setElevation(dp(this, 6));
         roundClip(hero, cardR, this);
-        ImageView hiv = new ImageView(this);
-        hiv.setScaleType(ImageView.ScaleType.CENTER_CROP);
+        CardFaceView153 hiv = new CardFaceView153(this); // Q153（件五）：共用取图管线（COVER＋clipPath），scaleType 退役
+        hiv.setFaceRadius153(cardR, false);
         // Q151（N5）：hiv 第二把 outline 撤除——与主卡图廊组件化单裁同口径，
         // 圆角只由组件外框 hero 一把收口（Q152 固定框后此口径不变）。
         hiv.setBackground(placeholderGradFor(f.id, cardR, this)); // 占位先行（无图终态同此）
         hero.addView(hiv, new FrameLayout.LayoutParams(imgW, imgH));
-        bindGalleryBitmap152(hiv, f.image, imgW, true, null);
-        // Q152（组织标统一右上＋外卡 AI 标）：组织标右上；ai_redraw 的卡左上
-        // 挂「AI 重绘」矢量标（与主卡同标同位），说明灰字在名下另行（见下）。
-        addOrgBadgeTopRight152(hero, normOrgKey152(f.org), false, 1.0f, 8);
+        // Q153（件二定稿）：组织标仅无图占位终态（无路径/解码无果）才落英雄图
+        // 右下角；有真实卡面一律不加。ai_redraw 左上标与说明灰字口径不变（另件）。
+        bindGalleryBitmap152(hiv, f.image, imgW, true,
+            () -> addOrgBadgeBottomRight153(hero, normOrgKey152(f.org), false, 1.2f, 8));
         if (f.aiRedraw) {
             FrameLayout.LayoutParams aiLp152 = new FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
             aiLp152.gravity = Gravity.TOP | Gravity.LEFT;
@@ -5201,9 +5296,8 @@ public class MainActivity extends Activity {
     FrameLayout showcasePanel152 = null;
     String showcasePanelKind152 = null; // palette/density/group，null=未开
     View showcaseBackBtn152 = null, showcasePaletteBtn152 = null, showcaseSegBox152 = null,
-         showcaseDensityBtn152 = null, showcaseCloseBtn152 = null;
+         showcaseDensityBtn152 = null;
     BackChevronView showcaseBackIcon152 = null;
-    CloseIconView showcaseCloseIcon152 = null;
     ShowcasePaletteIcon152 showcasePaletteIcon152 = null;
     TextView showcaseDensityBtnTv152 = null;
     View showcaseZoomView = null;                    // Q122（件十四②）：点卡放大看卡面（纯展示层）
@@ -5625,8 +5719,27 @@ public class MainActivity extends Activity {
     static void perfMark152(String ev152, long t0ns152) {
         try { android.util.Log.i("CardPerf152", ev152 + " +" + ((System.nanoTime() - t0ns152) / 1000000L) + "ms"); } catch (Throwable ignored) {}
     }
+    // Q153（2.64，件三/四）：主线程长任务记账——已知重活（背板捕获三段、同步
+    // 解图、续搭建行、图廊换入）各自打 tag 计时，≥8ms 才落日志并留作帧监的
+    // 「同帧嫌疑」字段；帧监据此把 >24ms 掉帧与最近长任务对位，不再只报一个
+    // 光秃秃的掉帧数。本机无真机，数值口径＝代码走读＋真机 logcat 复核。
+    static String perfLastTask153 = "";
+    static long perfLastTaskMs153 = 0;
+    static long perfLastTaskAt153 = 0;
+    static void perfTask153(String tag153, long startNs153) {
+        try {
+            long ms153 = (System.nanoTime() - startNs153) / 1000000L;
+            if (ms153 < 8) return;
+            perfLastTask153 = tag153;
+            perfLastTaskMs153 = ms153;
+            perfLastTaskAt153 = android.os.SystemClock.uptimeMillis();
+            android.util.Log.i("CardPerf152", "task " + tag153 + " " + ms153 + "ms");
+        } catch (Throwable ignored) {}
+    }
     boolean perfMonOn152 = false;
     long perfLastDropLog152 = 0;
+    int perfDropCount153 = 0;
+    long perfDropMax153 = 0;
     void startPerfMonitor152() {
         if (perfMonOn152) return;
         perfMonOn152 = true;
@@ -5635,10 +5748,18 @@ public class MainActivity extends Activity {
             public void doFrame(long frameTimeNanos) {
                 if (lastFrame152[0] != 0L) {
                     long dtMs152 = (frameTimeNanos - lastFrame152[0]) / 1000000L;
-                    long now152 = System.currentTimeMillis();
-                    if (dtMs152 > 24 && now152 - perfLastDropLog152 > 1000) {
-                        perfLastDropLog152 = now152;
-                        try { android.util.Log.i("CardPerf152", "drop " + dtMs152 + "ms tab=" + tab + (detailCard != null ? "+detail" : "") + (helloOpen ? "+hello" : "")); } catch (Throwable ignored) {}
+                    long now152 = android.os.SystemClock.uptimeMillis();
+                    if (dtMs152 > 24) {
+                        perfDropCount153++;
+                        if (dtMs152 > perfDropMax153) perfDropMax153 = dtMs152;
+                        // Q153：节流 1s→500ms 并带滚动龄/最近长任务——滑动期掉帧要能
+                        // 当场对位是续搭、解图还是背板，不许只剩事后猜。
+                        if (now152 - perfLastDropLog152 > 500) {
+                            perfLastDropLog152 = now152;
+                            long scrollAge153 = lastScrollEventMs <= 0 ? -1 : now152 - lastScrollEventMs;
+                            try { android.util.Log.i("CardPerf152", "drop " + dtMs152 + "ms max=" + perfDropMax153 + " count=" + perfDropCount153 + " tab=" + tab + (detailCard != null ? "+detail" : "") + (helloOpen ? "+hello" : "") + " scrollAge=" + scrollAge153 + " lastTask=" + perfLastTask153 + "/" + perfLastTaskMs153 + "ms"); } catch (Throwable ignored) {}
+                            perfDropCount153 = 0; perfDropMax153 = 0;
+                        }
                     }
                 }
                 lastFrame152[0] = frameTimeNanos;
@@ -5733,7 +5854,7 @@ public class MainActivity extends Activity {
     boolean glassSnapStale = false;
     int glassTabGen = 0;
     long glassTabSwitchMs = 0; // Q63：切页时刻，280ms 淡入窗内其他路径的 refresh 一律让路给代次守卫的那一次
-    final Runnable glassRefreshTask = new Runnable() { public void run() { refreshLiveGlass(); } };
+    final Runnable glassRefreshTask = new Runnable() { public void run() { noteBackdropContentChanged153(); refreshLiveGlass(); } }; // Q153：滚动停稳＝内容版本++（背板缓存失效点之一）
     // Q29：旧 Q16 的滚动中 140ms 节流实时重采样（liveGlassTask/lastLiveGlassMs）整套删除——滚动零截图。
     final java.util.Map<ImageView, Integer> glassRetry = new java.util.HashMap<>(); // Q16: layout retry cap per glass layer
     // Q41 底栏玻璃底色滑动实时跟随：条带快照（文档空间）+滚动期 Canvas 平移绘制。
@@ -5775,18 +5896,23 @@ public class MainActivity extends Activity {
     View currentPageView;           // Q38: currently displayed page view - only pages crossfade on switch; FABs/sheets in content keep removeAll semantics
     FrameLayout pageHost;           // Q120（2.33）：五页签常驻宿主（content 首层）——建好只显隐、切走不拆、切回不重建
     View fullScreenPage;            // Q120：全屏二级页（关于/你好/更新日志）在 content 上的当前实例，showTab 先摘它再切页
-    // Q127（2.39，审计 B1）：首页续搭未落定计数与兜底加载提示层（content 之上独立层，
-    // 不挂 pageHost，免得被 showTab 显隐/抓图牵连；在场时经 captureBackdrop 隐藏名单防拍进背板）
-    int homeChunkPending = 0;
-    View homeLoadingLayer = null;
+    // Q153（2.64，件一）：首页加载层单一状态机——旧 homeChunkPending 裸 int＋
+    // homeBootBuilt150 裸闩＋maybeShow/hide 两口旁路（2.63 真机残留：卡全渲染
+    // 完转圈仍挂）整组退役。未落定计数改令牌集合（每批续搭一枚，落定/作废
+    // 各自归还，绝不漏减）；显隐只走 renderHomeLoading153() 单入口；完成只
+    // 许 onHomeBootBuilt153() 一处（置 READY＋清令牌＋同入口摘层）。
+    final java.util.Set<Object> homeChunkTokens153 = new java.util.HashSet<>();
+    static final int HOME_LOAD_BOOTING153 = 0; // 首屏未搭完：满足条件可露加载层
+    static final int HOME_LOAD_READY153 = 1;   // 首屏已搭完：本进程内永不再露
+    int homeLoadState153 = HOME_LOAD_BOOTING153;
+    View homeLoadingLayer = null; // 全程唯一实例，buildHomeLoadingLayer153 只建一次
     PullSpinView homeLoadingSpin = null;
     View bootLayer151 = null; // Q151（N16）：冷启雾蓝加载层（数据备好即摘）
     PullSpinView bootSpin151 = null;
-    // Q150（2.61，N1）：首页列表在本进程内是否已完整搭完过一次——居中「加载中」兜底层
-    // 只许在首屏分块真未搭完（冷启首建）时露；此后任何重搭（切页回来/数据应用/外观
-    // 变更重建/筛选变更）不许再露（首 4 行恒同步在屏、余下分帧补齐，无圈可看）。
-    // 触发条件剖单见 PROGRESS Q150。进程内不复位，冷启自然归零。
-    boolean homeBootBuilt150 = false;
+    // Q150（2.61，N1）口径由 Q153 状态机承接：homeLoadState153 到 READY 后居中
+    // 「加载中」永不再露（首 4 行恒同步在屏、余下分帧补齐，无圈可看）；进程内
+    // 不复位，冷启自然归零。旧 homeBootBuilt150 布尔闩已删（置闩点散落多处、
+    // 与 pending 两口径打架即 2.63 残留根因之一）。
     final SpringDriver tabAnim = new SpringDriver();       // Q120：切页过渡弹簧驱动（单回路）
     final Spring1D tabSpring = new Spring1D(1f);            // Q120：切页过渡进度 0→1
     View tabAnimOut;                                       // Q120：过渡中正在退场的旧页（连切时强制收尾它）
@@ -5874,6 +6000,7 @@ public class MainActivity extends Activity {
     LinearLayout homeList = null;
     ScrollView homeScroll = null;
     long homeScrollMoveMs = 0; // Q116：最近一次首页滚动位移时刻，续帧搭行据此给甩动让路
+    final Runnable scrollPrefetchRelease153 = () -> { Img.scrollPrefetchHold153 = false; }; // Q153（件四）：停稳放行预取
     DragBarView homeDragBar = null;
     LinearLayout homeHero = null; // Q15：卡库总览英雄卡（仅无搜索/无筛选时显示，同混合版 lib-hero 口径）
     // Q61 下拉刷新（仅首页列表在顶部时接管下拉，松手触发双线检查更新；带轻量指示，不跳顶、不丢位置）
@@ -6225,6 +6352,10 @@ public class MainActivity extends Activity {
         // Q41：滚动期条带平移跟随（只 Canvas 绘制、不重采样，与停稳计时互不干扰）
         root.getViewTreeObserver().addOnScrollChangedListener(() -> {
             lastScrollEventMs = android.os.SystemClock.uptimeMillis(); // Q98 打点供背板滚动冻结判定
+            // Q153（件四）：任一滚动活跃即关预取闸，停稳 250ms 放行（逐事件重排）
+            Img.scrollPrefetchHold153 = true;
+            mainHandler.removeCallbacks(scrollPrefetchRelease153);
+            mainHandler.postDelayed(scrollPrefetchRelease153, 250);
             // Q130（件七）：详情窗在场时滚动全是窗内 detailScroll 的事件——玻璃链在此
             // 全程冻结（tick/refreshLiveGlass 已有 detailCard 守卫、bandScroll 恒 null、
             // live 玻璃全藏在窗后），scheduleGlassRefresh 的逐事件摘挂防抖＋
@@ -6440,13 +6571,13 @@ public class MainActivity extends Activity {
         // 态无在飞检查即按其 onDone 同口径复位；转圈循环按当前可见态重启（onPause
         // 已全停，见下）。加载态一律重算、绝不「恢复」一个旧转圈（行业正道同此）。
         Img.decodePaused151 = false; // Q151（P0·位图）：后台暂停的预解码回前台续跑
-        if (homeLoadingLayer != null && homeChunkPending <= 0) hideHomeLoading();
+        renderHomeLoading153(); // Q153：回前台按状态机重算加载层（无主转圈不许留）
         if (homePullRefreshing && !otaFetchStarted) {
             homePullRefreshing = false;
             if (homePullBar != null) homePullBar.setVisibility(View.GONE);
         }
         if (homePullRefreshing) updateHomePullUi(); // 在飞检查仍在：指示与转圈按现态接回
-        if (homeLoadingSpin != null && homeLoadingLayer != null) startPullSpin(homeLoadingSpin);
+        if (homeLoadingSpin != null && homeLoadingLayer != null && homeLoadingLayer.getParent() != null) startPullSpin(homeLoadingSpin);
         if (nfcWaiting) enableNfcReader();
     }
 
@@ -6809,6 +6940,7 @@ public class MainActivity extends Activity {
     // Q65 选择窗：不标/一类/二类三选 + 一句说明；manage=true 时多一条移除已有（全部）
     void openAcctClassPicker(final Card c, final String title, final boolean manage, final Runnable uiRefresh) {
         final long pickerPerfT0_152 = System.nanoTime(); // Q152 打点：加卡选择窗
+        perfMark152("sheet.t_click acctpicker", pickerPerfT0_152); // Q153（件三）：点击基线（函数入口≈ACTION_UP 后分发，口径见 Q153）
         if (c == null) return;
         closeAcctClassPicker();
         if (rootView == null) { addMineEntry(c, "", uiRefresh); return; }
@@ -6895,6 +7027,8 @@ public class MainActivity extends Activity {
         overlay.addView(wrap, clp);
         rootView.addView(overlay, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         perfMark152("picker.show", pickerPerfT0_152); // Q152：选择窗上屏打点
+        perfMark152("sheet.t_popupShow acctpicker", pickerPerfT0_152); // Q153（件三）：DeepSeek 字段口径
+        deferSheetBackdrop153("acctpicker", overlay, pickerPerfT0_152); // Q153：首帧后补背板（与 glassLayerHw 挂载钩子同管线，本处补点击基线）
         acctPickerView = overlay;
         hideChrome(); // Q122（件十一）：选择窗开窗底栏整件退场（01:36 图证 dock 与窗底叠读），关窗 restoreChrome
         // Q122（件五）：背后详情蓝钮整颗藏死（GONE、非降透明）——2.33 只提窗面到近实，
@@ -8000,7 +8134,9 @@ public class MainActivity extends Activity {
         if (sv == null) return;
         int removedAbove = Math.max(0, Math.min(boxH, svY0 - boxTop));
         final int target = Math.max(0, svY0 - removedAbove);
-        sv.post(() -> { try { sv.scrollTo(0, target); } catch (Throwable ignored) {} });
+        // Q153（件八）：延迟写位加手势守卫——post 落地前用户拖拽过则作废。
+        final long capMs153 = android.os.SystemClock.uptimeMillis();
+        sv.post(() -> { try { if (lastUserTouchScrollMs153 <= capMs153) sv.scrollTo(0, target); } catch (Throwable ignored) {} });
     }
 
     // hand-written damped spring (no libs), Q38 tuning: stiffness 210, damping ratio ~0.68 -> about 500ms
@@ -8095,7 +8231,7 @@ public class MainActivity extends Activity {
         clearLiveGlassForTabSwitch(); // Q63：切页瞬间清 live 玻璃旧帧，不许旧页文字在新页玻璃面糊出残影
         tab = key;
         sCrashTab = key;
-        if (!"home".equals(key)) hideHomeLoading(); // Q127：加载提示层只许在首页在场
+        if (!"home".equals(key)) renderHomeLoading153(); // Q127→Q153：加载层只许首页在场，离页走单入口摘（tab 已先置新值）
         // Q120（2.33）：页面常驻——旧页不再 removeAllViews 摘除，改宿主内显隐；全屏
         // 二级页（关于/你好/更新日志）若在场先摘除并复位宿主可见。过渡弹簧先作废旧
         // 回路，连切时上一段未落定的退场页在下方一并强制收尾，不许半透明旧页残留。
@@ -8241,7 +8377,7 @@ public class MainActivity extends Activity {
         // Q64：首页重活让一帧——先让过渡首帧出去，再做签名校验/分帧续搭，避免 213 张校验堵在点击瞬间掉帧。
         if ("home".equals(key) && homeList != null) {
             final View pg64 = page;
-            pg64.post(() -> { if (gen64 == tabAnimGen && "home".equals(tab)) { refreshHome(); maybeShowHomeLoading(); } }); // Q127：回来时续搭未落定则兜底层接上
+            pg64.post(() -> { if (gen64 == tabAnimGen && "home".equals(tab)) { refreshHome(); renderHomeLoading153(); } }); // Q127→Q153：回来时续搭未落定则单入口接上
         }
         restoreCurrentTabScroll();
         syncSearchFab();
@@ -8742,8 +8878,12 @@ public class MainActivity extends Activity {
         } catch (Exception e) { /* no IME: silent */ }
     }
 
+    // Q153（件八）：用户最近一次触摸拖拽时刻（折展落定纠偏的手势守卫比对基准）。
+    long lastUserTouchScrollMs153 = 0L;
+
     // Tap outside whichever capsule is focused -> that search goes away.
     @Override public boolean dispatchTouchEvent(MotionEvent ev) {
+        if (ev != null && ev.getAction() == MotionEvent.ACTION_MOVE) lastUserTouchScrollMs153 = android.os.SystemClock.uptimeMillis();
         if (ev != null && ev.getAction() == MotionEvent.ACTION_DOWN) {
             boolean foc = (searchBox != null && searchBox.hasFocus())
                 || (floatSearchBox != null && floatSearchBox.hasFocus());
@@ -8894,10 +9034,72 @@ public class MainActivity extends Activity {
     // Q93 换画法：逐组织对齐用户 2026-10-04 审过的示意图板（~/workspace/your_files/org-badge-board.png，
     // 生成脚本 org-badge-board.py 为形态与色值真源）——统一在 240×120 画板坐标内绘制再缩放进本视图；
     // 银联三色衔接缎带+下方小字、Visa 金翼、万事达双圆交叠独立色、网联纯双圆（画板 A 案）、运通方标、JCB 三段斜切。
+    // Q153（2.64，件五·详情图四角黑边）：共用取图管线——DeepSeek 方案 A/C：
+    // 「旋转（bindGalleryBitmap152 内既有 portraitToLandscape151）→覆盖填充→
+    // 圆角裁剪」合成一次几何计算＋一次 clipPath+drawBitmap。继承 ImageView 只
+    // 为保住既有钩子（setImageBitmap/setTag/bindGalleryBitmap152/
+    // swapInFetchedIn133 的 instanceof 与 tag 认件），绘制全自绘：scaleType
+    // 自此在这四处退役（列表瓷砖 cardTile/详情图廊/外卡英雄图/展柜面共用本
+    // 类），不设深色 background、不上硬件层。几何一处：COVER=scale 取 max 铺
+    // 满居中（列表/详情/外卡/展柜放大面），FIT=scale 取 min 整幅居中（展柜
+    // 小面 Q122 整幅可见口径）；draw() 先一把 clipPath（背景占位与位图同裁），
+    // onDraw 只按矩阵贴图。静态验图结论：抽查 12 张卡图四角皆不透明内容色
+    // （仅 boc-visa-usd 为透明角抠图），图源无黑角/暗角，黑边定性控件侧。
+    class CardFaceView153 extends ImageView {
+        float faceR153 = 0f;
+        boolean faceTopOnly153 = false;
+        boolean faceFit153 = false;
+        final Paint facePaint153 = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.FILTER_BITMAP_FLAG);
+        final android.graphics.Path faceClip153 = new android.graphics.Path();
+        final RectF faceRect153 = new RectF();
+        final android.graphics.Matrix faceMx153 = new android.graphics.Matrix();
+        CardFaceView153(Context ctx) { super(ctx); }
+        void setFaceRadius153(float radiusDp, boolean topOnly) {
+            faceR153 = radiusDp * getResources().getDisplayMetrics().density;
+            faceTopOnly153 = topOnly;
+            invalidate();
+        }
+        void setFaceFit153(boolean fit) { faceFit153 = fit; invalidate(); }
+        android.graphics.Path faceClipPath153() {
+            faceClip153.reset();
+            faceRect153.set(0, 0, getWidth(), getHeight());
+            if (faceR153 <= 0f) { faceClip153.addRect(faceRect153, android.graphics.Path.Direction.CW); return faceClip153; }
+            if (faceTopOnly153) {
+                float r = faceR153;
+                faceClip153.addRoundRect(faceRect153, new float[]{ r, r, r, r, 0f, 0f, 0f, 0f }, android.graphics.Path.Direction.CW);
+            } else {
+                faceClip153.addRoundRect(faceRect153, faceR153, faceR153, android.graphics.Path.Direction.CW);
+            }
+            return faceClip153;
+        }
+        @Override public void draw(android.graphics.Canvas c) {
+            int s153 = c.save();
+            c.clipPath(faceClipPath153());
+            super.draw(c);
+            c.restoreToCount(s153);
+        }
+        @Override protected void onDraw(android.graphics.Canvas c) {
+            android.graphics.drawable.Drawable d153 = getDrawable();
+            if (d153 instanceof android.graphics.drawable.BitmapDrawable) {
+                Bitmap b153 = ((android.graphics.drawable.BitmapDrawable) d153).getBitmap();
+                if (b153 != null && !b153.isRecycled() && b153.getWidth() > 0 && b153.getHeight() > 0 && getWidth() > 0 && getHeight() > 0) {
+                    float sx153 = (float) getWidth() / b153.getWidth();
+                    float sy153 = (float) getHeight() / b153.getHeight();
+                    float sc153 = faceFit153 ? Math.min(sx153, sy153) : Math.max(sx153, sy153);
+                    faceMx153.reset();
+                    faceMx153.postScale(sc153, sc153);
+                    faceMx153.postTranslate((getWidth() - b153.getWidth() * sc153) / 2f, (getHeight() - b153.getHeight() * sc153) / 2f);
+                    c.drawBitmap(b153, faceMx153, facePaint153);
+                    return;
+                }
+            }
+            super.onDraw(c);
+        }
+    }
+
     class OrgBadgeView extends View {
         final String org;
         final boolean darkBg;
-        boolean badgeB129 = false; // Q129：B 扁平版（仅设置区预览构造时置 true；卡面落点不在本单，addOrgBadge 保持停用）
         OrgBadgeView(Context ctx, String o, boolean dark) {
             super(ctx); org = o == null ? "" : o.trim(); darkBg = dark;
             setClickable(false); setFocusable(false);
@@ -8906,32 +9108,27 @@ public class MainActivity extends Activity {
             int w = getWidth(), h = getHeight();
             if (w <= 0 || h <= 0 || org.isEmpty()) return;
             Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);
-            // Q148（2.59，组织小标批）：画板改统一拟合——旧实现横纵各拉各的单位
-            // （ux＝w/240、uy＝h/120 两套并行），预览框宽高比≠2:1 时字号只随 uy、
-            // 字宽与框体只随 ux：VISA 字溢框、AMEX 蓝框没铺满（用户图证）。改
-            // min 拟合＋居中平移：字、框、金翼同吃一单位 u，框偏窄时整标等比
-            // 缩小居中，任何框形不溢不亏；B 版（120×76 画板）同理。绘制失败的
-            // 兜底口径不变（只不显示）。仍仅设置内预览、不上卡面（Q104 停用不变）。
+            // Q153（2.64，件六·用户三度纠偏后的统一定稿）：组织标全 App 只留
+            // 一套画法——银联/VISA 按用户 2026-10-06 发的官方参考图重画（银联三色
+            // 斜切牌＋白字、VISA 深蓝斜体字标去金翼），万事达/Amex/JCB 沿现行画法
+            // 不动。旧「现行/扁平 B」二选与 badgeB129 分支整段删除（B 版实现存
+            // git 历史 fb55a8d，用户明示存档备查）。统一拟合（min 单位＋居中）
+            // 沿 Q148：任何框形不溢不亏。设置预览与卡面无图占位共用此一处现画。
             int save148 = cv.save();
             try {
-                boolean bFit148 = badgeB129 && (org.equals("unionpay") || org.equals("visa")
-                    || org.equals("mastercard") || org.equals("mastercard-nucc"));
-                if (bFit148) {
-                    float bu = Math.min(w / 120f, h / 76f);
-                    cv.translate((w - 120f * bu) / 2f, (h - 76f * bu) / 2f);
-                    if (org.equals("unionpay")) badgeUnionPayB129(cv, p, bu, bu);
-                    else if (org.equals("visa")) badgeVisaB129(cv, p, bu, bu);
-                    else badgeMastercardB129(cv, p, bu, bu);
-                } else {
-                    float u = Math.min(w / 240f, h / 120f);
-                    int w2 = Math.round(240f * u), h2 = Math.round(120f * u);
-                    cv.translate((w - w2) / 2f, (h - h2) / 2f);
-                    if (org.equals("mastercard") || org.equals("mastercard-nucc")) badgeMastercard(cv, p, w2, h2, u, u);
-                    else if (org.equals("unionpay")) badgeUnionPay(cv, p, w2, h2, u, u);
-                    else if (org.equals("visa")) badgeVisa(cv, p, w2, h2, u, u);
-                    else if (org.equals("jcb")) badgeJcb(cv, p, u, u);
-                    else if (org.equals("amex-cn")) badgeAmex(cv, p, u, u);
+                float u = Math.min(w / 240f, h / 120f);
+                int w2 = Math.round(240f * u), h2 = Math.round(120f * u);
+                cv.translate((w - w2) / 2f, (h - h2) / 2f);
+                if (org.equals("mastercard") || org.equals("mastercard-nucc")) badgeMastercard(cv, p, w2, h2, u, u);
+                else if (org.equals("unionpay")) {
+                    // Q153（件六 DeepSeek 参数）：实宽 <32dp 走极简——只留三色块＋「银联」
+                    // 中文，砍英文与字距（小到英文必糊成一团，按其验收清单 24dp 可区分）。
+                    if (w / getResources().getDisplayMetrics().density < 32f) badgeUnionPayMini153(cv, p, w2, h2, u, u);
+                    else badgeUnionPay153(cv, p, w2, h2, u, u);
                 }
+                else if (org.equals("visa")) badgeVisa153(cv, p, w2, h2, u, u);
+                else if (org.equals("jcb")) badgeJcb(cv, p, u, u);
+                else if (org.equals("amex-cn")) badgeAmex(cv, p, u, u);
             } catch (Throwable ignored) { /* 小标绘制失败只不显示，不为占位冒崩点 */ }
             finally { cv.restoreToCount(save148); }
         }
@@ -8940,51 +9137,124 @@ public class MainActivity extends Activity {
             Paint.FontMetrics fm = p.getFontMetrics();
             return cy - (fm.ascent + fm.descent) / 2f;
         }
-        // 银联（2.17 按用户 21:02 点名与 Visa 一同回退 2.16 浅底牌/圆弧版）：红 #E60012 / 蓝 #004B9B / 绿 #009944 三段等高平行四边形首尾无缝衔接、整体右倾，下配「银 联」小字
-        void badgeUnionPay(Canvas cv, Paint p, int w, int h, float ux, float uy) {
-            float x0 = 8 * ux, y0 = 6 * uy, bh = 62 * uy, seg = 52 * ux, slant = 26 * ux;
-            int[] cols = { Color.rgb(0xE6, 0x00, 0x12), Color.rgb(0x00, 0x4B, 0x9B), Color.rgb(0x00, 0x99, 0x44) };
+        // Q153 银联（按用户 268322 官方参考图重画，非贴图、自绘矢量）：红/蓝/青
+        // 三色平行四边形斜切牌面一体成型（牌体右倾、色带同倾无缝），白色粗斜体
+        // UnionPay 横贯＋「银联」压右下——旧画法是三段分离小梯形＋牌下深色小字，
+        // 小尺寸下读作碎块（用户「银联太丑了吧」即此）。色值按 DeepSeek 矢量
+        // 重构参数（2.64 件六细则）：红 #E21836 / 蓝 #00447C / 青 #007B84。
+        void badgeUnionPay153(Canvas cv, Paint p, int w, int h, float ux, float uy) {
+            float xTop = 46 * ux, xBot = 22 * ux, plateW = 172 * ux, plateY = 10 * uy, plateH = 100 * uy;
+            android.graphics.Path plate = new android.graphics.Path();
+            plate.moveTo(xTop, plateY);
+            plate.lineTo(xTop + plateW, plateY);
+            plate.lineTo(xBot + plateW, plateY + plateH);
+            plate.lineTo(xBot, plateY + plateH);
+            plate.close();
+            cv.save();
+            cv.clipPath(plate);
+            int[] cols = { Color.rgb(0xE2, 0x18, 0x36), Color.rgb(0x00, 0x44, 0x7C), Color.rgb(0x00, 0x7B, 0x84) };
+            float bandW = plateW / 3f, slant = xTop - xBot;
             p.setStyle(Paint.Style.FILL);
             for (int i = 0; i < 3; i++) {
-                float x = x0 + i * seg;
-                android.graphics.Path poly = new android.graphics.Path();
-                poly.moveTo(x, y0 + bh);
-                poly.lineTo(x + slant, y0);
-                poly.lineTo(x + slant + seg, y0);
-                poly.lineTo(x + seg, y0 + bh);
-                poly.close();
+                float bx = xTop + i * bandW;
+                android.graphics.Path band = new android.graphics.Path();
+                band.moveTo(bx, plateY - 2 * uy);
+                band.lineTo(bx + bandW, plateY - 2 * uy);
+                band.lineTo(bx + bandW - slant, plateY + plateH + 2 * uy);
+                band.lineTo(bx - slant, plateY + plateH + 2 * uy);
+                band.close();
                 p.setColor(cols[i]);
-                cv.drawPath(poly, p);
+                cv.drawPath(band, p);
             }
-            p.setColor(darkBg ? Color.WHITE : Color.rgb(0x33, 0x38, 0x3F));
-            p.setTypeface(weightTypeface(getContext(), 700));
-            p.setTextSize(30 * uy);
+            cv.restore();
+            // Q153（件六细则）：深底加 1px 浅色外描防融底（牌体描边，字不动）
+            if (darkBg) {
+                p.setStyle(Paint.Style.STROKE);
+                p.setStrokeWidth(Math.max(1f, 1.2f * ux));
+                p.setColor(Color.argb(190, 255, 255, 255));
+                cv.drawPath(plate, p);
+                p.setStyle(Paint.Style.FILL);
+            }
+            // 白字：UnionPay 粗斜体横贯牌心（按实测字宽收字号防溢牌）
+            p.setColor(Color.WHITE);
+            p.setTypeface(weightTypeface(getContext(), 800));
+            p.setTextSkewX(-0.15f);
+            float ts = 37 * uy;
+            p.setTextSize(ts);
+            float tw = p.measureText("UnionPay");
+            float maxTw = plateW * 0.88f;
+            if (tw > maxTw) { ts *= maxTw / tw; p.setTextSize(ts); }
             p.setTextAlign(Paint.Align.CENTER);
-            Paint.FontMetrics fm = p.getFontMetrics();
-            cv.drawText("银 联", w / 2f, 76 * uy - fm.ascent, p);
+            float pcx = xBot + plateW / 2f + slant / 2f;
+            cv.drawText("UnionPay", pcx, centeredBaseline(p, plateY + plateH * 0.44f), p);
+            p.setTextSkewX(0);
+            p.setTypeface(weightTypeface(getContext(), 800));
+            p.setTextSize(31 * uy);
+            p.setLetterSpacing(0.05f); // Q153（件六细则）：中文字距 0.05，画完即复位
+            cv.drawText("银联", pcx + plateW * 0.16f, centeredBaseline(p, plateY + plateH * 0.78f), p);
+            p.setLetterSpacing(0f);
         }
-        // Visa（2.17 按用户 20:49 点名回退 2.16 浅底牌版）：深蓝 #1A1F71 粗斜体 VISA、V 左上金色小翼；深底转白字版（翼保留金色）
-        void badgeVisa(Canvas cv, Paint p, int w, int h, float ux, float uy) {
+        // Q153（件六细则）：银联极简版（实宽 <32dp）——三色斜切块＋「银联」中文，
+        // 砍英文与字距；牌体贴满拟合框，小尺寸靠色块＋两汉字区分组织。
+        void badgeUnionPayMini153(Canvas cv, Paint p, int w, int h, float ux, float uy) {
+            float xTop = 34 * ux, xBot = 10 * ux, plateW = 196 * ux, plateY = 14 * uy, plateH = 92 * uy;
+            android.graphics.Path plate = new android.graphics.Path();
+            plate.moveTo(xTop, plateY);
+            plate.lineTo(xTop + plateW, plateY);
+            plate.lineTo(xBot + plateW, plateY + plateH);
+            plate.lineTo(xBot, plateY + plateH);
+            plate.close();
+            cv.save();
+            cv.clipPath(plate);
+            int[] cols = { Color.rgb(0xE2, 0x18, 0x36), Color.rgb(0x00, 0x44, 0x7C), Color.rgb(0x00, 0x7B, 0x84) };
+            float bandW = plateW / 3f, slant = xTop - xBot;
+            p.setStyle(Paint.Style.FILL);
+            for (int i = 0; i < 3; i++) {
+                float bx = xTop + i * bandW;
+                android.graphics.Path band = new android.graphics.Path();
+                band.moveTo(bx, plateY - 2 * uy);
+                band.lineTo(bx + bandW, plateY - 2 * uy);
+                band.lineTo(bx + bandW - slant, plateY + plateH + 2 * uy);
+                band.lineTo(bx - slant, plateY + plateH + 2 * uy);
+                band.close();
+                p.setColor(cols[i]);
+                cv.drawPath(band, p);
+            }
+            cv.restore();
+            if (darkBg) {
+                p.setStyle(Paint.Style.STROKE);
+                p.setStrokeWidth(Math.max(1f, 1.2f * ux));
+                p.setColor(Color.argb(190, 255, 255, 255));
+                cv.drawPath(plate, p);
+                p.setStyle(Paint.Style.FILL);
+            }
+            p.setColor(Color.WHITE);
+            p.setTypeface(weightTypeface(getContext(), 800));
+            p.setTextSize(52 * uy);
+            p.setTextAlign(Paint.Align.CENTER);
+            cv.drawText("银联", xBot + plateW / 2f + slant / 2f, centeredBaseline(p, plateY + plateH / 2f), p);
+        }
+        // Q153 VISA（按用户 268326 官方字标重画）：深蓝 #1A1F71 粗斜体字标一体，
+        // 旧金色小翼删除（现行官方字标无翼，金翼是旧版 Visa 识别物、压在卡面
+        // 自带标上更显杂乱）；深底预览仍转白保可读。字宽按实测收字号防溢框。
+        void badgeVisa153(Canvas cv, Paint p, int w, int h, float ux, float uy) {
             p.setStyle(Paint.Style.FILL);
             p.setColor(darkBg ? Color.WHITE : Color.rgb(0x1A, 0x1F, 0x71));
-            p.setTypeface(weightTypeface(getContext(), 800));
-            p.setTextSkewX(-0.25f);
-            p.setTextSize(84 * uy);
-            p.setTextAlign(Paint.Align.CENTER);
-            float baseline = centeredBaseline(p, h / 2f - 6 * uy);
-            cv.drawText("VISA", w / 2f, baseline, p);
+            // Q153（件六细则，DeepSeek 参数）：Paint 文字版——serif 粗斜体＋
+            // textSkewX -0.22 右倾＋字距 0.08，不手绘 Path；深底现行转白字防融底
+            // （与银联牌体浅色外描同目的、按标形态分治，见 Q153 对账）。
+            p.setTypeface(android.graphics.Typeface.create(android.graphics.Typeface.SERIF, android.graphics.Typeface.BOLD_ITALIC));
+            p.setTextSkewX(-0.22f);
+            p.setLetterSpacing(0.08f);
+            float ts = 88 * uy;
+            p.setTextSize(ts);
             float tw = p.measureText("VISA");
+            float maxTw = 208 * ux;
+            if (tw > maxTw) { ts *= maxTw / tw; p.setTextSize(ts); }
+            p.setTextAlign(Paint.Align.CENTER);
+            cv.drawText("VISA", w / 2f, centeredBaseline(p, h / 2f), p);
             p.setTextSkewX(0);
-            Paint.FontMetrics fm = p.getFontMetrics();
-            float gx = w / 2f - tw / 2f + 2 * ux, gy = baseline + fm.ascent + 2 * uy;
-            android.graphics.Path wing = new android.graphics.Path();
-            wing.moveTo(gx, gy + 16 * uy);
-            wing.lineTo(gx + 30 * ux, gy);
-            wing.lineTo(gx + 34 * ux, gy + 10 * uy);
-            wing.lineTo(gx + 6 * ux, gy + 20 * uy);
-            wing.close();
-            p.setColor(Color.rgb(0xF7, 0xB6, 0x00));
-            cv.drawPath(wing, p);
+            p.setLetterSpacing(0f);
         }
         // 万事达/万事网联：红 #EB001B / 橙 #F79E1B 双等圆交叠、交叠区独立填 #FF5F00（不用半透叠色冒充）
         void badgeMastercard(Canvas cv, Paint p, int w, int h, float ux, float uy) {
@@ -9005,50 +9275,6 @@ public class MainActivity extends Activity {
             p.setColor(Color.rgb(0xFF, 0x5F, 0x00));
             cv.drawRect(0, 0, w, h, p);
             cv.restore();
-        }
-        // Q129 银联 B（扁平版，仅设置预览）：三段实色梯形 #D9232E/#174B8F/#087F73 无缝衔接，
-        // 下配「UnionPay 银联」小字（样稿 icon-variants org-badges-b，120×76 画板）
-        void badgeUnionPayB129(Canvas cv, Paint p, float bx, float by) {
-            p.setStyle(Paint.Style.FILL);
-            int[] cols = { Color.rgb(0xD9, 0x23, 0x2E), Color.rgb(0x17, 0x4B, 0x8F), Color.rgb(0x08, 0x7F, 0x73) };
-            float[][] seg = { {10, 38}, {40, 68}, {70, 98} };
-            for (int i = 0; i < 3; i++) {
-                android.graphics.Path poly = new android.graphics.Path();
-                poly.moveTo(seg[i][0] * bx, 14 * by);
-                poly.lineTo(seg[i][1] * bx, 14 * by);
-                poly.lineTo((seg[i][1] - 4) * bx, 38 * by);
-                poly.lineTo((seg[i][0] - 4) * bx, 38 * by);
-                poly.close();
-                p.setColor(cols[i]);
-                cv.drawPath(poly, p);
-            }
-            p.setColor(darkBg ? Color.WHITE : Color.rgb(0x17, 0x4B, 0x8F)); // Q148：B 版银联小字补深色档（旧写死深蓝，深底上看不清）
-            p.setTypeface(weightTypeface(getContext(), 600));
-            p.setTextSize(8.5f * by);
-            p.setTextAlign(Paint.Align.CENTER);
-            cv.drawText("UnionPay 银联", 54 * bx, centeredBaseline(p, 52 * by), p);
-        }
-        // Q129 VISA B（仅设置预览）：深蓝 #1A1F71 粗斜体、无金翼；深底转白（样稿同口径）
-        void badgeVisaB129(Canvas cv, Paint p, float bx, float by) {
-            p.setStyle(Paint.Style.FILL);
-            p.setColor(darkBg ? Color.WHITE : Color.rgb(0x1A, 0x1F, 0x71));
-            p.setTypeface(weightTypeface(getContext(), 800));
-            p.setTextSkewX(-0.22f);
-            p.setTextSize(30 * by);
-            p.setTextAlign(Paint.Align.CENTER);
-            cv.drawText("VISA", 60 * bx, centeredBaseline(p, 38 * by), p);
-            p.setTextSkewX(0);
-        }
-        // Q129 Mastercard B（仅设置预览）：红 #EB001B + 橙 #F79E1B 半透交叠，不另填交叠色
-        void badgeMastercardB129(Canvas cv, Paint p, float bx, float by) {
-            p.setStyle(Paint.Style.FILL);
-            p.setColor(Color.rgb(0xEB, 0x00, 0x1B));
-            p.setAlpha(255);
-            cv.drawCircle(46 * bx, 38 * by, 17 * by, p);
-            p.setColor(Color.rgb(0xF7, 0x9E, 0x1B));
-            p.setAlpha(224); // 样稿 .88 半透，交叠处自然混色
-            cv.drawCircle(74 * bx, 38 * by, 17 * by, p);
-            p.setAlpha(255);
         }
         // 美国运通：#2E77BC 圆角方标 + 白粗字 AMEX
         void badgeAmex(Canvas cv, Paint p, float ux, float uy) {
@@ -9114,26 +9340,30 @@ public class MainActivity extends Activity {
         } catch (Throwable ignored) { }
     }
 
-    // Q152（2.63，组织标统一右上·全 App 收口）：卡面/结果图右上角一处加标——
-    // 同一 OrgBadgeView、同 48×24dp 画幅（scale 缩放）、同 6dp 内距，各落点
-    // （详情图廊/瓷砖/学生/外卡列表/BIN 命中行/外卡英雄图）只许走这一处，不许
-    // 再各写一套。标是宿主内的姊妹视图：图廊竖图横摆只转位图、标不随转，
-    // 视觉右上恒定（本件对旋转路径的自查结论）。Q104「卡面撤标」旧口径自此
-    // 被用户 2026-10-06 08:37 新令覆盖（见 Q152）。
-    void addOrgBadgeTopRight152(FrameLayout host, String org, boolean darkBg, float scale) {
-        addOrgBadgeTopRight152(host, org, darkBg, scale, 6);
+    // Q153（2.64，件二·用户 2026-10-06 16:32–16:41 二度纠偏后的定稿，覆
+    // Q152「组织标统一右上·全图加标」）：自绘组织标只许落在「没有真实卡面
+    // 图、纯色占位」的卡上，用于区分组织——有真实卡面图的卡面自带印刷标，
+    // 再盖一枚即重复盖章（用户图证 270137/270139），一律不加。落位改占位
+    // 区右下角（仿真实卡面印刷标惯常位，如双圆位），与右上加卡钮天然分开；
+    // 尺寸较 Q152 小标明显放大（各落点 scale 见调用处，Q153 对账注明）。
+    // 调用方必须先判无图（同步位图为 null / 异步 onNoBitmap）才许调本法；
+    // 标带 tag "orgBadge153"，远程图后落盘换入真图时由 swapInFetchedIn133
+    // 摘除（防占位转真图后标压真卡面）。
+    void addOrgBadgeBottomRight153(FrameLayout host, String org, boolean darkBg, float scale) {
+        addOrgBadgeBottomRight153(host, org, darkBg, scale, 6);
     }
-    void addOrgBadgeTopRight152(FrameLayout host, String org, boolean darkBg, float scale, int topMarginDp) {
+    void addOrgBadgeBottomRight153(FrameLayout host, String org, boolean darkBg, float scale, int bottomMarginDp) {
         if (host == null || !hasOrgBadge(org)) return;
         try {
-            OrgBadgeView badge152 = new OrgBadgeView(this, org, darkBg);
-            int bw152 = Math.round(dp(this, orgBadgeWidthDp(org) * scale));
-            int bh152 = Math.round(dp(this, 24 * scale));
-            FrameLayout.LayoutParams lp152 = new FrameLayout.LayoutParams(bw152, bh152);
-            lp152.gravity = Gravity.TOP | Gravity.RIGHT;
-            lp152.rightMargin = dp(this, 6);
-            lp152.topMargin = dp(this, topMarginDp);
-            host.addView(badge152, lp152);
+            OrgBadgeView badge153 = new OrgBadgeView(this, org, darkBg);
+            badge153.setTag("orgBadge153");
+            int bw153 = Math.round(dp(this, orgBadgeWidthDp(org) * scale));
+            int bh153 = Math.round(dp(this, 24 * scale));
+            FrameLayout.LayoutParams lp153 = new FrameLayout.LayoutParams(bw153, bh153);
+            lp153.gravity = Gravity.BOTTOM | Gravity.RIGHT;
+            lp153.rightMargin = dp(this, 6);
+            lp153.bottomMargin = dp(this, bottomMarginDp);
+            host.addView(badge153, lp153);
         } catch (Throwable ignored) { }
     }
 
@@ -9189,9 +9419,11 @@ public class MainActivity extends Activity {
                 try { b152 = Img.getSized(appCtx152, path, targetW); } catch (Throwable ignored) {}
                 final Bitmap fb152 = b152;
                 mainHandler.post(() -> {
+                    long swapT153 = System.nanoTime(); // Q153（件四）：换入/旋转在主线程的占用计时
                     if (!path.equals(iv.getTag())) return; // 视图已换图，错位不贴
                     if (fb152 != null) iv.setImageBitmap(rotatePortrait ? portraitToLandscape151(fb152) : fb152);
                     else if (onNoBitmap != null) onNoBitmap.run();
+                    perfTask153("gallery.swap", swapT153);
                 });
             });
         } catch (Throwable t152) {
@@ -9388,10 +9620,9 @@ public class MainActivity extends Activity {
         // Q143（2.54，乙组）撤 Q131 承托底板：图 CENTER_CROP 铺满 art 全框、art 与 iv 同半径（tileR）裁切——角区只透出瓷砖柔面，不再垫深色板（用户 01:19 工行星座图实证：一圈黑边＋卡显缩一号）。
         topSheetClip(art, tileR, this); // Q48 排查补强：图区容器同半径顶圆底直裁切，顶图四角不靠瓷砖外框单层 outline
         box.addView(art, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, imgH));
-        ImageView iv = new ImageView(this);
-        iv.setScaleType(ImageView.ScaleType.CENTER_CROP); // cover：铺满不留白、等比不拉伸
+        CardFaceView153 iv = new CardFaceView153(this); // Q153（件五）：共用取图管线（COVER 一次几何＋clipPath），scaleType/自身 outline 裁切退役
+        iv.setFaceRadius153(tileR, true); // 与 art 同半径顶圆底直（topSheetClip 轮廓同式，收进绘制内一把裁）
         iv.setTag(c.image); // Q133（2.45，件六）：远程图落盘就地换入的认件 tag（见 swapInFetchedImage133）
-        topSheetClip(iv, tileR, this); // Q126（件十）：图自身补与 art 同半径同轮廓裁切——旧实现只靠父容器单层 outline，失效时方图顶角直出
         iv.setBackground(placeholderGradFor(c.id, 0, this));
         art.addView(iv, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         Bitmap b = Img.getSized(this, c.image, tileW); // Q99：卡图按瓷砖实际显示宽一次解码缓存，不再原图逐帧缩放
@@ -9498,11 +9729,11 @@ public class MainActivity extends Activity {
         blp2.gravity = Gravity.TOP | Gravity.RIGHT;
         blp2.topMargin = btnEdge; blp2.rightMargin = btnEdge;
         art.addView(mineBtn, blp2);
-        // Q152（组织标统一右上）：瓷砖组织标落右上列、加卡钮正下方（钮是既有
-        // 控件不挪位，标在其下同列成串）；scale 随列数收。Q104 撤标被用户
-        // 2026-10-06 新令覆盖，参数表/文字行的组织呈现不变。
-        addOrgBadgeTopRight152(art, normOrgKey152(c.org), false,
-            nc >= 4 ? 0.5f : nc == 3 ? 0.65f : 0.85f, (btnEdge + btnSize) / Math.max(1, dp(this, 1)) + 4);
+        // Q153（件二定稿，覆 Q152）：组织标仅无图占位（b==null）才加，落 art
+        // 右下角仿卡面印刷标位，与右上加卡钮天然分开；有真实卡面一律不加。
+        // scale 随列数收：2 列 1.15／3 列 0.95／4 列 0.8（基 48×24dp，较 Q152 小标放大）。
+        if (b == null) addOrgBadgeBottomRight153(art, normOrgKey152(c.org), false,
+            nc >= 4 ? 0.8f : nc == 3 ? 0.95f : 1.15f);
         // Q89：未核实卡在卡图左上角压一枚「存疑」毛玻璃标（与右上加卡钮对角分工、不遮卡名）
         if (c.hasUnverified()) {
             FrameLayout.LayoutParams dlp = new FrameLayout.LayoutParams(
@@ -10389,7 +10620,7 @@ public class MainActivity extends Activity {
         if (homePullRefreshing) return;
         homePullRefreshing = true;
         homePullDy = 0f;
-        hideHomeLoading(); // Q148：下拉指示接管反馈，居中加载层同时退场（双转圈同治，见 maybeShowHomeLoading）
+        renderHomeLoading153(); // Q148→Q153：下拉指示接管反馈，居中层走单入口退场（双转圈同治）
         updateHomePullUi();
         haptic();
         // Q148（2.59，用户 05:06 立规矩）：首页下拉改走数据同步检测全链
@@ -10401,7 +10632,7 @@ public class MainActivity extends Activity {
             homePullRefreshing = false;
             if (homePullIcon != null) stopPullSpin(homePullIcon);
             if (homePullBar != null) homePullBar.setVisibility(View.GONE);
-            maybeShowHomeLoading(); // 同步收尾后若首屏续搭未落定，居中兜底按原口径接回（任意时刻只许一个转圈）
+            renderHomeLoading153(); // Q153：同步收尾后若首屏续搭未落定，单入口按状态接回（任意时刻只许一个转圈）
         });
     }
 
@@ -10641,7 +10872,18 @@ public class MainActivity extends Activity {
             int w = iv.getWidth();
             if (w > 0) {
                 Bitmap nb = Img.getSized(this, path, w);
-                if (nb != null) iv.setImageBitmap(nb);
+                if (nb != null) {
+                    iv.setImageBitmap(nb);
+                    noteBackdropContentChanged153(); // Q153：异步图落位＝内容版本++（背板缓存失效点）
+                    // Q153：占位瓷砖当年因无图加的组织标，真图换入后必须摘除
+                    // （有真实卡面一律不加标，防远程图落盘后标压真卡面）。
+                    if (iv.getParent() instanceof ViewGroup) {
+                        ViewGroup vg153 = (ViewGroup) iv.getParent();
+                        for (int i = vg153.getChildCount() - 1; i >= 0; i--) {
+                            if ("orgBadge153".equals(vg153.getChildAt(i).getTag())) vg153.removeViewAt(i);
+                        }
+                    }
+                }
             }
         }
         if (v instanceof ViewGroup) {
@@ -10683,9 +10925,11 @@ public class MainActivity extends Activity {
     }
 
     void renderHomeList(List<Card> list) {
+        noteBackdropContentChanged153(); // Q153：数据/筛选重渲染＝内容版本++（背板缓存失效点）
         final int gen = ++homeRenderGen; // 作废上一轮尚未跑完的分帧续帧
-        homeChunkPending = 0; // Q127：新一轮渲染接管未落定计数（旧轮 step 凭 gen 自尽，不再回写）
-        hideHomeLoading(); // Q127：上一轮若亮着兜底层，新一轮起手先摘（本轮有续搭会再亮）
+        // Q153：未落定计数不再整表清零——旧轮续搭凭 gen 作废时各自归还令牌
+        // （见 addCardRowsChunked 作废支），新轮令牌随后登记，计数恒平。
+        renderHomeLoading153(); // 上一轮若亮着兜底层，按状态机先重算（新轮有续搭会再亮）
         homeList.removeAllViews();
         if (list.isEmpty()) {
             homeList.addView(emptyState("没有符合条件的卡\n换个筛选条件或清空筛选试试"));
@@ -10702,6 +10946,7 @@ public class MainActivity extends Activity {
                 goExt.setOnClickListener(v -> { haptic(); openExtendedSearch(); if (extInput != null) { extInput.setText(fq); try { extInput.setSelection(fq.length()); } catch (Throwable ignored) {} } });
                 homeList.addView(goExt, glp);
             }
+            if (homeChunkTokens153.isEmpty() && homeLoadState153 == HOME_LOAD_BOOTING153) onHomeBootBuilt153(); // Q153：空表也是搭完，走唯一完成点
             return;
         }
         if (query.isEmpty() && activeFilterCount() == 0) homeList.addView(wizardBanner());
@@ -10733,22 +10978,39 @@ public class MainActivity extends Activity {
             }));
             if (open) addCardRowsChunked(homeList, cs, gen);
         }
+        // Q153：本轮全同步搭完（无续搭登记）且无在飞令牌——首建即落定，走唯一完成点
+        if (homeChunkTokens153.isEmpty() && homeLoadState153 == HOME_LOAD_BOOTING153) onHomeBootBuilt153();
     }
 
     // Q21 ② 分帧渲染：首帧只搭首屏（约 4 行），其余每帧续搭 4 行——213 张不再一口气堵死主线程，
     // 切页/筛选后的第一眼立刻出现，列表在手指碰到前就已补齐；代次令牌保证快速连改筛选时旧续帧不会把过期卡塞回来。
     // 分组模式下续帧按记录的插入位回插本组行尾（下一组标题之前），不许续帧一律 append 到全表末尾把组冲散。
-    // Q152（2.63，前单②）：首页「加载中」残留看门狗——分帧续搭的 pending 计数在
-    // 代次切换/容器易主等边角时序下可能永不归零，兜底层便长挂（数据已入仍转圈）。
-    // 进度时间戳＋2.5 秒无进展强制落定摘层；正常链毫秒级推进、永不触发。
-    long homeChunkProgressMs152 = 0;
-    void armHomeLoadingWatchdog152() {
-        homeChunkProgressMs152 = System.currentTimeMillis();
-        mainHandler.postDelayed(() -> {
-            if (homeChunkPending > 0 && System.currentTimeMillis() - homeChunkProgressMs152 > 2500) {
-                homeChunkPending = 0;
-                hideHomeLoading();
-                homeBootBuilt150 = true; // 与正常落定同口径：兜底层此后不再露
+    // Q153（2.64，件一）：看门狗改判——不再自己摘层/置闩。判据＝未落定令牌数
+    // 在 2.5 秒内未变小（Q152 旧判据读「进度时间戳」，而时间戳被续搭每帧刷新
+    // （旧 10785 行），「无进展」永不成立，看门狗形同虚设——本版删该时间戳）。
+    // 触发时只调唯一完成点 onHomeBootBuilt153()，与正常落定同路摘层。自续期
+    // 复查（每秒一探）直至 READY 或令牌排空，不留单发即弃的盲区。
+    int homeWatchPending153 = -1;   // 上次探到的令牌数
+    long homeWatchShrinkMs153 = 0;  // 令牌数最近一次变小的时刻
+    boolean homeWatchArmed153 = false;
+    void noteHomeChunkShrink153() {
+        int n153 = homeChunkTokens153.size();
+        if (homeWatchPending153 < 0 || n153 < homeWatchPending153) {
+            homeWatchPending153 = n153;
+            homeWatchShrinkMs153 = System.currentTimeMillis();
+        }
+    }
+    void armHomeLoadingWatchdog153() {
+        noteHomeChunkShrink153();
+        if (homeWatchArmed153) return;
+        homeWatchArmed153 = true;
+        mainHandler.postDelayed(new Runnable() {
+            @Override public void run() {
+                if (homeLoadState153 != HOME_LOAD_BOOTING153 || homeChunkTokens153.isEmpty()) { homeWatchArmed153 = false; return; }
+                boolean stalled153 = System.currentTimeMillis() - homeWatchShrinkMs153 > 2500
+                        && homeChunkTokens153.size() >= homeWatchPending153;
+                if (stalled153) { homeWatchArmed153 = false; onHomeBootBuilt153(); return; } // 只喊完成点，不自摘层
+                mainHandler.postDelayed(this, 1000);
             }
         }, 2600);
     }
@@ -10761,51 +11023,62 @@ public class MainActivity extends Activity {
         if (rows <= firstRows) return;
         // Q127（2.39，审计 A2/B1）：续搭未落定计数——B1 加载提示层据此显隐；
         // 预热领先自 1 帧扩到 3 帧（每帧 4 行 → 领先 12 行），构建帧尽量只命中缓存。
-        homeChunkPending++;
-        armHomeLoadingWatchdog152(); // Q152：残留看门狗（进度戳起跑）
-        maybeShowHomeLoading();
+        // Q153：计数改令牌（见字段处），本批一枚、落定/作废各自归还。
+        final Object chunkToken153 = new Object(); // Q153：本批续搭令牌，落定/作废各自归还
+        homeChunkTokens153.add(chunkToken153);
+        armHomeLoadingWatchdog153(); // Q153：看门狗（改判令牌未变小，触发只喊完成点）
+        renderHomeLoading153();
         prefetchCardRows(list, firstRows, firstRows + 12); // Q105：下一帧的行先在后台解图
         final int[] next = { firstRows };
         final Runnable[] step = new Runnable[1];
         step[0] = () -> {
-            if (gen != homeRenderGen || container != homeList) return; // 已有更新一轮渲染接管
+            if (gen != homeRenderGen || container != homeList) { // 已有更新一轮渲染接管：整批作废并归还令牌（Q153，旧码在此裸 return 漏减计数）
+                homeChunkTokens153.remove(chunkToken153);
+                noteHomeChunkShrink153();
+                afterHomeChunkTokenReturned153();
+                return;
+            }
             // Q116（2.29）：续帧搭的全是视口外的尾部行——用户正在甩列表的这几帧不跟
             // 甩动抢主线程，滚动停稳后立即续上；首帧 4 行同步节奏与最终产出不变。
             // Q127（2.39，审计 A2）：让路扩围——切页过渡弹簧在跑（tabAnim.task 非空）
             // 时同样顺延，过渡落定后立即续搭，不再只看 150ms 滚动窗。
             if ((homeScroll != null
-                    && android.os.SystemClock.uptimeMillis() - homeScrollMoveMs < 150)
+                    && android.os.SystemClock.uptimeMillis() - homeScrollMoveMs < 200)
+                    || android.os.SystemClock.uptimeMillis() - lastScrollEventMs < 200
                     || tabAnim.task != null) {
+                // Q153（件四）：续搭与滚动互斥收紧——任一滚动 200ms 内不搭行，
+                // 停稳再续（旧 150ms 仅看首页自家滚动位移，现并入全树滚动打点）
                 mainHandler.postDelayed(step[0], 120);
                 return;
             }
             int end = Math.min(rows, next[0] + 4);
             for (int r = next[0]; r < end; r++) addCardRowAt(container, list, r, insertAt);
             next[0] = end;
-            homeChunkProgressMs152 = System.currentTimeMillis(); // Q152：续搭有进展，看门狗不触发
+            // Q153：旧「续搭有进展刷时间戳」行删除——看门狗改判令牌数未变小，
+            // 进展只认令牌归还（落定/作废处 noteHomeChunkShrink153），帧帧刷戳
+            // 正是 Q152 看门狗永不触发的病根。
             if (next[0] < rows) prefetchCardRows(list, next[0], next[0] + 12); // Q105：始终领先一帧预热（Q127 扩为 3 帧）
             // Q95 热修（2.07）：续搭不许投给 container 自身——首页容器会被欢迎页/覆盖层摘除，
             // View.post 在未 attach 时会 park 进该视图的 RunQueue，等重挂瞬间才集中 flush，
             // 与切页淡入、玻璃背板重录挤在同一帧（清数据首启点「开始使用」闪退的 virgin 独有链路）。
             // 改投主线程 Handler：页面在不在场都按帧推进，欢迎页停留期间即可搭完。
             if (next[0] < rows) mainHandler.post(step[0]);
-            else { // Q127（2.39，审计 B1）：本轮续搭落定——计数归零则摘加载提示层
-                if (homeChunkPending > 0) homeChunkPending--;
-                if (homeChunkPending <= 0) { hideHomeLoading(); homeBootBuilt150 = true; } // Q150（2.61，N1）：首建落定置闩，此后切页/重搭不再露居中转圈
+            else { // Q153：本批续搭落定——归还令牌，同路收口（排空走唯一完成点）
+                homeChunkTokens153.remove(chunkToken153);
+                noteHomeChunkShrink153();
+                afterHomeChunkTokenReturned153();
             }
         };
         mainHandler.post(step[0]);
     }
 
-    // Q127（2.39，审计 B1）：首屏未就绪兜底提示——续搭未落定且已身处首页（欢迎已退）
-    // 时在 content 之上独立层居中转圈＋「加载中」，落定即摘。A 层生效后正常路径几乎
-    // 不触发（欢迎停留期预建通常已搭完）；层在场时 captureBackdrop 走隐藏名单同口
-    // （见 captureBackdrop 内 homeLoadingLayer 处理），不许被拍进玻璃背板。
-    void maybeShowHomeLoading() {
-        if (homeBootBuilt150) return; // Q150（2.61，N1）：列表已完整搭完过——切页/重搭永不再露居中转圈，只许首屏首建时出现
-        if (homeChunkPending <= 0 || helloOpen || !"home".equals(tab)) return;
-        if (homePullRefreshing) return; // Q148：下拉同步在场时下拉指示独占反馈，不许居中再起一个转圈（用户点名双转圈）
-        if (content == null || homeLoadingLayer != null) return;
+    // Q153（2.64，件一）：加载层状态机三件套，替退 maybeShowHomeLoading/
+    // hideHomeLoading 两口旁路（旧 hide 走 140ms 淡出＋320ms 兜底异步摘除，
+    // 淡出窗口内 maybeShow 又 new 新层双层并存、旧层摘除回调与新层显隐互相
+    // 打架，即 DeepSeek 根因 A/D 的代码实证；旧 maybeShow 每次 new 新层、
+    // hide 后字段置 null，实例不唯一）。
+    // 唯一实例：只建一次、复用终身；show 前先清残（父级不对先摘再挂）。
+    void buildHomeLoadingLayer153() {
         FrameLayout layer = new FrameLayout(this);
         layer.setBackgroundColor(Color.argb(0, 0, 0, 0)); // 透明兜底：只提示不遮画面（旧混合版同口径）
         LinearLayout colL = new LinearLayout(this);
@@ -10823,31 +11096,60 @@ public class MainActivity extends Activity {
             ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         labp.topMargin = dp(this, 8);
         colL.addView(lab, labp);
-        content.addView(layer, new FrameLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         homeLoadingLayer = layer;
         homeLoadingSpin = spin;
-        layer.setAlpha(0f);
-        layer.animate().alpha(1f).setDuration(160).start();
-        startPullSpin(spin);
     }
 
-    void hideHomeLoading() {
-        final View layer = homeLoadingLayer;
-        if (layer == null) return;
-        homeLoadingLayer = null;
-        if (homeLoadingSpin != null) { stopPullSpin(homeLoadingSpin); homeLoadingSpin = null; }
-        layer.animate().cancel();
-        layer.animate().alpha(0f).setDuration(140).withEndAction(() -> {
-            if (layer.getParent() != null) ((ViewGroup) layer.getParent()).removeView(layer);
-        }).start();
-        // 兜底：动画回调不达时 300ms 强制摘除，层不许赖在屏上
-        mainHandler.postDelayed(() -> {
-            if (layer.getParent() != null) ((ViewGroup) layer.getParent()).removeView(layer);
-        }, 320);
+    // 唯一渲染入口：任何路径（续搭登记/落定/作废、切页、下拉、回前台、欢迎
+    // 散场、看门狗）只许调它重算显隐，不许再各自 add/remove/置闩。隐藏走同
+    // 帧同步摘除（不再淡出延迟摘，杜绝残留窗口）。层在场时 captureBackdrop
+    // 走隐藏名单同口（见 captureBackdrop 内 homeLoadingLayer 处理）。
+    void renderHomeLoading153() {
+        boolean shouldShow153 = homeLoadState153 == HOME_LOAD_BOOTING153
+                && !homeChunkTokens153.isEmpty()
+                && !helloOpen
+                && "home".equals(tab)
+                && !homePullRefreshing // Q148：下拉同步在场时下拉指示独占反馈，不许双转圈
+                && content != null;
+        if (shouldShow153) {
+            if (homeLoadingLayer == null) buildHomeLoadingLayer153();
+            if (homeLoadingLayer.getParent() != content) {
+                if (homeLoadingLayer.getParent() != null)
+                    ((ViewGroup) homeLoadingLayer.getParent()).removeView(homeLoadingLayer); // show 前先清残
+                content.addView(homeLoadingLayer, new FrameLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+                homeLoadingLayer.setAlpha(0f);
+                homeLoadingLayer.animate().alpha(1f).setDuration(160).start();
+                if (homeLoadingSpin != null) startPullSpin(homeLoadingSpin);
+            }
+        } else {
+            if (homeLoadingLayer != null && homeLoadingLayer.getParent() != null) {
+                homeLoadingLayer.animate().cancel();
+                ((ViewGroup) homeLoadingLayer.getParent()).removeView(homeLoadingLayer); // 同帧摘，不留淡出尾巴
+            }
+            if (homeLoadingSpin != null) stopPullSpin(homeLoadingSpin);
+        }
+    }
+
+    // 唯一完成点：首屏搭完（正常落定/看门狗判卡死/无续搭整表同步搭完）只许
+    // 从这里进 READY——置态＋令牌强制清零＋走同一渲染入口摘层，别处不许
+    // 直接置态或摘层。
+    void onHomeBootBuilt153() {
+        homeLoadState153 = HOME_LOAD_READY153;
+        homeChunkTokens153.clear();
+        noteHomeChunkShrink153();
+        renderHomeLoading153();
+    }
+
+    // 令牌归还后的同路收口（落定/作废共用）：排空且仍 BOOTING 走完成点，
+    // 否则只重算显隐。
+    void afterHomeChunkTokenReturned153() {
+        if (homeChunkTokens153.isEmpty() && homeLoadState153 == HOME_LOAD_BOOTING153) onHomeBootBuilt153();
+        else renderHomeLoading153();
     }
 
     void addCardRowAt(LinearLayout container, List<Card> list, int rowIdx, int[] insertAt) {
+        long rowT153 = System.nanoTime(); // Q153（件四）：续搭/首屏建行计时（≥8ms 落 task tag）
         int i = rowIdx * cols;
         LinearLayout row = new LinearLayout(this);
         row.setOrientation(LinearLayout.HORIZONTAL);
@@ -10881,6 +11183,7 @@ public class MainActivity extends Activity {
                 row.addView(spacer);
             }
         }
+        perfTask153("chunk.addView", rowT153);
     }
 
     View bankHead(final String bank, List<Card> cs, boolean open, int maxN, final Runnable onToggle) {
@@ -10970,7 +11273,7 @@ public class MainActivity extends Activity {
         closeFilterSheetNow();
         // P2e/P2c：右下双钮退场，不与筛选窗叠压
         hideChrome(); // Q12
-        prepareFrozenBackdrop131(); // Q131：冻结帧在窗上屏前抓好，进场动画不付整树绘制＋三遍模糊（件四）
+        // Q153（件三）：旧 prepareFrozenBackdrop131 窗前同步预抓退役——背板改由 glassLayerHw 挂载后的统一管线首帧后补（内容先行）。
         final FrameLayout sheet = new FrameLayout(this);
         sheet.setBackgroundColor(Color.argb(102, 15, 20, 40)); // Q77b：窗外再压暗一档（对齐混合版 .dlg-backdrop rgba(0,0,0,.4)），与玻璃窗体明暗分明
         sheet.setOnClickListener(v -> { haptic(); closeFilterSheet(); }); // Q152（追加C）：关闭钮/遮罩点按补触感
@@ -12929,8 +13232,8 @@ public class MainActivity extends Activity {
             // Q143（2.54，乙组）撤 Q131 承托底板：详情大图铺满 imgFrame 框边、角外透窗面——深色卡不再被底板勒出一圈黑边（Q138 的承托形制只撤底色、内缩/封顶/海拔不变）。
             if (Build.VERSION.SDK_INT >= 21) imgFrame.setElevation(dp(this, 6));
             roundClip(imgFrame, cardR, this);
-            ImageView iv = new ImageView(this);
-            iv.setScaleType(ImageView.ScaleType.CENTER_CROP); // Q122（2.34，件二）：框已按图比定尺寸，CENTER_CROP 等比铺满无拉伸；旧 FIT_CENTER 在比例微差时留边透出窗面成白楔
+            CardFaceView153 iv = new CardFaceView153(this); // Q153（件五）：共用取图管线（COVER＋clipPath 自绘），scaleType 退役；黑边根因（旧 CENTER_CROP＋占位底在旋转/比例微差时角区露底）由此一次几何铺满消解
+            iv.setFaceRadius153(cardR, false);
             iv.setBackgroundColor(Color.TRANSPARENT);
             // Q151（N5·组件化圆角）：iv 自身的第二把 outline 撤除——旧 imgFrame＋iv
             // 各裁一遍，两遍抗锯齿半径微差，滑杆回标准档时四角出黑楔（用户 06:09
@@ -12967,12 +13270,13 @@ public class MainActivity extends Activity {
                 dlp.leftMargin = dp(this, 8); dlp.topMargin = dp(this, 8);
                 imgFrame.addView(badgeCol, dlp);
             }
-            // Q152（组织标统一右上）：详情图廊组织标落 imgFrame 右上——位图横摆
-            // 只转 iv 里的图，角标是框内姊妹视图不随转，视觉右上恒定。子版本无
-            // 独立组织字段（数据实查：variants 仅 bin/image/name/note），全廊用本卡组织。
-            addOrgBadgeTopRight152(imgFrame, normOrgKey152(c.org), false, 1.0f, 8);
             iv.setBackground(placeholderGradFor(c.id, cardR, this)); // 占位先行（无图终态同此，异步换入后被位图盖住）
+            // Q153（件二定稿，覆 Q152）：组织标仅无图占位终态（无路径/解码无
+            // 果走 onNoBitmap）才落 imgFrame 右下角仿卡面印刷标位；有真实卡面
+            // 一律不加。标是框内姊妹视图不随位图横摆，落位恒视觉右下。子版本
+            // 无独立组织字段（Q152 数据实查），全廊用本卡组织。
             bindGalleryBitmap152(iv, slidePath152, slideW152, true, () -> {
+                addOrgBadgeBottomRight153(imgFrame, normOrgKey152(c.org), false, 1.25f, 8);
                 if (placeholderCustomEnabled) imgFrame.setOnLongClickListener(v -> { haptic(); openPlaceholderColorPicker(c); return true; });
             });
             if (slideName != null && !slideName.isEmpty()) {
@@ -13525,7 +13829,7 @@ public class MainActivity extends Activity {
             roundClip(stuThumb, cardSmallR129(9f), this);
             Bitmap b = Img.getSized(this, c.image, dp(this, 72)); // Q105：72dp 拇指按显示尺寸解码（旧 Img.get 全量解码）
             if (b != null) iv.setImageBitmap(b);
-            addOrgBadgeTopRight152(stuThumb, normOrgKey152(c.org), false, 0.5f); // Q152：组织标统一右上（学生列表图）
+            else addOrgBadgeBottomRight153(stuThumb, normOrgKey152(c.org), false, 0.7f); // Q153：仅无图占位加组织标（右下·放大）；有图不加
             LinearLayout tx = new LinearLayout(this);
             tx.setOrientation(LinearLayout.VERTICAL);
             LinearLayout.LayoutParams txLp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
@@ -16543,11 +16847,13 @@ public class MainActivity extends Activity {
             closeBinQueryNow();
             openDetail(target);
         });
-        // Q152（组织标统一右上）：BIN 命中行外包一层，组织标落行右上（行内
-        // 点击仍走 box 本体，标不拦截）。
+        // Q153（件二定稿，覆 Q152）：BIN 命中行不渲染卡图、组织已在 meta 文字
+        // 行；仅当该卡无卡面图（image 路径为空）才在行右下补组织标助区分，有
+        // 真实卡面一律不加（行内点击仍走 box 本体，标不拦截）。
         FrameLayout hitWrap152 = new FrameLayout(this);
         hitWrap152.addView(box, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
-        addOrgBadgeTopRight152(hitWrap152, normOrgKey152(c.org), false, 0.62f, 4);
+        if (c.image == null || c.image.isEmpty())
+            addOrgBadgeBottomRight153(hitWrap152, normOrgKey152(c.org), false, 0.7f, 4);
         return hitWrap152;
     }
 
@@ -17452,7 +17758,7 @@ public class MainActivity extends Activity {
     }
     FrameLayout buildUpdateSheet(String title, String msg, String cancelTxt, String okTxt, Runnable onOk) {
         hideChrome();
-        prepareFrozenBackdrop131(); // Q131：确认为同族 frozen 浮卡窗，冻结帧先行（件四；桌面图标切换确认窗亦经此，件二）
+        // Q153（件三）：旧 prepareFrozenBackdrop131 窗前同步预抓退役——背板改由 glassLayerHw 挂载后的统一管线首帧后补（内容先行）。
         final FrameLayout sheet = new FrameLayout(this);
         View shade = new View(this); shade.setBackgroundColor(Color.argb(102,0,0,0)); shade.setAlpha(0f);
         sheet.addView(shade, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
@@ -17903,7 +18209,7 @@ public class MainActivity extends Activity {
         ensureGlossary();
         try { fetchGlossaryUpdate(); } catch (Throwable ignored) {}
         hideChrome(); // Q122（件十一）：浮层开窗底栏退场
-        prepareFrozenBackdrop131(); // Q131：同筛选窗——冻结帧先行，进场弹簧不被抓图堵首帧（件四）
+        // Q153（件三）：旧 prepareFrozenBackdrop131 窗前同步预抓退役——背板改由 glassLayerHw 挂载后的统一管线首帧后补（内容先行）。
         final FrameLayout overlay = new FrameLayout(this);
         View shade = new View(this);
         shade.setBackgroundColor(Color.argb(102, 0, 0, 0));
@@ -18468,7 +18774,8 @@ public class MainActivity extends Activity {
         // Q151（N6）：无深链落点时把重建前滚动位贴回（与 renderNews keepY 同口径）
         if (jumpView == null && glossKeepY151 > 0 && newsScroll != null) {
             final int y151 = glossKeepY151;
-            newsScroll.post(() -> { if (newsScroll != null) newsScroll.scrollTo(0, y151); });
+            final long keepMs153 = android.os.SystemClock.uptimeMillis(); // Q153（件八）：同 renderNews 守卫口径
+            newsScroll.post(() -> { if (newsScroll != null && lastUserTouchScrollMs153 <= keepMs153) newsScroll.scrollTo(0, y151); });
         }
     }
 
@@ -18919,9 +19226,9 @@ public class MainActivity extends Activity {
         if (Build.VERSION.SDK_INT >= 21) face.setElevation(dp(this, 6));
         if (it.card != null) {
             face.setBackground(placeholderGradFor(it.card.id, r, this));
-            ImageView iv = new ImageView(this);
-            iv.setScaleType(cropFill127 ? ImageView.ScaleType.CENTER_CROP : ImageView.ScaleType.FIT_CENTER); // Q122（2.34，件十五补）：小面整幅等比可见；Q127 放大面铺满裁切
-            roundClip(iv, r, this); // Q130（件六）：卡图自身补与外框同一把弧——旧实现只靠 face 外框单层 outline，个别机型失效时方图四角直出（右角最显）；只加裁切，缩放/显示区/半径公式（cardR129 随圆角 t 同步）一字未动
+            CardFaceView153 iv = new CardFaceView153(this); // Q153（件五）：共用取图管线——放大面 COVER 铺满、小面 FIT 整幅（同类同一几何函数两档），scaleType 与 iv 自身 outline 退役
+            iv.setFaceRadius153(r, false);
+            iv.setFaceFit153(!cropFill127);
             Bitmap b = Img.getSized(this, it.card.image, Math.max(64, wPx)); // Q105：展柜面按实际显示宽解码（旧全量解码；源宽恒 ≥ 显示宽，画面不变）
             if (b != null) {
                 // Q131（件五）：有真实卡图时面底衬换承托面（旧为按卡配色的占位渐变垫在
@@ -19073,9 +19380,7 @@ public class MainActivity extends Activity {
         if (showcaseBackBtn152 != null) showcaseBackBtn152.setBackground(roundRect(btnBg152, 999, this));
         if (showcasePaletteBtn152 != null) showcasePaletteBtn152.setBackground(roundRect(btnBg152, 999, this));
         if (showcaseSegBox152 != null) showcaseSegBox152.setBackground(roundRect(btnBg152, 999, this));
-        if (showcaseCloseBtn152 != null) showcaseCloseBtn152.setBackground(roundRect(btnBg152, 999, this));
         if (showcaseBackIcon152 != null) { showcaseBackIcon152.iconColor = ink152; showcaseBackIcon152.invalidate(); }
-        if (showcaseCloseIcon152 != null) { showcaseCloseIcon152.iconColor = ink152; showcaseCloseIcon152.invalidate(); }
         if (showcasePaletteIcon152 != null) { showcasePaletteIcon152.ink152 = ink152; showcasePaletteIcon152.invalidate(); }
         if (showcaseDensityBtnTv152 != null) {
             showcaseDensityBtnTv152.setBackground(roundRect(btnBg152, 999, this));
@@ -19267,7 +19572,8 @@ public class MainActivity extends Activity {
         showcaseBody.setClipChildren(true);
         overlay.addView(showcaseBody, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         // 头部浮条（Q152 展柜重做）：去「展柜」标题（用户点名）——左起返回圆钮
-        // ＋调色板圆钮，中间堆叠/平放段选组，右侧密度钮、分组钮、关闭圆钮；
+        // ＋调色板圆钮，中间堆叠/平放段选组，右侧密度钮、分组钮（右端关闭圆钮
+        // Q153 件十补四已撤，与返回同语义且被屏宽裁半）；
         // 全部与全 App 钮语言一致（圆钮 circleIconBtn 同形制/药丸 roundRect 999
         // 经 autoR143 随圆角滑杆收口），不拿原生控件凑数。右侧竖栏整条退役：
         // 色点/密度/分组/恢复默认全收进「点头部钮→弹面板」（见 toggleShowcase-
@@ -19346,18 +19652,11 @@ public class MainActivity extends Activity {
         showcaseGroupChip.setLayoutParams(grpLp152);
         showcaseGroupChip.setOnClickListener(v -> { haptic(); toggleShowcasePanel152("group"); });
         head.addView(showcaseGroupChip);
-        // 关闭圆钮
-        FrameLayout closeBtn = new FrameLayout(this);
-        closeBtn.setBackground(roundRect(showcaseDarkBg() ? Color.argb(70, 255, 255, 255) : Color.argb(220, 255, 255, 255), 999, this));
-        CloseIconView civ = new CloseIconView(this);
-        civ.iconColor = showcaseOnBg();
-        closeBtn.addView(civ, new FrameLayout.LayoutParams(dp(this, 18), dp(this, 18), Gravity.CENTER));
-        LinearLayout.LayoutParams cbLp = new LinearLayout.LayoutParams(dp(this, 36), dp(this, 36));
-        cbLp.leftMargin = dp(this, 8);
-        closeBtn.setLayoutParams(cbLp);
-        closeBtn.setOnClickListener(v -> { haptic(); closeShowcase(); });
-        head.addView(closeBtn);
-        showcaseCloseBtn152 = closeBtn; showcaseCloseIcon152 = civ;
+        // Q153（2.64，件十补四）：右端关闭圆钮撤除——与左上返回圆钮逐字同语义
+        // （同走 closeShowcase 关柜回我的卡片页，无第二语义，走查实证）；顶栏
+        // 五件已逼近屏宽、它被右界裁到只剩左半（用户 16:58 实报认不出、误点
+        // 关柜）。撤后顶栏＝返回/调色板/段选/密度/分组五件自然不溢出；字段与
+        // restyle/清引用同删（删功能连代码一起删）。
         // 弹出面板宿主（头部之下浮层，一次只开一类：palette/density/group）
         FrameLayout panel152 = new FrameLayout(this);
         panel152.setBackground(showcaseBarBg151(20));
@@ -19385,8 +19684,8 @@ public class MainActivity extends Activity {
         showcaseStackChip = null; showcaseCanvasChip = null; showcaseGroupChip = null;
         showcaseZoomView = null; showcaseDensityLab = null; showcaseSlider151 = null; showcaseHead151 = null; // Q141：放大层/内容矩形随关清（旧 Q122 contentW/H 退役）
         showcasePanel152 = null; showcasePanelKind152 = null; // Q152：面板宿主随关清
-        showcaseBackBtn152 = null; showcasePaletteBtn152 = null; showcaseSegBox152 = null; showcaseDensityBtn152 = null; showcaseCloseBtn152 = null;
-        showcaseBackIcon152 = null; showcaseCloseIcon152 = null; showcasePaletteIcon152 = null; showcaseDensityBtnTv152 = null;
+        showcaseBackBtn152 = null; showcasePaletteBtn152 = null; showcaseSegBox152 = null; showcaseDensityBtn152 = null;
+        showcaseBackIcon152 = null; showcasePaletteIcon152 = null; showcaseDensityBtnTv152 = null;
         showcaseMinX = 0; showcaseMinY = 0; showcaseMaxX = 0; showcaseMaxY = 0;
         showcaseDragging = false; showcaseTouching140 = false; // Q140：关柜复位手势旗
         showcaseClosing = false;
@@ -21548,16 +21847,25 @@ public class MainActivity extends Activity {
         if (card instanceof FoldClipLayout144) ((FoldClipLayout144) card).foldClip144 = on144;
     }
 
-    int[] captureFoldScroll142(final LinearLayout card) {
+    // Q153（件八）：锚捕获带时刻戳（第三元＝uptimeMillis），供落定守卫比对手势。
+    long[] captureFoldScroll142(final LinearLayout card) {
         if (newsScroll == null) return null;
-        return new int[]{ newsScroll.getScrollY(), contentTopInScroll131(card, newsScroll) };
+        return new long[]{ newsScroll.getScrollY(), contentTopInScroll131(card, newsScroll), android.os.SystemClock.uptimeMillis() };
     }
 
-    void settleFoldScroll142(final int[] cap142, final int shrink142) {
+    void settleFoldScroll142(final long[] cap142, final int shrink142) {
         if (cap142 == null || newsScroll == null || shrink142 <= 0) return;
-        int removedAbove142 = Math.max(0, Math.min(shrink142, cap142[0] - cap142[1]));
-        int target142 = Math.max(0, cap142[0] - removedAbove142);
-        if (newsScroll.getScrollY() != target142) newsScroll.scrollTo(0, target142);
+        // Q153（件八，用户 16:53 真机实报「收起后下滑被弹回顶」）：Q142 注释里
+        // 「动画内手动滚动会被落定锚覆盖一次」的已知取舍即本病本体——落定写位
+        // 一律过双守卫：①捕获后用户有过触摸拖拽（lastUserTouchScrollMs153 晚于
+        // 捕获时刻）整笔作废；②当前位已滚出被动钳位带 [target, capY]（用户自己
+        // 滚走的）整笔作废。两守卫都过才按原锚数学写一次，锚点语义不变。
+        if (lastUserTouchScrollMs153 > cap142[2]) return;
+        int removedAbove142 = Math.max(0, Math.min(shrink142, (int) cap142[0] - (int) cap142[1]));
+        int target142 = Math.max(0, (int) cap142[0] - removedAbove142);
+        int cur142 = newsScroll.getScrollY();
+        if (cur142 > (int) cap142[0] || cur142 < target142) return;
+        if (cur142 != target142) newsScroll.scrollTo(0, target142);
     }
 
     void collapseNewsCard135(final LinearLayout card, final TextView ttl, final TextView sm,
@@ -21567,7 +21875,7 @@ public class MainActivity extends Activity {
         int curH = card.getHeight();
         if (curH <= 0) { card.measure(wSpec, uSpec); curH = card.getMeasuredHeight(); }
         if (det == null || curH <= 0) { if (onDone != null) onDone.run(); return; }
-        final int[] foldCap142 = captureFoldScroll142(card); // Q142：收起开始先记滚动锚
+        final long[] foldCap142 = captureFoldScroll142(card); // Q142：收起开始先记滚动锚
         // 临时量收起高：换到收起态量一次，立即换回展开态（同步完成、不可见）
         final int detIdx = card.indexOfChild(det);
         card.removeView(det);
@@ -21703,7 +22011,7 @@ public class MainActivity extends Activity {
         final int uSpec = View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED);
         int curH = card.getHeight();
         if (curH <= 0) { card.measure(wSpec, uSpec); curH = card.getMeasuredHeight(); }
-        final int[] foldCap142 = captureFoldScroll142(card); // Q142：收起开始先记滚动锚（与资讯同治）
+        final long[] foldCap142 = captureFoldScroll142(card); // Q142：收起开始先记滚动锚（与资讯同治）
         // Q148：临时量收起高——翻到收起态量一次，立即翻回展开态（同步完成、
         // 不可见，与资讯 collapse 同式）；不再像 Q145 那样摘完就不再挂回。
         final int boxIdx = box != null ? card.indexOfChild(box) : -1;
@@ -21897,7 +22205,10 @@ public class MainActivity extends Activity {
             });
             }
         }
-        if (keepY > 0 && newsScroll != null) newsScroll.post(() -> newsScroll.scrollTo(0, keepY));
+        if (keepY > 0 && newsScroll != null) { // Q153（件八）：重建保位 post 加手势/位置守卫，用户重建后已动手滚动即作废
+            final long keepMs153 = android.os.SystemClock.uptimeMillis();
+            newsScroll.post(() -> { if (newsScroll != null && lastUserTouchScrollMs153 <= keepMs153) newsScroll.scrollTo(0, keepY); });
+        }
     }
 
     View buildNewsPage() {
@@ -22473,7 +22784,7 @@ public class MainActivity extends Activity {
             // Q127（2.39，审计 A3/B1）：欢迎预建若还没搭完（首屏 4 行由 renderHomeList
             // 同步保底、余下按 A2 让路在进入后补齐），点击段不许同步等——未落定就先
             // 亮兜底加载层，落定自摘（addCardRowsChunked 落定处回调用）。
-            maybeShowHomeLoading();
+            renderHomeLoading153(); // Q153：欢迎散场回首页，加载层按状态机单入口重算（未落定才露）
         };
         if (gone != null) {
             gone.animate().cancel();
@@ -22947,10 +23258,8 @@ public class MainActivity extends Activity {
             moreMenuBarWas = settingsScroll.isVerticalScrollBarEnabled();
             settingsScroll.setVerticalScrollBarEnabled(false);
         }
-        // Q102：趁菜单未上屏、画面静止先同步抓一帧背板存档，随后开窗全程冻结重抓——旧链在
-        // 菜单缩放动画期间按 preDraw 反复整屏重抓＋隐藏/恢复全部玻璃宿主，背景随之抽搐闪烁。
-        backdropLastCapMs = 0L;
-        try { captureBackdrop(); } catch (Throwable ignored) {}
+        // Q153（件三）：旧 Q102 开窗前同步抓帧退役——菜单内容先行，背板由
+        // glassLayerHw 挂载后的统一管线首帧后补；moreMenuBackdropFrozen 只封 tick。
         moreMenuBackdropFrozen = true;
         final FrameLayout overlay = new FrameLayout(this);
         overlay.setBackgroundColor(Color.TRANSPARENT);
@@ -23042,14 +23351,8 @@ public class MainActivity extends Activity {
         content.addView(overlay, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         moreMenuOverlay = overlay;
         // Q122：遮罩已撤，菜单入场只剩 cardWrap 自 ⋯ 角缩放淡入（下方原行），页面不压暗。
-        // Q104：落位落定后再同步重抓一帧冻结背板——开窗瞬间的预抓帧若与菜单最终几何
-        // 有任何时序差（页面未停稳/字体落定），按最终落位重采样对齐；抓图时宿主整面
-        // 让开（captureBackdrop 既有机制），画面上不会闪没。关窗后 overlay 已换则跳过。
-        cardWrap.post(() -> {
-            if (moreMenuOverlay != overlay) return;
-            backdropLastCapMs = 0L;
-            try { captureBackdrop(); } catch (Throwable ignored) {}
-        });
+        // Q153（件三）：旧 Q104 落位后同步重抓退役——首帧后补背板已由统一管线
+        // （glassLayerHw 挂载钩子）承担，此处不再另抓一发与动画抢帧。
         // 缩放原点贴按钮角（右上）：菜单像从 ⋯ 钮角上长出来；缩放与淡入同步、带轻回弹。
         // Q115：原点 x 改按锚点右沿在整框内坐标（整框夹后左移过，原 menuPad+menuW 已不对位）。
         cardWrap.setPivotX(Math.max(0, Math.min(wrapW115, anchorRight - wrapLeft115)));
@@ -24032,37 +24335,12 @@ public class MainActivity extends Activity {
         box.setOrientation(LinearLayout.VERTICAL);
         box.setPadding(0, dp(this, 8), 0, dp(this, 10));
         box.addView(tv(this, S("org_badge_style"), 14, colText(), true));
-        TextView desc = tv(this, L("只在这里预览，还不会放到卡面上（等你看过再定）。Amex / JCB 暂无 B 版，预览沿用现行画法。", "Preview only — badges stay off card faces until you decide. Amex / JCB have no B version yet and preview in the current style."), 11.5f, colText2(), false);
+        // Q153（件六定稿）：样式二选切换已删——全 App 一套画法，预览即卡面无图
+        // 占位右下角的正式画法（落点规则不变），此处五标与卡面同源现画。
+        TextView desc = tv(this, L("全 App 统一这一套：银联/VISA 按官方标画法，卡面无图时右下角就是这个样子。", "One unified style app-wide: UnionPay/VISA follow the official marks — this is exactly what appears at the lower-right of no-image card faces."), 11.5f, colText2(), false);
         bodyLH(desc);
         box.addView(desc);
-        LinearLayout row = new LinearLayout(this);
-        row.setOrientation(LinearLayout.HORIZONTAL);
-        LinearLayout.LayoutParams rlp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        rlp.topMargin = dp(this, 9);
-        row.setLayoutParams(rlp);
-        String[][] opts = {{"current", S("org_badge_cur")}, {"b", S("org_badge_b")}};
-        for (final String[] o : opts) {
-            final boolean on = o[0].equals(orgStyle129);
-            TextView t = tv(this, o[1], 12.5f, on ? accentColor() : colText(), on);
-            t.setGravity(Gravity.CENTER);
-            t.setBackground(on ? softCapsuleBg(9) : roundRect(colChipOff(), 9f, this));
-            t.setSingleLine(true); t.setMaxLines(1); t.setEllipsize(android.text.TextUtils.TruncateAt.END);
-            pinFixedText125(t);
-            t.setPadding(dp(this, 4), dp(this, 8), dp(this, 4), dp(this, 8));
-            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
-            lp.rightMargin = dp(this, 8);
-            t.setLayoutParams(lp);
-            t.setOnClickListener(v -> {
-                if (o[0].equals(orgStyle129)) return;
-                orgStyle129 = o[0];
-                if (prefs != null) prefs.edit().putString("org_badge_style", orgStyle129).apply();
-                haptic();
-                applyAppearanceSoft130(); // Q130：无闪换入，只刷新本设置区预览，卡面无任何落点变化
-            });
-            row.addView(t);
-        }
-        box.addView(row);
-        // 五组织真实预览（OrgBadgeView 现画，B 开关按当前选择）
+        // 五组织真实预览（OrgBadgeView 现画，与卡面占位标同一套唯一画法）
         LinearLayout prev = new LinearLayout(this);
         prev.setOrientation(LinearLayout.HORIZONTAL);
         LinearLayout.LayoutParams plp2 = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
@@ -24077,7 +24355,6 @@ public class MainActivity extends Activity {
             stage.setBackground(roundRect(colChipOff(), 10, this));
             stage.setClipToOutline(true);
             OrgBadgeView bv = new OrgBadgeView(this, og[0], darkEff()); // Q148：预览按当前深浅传 darkBg——旧写死 false，深色下 VISA 恒深蓝字压深垫看不清（用户图证）
-            bv.badgeB129 = "b".equals(orgStyle129);
             stage.addView(bv, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
             cell.addView(stage, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(this, 44)));
             TextView nm = tv(this, og[1], 10, colText2(), false);
