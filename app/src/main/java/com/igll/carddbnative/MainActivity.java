@@ -953,6 +953,10 @@ public class MainActivity extends Activity {
     }
     View buildTopFab() {
         FrameLayout fab = new FrameLayout(this);
+        // Q152（追加D同类同治）：玻璃层垫底须随钮身圆角裁剪——旧只给窗体类钮
+        // roundClip，fab 本体无裁剪时玻璃层方角在圆钮外露（用户图证方形白盒压字
+        // 的一源）；与搜索/筛选钮一把收口（fabClipR146 随圆角滑杆）。
+        // 本行由 roundClip 在构造尾统一施加（见下方）。
         // Q23：与 Q3 悬浮钮同款玻璃底（glassFabBg + applyGlassFabShadow + live 玻璃层），对照混合版 .qf-top/.qf-btn
         // 同语言：44dp 圆钮、白色 .5 描边、深色细线箭头；玻璃模糊由 glassLayer 垫底。
         fab.setBackground(glassFabBg());
@@ -974,6 +978,7 @@ public class MainActivity extends Activity {
                 pressBounce(v, false);
             return false;
         });
+        roundClip(fab, fabClipR146(), this); // Q152：三钮圆角裁剪同治（方形玻璃角退役）
         return fab;
     }
     GradientDrawable roundRect(int color, float radiusDp, Context c) {
@@ -1077,7 +1082,6 @@ public class MainActivity extends Activity {
         STR.put("sec_display", new String[]{"显示","Display"});
         STR.put("sec_experience", new String[]{"使用体验","Experience"});
         STR.put("sec_data", new String[]{"数据","Data"});
-        STR.put("sec_about", new String[]{"关于","About"});
         STR.put("dark_mode", new String[]{"深色模式","Dark Mode"});
         STR.put("dark_system", new String[]{"跟随系统","System"});
         STR.put("dark_light", new String[]{"浅色","Light"});
@@ -2520,6 +2524,13 @@ public class MainActivity extends Activity {
         if (moreMenuBackdropFrozen) return; // Q102：⋯ 菜单开窗期间背板冻结（开窗瞬间已同步抓存静止帧），不许动画期逐帧整屏重抓＋三遍模糊抖背景
         if (detailCard != null) return; // Q118（2.31）：详情窗在场——冻结玻璃只用开窗落定那一帧（openDetail 已排一次结构性重抓），窗内上下滑动绝不再逐帧整树重抓＋三遍模糊（慢拖中途停顿逾 200ms 即被本 tick 抓一帧，正是详情页滑动卡顿主源）
         if (fxSheetView150 != null) return; // Q150（2.61）：外卡详情窗与主详情同类——窗在场同闸冻结，冻结帧由 openFxDetail 的空闲门控结构性抓帧供齐（见 scheduleSheetBackdrop150）
+        // Q152（2.63，流畅A档·玻璃捕获节流）：滚动活跃（<200ms）/色带拖动
+        // （<350ms）窗内整树录制（recordHwBackdrop）先行跳过——旧序录制排在滚动
+        // 闸之前，滚动中每个 preDraw 都整树录一遍正是页内滑动的隐形主线程税；
+        // 停稳后 tick 自然续拍补帧（与下方软件抓图同闸同窗，冻结帧另有开窗时
+        // prepareFrozenBackdrop131 的结构性抓帧供齐，不等本 tick）。
+        if (android.os.SystemClock.uptimeMillis() - lastScrollEventMs < 200) return;
+        if (android.os.SystemClock.uptimeMillis() - dragReorderTouchMs131 < 350) return;
         boolean frozenShown130 = anyFrozenGlassShown();
         // Q131：frozen 窗在场且冻结帧已备齐（武装位已落）时，硬件录制与软件抓图同
         // 口径停录——窗玻璃消费的是冻结帧，逐帧重录纯耗主线程且会把动画中的窗体
@@ -4745,6 +4756,7 @@ public class MainActivity extends Activity {
     // 原样供稿（英雄图/信息胶囊/核实状态/规格/点评/官方链接/页脚）。专区页不再拆建：
     // 窗浮在专区页之上，关窗后专区滚动位原样（旧口径拆页重建＋fxZoneKeepY 回滚退役）。
     void openFxDetail(final FxCard f) {
+        final long fxPerfT0_152 = System.nanoTime(); // Q152 打点：外卡详情入口→首帧
         if (f == null || fxSheetView150 != null || fxSheetClosing150) return;
         fxDetailOpen = true;
         fxSheetClosing150 = false;
@@ -4842,6 +4854,13 @@ public class MainActivity extends Activity {
 
         content.addView(overlay, new FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        overlay.getViewTreeObserver().addOnPreDrawListener(new android.view.ViewTreeObserver.OnPreDrawListener() {
+            public boolean onPreDraw() {
+                overlay.getViewTreeObserver().removeOnPreDrawListener(this);
+                perfMark152("openFxDetail.firstFrame", fxPerfT0_152); // Q152：首帧落屏
+                return true;
+            }
+        });
         overlay.bringToFront();
         fxSheetView150 = overlay;
         syncTopFab();
@@ -5598,6 +5617,35 @@ public class MainActivity extends Activity {
             mineFoldSpring);
     }
 
+    // ---------- Q152（2.63）PerfTrace：debug 内测性能打点（logcat tag CardPerf152） ----------
+    // 二审⑦验收打点落地：mark 记相对毫秒；Choreographer 帧监抓 >24ms 掉帧（1 秒
+    // 节流、带当前页签）。结论口径：本机只有代码走读估算，真机读数以下批验收为准
+    // （阈值表见 PROGRESS Q152）。常驻运行但只在掉帧时发日志，开销可忽略。
+    static void perfMark152(String ev152, long t0ns152) {
+        try { android.util.Log.i("CardPerf152", ev152 + " +" + ((System.nanoTime() - t0ns152) / 1000000L) + "ms"); } catch (Throwable ignored) {}
+    }
+    boolean perfMonOn152 = false;
+    long perfLastDropLog152 = 0;
+    void startPerfMonitor152() {
+        if (perfMonOn152) return;
+        perfMonOn152 = true;
+        final long[] lastFrame152 = { 0L };
+        android.view.Choreographer.getInstance().postFrameCallback(new android.view.Choreographer.FrameCallback() {
+            public void doFrame(long frameTimeNanos) {
+                if (lastFrame152[0] != 0L) {
+                    long dtMs152 = (frameTimeNanos - lastFrame152[0]) / 1000000L;
+                    long now152 = System.currentTimeMillis();
+                    if (dtMs152 > 24 && now152 - perfLastDropLog152 > 1000) {
+                        perfLastDropLog152 = now152;
+                        try { android.util.Log.i("CardPerf152", "drop " + dtMs152 + "ms tab=" + tab + (detailCard != null ? "+detail" : "") + (helloOpen ? "+hello" : "")); } catch (Throwable ignored) {}
+                    }
+                }
+                lastFrame152[0] = frameTimeNanos;
+                android.view.Choreographer.getInstance().postFrameCallback(this);
+            }
+        });
+    }
+
     // ---------- 全局状态 ----------
     SharedPreferences prefs;
     Set<String> mine = new HashSet<>();
@@ -6170,6 +6218,7 @@ public class MainActivity extends Activity {
         // Update 写 tmp151→rename，半途杀进程会留残档；启动先清，本轮应用从干净
         // 临时名开始（正式文件 cards-ota.json 一字不碰）。
         try { File staleTmp152 = new File(getFilesDir(), "cards-ota.json.tmp151"); if (staleTmp152.exists()) staleTmp152.delete(); } catch (Throwable ignored) {}
+        startPerfMonitor152(); // Q152：帧监打点（>24ms 掉帧，logcat CardPerf152）
         beginBootLoad151(root); // Q151（N16）：雾蓝加载层上屏＋后台备数据/首屏图，完成回 finishBoot151 建页
         // Q29：滚动只重置停稳计时、滚动中零截图（scheduleGlassRefresh 内 650ms 防抖，见其注释）
         // Q41：滚动期条带平移跟随（只 Canvas 绘制、不重采样，与停稳计时互不干扰）
@@ -8539,6 +8588,7 @@ public class MainActivity extends Activity {
                 pressBounce(v, false);
             return false;
         });
+        roundClip(fab, fabClipR146(), this); // Q152：三钮圆角裁剪同治（方形玻璃角退役）
         return fab;
     }
 
@@ -8566,6 +8616,7 @@ public class MainActivity extends Activity {
                 pressBounce(v, false);
             return false;
         });
+        roundClip(fab, fabClipR146(), this); // Q152：三钮圆角裁剪同治（方形玻璃角退役）
         return fab;
     }
 
@@ -10684,6 +10735,21 @@ public class MainActivity extends Activity {
     // Q21 ② 分帧渲染：首帧只搭首屏（约 4 行），其余每帧续搭 4 行——213 张不再一口气堵死主线程，
     // 切页/筛选后的第一眼立刻出现，列表在手指碰到前就已补齐；代次令牌保证快速连改筛选时旧续帧不会把过期卡塞回来。
     // 分组模式下续帧按记录的插入位回插本组行尾（下一组标题之前），不许续帧一律 append 到全表末尾把组冲散。
+    // Q152（2.63，前单②）：首页「加载中」残留看门狗——分帧续搭的 pending 计数在
+    // 代次切换/容器易主等边角时序下可能永不归零，兜底层便长挂（数据已入仍转圈）。
+    // 进度时间戳＋2.5 秒无进展强制落定摘层；正常链毫秒级推进、永不触发。
+    long homeChunkProgressMs152 = 0;
+    void armHomeLoadingWatchdog152() {
+        homeChunkProgressMs152 = System.currentTimeMillis();
+        mainHandler.postDelayed(() -> {
+            if (homeChunkPending > 0 && System.currentTimeMillis() - homeChunkProgressMs152 > 2500) {
+                homeChunkPending = 0;
+                hideHomeLoading();
+                homeBootBuilt150 = true; // 与正常落定同口径：兜底层此后不再露
+            }
+        }, 2600);
+    }
+
     void addCardRowsChunked(final LinearLayout container, final List<Card> list, final int gen) {
         final int rows = (list.size() + cols - 1) / cols;
         final int[] insertAt = { container.getChildCount() };
@@ -10693,6 +10759,7 @@ public class MainActivity extends Activity {
         // Q127（2.39，审计 A2/B1）：续搭未落定计数——B1 加载提示层据此显隐；
         // 预热领先自 1 帧扩到 3 帧（每帧 4 行 → 领先 12 行），构建帧尽量只命中缓存。
         homeChunkPending++;
+        armHomeLoadingWatchdog152(); // Q152：残留看门狗（进度戳起跑）
         maybeShowHomeLoading();
         prefetchCardRows(list, firstRows, firstRows + 12); // Q105：下一帧的行先在后台解图
         final int[] next = { firstRows };
@@ -10712,6 +10779,7 @@ public class MainActivity extends Activity {
             int end = Math.min(rows, next[0] + 4);
             for (int r = next[0]; r < end; r++) addCardRowAt(container, list, r, insertAt);
             next[0] = end;
+            homeChunkProgressMs152 = System.currentTimeMillis(); // Q152：续搭有进展，看门狗不触发
             if (next[0] < rows) prefetchCardRows(list, next[0], next[0] + 12); // Q105：始终领先一帧预热（Q127 扩为 3 帧）
             // Q95 热修（2.07）：续搭不许投给 container 自身——首页容器会被欢迎页/覆盖层摘除，
             // View.post 在未 attach 时会 park 进该视图的 RunQueue，等重挂瞬间才集中 flush，
@@ -12180,6 +12248,7 @@ public class MainActivity extends Activity {
 
     void openDetail(Card c, boolean fromWiz) {
         if (c == null) return;
+        final long perfT0_152 = System.nanoTime(); // Q152 打点：入口→正文建成→首帧
         if (detailClosing) return; // 收窗途中再点既不重开也不入队（关窗意图已生效）
         if (detailCard != null) { detailQueue.add(c); return; } // 连点排队 FIFO，关一开一下一张
         dismissCardMenu();
@@ -12222,6 +12291,7 @@ public class MainActivity extends Activity {
         sc.setFillViewport(false);
         detailScroll = sc;
         LinearLayout body = buildDetailSheetBody(c);
+        perfMark152("openDetail.body", perfT0_152); // Q152
         body.setPadding(0, 0, 0, detailTailPad125()); // Q125：尾部留白唯一口径（见 detailTailPad125）
         sc.addView(body);
         sheetCard.addView(sc, new LinearLayout.LayoutParams(
@@ -12325,6 +12395,13 @@ public class MainActivity extends Activity {
 
         content.addView(overlay, new FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        overlay.getViewTreeObserver().addOnPreDrawListener(new android.view.ViewTreeObserver.OnPreDrawListener() {
+            public boolean onPreDraw() {
+                overlay.getViewTreeObserver().removeOnPreDrawListener(this);
+                perfMark152("openDetail.firstFrame", perfT0_152); // Q152：首帧落屏
+                return true;
+            }
+        });
         overlay.bringToFront();
         detailView = overlay;
         syncSearchFab();
@@ -22005,6 +22082,49 @@ public class MainActivity extends Activity {
         return root;
     }
 
+    // Q152（2.63，前单⑤）：崩溃记录盒（原设置页底部「关于」残留区）迁入关于页——
+    // 设置页删 sectionHead＋本盒，复制/清除功能原样保留、只换安家处；无崩溃记录
+    // 时返回 null 不占位（与旧设置页条件显形同口径）。
+    View buildCrashBox152() {
+        if (crashLogText == null || crashLogText.trim().isEmpty()) return null;
+            LinearLayout crashBox = new LinearLayout(this);
+            crashBox.setOrientation(LinearLayout.VERTICAL);
+            crashBox.setBackground(roundRect(Color.rgb(0xFF, 0xF1, 0xF0), 12, this));
+            crashBox.setPadding(dp(this, 14), dp(this, 10), dp(this, 14), dp(this, 12));
+            LinearLayout.LayoutParams cbp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            cbp.topMargin = dp(this, 8);
+            crashBox.setLayoutParams(cbp);
+            crashBox.addView(tv(this, "最近一次崩溃记录", 14, Color.rgb(0xB0, 0x2A, 0x20), true));
+            TextView crashTv = tv(this, crashLogText, 11, Color.rgb(0x5A, 0x2A, 0x24), false);
+            crashTv.setTextIsSelectable(true);
+            LinearLayout.LayoutParams clp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            clp.topMargin = dp(this, 6);
+            crashTv.setLayoutParams(clp);
+            crashBox.addView(crashTv);
+            LinearLayout crashBtns = new LinearLayout(this);
+            crashBtns.setOrientation(LinearLayout.HORIZONTAL);
+            LinearLayout.LayoutParams bpl = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            bpl.topMargin = dp(this, 10);
+            crashBtns.setLayoutParams(bpl);
+            TextView copyBtn = softMiniBtn("复制记录", true);
+            copyBtn.setOnClickListener(v -> {
+                haptic();
+                try {
+                    android.content.ClipboardManager cm = (android.content.ClipboardManager) getSystemService(CLIPBOARD_SERVICE);
+                    if (cm != null) cm.setPrimaryClip(android.content.ClipData.newPlainText("crash", crashLogText));
+                    showFloatToast("崩溃记录已复制");
+                } catch (Throwable ignored) { showFloatToast("复制失败"); }
+            });
+            crashBtns.addView(copyBtn, new LinearLayout.LayoutParams(0, dp(this, 38), 1f));
+            TextView clearBtn = softMiniBtn("清除记录", false);
+            clearBtn.setOnClickListener(v -> { haptic(); clearCrashLog(); applyAppearanceSoft130(); showFloatToast("崩溃记录已清除"); }); // Q135（件三普查）：改走无闪换入
+            LinearLayout.LayoutParams clrLp = new LinearLayout.LayoutParams(0, dp(this, 38), 1f);
+            clrLp.leftMargin = dp(this, 10);
+            crashBtns.addView(clearBtn, clrLp);
+            crashBox.addView(crashBtns);
+            return crashBox;
+    }
+
     LinearLayout buildAboutBody() {
         LinearLayout page = new LinearLayout(this);
         page.setOrientation(LinearLayout.VERTICAL);
@@ -22105,6 +22225,8 @@ public class MainActivity extends Activity {
         LinearLayout.LayoutParams mgLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         mgLp.topMargin = dp(this, 8);
         page.addView(mig, mgLp);
+        View crashBox152 = buildCrashBox152(); // Q152：崩溃记录盒迁入（原设置页「关于」区，复制/清除俱在）
+        if (crashBox152 != null) page.addView(crashBox152);
 
         // Q88 分区四：请作者喝咖啡（展开与真码沿 Q46，未改保存链）
         TextView secCoffee = tvW(this, "支持作者", 15, colText(), 700);
@@ -23111,46 +23233,6 @@ public class MainActivity extends Activity {
         });
         page.addView(cacheRow);
 
-        sectionHead(page, S("sec_about"));
-        // Q18: last-crash trace at top of About (copyable / clearable); empty when no crash recorded
-        if (crashLogText != null && !crashLogText.trim().isEmpty()) {
-            LinearLayout crashBox = new LinearLayout(this);
-            crashBox.setOrientation(LinearLayout.VERTICAL);
-            crashBox.setBackground(roundRect(Color.rgb(0xFF, 0xF1, 0xF0), 12, this));
-            crashBox.setPadding(dp(this, 14), dp(this, 10), dp(this, 14), dp(this, 12));
-            LinearLayout.LayoutParams cbp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-            cbp.topMargin = dp(this, 8);
-            crashBox.setLayoutParams(cbp);
-            crashBox.addView(tv(this, "最近一次崩溃记录", 14, Color.rgb(0xB0, 0x2A, 0x20), true));
-            TextView crashTv = tv(this, crashLogText, 11, Color.rgb(0x5A, 0x2A, 0x24), false);
-            crashTv.setTextIsSelectable(true);
-            LinearLayout.LayoutParams clp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-            clp.topMargin = dp(this, 6);
-            crashTv.setLayoutParams(clp);
-            crashBox.addView(crashTv);
-            LinearLayout crashBtns = new LinearLayout(this);
-            crashBtns.setOrientation(LinearLayout.HORIZONTAL);
-            LinearLayout.LayoutParams bpl = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-            bpl.topMargin = dp(this, 10);
-            crashBtns.setLayoutParams(bpl);
-            TextView copyBtn = softMiniBtn("复制记录", true);
-            copyBtn.setOnClickListener(v -> {
-                haptic();
-                try {
-                    android.content.ClipboardManager cm = (android.content.ClipboardManager) getSystemService(CLIPBOARD_SERVICE);
-                    if (cm != null) cm.setPrimaryClip(android.content.ClipData.newPlainText("crash", crashLogText));
-                    showFloatToast("崩溃记录已复制");
-                } catch (Throwable ignored) { showFloatToast("复制失败"); }
-            });
-            crashBtns.addView(copyBtn, new LinearLayout.LayoutParams(0, dp(this, 38), 1f));
-            TextView clearBtn = softMiniBtn("清除记录", false);
-            clearBtn.setOnClickListener(v -> { haptic(); clearCrashLog(); applyAppearanceSoft130(); showFloatToast("崩溃记录已清除"); }); // Q135（件三普查）：改走无闪换入
-            LinearLayout.LayoutParams clrLp = new LinearLayout.LayoutParams(0, dp(this, 38), 1f);
-            clrLp.leftMargin = dp(this, 10);
-            crashBtns.addView(clearBtn, clrLp);
-            crashBox.addView(crashBtns);
-            page.addView(crashBox);
-        }
         // Q148（2.59，设置瘦身，用户点名）：「版本」与「迁移进度」两行退出设置页——
         // 版本关于页 hero 与「版本与更新日志」分区已有（appVersion 实时读包），迁
         // 移进度搬进关于页同分区（见 buildAboutBody），设置页只留可操作项。
