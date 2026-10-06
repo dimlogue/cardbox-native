@@ -2096,9 +2096,20 @@ public class MainActivity extends Activity {
         return o.equals("unionpay") || o.equals("mastercard") || o.equals("mastercard-nucc")
             || o.equals("visa") || o.equals("jcb") || o.equals("amex-cn");
     }
-    static int orgBadgeWidthDp(String org) {
-        // Q93：统一按示意图板 240×120（2:1）画幅取宽，高 24dp → 宽恒 48dp；各组织在同一画幅内按画板几何留白
-        return 48;
+    // Q157（2.68，用户 17:46–17:48 三连）：组织标统一尺寸盒一处收口——五组织
+    // 同一外接盒（基 34×17dp，与 240×120 画板同比 2:1），贴图两标 fit-inside、
+    // 自绘三标同画板同盒，各落点只乘 scale、不许另定宽高。旧 Q93 基 48×24dp
+    // 真机判太大（图证 270181）、且万事达旧小标与贴图两标规格不一，并此收口。
+    static final int ORG_BADGE_W_DP157 = 34;
+    static final int ORG_BADGE_H_DP157 = 17;
+    static int orgBadgeWidthDp(String org) { return ORG_BADGE_W_DP157; }
+    static int orgBadgeHeightDp157() { return ORG_BADGE_H_DP157; }
+    // Q157：图框圆角裁切的最小内收——标视图右下角点落进圆角弧内侧所需最小距
+    // d ≥ r(1−√2/2) ≈ 0.293r（角点至弧心距 ≤ r），整 dp 向上取整；半径与图框
+    // 同源现算（圆角杆一动，标距自动跟随），底角为直角者 r=0 → 贴边 0。
+    static int badgeCornerInset157(float radiusDp) {
+        if (radiusDp <= 0f) return 0;
+        return Math.max(0, (int) Math.ceil(radiusDp * 0.2929f));
     }
     // Q93：占位面深底判定——与 placeholderGradFor 完全同口径取色板对，两端平均亮度低即深底，
     // 组织小标的银联小字/Visa 字色据此切深底白字版（示意图板深色底一档口径）
@@ -4855,7 +4866,7 @@ public class MainActivity extends Activity {
             thumb.addView(iv, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
             roundClip(thumb, cardSmallR129(9f), this);
             if (fb133 != null) iv.setImageBitmap(fb133);
-            if (fb133 == null) addOrgBadgeBottomRight153(thumb, normOrgKey152(f.org), false, 0.78f); // Q153：仅无图占位加组织标（右下·放大）；有图不加
+            if (fb133 == null) addOrgBadgeBottomRight153(thumb, normOrgKey152(f.org), false, 0.78f, badgeCornerInset157(cardSmallR129(9f))); // Q153：仅无图占位加组织标；Q157：框 r=cardSmallR129(9) 圆角最小内收（默认档 3dp）
             LinearLayout tx = new LinearLayout(this);
             tx.setOrientation(LinearLayout.VERTICAL);
             LinearLayout.LayoutParams txLp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
@@ -5094,7 +5105,7 @@ public class MainActivity extends Activity {
         // Q153（件二定稿）：组织标仅无图占位终态（无路径/解码无果）才落英雄图
         // 右下角；有真实卡面一律不加。ai_redraw 左上标与说明灰字口径不变（另件）。
         bindGalleryBitmap152(hiv, f.image, imgW, true,
-            () -> addOrgBadgeBottomRight153(hero, normOrgKey152(f.org), false, 1.2f, 2));
+            () -> addOrgBadgeBottomRight153(hero, normOrgKey152(f.org), false, 1.2f, badgeCornerInset157(cardR))); // Q157：框 r=cardR（≥16dp）圆角最小内收（默认档 5dp）
         if (f.aiRedraw) {
             FrameLayout.LayoutParams aiLp152 = new FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
             aiLp152.gravity = Gravity.TOP | Gravity.LEFT;
@@ -9338,7 +9349,7 @@ public class MainActivity extends Activity {
         try {
             OrgBadgeView badge = new OrgBadgeView(this, org, darkBg);
             int bw = Math.round(dp(this, orgBadgeWidthDp(org) * scale));
-            int bh = Math.round(dp(this, 24 * scale));
+            int bh = Math.round(dp(this, orgBadgeHeightDp157() * scale)); // Q157：高度并入统一盒收口（本法仍停用）
             FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(bw, bh);
             lp.gravity = Gravity.BOTTOM | Gravity.RIGHT;
             lp.rightMargin = dp(this, 6);
@@ -9357,20 +9368,24 @@ public class MainActivity extends Activity {
     // 标带 tag "orgBadge153"，远程图后落盘换入真图时由 swapInFetchedIn133
     // 摘除（防占位转真图后标压真卡面）。
     void addOrgBadgeBottomRight153(FrameLayout host, String org, boolean darkBg, float scale) {
-        addOrgBadgeBottomRight153(host, org, darkBg, scale, 2);
+        addOrgBadgeBottomRight153(host, org, darkBg, scale, 0, 0); // Q157：默认真贴边 0dp（直角底/无圆角裁切落点）
     }
-    void addOrgBadgeBottomRight153(FrameLayout host, String org, boolean darkBg, float scale, int bottomMarginDp) {
+    void addOrgBadgeBottomRight153(FrameLayout host, String org, boolean darkBg, float scale, int marginDp) {
+        addOrgBadgeBottomRight153(host, org, darkBg, scale, marginDp, marginDp);
+    }
+    void addOrgBadgeBottomRight153(FrameLayout host, String org, boolean darkBg, float scale, int rightMarginDp, int bottomMarginDp) {
         if (host == null || !hasOrgBadge(org)) return;
         try {
             OrgBadgeView badge153 = new OrgBadgeView(this, org, darkBg);
             badge153.setTag("orgBadge153");
             int bw153 = Math.round(dp(this, orgBadgeWidthDp(org) * scale));
-            int bh153 = Math.round(dp(this, 24 * scale));
+            int bh153 = Math.round(dp(this, orgBadgeHeightDp157() * scale));
             FrameLayout.LayoutParams lp153 = new FrameLayout.LayoutParams(bw153, bh153);
             lp153.gravity = Gravity.BOTTOM | Gravity.RIGHT;
-            // Q156（2.67，用户 17:37）：再下移＋右移贴近边框——右/下距统一 2dp
-            // 贴边小距（不压出图外、不盖圆角裁切），六落点同此一处收口。
-            lp153.rightMargin = dp(this, 2);
+            // Q157（2.68，用户 17:46/17:48）：再下、再右贴近边框——距值逐落点
+            // 由调用方按图框圆角给定（badgeCornerInset157，清单见 Q157）：直角
+            // 0dp 真贴边、圆角取刚好不被裁的最小内收；详情图廊样板点冻结 2dp。
+            lp153.rightMargin = dp(this, rightMarginDp);
             lp153.bottomMargin = dp(this, bottomMarginDp);
             host.addView(badge153, lp153);
         } catch (Throwable ignored) { }
@@ -9740,7 +9755,8 @@ public class MainActivity extends Activity {
         art.addView(mineBtn, blp2);
         // Q153（件二定稿，覆 Q152）：组织标仅无图占位（b==null）才加，落 art
         // 右下角仿卡面印刷标位，与右上加卡钮天然分开；有真实卡面一律不加。
-        // scale 随列数收：2 列 1.15／3 列 0.95／4 列 0.8（基 48×24dp，较 Q152 小标放大）。
+        // scale 随列数收：2 列 1.15／3 列 0.95／4 列 0.8（Q157 起基改 34×17dp）。
+        // Q157：art 底两角为直（topSheetClip 只圆顶角）→ 右/下距 0dp 真贴边。
         if (b == null) addOrgBadgeBottomRight153(art, normOrgKey152(c.org), false,
             nc >= 4 ? 0.8f : nc == 3 ? 0.95f : 1.15f);
         // Q89：未核实卡在卡图左上角压一枚「存疑」毛玻璃标（与右上加卡钮对角分工、不遮卡名）
@@ -13358,7 +13374,7 @@ public class MainActivity extends Activity {
         page.setOrientation(LinearLayout.VERTICAL);
         page.setBackgroundColor(Color.TRANSPARENT); // Q94 铺开：窗身柔面由 sheetCard 承担（原 Q83 colSheet 实底）
 
-        // ---- 图廊（.p-gal/.p-track/.p-slide）：整宽横滑，图原比例 contain、圆角 12、阴影，高封顶 260 ----
+        // ---- 图廊（.p-gal/.p-track/.p-slide）：整宽横滑，展示盒真卡比 1.586 窗宽取最大（Q157 起不封顶）、图 FIT 整幅、圆角 cardR、阴影 ----
         final boolean hasVar = c.variants != null && c.variants.length() > 0;
         final int nSlides = hasVar ? c.variants.length() : 1;
         LinearLayout gal = new LinearLayout(this);
@@ -13410,9 +13426,13 @@ public class MainActivity extends Activity {
             // 存：转后为横比图，CROP 铺满不拉伸（bindGalleryBitmap152 内转）。
             // 取图改异步（缓存命中直贴、未命中占位＋后台解码换入），开窗首帧
             // 不再逐 slide 主线程同步解码（Q125 的 getSized 尺寸口径并入异步收口）。
+            // Q157 注：280dp 封顶与 CROP 已被上方 Q157 段取代（盒改窗宽最大＋FIT），
+            // 本段「同廊同框、底边齐平」不变量保留。
+            // Q157（2.68，用户 17:48）：展示盒按真卡比例 1.586（85.6×53.98mm）
+            // 在窗宽内取最大——宽＝availW（左右贴 slide 内边距 26dp）、高随比例，
+            // 撤旧 280dp 封顶缩宽（图证斥「封面太小、比例不对」）；图 FIT 整幅
+            // 不裁（见 setFaceFit153），占位底同盒同比例（iv 背景同框）。
             int imgW = availW, imgH = Math.round(availW / 1.586f);
-            int maxH152 = dp(this, 280);
-            if (imgH > maxH152) { imgH = maxH152; imgW = Math.round(imgH * 1.586f); }
             final String slidePath152 = imgPath;
             final int slideW152 = imgW;
             // Q48：控件级圆角裁切为主——用户定性「控件是正方形、图要裁成圆弧边框」；旧实现仅靠 roundBitmap
@@ -13429,8 +13449,9 @@ public class MainActivity extends Activity {
             // Q143（2.54，乙组）撤 Q131 承托底板：详情大图铺满 imgFrame 框边、角外透窗面——深色卡不再被底板勒出一圈黑边（Q138 的承托形制只撤底色、内缩/封顶/海拔不变）。
             if (Build.VERSION.SDK_INT >= 21) imgFrame.setElevation(dp(this, 6));
             roundClip(imgFrame, cardR, this);
-            CardFaceView153 iv = new CardFaceView153(this); // Q153（件五）：共用取图管线（COVER＋clipPath 自绘），scaleType 退役；黑边根因（旧 CENTER_CROP＋占位底在旋转/比例微差时角区露底）由此一次几何铺满消解
+            CardFaceView153 iv = new CardFaceView153(this); // Q153（件五）：共用取图管线（一次几何＋clipPath 自绘），scaleType 退役
             iv.setFaceRadius153(cardR, false);
+            iv.setFaceFit153(true); // Q157：详情图廊 FIT 整幅不裁（整卡全貌优先，占位底同盒兜露边）
             iv.setBackgroundColor(Color.TRANSPARENT);
             // Q151（N5·组件化圆角）：iv 自身的第二把 outline 撤除——旧 imgFrame＋iv
             // 各裁一遍，两遍抗锯齿半径微差，滑杆回标准档时四角出黑楔（用户 06:09
@@ -13473,7 +13494,10 @@ public class MainActivity extends Activity {
             // 一律不加。标是框内姊妹视图不随位图横摆，落位恒视觉右下。子版本
             // 无独立组织字段（Q152 数据实查），全廊用本卡组织。
             bindGalleryBitmap152(iv, slidePath152, slideW152, true, () -> {
-                addOrgBadgeBottomRight153(imgFrame, normOrgKey152(c.org), false, 1.25f, 2);
+                // Q157 样板落点（用户 17:48 点名此点 VISA 贴标「做的挺好的」）：
+                // 尺寸与贴边冻结——基盒虽改 34×17，scale 1.25→1.765 使有效尺寸
+                // 恒 60×30dp、右/下距恒 2dp 不变；随新展示盒右下贴边（宿主同框）。
+                addOrgBadgeBottomRight153(imgFrame, normOrgKey152(c.org), false, 1.765f, 2);
                 if (placeholderCustomEnabled) imgFrame.setOnLongClickListener(v -> { haptic(); openPlaceholderColorPicker(c); return true; });
             });
             if (slideName != null && !slideName.isEmpty()) {
@@ -14033,7 +14057,7 @@ public class MainActivity extends Activity {
             roundClip(stuThumb, cardSmallR129(9f), this);
             Bitmap b = Img.getSized(this, c.image, dp(this, 72)); // Q105：72dp 拇指按显示尺寸解码（旧 Img.get 全量解码）
             if (b != null) iv.setImageBitmap(b);
-            else addOrgBadgeBottomRight153(stuThumb, normOrgKey152(c.org), false, 0.7f); // Q153：仅无图占位加组织标（右下·放大）；有图不加
+            else addOrgBadgeBottomRight153(stuThumb, normOrgKey152(c.org), false, 0.7f, badgeCornerInset157(cardSmallR129(9f))); // Q153：仅无图占位加组织标；Q157：框 r=cardSmallR129(9) 圆角最小内收（默认档 3dp）
             LinearLayout tx = new LinearLayout(this);
             tx.setOrientation(LinearLayout.VERTICAL);
             LinearLayout.LayoutParams txLp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
@@ -17121,7 +17145,7 @@ public class MainActivity extends Activity {
         FrameLayout hitWrap152 = new FrameLayout(this);
         hitWrap152.addView(box, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
         if (c.image == null || c.image.isEmpty())
-            addOrgBadgeBottomRight153(hitWrap152, normOrgKey152(c.org), false, 0.7f, 2);
+            addOrgBadgeBottomRight153(hitWrap152, normOrgKey152(c.org), false, 0.7f, badgeCornerInset157(12f)); // Q157：行框 r=12dp 圆角最小内收（4dp）
         return hitWrap152;
     }
 
