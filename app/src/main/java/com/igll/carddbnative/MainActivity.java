@@ -4,9 +4,19 @@ import android.animation.ValueAnimator;
 import android.app.Activity;
 import android.app.AlarmManager;
 import android.app.PendingIntent;
+import android.content.ContentProvider;
+import android.content.ContentValues;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.content.pm.PackageInfo;
+import android.content.pm.ProviderInfo;
+import android.content.res.XmlResourceParser;
+import android.database.Cursor;
+import android.database.MatrixCursor;
+import android.os.ParcelFileDescriptor;
+import android.provider.OpenableColumns;
+import android.provider.Settings;
 import android.content.res.ColorStateList;
 import android.net.Uri;
 import android.nfc.NfcAdapter;
@@ -56,11 +66,13 @@ import android.widget.FrameLayout;
 import android.widget.GridView;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
+import android.widget.ProgressBar;
 import android.widget.HorizontalScrollView;
 import android.widget.ScrollView;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import org.xmlpull.v1.XmlPullParser;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
@@ -526,6 +538,7 @@ public class MainActivity extends Activity {
             || placeholderPickerView != null
             || fxSheetView150 != null // Q150（2.61）：外卡详情窗升起同列覆盖（与 Q122 补挂口径一致，防回顶钮/底栏在窗在场时被召回压窗）
             || delConfirmSheet != null || updateTipSheet != null || updateConfirmSheet != null
+            || appUpdateSheet159 != null // Q159：软件更新窗同列覆盖（防底栏/悬浮件在窗在场时被召回压窗）
             || exitSheet151 != null; // Q151（N15）：退出确认窗在场同列覆盖（防悬浮件被召回压窗）
     }
     void hideFabsNow() {
@@ -1136,6 +1149,13 @@ public class MainActivity extends Activity {
         STR.put("haptic_strong", new String[]{"强","Strong"});
         STR.put("high_refresh", new String[]{"高刷新率","High Refresh Rate"});
         STR.put("data_update", new String[]{"数据更新","Data Update"});
+        // Q159：软件 OTA 自更新文案（与数据更新分行分状态，检查/下载/校验/安装四态同走 STR 译路）。
+        STR.put("software_update", new String[]{"软件更新","Software Update"});
+        STR.put("software_checking", new String[]{"正在检查…","Checking…"});
+        STR.put("software_downloading", new String[]{"正在下载…","Downloading…"});
+        STR.put("software_verifying", new String[]{"正在校验…","Verifying…"});
+        STR.put("software_install", new String[]{"安装","Install"});
+        STR.put("software_download_update", new String[]{"下载并更新","Download & Update"});
         STR.put("version", new String[]{"版本","Version"});
         STR.put("changelog", new String[]{"更新日志","Changelog"});
         STR.put("welcome", new String[]{"欢迎页","Welcome"});
@@ -5400,6 +5420,30 @@ public class MainActivity extends Activity {
     String pendingUpdateJson = null; int pendingUpdateVer = -1; boolean updateApplying = false;
     String pendingUpdateSummary = ""; // Q123（2.35，件三）：确认窗的变化摘要（检测线程算好，主线程只读）
     boolean updateApplyArmed = false; // Q91：仅确认窗「去更新」可置真，applyPendingUpdate 进门先验后即销，堵死一切绕过确认的写库路径
+    // Q159：软件 OTA 自更新状态。与数据 OTA 分开记账：检查与下载各自单闸，软件窗在场时
+    // isChromeCovered() 一并认它，数据检查/数据确认窗在场时软件检查串行避让，绝不同屏打架。
+    static class AppUpdateInfo159 {
+        int versionCode = -1;
+        String versionName = "";
+        String apkUrl = "";
+        long size = -1;
+        String sha256 = "";
+        String releaseNotes = "";
+        boolean forceUpdate; // 清单接受该字段；本版只读不实现强制弹窗
+        String rawJson = "";
+    }
+    AppUpdateInfo159 appUpdateInfo159;
+    boolean appUpdateChecking159;
+    boolean appUpdateDownloading159;
+    boolean appUpdateScheduled159;
+    boolean appUpdateReady159;
+    View appUpdateSheet159;
+    boolean appUpdateSheetClosing159;
+    TextView appUpdateStatus159;
+    TextView appUpdateProgressText159;
+    ProgressBar appUpdateProgress159;
+    TextView appUpdateCancel159;
+    TextView appUpdateOk159;
     // Q19：自定义卡详情改为与 Q6 数据库详情同规范的贴底浮窗（原居中 AlertDialog 白框已废）
     View customDetailSheet = null;
     View customDetailWrap = null;
@@ -6419,6 +6463,8 @@ public class MainActivity extends Activity {
         w.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE);
 
         prefs = getSharedPreferences("cardbox_native", MODE_PRIVATE);
+        // Q159：软件更新临时 APK 只落 cache/update，启动早期一次性清旧包（装完/失败残留均不进用户数据区）。
+        try { deleteDirRecursive(new File(getCacheDir(), "update")); } catch (Throwable ignored) {}
         // Q18: crash trace first (so even early onCreate crashes are recorded), then restore glass-disable flag
         glassDisabled = false;
         try { glassDisabled = prefs.getBoolean("glass_disabled", false); } catch (Throwable ignored) {}
@@ -6741,6 +6787,7 @@ public class MainActivity extends Activity {
         // 的保持其选择不动。检测发起再延到首帧落定后（见 scheduleAutoDataCheck），
         // 绝不堵首帧。手动检查入口（设置页数据行/下拉）不受此限、口径不变。
         if (prefs != null && prefs.getBoolean("auto_check_update", false)) scheduleAutoDataCheck();
+        scheduleAutoAppCheck159(); // Q159：软件静默检查延到首帧后，与数据自动检查同避让口径，只挂红点不弹窗
         if (!prefs.getBoolean("welcomed", false) && !prefs.getBoolean("hello_done", false)) showHello(); // Q93：旧欢迎页已删，首启直达「你好」
         if (hwJustRetreated) {
             // Q108：本次冷启刚把硬件玻璃自退回安全链——等欢迎页散场后提示一次，
@@ -18320,6 +18367,526 @@ public class MainActivity extends Activity {
         } else done.run();
     }
 
+    // ---------- Q159：软件 OTA 自更新（清单→确认→窗内下载→大小/SHA-256 双校验→系统安装） ----------
+    // 清单与数据 OTA 同口径：主线 raw.githubusercontent、备线 jsDelivr（仅兜底），双线都拉、
+    // 只比 versionCode 取高，不比版本名字符串。新版判定只认 remote.versionCode > 本地。
+    // forceUpdate 本版只接受不实现强制弹窗；minSupportedVersionCode 读取忽略（清单可先行预埋）。
+    static final String APP_MANIFEST_URL159 = "https://raw.githubusercontent.com/dimlogue/cardbox-data/main/app.json";
+    static final String APP_MANIFEST_URL_BACKUP159 = "https://cdn.jsdelivr.net/gh/dimlogue/cardbox-data@main/app.json";
+
+    int appVersionCode159() {
+        try {
+            PackageInfo pi = getPackageManager().getPackageInfo(getPackageName(), 0);
+            return Build.VERSION.SDK_INT >= 28 ? (int) pi.getLongVersionCode() : pi.versionCode;
+        } catch (Throwable ignored) { return 0; }
+    }
+
+    AppUpdateInfo159 parseAppUpdateInfo159(JSONObject o, String raw) {
+        if (o == null) return null;
+        try {
+            AppUpdateInfo159 info = new AppUpdateInfo159();
+            info.versionCode = o.optInt("versionCode", -1);
+            info.versionName = o.optString("versionName", "").trim();
+            info.apkUrl = o.optString("apkUrl", "").trim();
+            info.size = o.optLong("size", -1);
+            info.sha256 = o.optString("sha256", "").trim().toLowerCase(java.util.Locale.ROOT);
+            info.releaseNotes = o.optString("releaseNotes", "");
+            info.forceUpdate = o.optBoolean("forceUpdate", false);
+            // minSupportedVersionCode：本版读取忽略，不据此拦截或提示。
+            info.rawJson = raw == null ? "" : raw;
+            if (info.versionCode <= 0 || info.size <= 0 || info.apkUrl.length() == 0
+                    || !(info.apkUrl.startsWith("https://") || info.apkUrl.startsWith("http://"))
+                    || !info.sha256.matches("[0-9a-f]{64}")) return null;
+            if (info.versionName.length() == 0) info.versionName = String.valueOf(info.versionCode);
+            return info;
+        } catch (Throwable ignored) { return null; }
+    }
+
+    AppUpdateInfo159 loadCachedAppUpdateInfo159() {
+        if (appUpdateInfo159 != null && appUpdateInfo159.versionCode > appVersionCode159()) return appUpdateInfo159;
+        if (prefs == null) return null;
+        try {
+            String raw = prefs.getString("app_update_json159", "");
+            if (raw == null || raw.length() == 0) return null;
+            AppUpdateInfo159 info = parseAppUpdateInfo159(new JSONObject(raw), raw);
+            if (info != null && info.versionCode > appVersionCode159()) {
+                appUpdateInfo159 = info;
+                return info;
+            }
+            appUpdateInfo159 = null;
+            prefs.edit().remove("app_update_json159").apply();
+        } catch (Throwable ignored) {}
+        return null;
+    }
+
+    void scheduleAutoAppCheck159() {
+        if (appUpdateScheduled159) return;
+        appUpdateScheduled159 = true;
+        Runnable task = new Runnable() {
+            @Override public void run() {
+                // 与数据自动检查同避让口径：欢迎页在场、数据检查/下载进行中或数据确认窗
+                // 在场时只顺延，软件检查绝不抢先弹窗、绝不与数据更新同屏打架。
+                if (helloOpen || otaFetchStarted || updateApplying || updateConfirmSheet != null || updateTipSheet != null
+                        || appUpdateChecking159 || appUpdateDownloading159) {
+                    mainHandler.postDelayed(this, 1200);
+                    return;
+                }
+                appUpdateScheduled159 = false;
+                checkAppUpdate159(false);
+            }
+        };
+        mainHandler.postDelayed(task, 1500);
+    }
+
+    void checkAppUpdate159(final boolean manual) {
+        if (appUpdateDownloading159) {
+            if (manual) showFloatToast(S("software_downloading"));
+            return;
+        }
+        if (appUpdateChecking159) {
+            if (manual) showFloatToast(S("software_checking"));
+            return;
+        }
+        if (otaFetchStarted || updateApplying || updateConfirmSheet != null || updateTipSheet != null) {
+            if (manual) showFloatToast(L("数据更新正在进行，请稍后再试", "A data update is in progress — please try again in a moment."));
+            return;
+        }
+        appUpdateChecking159 = true;
+        final int localCode = appVersionCode159();
+        final String[] urls = new String[]{APP_MANIFEST_URL159, APP_MANIFEST_URL_BACKUP159};
+        new Thread(() -> {
+            AppUpdateInfo159 best = null;
+            boolean timeout = false;
+            for (String url : urls) {
+                HttpURLConnection conn = null;
+                try {
+                    conn = (HttpURLConnection) new java.net.URL(url).openConnection();
+                    conn.setConnectTimeout(8000);
+                    conn.setReadTimeout(9000);
+                    conn.setRequestProperty("Cache-Control", "no-cache");
+                    conn.setRequestProperty("User-Agent", "CardBox Android");
+                    if (conn.getResponseCode() != 200) continue;
+                    String raw = readAllDeadline(conn.getInputStream(), 9000);
+                    AppUpdateInfo159 parsed = parseAppUpdateInfo159(new JSONObject(raw), raw);
+                    if (parsed != null && (best == null || parsed.versionCode > best.versionCode)) best = parsed;
+                } catch (java.net.SocketTimeoutException te) {
+                    timeout = true;
+                } catch (Throwable ignored) {
+                } finally {
+                    if (conn != null) conn.disconnect();
+                }
+            }
+            final AppUpdateInfo159 result = best;
+            final boolean timedOut = timeout;
+            runOnUiThread(() -> {
+                appUpdateChecking159 = false;
+                try {
+                    if (result == null) {
+                        if (manual) showFloatToast(timedOut
+                                ? L("检查软件更新超时，请检查网络后重试", "Software update check timed out. Check your network and try again.")
+                                : L("检查软件更新失败：两条线路都没连上，请检查网络后重试", "Software update check failed — neither route connected. Check your network and try again."));
+                        if ("settings".equals(tab)) applyAppearanceSoft130();
+                        return;
+                    }
+                    if (result.versionCode <= localCode) {
+                        appUpdateInfo159 = null;
+                        if (prefs != null) prefs.edit().remove("app_update_json159").apply();
+                        if (manual) showFloatToast(L("已是最新软件（" + appVersion() + "）", "Software is up to date (" + appVersion() + ")"));
+                        if ("settings".equals(tab)) applyAppearanceSoft130();
+                        return;
+                    }
+                    appUpdateInfo159 = result;
+                    if (prefs != null) prefs.edit().putString("app_update_json159", result.rawJson).apply();
+                    // 静默命中只挂红点：当前不在设置页时让已建设置页失效，下次切入按缓存重建出行。
+                    if ("settings".equals(tab)) applyAppearanceSoft130(); else invalidatePagesSoft();
+                    if (manual && updateConfirmSheet == null && updateTipSheet == null && !otaFetchStarted && !updateApplying) showAppUpdateSheet159();
+                } catch (Throwable ignored) {}
+            });
+        }).start();
+    }
+
+    File appUpdateDir159() {
+        return new File(getCacheDir(), "update");
+    }
+
+    File appUpdateTarget159(AppUpdateInfo159 info) {
+        return new File(appUpdateDir159(), "app-" + info.versionCode + ".apk");
+    }
+
+    String sha256File159(File file) throws Exception {
+        java.security.MessageDigest digest = java.security.MessageDigest.getInstance("SHA-256");
+        java.io.FileInputStream in = new java.io.FileInputStream(file);
+        try {
+            byte[] buf = new byte[32768];
+            int n;
+            while ((n = in.read(buf)) != -1) digest.update(buf, 0, n);
+        } finally {
+            try { in.close(); } catch (Throwable ignored) {}
+        }
+        StringBuilder sb = new StringBuilder();
+        for (byte b : digest.digest()) sb.append(String.format(java.util.Locale.ROOT, "%02x", b & 0xff));
+        return sb.toString();
+    }
+
+    static void copyFile159(File src, File dst) throws Exception {
+        java.io.FileInputStream in = new java.io.FileInputStream(src);
+        java.io.FileOutputStream out = new java.io.FileOutputStream(dst);
+        try {
+            byte[] buf = new byte[32768];
+            int n;
+            while ((n = in.read(buf)) != -1) out.write(buf, 0, n);
+            out.flush();
+        } finally {
+            try { in.close(); } catch (Throwable ignored) {}
+            try { out.close(); } catch (Throwable ignored) {}
+        }
+    }
+
+    HttpURLConnection openAppDownload159(String url) throws Exception {
+        String current = url;
+        for (int hop = 0; hop < 6; hop++) {
+            java.net.URL u = new java.net.URL(current);
+            HttpURLConnection conn = (HttpURLConnection) u.openConnection();
+            conn.setInstanceFollowRedirects(false);
+            conn.setConnectTimeout(10000);
+            conn.setReadTimeout(20000);
+            conn.setRequestProperty("Cache-Control", "no-cache");
+            conn.setRequestProperty("Accept-Encoding", "identity");
+            conn.setRequestProperty("User-Agent", "CardBox Android");
+            int code = conn.getResponseCode();
+            if (code == 200) return conn;
+            if (code == 301 || code == 302 || code == 303 || code == 307 || code == 308) {
+                String location = conn.getHeaderField("Location");
+                conn.disconnect();
+                if (location == null || location.length() == 0) throw new java.io.IOException("HTTP " + code);
+                current = new java.net.URL(u, location).toString();
+                continue;
+            }
+            conn.disconnect();
+            throw new java.io.IOException("HTTP " + code);
+        }
+        throw new java.io.IOException("HTTP redirect");
+    }
+
+    boolean canInstallPackages159() {
+        return Build.VERSION.SDK_INT < 26 || getPackageManager().canRequestPackageInstalls();
+    }
+
+    void showAppInstallPermissionGuide159() {
+        String msg = L("系统要求先允许本 App 安装应用，打开后返回再点更新。安装界面由系统弹出，确认后才会开始安装。",
+                "The system requires you to allow this app to install apps first. Open the setting, turn it on, return, then tap Update again. The system will show its own install confirmation before anything is installed.");
+        FrameLayout sheet = buildUpdateSheet(S("software_update"), msg, S("cancel"), L("去开启", "Open Settings"), () -> {
+            try {
+                Intent intent = new Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:" + getPackageName()));
+                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                startActivity(intent);
+            } catch (Throwable e) {
+                showFloatToast(L("没能打开系统设置，请到系统设置里允许本 App 安装应用", "The system setting could not be opened. Please allow this app to install apps in system settings."));
+            }
+        });
+        content.addView(sheet);
+        animateUpdateSheetIn(sheet);
+    }
+
+    void launchAppInstaller159(File apk) {
+        try {
+            Uri uri = FileProvider.getUriForFile(this, getPackageName() + ".fileprovider", apk);
+            Intent intent = new Intent(Intent.ACTION_VIEW);
+            intent.setDataAndType(uri, "application/vnd.android.package-archive");
+            intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_ACTIVITY_NEW_TASK);
+            startActivity(intent);
+        } catch (Throwable e) {
+            showFloatToast(L("找不到系统安装器，没能打开安装界面", "No system installer was found, so the install screen could not open."));
+        }
+    }
+
+    void closeAppUpdateSheet159() {
+        final View sheet = appUpdateSheet159;
+        if (sheet == null || appUpdateSheetClosing159) return;
+        if (appUpdateDownloading159) {
+            showFloatToast(S("software_downloading"));
+            return;
+        }
+        appUpdateSheetClosing159 = true;
+        Object[] tagged = sheet.getTag() instanceof Object[] ? (Object[]) sheet.getTag() : null;
+        final View wrap = tagged != null ? (View) tagged[0] : null;
+        final boolean[] doneRan = {false};
+        Runnable done = () -> {
+            if (doneRan[0]) return;
+            doneRan[0] = true;
+            if (sheet.getParent() != null) ((ViewGroup) sheet.getParent()).removeView(sheet);
+            if (appUpdateSheet159 == sheet) {
+                appUpdateSheet159 = null;
+                appUpdateSheetClosing159 = false;
+                appUpdateReady159 = false;
+                appUpdateStatus159 = null;
+                appUpdateProgressText159 = null;
+                appUpdateProgress159 = null;
+                appUpdateCancel159 = null;
+                appUpdateOk159 = null;
+            }
+            restoreChrome();
+        };
+        if (wrap != null) {
+            wrap.animate().translationY(dp(this, 42)).alpha(0f).setDuration(ANIM_DUR_SHEET_OUT).setInterpolator(ANIM_EXIT).withEndAction(done).start();
+            sheet.animate().alpha(0f).setDuration(ANIM_DUR_SHADE_OUT).setInterpolator(ANIM_EXIT).start();
+            mainHandler.postDelayed(() -> { if (appUpdateSheet159 == sheet && appUpdateSheetClosing159) done.run(); }, ANIM_DUR_SHEET_OUT + 130);
+        } else done.run();
+    }
+
+    void showAppUpdateSheet159() {
+        final AppUpdateInfo159 info = loadCachedAppUpdateInfo159();
+        if (info == null || info.versionCode <= appVersionCode159() || appUpdateSheet159 != null) return;
+        if (updateConfirmSheet != null || updateTipSheet != null || otaFetchStarted || updateApplying) return;
+        hideChrome();
+        final FrameLayout sheet = new FrameLayout(this);
+        View shade = new View(this);
+        shade.setBackgroundColor(Color.argb(102, 0, 0, 0));
+        shade.setOnClickListener(v -> closeAppUpdateSheet159());
+        sheet.addView(shade, new FrameLayout.LayoutParams(-1, -1));
+
+        LinearLayout card = new LinearLayout(this);
+        card.setOrientation(LinearLayout.VERTICAL);
+        GradientDrawable cardBg = glassWindowTint(sheetR129(22f), false);
+        boostWindowFace(cardBg);
+        card.setBackground(cardBg);
+        if (Build.VERSION.SDK_INT >= 21) { softShadow(card, 24); roundClip(card, sheetR129(22f), this); }
+        card.setPadding(dp(this, 18), dp(this, 18), dp(this, 18), dp(this, 14) + navBarH());
+        card.setOnClickListener(v -> {});
+
+        TextView title = tvW(this, S("software_update"), 17, colText(), 800);
+        card.addView(title);
+        TextView versionLine = tv(this,
+                L("新版 " + info.versionName + "（当前 " + appVersion() + "）", "Version " + info.versionName + " (current " + appVersion() + ")"),
+                13.5f, inkBody(), false);
+        versionLine.setPadding(0, dp(this, 5), 0, 0);
+        card.addView(versionLine);
+
+        TextView notesTitle = tvW(this, L("更新说明", "Release Notes"), 13, colText(), 800);
+        LinearLayout.LayoutParams notesTitleLp = new LinearLayout.LayoutParams(-1, -2);
+        notesTitleLp.topMargin = dp(this, 12);
+        card.addView(notesTitle, notesTitleLp);
+        String notes = info.releaseNotes == null || info.releaseNotes.trim().length() == 0
+                ? L("本次更新说明暂略。", "No release notes provided.")
+                : info.releaseNotes.replace("\\n", "\n");
+        TextView notesText = tv(this, notes, 13, inkBody(), false);
+        notesText.setLineSpacing(0, 1.35f);
+        ScrollView notesScroll = new ScrollView(this);
+        notesScroll.addView(notesText);
+        LinearLayout.LayoutParams notesLp = new LinearLayout.LayoutParams(-1, dp(this, notes.length() > 180 ? 104 : 64));
+        notesLp.topMargin = dp(this, 5);
+        card.addView(notesScroll, notesLp);
+
+        TextView status = tv(this,
+                L("下载前会核对安装包大小，下载后还会校验 SHA-256；两项都通过才打开系统安装。安装时如被系统风险检测拦截，在系统框里选『继续安装』。",
+                  "The package size is checked before download and its SHA-256 after; the system installer opens only after both pass. If system risk screening intercepts the install, choose “Continue installation” in the system dialog."),
+                12.5f, inkBody(), false);
+        status.setLineSpacing(0, 1.35f);
+        LinearLayout.LayoutParams statusLp = new LinearLayout.LayoutParams(-1, -2);
+        statusLp.topMargin = dp(this, 12);
+        card.addView(status, statusLp);
+        appUpdateStatus159 = status;
+
+        ProgressBar progress = new ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal);
+        progress.setMax(100);
+        progress.setProgress(0);
+        progress.setVisibility(View.GONE);
+        try { progress.setProgressTintList(android.content.res.ColorStateList.valueOf(accentColor())); } catch (Throwable ignored) {}
+        LinearLayout.LayoutParams progressLp = new LinearLayout.LayoutParams(-1, dp(this, 6));
+        progressLp.topMargin = dp(this, 12);
+        card.addView(progress, progressLp);
+        appUpdateProgress159 = progress;
+
+        TextView progressText = tv(this, "", 12, inkBody(), false);
+        progressText.setVisibility(View.GONE);
+        LinearLayout.LayoutParams progressTextLp = new LinearLayout.LayoutParams(-1, -2);
+        progressTextLp.topMargin = dp(this, 6);
+        card.addView(progressText, progressTextLp);
+        appUpdateProgressText159 = progressText;
+
+        LinearLayout buttons = new LinearLayout(this);
+        buttons.setOrientation(LinearLayout.HORIZONTAL);
+        LinearLayout.LayoutParams buttonsLp = new LinearLayout.LayoutParams(-1, -2);
+        buttonsLp.topMargin = dp(this, 16);
+        card.addView(buttons, buttonsLp);
+
+        TextView cancel = tvW(this, S("cancel"), 14.5f, inkBody(), 700);
+        cancel.setGravity(Gravity.CENTER);
+        cancel.setBackground(rippleBg(darkEff() ? colChipOff() : Color.rgb(0xF2, 0xF3, 0xF7), 14));
+        LinearLayout.LayoutParams cancelLp = new LinearLayout.LayoutParams(0, dp(this, 48), 1f);
+        cancelLp.rightMargin = dp(this, 10);
+        buttons.addView(cancel, cancelLp);
+        appUpdateCancel159 = cancel;
+
+        TextView ok = tvW(this, S("software_download_update"), 14.5f, Color.WHITE, 800);
+        ok.setGravity(Gravity.CENTER);
+        ok.setBackground(rippleBg(Color.rgb(0x0A, 0x5C, 0xD6), 14));
+        buttons.addView(ok, new LinearLayout.LayoutParams(0, dp(this, 48), 1f));
+        appUpdateOk159 = ok;
+
+        FrameLayout wrap = new FrameLayout(this);
+        View glass = glassLayerHw(card, sheetR129(22f), false, "updatewin");
+        roundClip(glass, sheetR129(22f), this);
+        wrap.addView(glass, new FrameLayout.LayoutParams(-1, -1));
+        wrap.addView(card, new FrameLayout.LayoutParams(-1, -1));
+        FrameLayout.LayoutParams wrapLp = new FrameLayout.LayoutParams(-1, -2, Gravity.BOTTOM);
+        wrapLp.leftMargin = dp(this, 12);
+        wrapLp.rightMargin = dp(this, 12);
+        wrapLp.bottomMargin = dp(this, 10) + navBarH();
+        sheet.addView(wrap, wrapLp);
+        sheet.setTag(new Object[]{wrap, shade});
+        appUpdateSheet159 = sheet;
+        appUpdateReady159 = false;
+        cancel.setOnClickListener(v -> { haptic(); closeAppUpdateSheet159(); });
+        ok.setOnClickListener(v -> { haptic(); startAppUpdateDownload159(); });
+        content.addView(sheet);
+        animateUpdateSheetIn(sheet);
+    }
+
+    void startAppUpdateDownload159() {
+        final AppUpdateInfo159 info = appUpdateInfo159 != null ? appUpdateInfo159 : loadCachedAppUpdateInfo159();
+        if (info == null || info.versionCode <= appVersionCode159()) return;
+        if (appUpdateDownloading159) return;
+        if (!canInstallPackages159()) {
+            closeAppUpdateSheet159();
+            mainHandler.postDelayed(this::showAppInstallPermissionGuide159, 360);
+            return;
+        }
+        final File target = appUpdateTarget159(info);
+        if (appUpdateReady159 && target.exists()) {
+            closeAppUpdateSheet159();
+            mainHandler.postDelayed(() -> launchAppInstaller159(target), 120);
+            return;
+        }
+        appUpdateDownloading159 = true;
+        appUpdateReady159 = false;
+        final TextView statusF = appUpdateStatus159;
+        final TextView progressTextF = appUpdateProgressText159;
+        final ProgressBar progressF = appUpdateProgress159;
+        final TextView okF = appUpdateOk159;
+        final TextView cancelF = appUpdateCancel159;
+        if (statusF != null) statusF.setText(S("software_downloading"));
+        if (progressF != null) { progressF.setVisibility(View.VISIBLE); progressF.setProgress(0); }
+        if (progressTextF != null) { progressTextF.setVisibility(View.VISIBLE); progressTextF.setText(""); }
+        if (okF != null) { okF.setEnabled(false); okF.setAlpha(0.55f); }
+        if (cancelF != null) { cancelF.setEnabled(false); cancelF.setAlpha(0.55f); }
+
+        new Thread(() -> {
+            File dir = appUpdateDir159();
+            File part = new File(dir, target.getName() + ".part");
+            String failure = null;
+            boolean integrityFailure = false;
+            boolean targetVerified = false;
+            try {
+                if (!dir.exists()) dir.mkdirs();
+                if (target.exists()) {
+                    targetVerified = false;
+                } else {
+                    if (part.exists()) part.delete();
+                    HttpURLConnection conn = openAppDownload159(info.apkUrl);
+                    java.io.InputStream in = null;
+                    java.io.FileOutputStream out = null;
+                    try {
+                        in = conn.getInputStream();
+                        out = new java.io.FileOutputStream(part);
+                        byte[] buf = new byte[32768];
+                        long written = 0;
+                        int lastPct = -1;
+                        long[] lastUiMs = {0L};
+                        int n;
+                        while ((n = in.read(buf)) != -1) {
+                            written += n;
+                            if (written > info.size) { integrityFailure = true; break; }
+                            out.write(buf, 0, n);
+                            final long snapshot = written;
+                            int pct = info.size > 0 ? (int) Math.min(100, (written * 100L) / info.size) : 0;
+                            long now = System.currentTimeMillis();
+                            if (pct != lastPct || now - lastUiMs[0] > 180) {
+                                lastPct = pct;
+                                lastUiMs[0] = now;
+                                final int pctF = pct;
+                                runOnUiThread(() -> {
+                                    try {
+                                        if (progressF != null) progressF.setProgress(pctF);
+                                        if (progressTextF != null) progressTextF.setText(S("software_downloading") + " " + pctF + "% · "
+                                                + fmtBytesKb((int) Math.min(snapshot, Integer.MAX_VALUE)) + " / " + fmtBytesKb((int) Math.min(info.size, Integer.MAX_VALUE)));
+                                    } catch (Throwable ignored) {}
+                                });
+                            }
+                        }
+                        out.flush();
+                        if (!integrityFailure && written != info.size) integrityFailure = true;
+                        if (!integrityFailure && !part.renameTo(target)) {
+                            copyFile159(part, target);
+                            part.delete();
+                        }
+                    } finally {
+                        if (in != null) try { in.close(); } catch (Throwable ignored) {}
+                        if (out != null) try { out.close(); } catch (Throwable ignored) {}
+                        conn.disconnect();
+                    }
+                }
+                if (!integrityFailure) {
+                    runOnUiThread(() -> {
+                        try {
+                            if (statusF != null) statusF.setText(S("software_verifying"));
+                            if (progressF != null) progressF.setProgress(100);
+                            if (progressTextF != null) progressTextF.setText(S("software_verifying"));
+                        } catch (Throwable ignored) {}
+                    });
+                    if (!target.exists() || target.length() != info.size) integrityFailure = true;
+                    else {
+                        String sha = sha256File159(target);
+                        if (!info.sha256.equalsIgnoreCase(sha)) integrityFailure = true;
+                        else targetVerified = true;
+                    }
+                }
+                if (integrityFailure) {
+                    try { if (part.exists()) part.delete(); } catch (Throwable ignored) {}
+                    try { if (target.exists()) target.delete(); } catch (Throwable ignored) {}
+                    failure = L("下载不完整，已删除，请重试", "The download was incomplete and has been deleted. Please try again.");
+                }
+            } catch (java.net.SocketTimeoutException te) {
+                try { if (part.exists()) part.delete(); } catch (Throwable ignored) {}
+                failure = L("下载超时，安装包还没下完，请检查网络后重试", "The download timed out before the package finished. Check your network and try again.");
+            } catch (Throwable e) {
+                try { if (part.exists()) part.delete(); } catch (Throwable ignored) {}
+                failure = L("下载失败，请检查网络后重试", "The download failed. Check your network and try again.");
+            }
+
+            final String failureF = failure;
+            final boolean verifiedF = targetVerified && failure == null;
+            runOnUiThread(() -> {
+                appUpdateDownloading159 = false;
+                try {
+                    if (okF != null) { okF.setEnabled(true); okF.setAlpha(1f); }
+                    if (cancelF != null) { cancelF.setEnabled(true); cancelF.setAlpha(1f); }
+                    if (failureF != null) {
+                        if (statusF != null) statusF.setText(failureF);
+                        if (progressTextF != null) progressTextF.setText(failureF);
+                        if (okF != null) okF.setText(S("software_download_update"));
+                        showFloatToast(failureF);
+                        return;
+                    }
+                    if (!verifiedF) return;
+                    appUpdateReady159 = true;
+                    if (statusF != null) statusF.setText(L("已下载并校验通过，正在打开系统安装。", "Downloaded and verified. Opening the system installer."));
+                    if (progressTextF != null) progressTextF.setText(L("校验通过", "Verified"));
+                    if (okF != null) okF.setText(S("software_install"));
+                    if (!canInstallPackages159()) {
+                        closeAppUpdateSheet159();
+                        mainHandler.postDelayed(this::showAppInstallPermissionGuide159, 360);
+                        return;
+                    }
+                    mainHandler.postDelayed(() -> {
+                        closeAppUpdateSheet159();
+                        mainHandler.postDelayed(() -> launchAppInstaller159(target), 120);
+                    }, 260);
+                } catch (Throwable ignored) {}
+            });
+        }).start();
+    }
+
     // ---------- 资讯（Phase 2c，对照 app.js renderNews/loadNews/checkNewsUpdate） ----------
     static class NewsItem {
         String id, title, tag, date, source, summary, url;
@@ -24336,6 +24903,42 @@ public class MainActivity extends Activity {
             checkDataUpdate(true, false, () -> { if ("settings".equals(tab)) applyAppearanceSoft130(); });
         });
         page.addView(updRow);
+        // Q159：软件更新独立一行（与数据更新分开、两处不并列显示对方版本号）；行内只显
+        // 当前软件版本与软件新版状态。点行手动检查，结果必有反馈；静默命中只在此行挂红点。
+        AppUpdateInfo159 swInfo159 = loadCachedAppUpdateInfo159();
+        final boolean swAvail159 = swInfo159 != null && swInfo159.versionCode > appVersionCode159();
+        String swSub159 = appUpdateChecking159 ? S("software_checking")
+                : appUpdateDownloading159 ? S("software_downloading")
+                : swAvail159 ? L("当前 " + appVersion() + " · 有新版 " + swInfo159.versionName + " 可更新 ›",
+                        "Current " + appVersion() + " · Update " + swInfo159.versionName + " available ›")
+                : L("当前版本 " + appVersion() + " · 点此检查软件更新 ›",
+                        "Current " + appVersion() + " · Tap to check for software updates ›");
+        View swRow159 = settingRow(S("software_update"), swSub159);
+        if (swAvail159) {
+            try {
+                TextView swTitle159 = (TextView) ((ViewGroup) swRow159).getChildAt(0);
+                String base = S("software_update") + "  ●";
+                int dot = base.indexOf('●');
+                android.text.SpannableStringBuilder ssb = new android.text.SpannableStringBuilder(base);
+                ssb.setSpan(new android.text.style.ForegroundColorSpan(Color.rgb(0xE0, 0x31, 0x31)), dot, dot + 1, android.text.Spannable.SPAN_EXCLUSIVE_EXCLUSIVE);
+                ssb.setSpan(new android.text.style.RelativeSizeSpan(0.7f), dot, dot + 1, android.text.Spannable.SPAN_EXCLUSIVE_EXCLUSIVE);
+                swTitle159.setText(ssb);
+            } catch (Throwable ignored) {}
+        }
+        final TextView swSubTv159 = (TextView) ((ViewGroup) swRow159).getChildAt(1);
+        swRow159.setOnClickListener(v -> {
+            haptic();
+            if (appUpdateDownloading159) { showFloatToast(S("software_downloading")); return; }
+            if (appUpdateChecking159) { showFloatToast(S("software_checking")); return; }
+            AppUpdateInfo159 readyInfo159 = loadCachedAppUpdateInfo159();
+            if (readyInfo159 != null && readyInfo159.versionCode > appVersionCode159()) { showAppUpdateSheet159(); return; }
+            swSubTv159.setText(S("software_checking"));
+            checkAppUpdate159(true);
+            mainHandler.post(() -> {
+                if (!appUpdateChecking159 && !appUpdateDownloading159 && "settings".equals(tab)) applyAppearanceSoft130();
+            });
+        });
+        page.addView(swRow159);
         switchRow(page, "启动时自动检测更新", "开启只检测并提示，不自动应用；关闭则仅手动检查", prefs != null && prefs.getBoolean("auto_check_update", false), on -> { if(prefs!=null) prefs.edit().putBoolean("auto_check_update", on).apply(); haptic(); applyAppearanceSoft130(); }); // Q121：默认关（站规矩）；Q135（件三普查）：改走无闪换入
         // Q151（N15）：退出前再次确认（默认开）——根层返回弹三选确认窗（showExitConfirm151）；关则根层返回直退桌面。走既有 switchRow＋prefs 持久化口径。
         switchRow(page, isEn() ? "Confirm Before Exit" : "退出前再次确认", isEn() ? "Ask on Back at the main screen (Cancel / Exit / End Process); off = exit directly" : "主界面按返回时先确认（取消／退出／结束进程）；关闭则直接退出", prefs == null || prefs.getBoolean("exit_confirm", true), on -> { if(prefs!=null) prefs.edit().putBoolean("exit_confirm", on).apply(); haptic(); });
@@ -25433,6 +26036,117 @@ public class MainActivity extends Activity {
         page.addView(panel);
     }
 
+    // Q159：零依赖文件供应器（手写，不引 AndroidX）。Manifest 以包名+.fileprovider 注册，
+    // 只按 res/xml/file_paths 暴露 cache/update；其余路径一律拒绝，安装包不出缓存区。
+    public static class FileProvider extends ContentProvider {
+        private final java.util.Map<String, File> roots159 = new java.util.HashMap<>();
+
+        public FileProvider() {}
+
+        @Override
+        public void attachInfo(Context context, ProviderInfo info) {
+            super.attachInfo(context, info);
+            roots159.clear();
+            try {
+                if (info != null && info.metaData != null) {
+                    int resId = info.metaData.getInt("android.support.FILE_PROVIDER_PATHS", 0);
+                    if (resId != 0) {
+                        XmlResourceParser xml = context.getResources().getXml(resId);
+                        int event;
+                        while ((event = xml.next()) != XmlPullParser.END_DOCUMENT) {
+                            if (event != XmlPullParser.START_TAG) continue;
+                            String tag = xml.getName();
+                            String name = xml.getAttributeValue(null, "name");
+                            String path = xml.getAttributeValue(null, "path");
+                            if (name == null) continue;
+                            File root = null;
+                            if ("cache-path".equals(tag)) root = new File(context.getCacheDir(), path == null ? "" : path);
+                            else if ("files-path".equals(tag)) root = new File(context.getFilesDir(), path == null ? "" : path);
+                            if (root != null) roots159.put(name, root);
+                        }
+                    }
+                }
+            } catch (Throwable ignored) {}
+            if (!roots159.containsKey("update")) roots159.put("update", new File(context.getCacheDir(), "update"));
+        }
+
+        public static Uri getUriForFile(Context context, String authority, File file) {
+            return new Uri.Builder()
+                    .scheme("content")
+                    .authority(authority)
+                    .appendPath("update")
+                    .appendPath(file.getName())
+                    .build();
+        }
+
+        private File resolveFile159(Uri uri) throws java.io.FileNotFoundException {
+            java.util.List<String> segments = uri.getPathSegments();
+            if (segments.size() < 2) throw new java.io.FileNotFoundException(uri.toString());
+            File root = roots159.get(segments.get(0));
+            if (root == null && getContext() != null) root = new File(getContext().getCacheDir(), "update");
+            if (root == null) throw new java.io.FileNotFoundException(uri.toString());
+            File file = new File(root, segments.get(1));
+            try {
+                String rootPath = root.getCanonicalPath();
+                String filePath = file.getCanonicalPath();
+                if (!filePath.startsWith(rootPath + File.separator) || !file.isFile()) throw new java.io.FileNotFoundException(uri.toString());
+            } catch (java.io.IOException e) {
+                throw new java.io.FileNotFoundException(uri.toString());
+            }
+            return file;
+        }
+
+        @Override
+        public boolean onCreate() { return true; }
+
+        @Override
+        public Cursor query(Uri uri, String[] projection, String selection, String[] selectionArgs, String sortOrder) {
+            try {
+                File file = resolveFile159(uri);
+                String[] columns = projection == null
+                        ? new String[]{OpenableColumns.DISPLAY_NAME, OpenableColumns.SIZE}
+                        : projection;
+                MatrixCursor cursor = new MatrixCursor(columns);
+                Object[] row = new Object[columns.length];
+                for (int i = 0; i < columns.length; i++) {
+                    if (OpenableColumns.DISPLAY_NAME.equals(columns[i])) row[i] = file.getName();
+                    else if (OpenableColumns.SIZE.equals(columns[i])) row[i] = file.length();
+                    else row[i] = null;
+                }
+                cursor.addRow(row);
+                return cursor;
+            } catch (Throwable ignored) {
+                return new MatrixCursor(new String[]{OpenableColumns.DISPLAY_NAME, OpenableColumns.SIZE});
+            }
+        }
+
+        @Override
+        public String getType(Uri uri) {
+            String name = uri.getLastPathSegment();
+            return name != null && name.endsWith(".apk")
+                    ? "application/vnd.android.package-archive"
+                    : "application/octet-stream";
+        }
+
+        @Override
+        public ParcelFileDescriptor openFile(Uri uri, String mode) throws java.io.FileNotFoundException {
+            if (!"r".equals(mode) && !"rt".equals(mode) && !"rw".equals(mode) && !"rwt".equals(mode)) {
+                // 对外只读：r 系列里也只开只读描述符，安装器不需要也不应拿到写权限。
+                if (!"r".equals(mode)) throw new java.io.FileNotFoundException("read-only");
+            }
+            return ParcelFileDescriptor.open(resolveFile159(uri), ParcelFileDescriptor.MODE_READ_ONLY);
+        }
+
+        @Override
+        public Uri insert(Uri uri, ContentValues values) { return null; }
+
+        @Override
+        public int delete(Uri uri, String selection, String[] selectionArgs) { return 0; }
+
+        @Override
+        public int update(Uri uri, ContentValues values, String selection, String[] selectionArgs) { return 0; }
+    }
+
     LinearLayout basePage(String title) {
         LinearLayout page = new LinearLayout(this);
         page.setOrientation(LinearLayout.VERTICAL);
@@ -25473,6 +26187,10 @@ public class MainActivity extends Activity {
         if (extSheet != null) { closeExtendedSearch(); return; }
         if (binSheet != null) { closeBinQuery(); return; }
         if (delConfirmSheet != null) { closeDelConfirm(); return; }
+        if (appUpdateSheet159 != null) { // Q159：软件更新窗在场先收它；下载中 close 内部只提示不关（不许半包逃逸）
+            if (appUpdateDownloading159) showFloatToast(S("software_downloading")); else closeAppUpdateSheet159();
+            return;
+        }
         if (updateConfirmSheet != null) { closeUpdateSheet(updateConfirmSheet); return; }
         if (updateTipSheet != null) { closeUpdateSheet(updateTipSheet); return; }
         if (exitSheetBack151()) return; // Q151（N15）：退出窗在场时返回＝取消，不许穿透根层重弹

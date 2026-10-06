@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths>
+    <!-- Q159: only expose the software-update APK cache directory. -->
+    <cache-path name="update" path="update/" />
+</paths>

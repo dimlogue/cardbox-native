@@ -1,13 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="com.igll.carddbnative"
-    android:versionCode="269"
-    android:versionName="2.69-native">
+    android:versionCode="270"
+    android:versionName="2.70-native">
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.VIBRATE" />
     <uses-permission android:name="android.permission.NFC" />
     <uses-feature android:name="android.hardware.nfc" android:required="false" />
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="28" />
+    <!-- Q159：软件 OTA 拉起系统安装所需的未知来源安装权限（逐 App 在系统设置中授权）。 -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
     <uses-sdk android:minSdkVersion="24" android:targetSdkVersion="34" />
     <application
         android:label="卡盒·原生版"
@@ -21,6 +23,16 @@
             android:exported="true"
             android:configChanges="orientation|screenSize|keyboardHidden">
         </activity>
+        <!-- Q159：手写零依赖 FileProvider（MainActivity 内嵌类），只暴露 cache/update 给系统安装器。 -->
+        <provider
+            android:name=".MainActivity$FileProvider"
+            android:authorities="com.igll.carddbnative.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
         <!-- Q129（2.41）：桌面图标三款预置，activity-alias 切换（先启新后禁旧，见 applyLauncherIcon129）。
              经典款为默认且 manifest 里恒 enabled，alias 切换失败也有它兜底，绝不出现桌面无图标。 -->
         <activity-alias
