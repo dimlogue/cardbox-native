@@ -4067,6 +4067,20 @@ public class MainActivity extends Activity {
             protected int sizeOf(String k, Bitmap b) { return b.getByteCount() / 1024; }
         };
         static Bitmap cacheGet(String k) { synchronized (cache) { return cache.get(k); } }
+        // Q152（2.63，更新链b）：单图缓存失效——某 path 的磁盘文件内容已变（远程
+        // 图落盘/自愈重下覆盖同名文件）时，把该 path 的全部桶位键＋原图键一并
+        // 解除引用，否则 LruCache 按路径键命中的仍是旧位图，落盘换入
+        // （swapInFetchedImage133 的 getSized）拿到旧图空转、屏上图换不上。
+        static void evictPath152(String path) {
+            if (path == null) return;
+            synchronized (cache) {
+                try {
+                    for (String k152 : new java.util.ArrayList<>(cache.snapshot().keySet())) {
+                        if (k152 != null && (k152.equals(path) || k152.startsWith(path + "@"))) cache.remove(k152);
+                    }
+                } catch (Throwable ignored) {}
+            }
+        }
         static void cachePut(String k, Bitmap b) { synchronized (cache) { cache.put(k, b); } }
         static final java.util.Set<String> fetching = new java.util.HashSet<>();
         // Q151（P0/N17）：图下载失败退避表（path→上次失败时刻）与有界下载池——
@@ -4327,6 +4341,7 @@ public class MainActivity extends Activity {
                         fetchFail151.put(path, System.currentTimeMillis()); // Q151：失败记账进退避
                     } else {
                         fetchFail151.remove(path);
+                        evictPath152(path); // Q152：新文件已落盘——先失效该图全部缓存键，换入钩子才拿得到新位图（见 evictPath152 注）
                         java.util.function.Consumer<String> h133 = remoteFetchedHook; // Q133：落盘通知（已建瓷砖就地换入）
                         if (h133 != null) { try { h133.accept(path); } catch (Throwable ignored) {} }
                     }
@@ -6117,6 +6132,10 @@ public class MainActivity extends Activity {
         buildNav(root);
         setContentView(root);
         applyAppearanceChrome(); // Q72：先套色再显页，切深色不闪白
+        // Q152（更新链c）：清上次更新中途被杀残留的半截临时文件——applyPending-
+        // Update 写 tmp151→rename，半途杀进程会留残档；启动先清，本轮应用从干净
+        // 临时名开始（正式文件 cards-ota.json 一字不碰）。
+        try { File staleTmp152 = new File(getFilesDir(), "cards-ota.json.tmp151"); if (staleTmp152.exists()) staleTmp152.delete(); } catch (Throwable ignored) {}
         beginBootLoad151(root); // Q151（N16）：雾蓝加载层上屏＋后台备数据/首屏图，完成回 finishBoot151 建页
         // Q29：滚动只重置停稳计时、滚动中零截图（scheduleGlassRefresh 内 650ms 防抖，见其注释）
         // Q41：滚动期条带平移跟随（只 Canvas 绘制、不重采样，与停稳计时互不干扰）
@@ -17181,6 +17200,12 @@ public class MainActivity extends Activity {
                 File dst151 = new File(getFilesDir(), "cards-ota.json");
                 if (dst151.exists()) dst151.delete();
                 if (!tmp151.renameTo(dst151)) throw new Exception("rename failed");
+                // Q152（2.63，更新链c）：落盘后重读校验——不信内存态：磁盘文件须能
+                // 独立读回、parse 出 JSONObject 且版本号与待应用版一致才算成功
+                // （与 Store.load 的标记对账同口径）；校验不过按失败收口、标记不写。
+                String diskJson152 = Store.readAll(new java.io.FileInputStream(dst151));
+                int diskVer152 = Store.versionOf(diskJson152);
+                if (diskVer152 != ver) throw new Exception("disk verify failed");
                 ok = Store.parseInto(json);
             } catch (Exception e) { ok = false; try { if (tmp151.exists()) tmp151.delete(); } catch (Throwable ignored) {} }
             final boolean fok = ok;
@@ -17189,7 +17214,10 @@ public class MainActivity extends Activity {
                 if (!fok) { showFloatToast("更新未能写入，数据未生效，请重试"); return; } // Q151（N18）：失败如实说（旧文案误报「检查网络」，实为写盘/解析失败）
                 pendingUpdateJson = null; pendingUpdateVer = -1; pendingUpdateSummary = "";
                 // Q98：确认应用成功才落标记——Store.load 凭此标记（且须与文件版本一致）才认 OTA 文件
-                if (prefs != null) prefs.edit().remove("pending_update_version").putInt("ota_applied_version", Store.dataVersion).apply();
+                // Q152（更新链c）：标记改 commit 同步落盘（旧 apply 异步：rename 已
+                // 成、标记未落盘时进程被杀＝文件新标记旧，Store.load 对账失败回落
+                // 旧版并清标记，用户白更一次）。顺序守恒：rename→重读校验→parse→写标记。
+                if (prefs != null) prefs.edit().remove("pending_update_version").putInt("ota_applied_version", Store.dataVersion).commit();
                 // Q105（2.19）：数据已换版——内存图缓存仍按路径键存着旧版位图，同进程内不
                 // 清就会继续顶住新图（2.15 只做了磁盘按版本分目录，内存这层漏了）。只解除
                 // 引用交系统回收，不 recycle（Q21）；磨砂裁片缓存同清（源自旧位图派生）。
@@ -23274,6 +23302,10 @@ public class MainActivity extends Activity {
             if (ds == null || ds.length <= 2) return 0;
             long before = dirSizeBytes(base);
             int cur = Store.dataVersion;
+            // Q152（更新链c）：「当前版」以已落盘标记为准兜底——applyPendingUpdate
+            // 调用本函时 Store 已 parseInto 新版、两者恒等；设置页常态调用时标记
+            // 即生效版。取大者防内存态偶发滞后把新图目录当旧版误删。
+            try { if (prefs != null) cur = Math.max(cur, prefs.getInt("ota_applied_version", -1)); } catch (Throwable ignored) {}
             int prev = -1;
             java.util.List<File> vers = new ArrayList<>();
             for (File d : ds) {
@@ -23333,9 +23365,17 @@ public class MainActivity extends Activity {
     // 同步解码；预热后命中缓存。只动时序/缓存，不动版式与分帧节奏定版。
     void warmHomeTiles125() {
         try {
+            // Q152（更新链a 核实修订）：现码本就「上限 24 张＋异步预解池」，非审方
+            // 所判全量同步遍历、更非冷启重跑（仅 applyPendingUpdate 换版后调一
+            // 次）。本轮把预热源从数据序改成与首页首屏同一口径（filteredHome＋
+            // applySort 的展示序前 24 张），预热的正是用户第一眼要看的图；分帧
+            // 限量由 Img.decodePool（2 线程）与 prefetchSized 的 decodeBusy 去重
+            // 天然兜底，不新起节流器。
             int tw = tileWidthForCols(cols);
+            java.util.List<Card> list152 = filteredHome();
+            applySort(list152);
             int n = 0;
-            for (Card c : Store.all) {
+            for (Card c : list152) {
                 if (c == null || c.image == null || c.image.isEmpty()) continue;
                 Img.prefetchSized(this, c.image, tw);
                 if (++n >= 24) break;
