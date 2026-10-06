@@ -4484,7 +4484,7 @@ public class MainActivity extends Activity {
         fxZoneOpen = false;
         fxZoneScroll = null; fxListBox = null; fxCountTv = null;
         if (navWrap != null) navWrap.setVisibility(View.VISIBLE); // Q32
-        showTab(tab);
+        setVisibleTab152(tab, "fx-zone-close"); // Q152：可见页唯一入口
     }
 
     View buildFxZonePage() {
@@ -5172,7 +5172,7 @@ public class MainActivity extends Activity {
     ScrollView settingsScroll = null;
 
     void savePageScroll(String key, ScrollView sv) {
-        if (sv != null) pageScrollSaveY.put(key, sv.getScrollY());
+        if (sv != null) notePageScroll152(key, sv.getScrollY()); // Q152：滚动位单写漏斗
     }
 
     int savedPageScrollY(String key, ScrollView sv) {
@@ -5194,7 +5194,7 @@ public class MainActivity extends Activity {
 
     // 明确该回顶的入口（如从自定义卡跳去卡库搜这家银行看结果）专用，不走默认保位
     void resetPageScroll(String key, ScrollView sv) {
-        pageScrollSaveY.put(key, 0);
+        notePageScroll152(key, 0); // Q152：滚动位单写漏斗
         if (sv != null) sv.scrollTo(0, 0);
     }
 
@@ -5202,7 +5202,7 @@ public class MainActivity extends Activity {
     void captureCurrentPageScroll() {
         savePageScroll("home", homeScroll);
         savePageScroll("mine", mineScrollView);
-        if (mineScrollView != null) mineScrollSaveY = mineScrollView.getScrollY();
+        if (mineScrollView != null) notePageScroll152("mine", mineScrollView.getScrollY()); // Q152：滚动位单写漏斗
         savePageScroll("student", studentScroll);
         savePageScroll("news", newsScroll);
         savePageScroll("settings", settingsScroll);
@@ -5462,8 +5462,8 @@ public class MainActivity extends Activity {
 
     // P-deck ③：换序/开合后保持我的卡片页滚动位置，不甩回顶部
     void refreshMineKeepScroll() {
-        if (mineScrollView != null) mineScrollSaveY = mineScrollView.getScrollY();
-        showTab("mine");
+        if (mineScrollView != null) notePageScroll152("mine", mineScrollView.getScrollY()); // Q152：滚动位单写漏斗
+        setVisibleTab152("mine", "refresh-mine-keep-scroll"); // Q152：可见页唯一入口
     }
 
     // Q151（N4·机制级治本）：「加卡后原地不动」共同收口——全 App 四条加入路径
@@ -6126,16 +6126,18 @@ public class MainActivity extends Activity {
         }, "cardbox-boot").start();
     }
 
-    // Q151（N16）：摘冷启加载层（停转圈＋淡出后摘除）；重复调用无害。
+    // Q151（N16）：摘冷启加载层；重复调用无害。Q152（2.63，DeepSeek 一轮④采纳）：
+    // 改同步摘除——旧实现留 180ms alpha 动画 withEndAction 迟到摘层，动画收尾
+    // 时机与 finishBoot 的切页分支交叠，且迟到回调仍碰视图树，属乱跳页嫌疑面
+    // 之一。同步 removeView 后本层当帧消失，不再有迟到回调。
     void dismissBootLayer151() {
         try {
             if (bootSpin151 != null) stopPullSpin(bootSpin151);
             final View bl151 = bootLayer151;
             bootLayer151 = null; bootSpin151 = null;
-            if (bl151 != null && bl151.getParent() instanceof ViewGroup) {
-                bl151.animate().alpha(0f).setDuration(180).withEndAction(() -> {
-                    try { ((ViewGroup) bl151.getParent()).removeView(bl151); } catch (Throwable ignored) {}
-                }).start();
+            if (bl151 != null) {
+                try { bl151.animate().cancel(); } catch (Throwable ignored) {}
+                try { if (bl151.getParent() instanceof ViewGroup) ((ViewGroup) bl151.getParent()).removeView(bl151); } catch (Throwable ignored) {}
             }
         } catch (Throwable ignored) {}
     }
@@ -6143,9 +6145,21 @@ public class MainActivity extends Activity {
     // Q151（N16）：idle 预建页（建好挂宿主置 GONE，showTab 切入时自置 VISIBLE，
     // 与其懒建路径产出一致）——切页不再现场付整页构建。news 永不预建（理由见
     // finishBoot151 尾注）；签名守卫页（mine）预建后 showTab 仍按签名决定复用。
-    void prebuildPage151(String key) {
+    // Q152（2.63，置顶件/DeepSeek 一轮①采纳）：改名 ensureBuiltPage152 并立三规：
+    // ①只建不见——addView 到宿主 z 序底层（index 0）＋GONE＋alpha 0＋
+    // setSaveEnabled(false)，内部禁止任何可见性/层级/focus 操作，更禁止调
+    // showTab 类可见切换（自查：buildStudentPage/buildMinePage/buildSettingsPage
+    // 均只 return 视图、不自挂不切页，buildMinePage 内一处 sv.post 滚动恢复在
+    // GONE 视图上无害）；②时机守卫——App 不在前台（activityPaused151）或数据
+    // 未就绪时直接跳过，迟到任务不许在用户操作期间落下（懒建路径兜底，无损）；
+    // ③任务句柄留名（prebuildTasks152），onPause 时整表撤下，前台恢复由
+    // schedulePrebuild152 重新排。
+    final Runnable[] prebuildTasks152 = new Runnable[3];
+    void ensureBuiltPage152(String key) {
         try {
-            if (pages.get(key) != null || pageHost == null) return;
+            if (activityPaused151 || pageHost == null) return; // 后台不落活，懒建兜底
+            if (Store.all == null || Store.all.isEmpty()) return; // 数据未就绪不建空壳页
+            if (pages.get(key) != null) return;
             View p151 = null;
             switch (key) {
                 case "student": p151 = buildStudentPage(); break;
@@ -6156,11 +6170,28 @@ public class MainActivity extends Activity {
             if (p151 == null) return;
             pages.put(key, p151);
             if (p151.getParent() == null) {
-                pageHost.addView(p151, new FrameLayout.LayoutParams(
+                pageHost.addView(p151, 0, new FrameLayout.LayoutParams(
                     ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
                 p151.setVisibility(View.GONE);
+                p151.setAlpha(0f);
+                p151.setSaveEnabled(false);
             }
         } catch (Throwable ignored) {}
+    }
+    void schedulePrebuild152() {
+        cancelPrebuild152();
+        final String[] keys152 = {"student", "mine", "settings"};
+        final long[] at152 = {600, 1400, 2200};
+        for (int i = 0; i < keys152.length; i++) {
+            final String k152 = keys152[i];
+            prebuildTasks152[i] = () -> ensureBuiltPage152(k152);
+            mainHandler.postDelayed(prebuildTasks152[i], at152[i]);
+        }
+    }
+    void cancelPrebuild152() {
+        for (int i = 0; i < prebuildTasks152.length; i++) {
+            if (prebuildTasks152[i] != null) mainHandler.removeCallbacks(prebuildTasks152[i]);
+        }
     }
 
     // Q151（N16）：数据备好后的主线程收尾——原 onCreate 尾段（评分维度收口→滚动
@@ -6174,40 +6205,50 @@ public class MainActivity extends Activity {
         try {
             if (prefs != null) for (String k151 : new String[]{"home", "student", "mine", "news", "settings"}) {
                 int y151 = prefs.getInt("scroll_y_" + k151, 0);
-                if (y151 > 0) pageScrollSaveY.put(k151, y151);
+                if (y151 > 0) notePageScroll152(k151, y151); // Q152
             }
         } catch (Throwable ignored) {}
-        showTab("home");
-        // Q131（2.43，件二）：桌面图标切换重启后的回落——冷启首帧直接落设置页，
-        // 滚动位经既有 pageScrollSaveY 机制在建页时恢复（buildSettingsPage 的
-        // keepY 口径），再 post 一次同值 scrollTo 兜底（建页恢复被布局时机吞时）。
-        if (prefs != null && prefs.getBoolean("icon_restart_return131", false)) {
-            final int iconBackY131 = prefs.getInt("icon_restart_scroll131", 0);
-            try { prefs.edit().putBoolean("icon_restart_return131", false).commit(); } catch (Throwable ignored) {}
-            pageScrollSaveY.put("settings", iconBackY131);
-            showTab("settings");
-            if (settingsScroll != null && iconBackY131 > 0)
-                settingsScroll.post(() -> { if (settingsScroll != null) settingsScroll.scrollTo(0, iconBackY131); });
-        }
-        // Q151（P0·恢复状态机）：进程被杀后冷启恢复页签与在看详情（onPause 落盘、
-        // 只存小标识）——页签回原页（滚动位已种回记位表、建页自恢复），详情按卡
-        // id 回库重开（一次性消费，关窗后不再自开）；欢迎页待出场时不抢层、只消费。
-        // 桌面图标重启回落（上一块 icon_restart_return131）优先级在前、已先行处理。
+        // Q152（2.63，置顶件/DeepSeek 一轮②③采纳）：启动落页只许一个决定点——
+        // 旧实现 showTab("home") 先行、图标回落分支再写 settings、恢复分支再写
+        // resume_tab：同一启动里对「当前页」多头写、且 resume_tab151 读后不清，
+        // 是回前台/冷启随机落页的坐实根因之一（本文件 Q151 恢复链自查）。改：
+        // 三个恢复源先全部「读即清」（remove＋commit 同步落盘，不用 apply，杜绝
+        // 二次消费与读到旧值），再按优先级只胜出一个：①桌面图标切换回落→
+        // 设置页（Q131 既有功能，优先级最高）；②进程被杀恢复→onPause 落盘的
+        // 原页；③默认首页。最终只经唯一入口 setVisibleTab152 切一次。
+        String bootTab152 = "home";
+        String bootReason152 = "boot-default-home";
+        int iconBackY152 = 0;
+        String resumeDetail152 = null;
         try {
             if (prefs != null) {
-                String rt151 = prefs.getString("resume_tab151", "home");
-                if (rt151 != null && !"home".equals(rt151)
-                        && ("student".equals(rt151) || "mine".equals(rt151) || "news".equals(rt151) || "settings".equals(rt151))) {
-                    showTab(rt151);
+                boolean iconBack152 = prefs.getBoolean("icon_restart_return131", false);
+                iconBackY152 = prefs.getInt("icon_restart_scroll131", 0);
+                String rt152 = prefs.getString("resume_tab151", null);
+                resumeDetail152 = prefs.getString("resume_detail_id151", null);
+                android.content.SharedPreferences.Editor ed152 = prefs.edit();
+                ed152.remove("resume_tab151").remove("resume_detail_id151")
+                     .putBoolean("icon_restart_return131", false);
+                ed152.commit();
+                if (iconBack152) { bootTab152 = "settings"; bootReason152 = "boot-icon-restart-return"; }
+                else if ("student".equals(rt152) || "mine".equals(rt152) || "news".equals(rt152) || "settings".equals(rt152)) {
+                    bootTab152 = rt152; bootReason152 = "boot-resume-tab";
                 }
-                String rd151 = prefs.getString("resume_detail_id151", null);
-                if (rd151 != null) {
-                    prefs.edit().remove("resume_detail_id151").apply();
-                    boolean helloPending151 = !prefs.getBoolean("welcomed", false) && !prefs.getBoolean("hello_done", false);
-                    if (!helloPending151) {
-                        Card rc151 = Store.byId.get(rd151);
-                        if (rc151 != null) openDetail(rc151);
-                    }
+            }
+        } catch (Throwable ignored) {}
+        if ("settings".equals(bootTab152) && iconBackY152 > 0) notePageScroll152("settings", iconBackY152);
+        setVisibleTab152(bootTab152, bootReason152);
+        if ("settings".equals(bootTab152) && iconBackY152 > 0 && settingsScroll != null) {
+            final int iconBackYF152 = iconBackY152;
+            settingsScroll.post(() -> { if (settingsScroll != null) settingsScroll.scrollTo(0, iconBackYF152); });
+        }
+        // 详情恢复（一次性，上已读即清）：欢迎页待出场时不抢层、只消费不打开。
+        try {
+            if (resumeDetail152 != null && prefs != null) {
+                boolean helloPending152 = !prefs.getBoolean("welcomed", false) && !prefs.getBoolean("hello_done", false);
+                if (!helloPending152) {
+                    Card rc152 = Store.byId.get(resumeDetail152);
+                    if (rc152 != null) openDetail(rc152);
                 }
             }
         } catch (Throwable ignored) {}
@@ -6232,13 +6273,12 @@ public class MainActivity extends Activity {
         // （news 除外：其构建含 fetchNewsUpdate/fetchGlossaryUpdate 联网拉取，属
         // 「用户进页才触发」口径，预建等于开机自动联网、触禁止自动加载红线）。
         dismissBootLayer151();
-        mainHandler.postDelayed(() -> prebuildPage151("student"), 600);
-        mainHandler.postDelayed(() -> prebuildPage151("mine"), 1400);
-        mainHandler.postDelayed(() -> prebuildPage151("settings"), 2200);
+        schedulePrebuild152(); // Q152：命名任务句柄＋前台/数据守卫＋onPause 可撤（见 ensureBuiltPage152）
     }
 
     @Override protected void onResume() {
         super.onResume();
+        activityPaused151 = false; // Q152：前台事实（预建/迟到任务守卫读它）
         // Q151（P0·恢复状态机）：回前台先扫残留加载态——进程在后台被压/被杀未遂时，
         // 下拉检查线程与分帧续搭的收尾回调可能永远等不到（或已随旧进程消亡后以新
         // 进程冷启），屏上不许留一个没有主人的转圈：加载层无未落定计数即摘；下拉
@@ -6274,6 +6314,11 @@ public class MainActivity extends Activity {
             }
         } catch (Throwable ignored) {}
         Img.decodePaused151 = true; // Q151（P0·位图）：后台停预解码，不与系统抢内存/CPU（ Glide 生命周期感知同理，自写实现）
+        // Q152（DeepSeek 二轮②采纳）：去后台即撤未落的预建任务——迟到任务不许在
+        // 用户回前台操作期间落下抢资源/碰视图树；回前台不自动重排（懒建兜底），
+        // 只有冷启 finishBoot 排一轮。
+        activityPaused151 = true;
+        cancelPrebuild152();
         // Q151（P0）：转圈循环去后台全停（旧实现 Handler 在后台照转，白耗电且回前台
         // 时机不可控）；回前台由 onResume 按可见态重启。
         try {
@@ -6939,7 +6984,7 @@ public class MainActivity extends Activity {
         if (pageHost != null) pageHost.removeAllViews();
         tabAnim.cancel();
         currentPageView = null;
-        showTab(tab);
+        setVisibleTab152(tab, "rebuild-pages-return"); // Q152：可见页唯一入口
         refreshNavLabels(); // Q85
     }
 
@@ -7829,6 +7874,35 @@ public class MainActivity extends Activity {
             }
         };
         mainHandler.post(navSpringTask);
+    }
+
+    // Q152（2.63，置顶件/DeepSeek 两轮收口）：全 App 唯一「可见页」入口——凡想让
+    // 某页成为当前可见页的路径（启动落页、关窗回宿主、加卡落地、页内跳转、整页
+    // 重建回位）一律经此并报 reason，不许再裸调 showTab；showTab 退为引擎（底栏
+    // 弹簧落定在动画终点调它，视作本入口的内里一步）。每次切页把 reason 记进
+    // 环形日志＋logcat（tag CardNav152），真机再现乱跳页可倒查是谁在何时切的。
+    final java.util.ArrayDeque<String> visibleTabLog152 = new java.util.ArrayDeque<>();
+    volatile boolean activityPaused151 = false; // 前台/后台事实（onResume/onPause 各写一处，预建与迟到任务守卫读它）
+    void setVisibleTab152(String key, String reason) {
+        try {
+            String line152 = android.os.SystemClock.uptimeMillis() + " show:" + key + " from:" + tab + " by:" + reason;
+            synchronized (visibleTabLog152) {
+                visibleTabLog152.addLast(line152);
+                while (visibleTabLog152.size() > 40) visibleTabLog152.removeFirst();
+            }
+            android.util.Log.d("CardNav152", line152);
+        } catch (Throwable ignored) {}
+        showTab(key);
+    }
+
+    // Q152（DeepSeek 二轮①滚动位单出处）：各页滚动位写入一律经此一口（滚动监听
+    // 持续记位＝onHide 的等价持续捕获、savePageScroll/onPause 落盘种子/恢复种子
+    // 全部汇到这里），读方只有 restorePageScroll/showTab 恢复链一处。专用字段
+    // （mineScrollSaveY）只是本漏斗的镜像，不许再有第二处直接写。
+    void notePageScroll152(String key, int y) {
+        if (key == null) return;
+        pageScrollSaveY.put(key, y);
+        if ("mine".equals(key)) mineScrollSaveY = y;
     }
 
     void showTab(String key) {
@@ -9686,7 +9760,7 @@ public class MainActivity extends Activity {
             return false;
         });
         homeScroll.setOnScrollChangeListener((v, scrollX, scrollY, oldScrollX, oldScrollY) -> {
-            pageScrollSaveY.put("home", scrollY);
+            notePageScroll152("home", scrollY); // Q152：滚动位单写漏斗
             if (floatSearchOpen && scrollY != oldScrollY) closeFloatSearch();
             lastHomeScrollY = scrollY;
             homeScrollMoveMs = android.os.SystemClock.uptimeMillis(); // Q116
@@ -13028,7 +13102,7 @@ public class MainActivity extends Activity {
         sv.setClipToPadding(false);
         studentScroll = sv;
         attachPullRefresh123(page, sv); // Q123（件四）：非设置页下拉刷新
-        if (Build.VERSION.SDK_INT >= 23) sv.setOnScrollChangeListener((v, sx, sy, ox, oy) -> { pageScrollSaveY.put("student", sy); updateTopFabVisibility(sy); });
+        if (Build.VERSION.SDK_INT >= 23) sv.setOnScrollChangeListener((v, sx, sy, ox, oy) -> { notePageScroll152("student", sy); updateTopFabVisibility(sy); }); // Q152：滚动位单写漏斗
         page.addView(sv, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         // Q49/Q98：学生页同为长列表（混合版 syncSbar onList 含 student），挂可拖拽滚动条；
         // 轨道顶与首页同口径锚到卡片列表头（首张学生卡，布局落位后钉死，下限状态栏+8dp）
@@ -13986,7 +14060,7 @@ public class MainActivity extends Activity {
         sv.setClipToPadding(false);
         mineScrollView = sv;
         if (Build.VERSION.SDK_INT >= 23) {
-            sv.setOnScrollChangeListener((v, sx, sy, ox, oy) -> { mineScrollSaveY = sy; pageScrollSaveY.put("mine", sy); updateTopFabVisibility(sy); });
+            sv.setOnScrollChangeListener((v, sx, sy, ox, oy) -> { notePageScroll152("mine", sy); updateTopFabVisibility(sy); }); // Q152：滚动位单写漏斗
         }
         page.addView(sv, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         attachPullRefresh123(page, sv); // Q123（件四）：非设置页下拉刷新
@@ -15387,7 +15461,7 @@ public class MainActivity extends Activity {
                 closeCustomDetailNow();
                 query = c.bank;
                 resetPageScroll("home", homeScroll); // 去看搜索结果，明确回顶（P-keepscroll 例外）
-                showTab("home");
+                setVisibleTab152("home", "custom-detail-search-bank"); // Q152：可见页唯一入口
                 if (searchBox != null) searchBox.setText(c.bank);
             });
             LinearLayout.LayoutParams flp2 = new LinearLayout.LayoutParams(0, dp(this, 46), 1f);
@@ -21164,7 +21238,7 @@ public class MainActivity extends Activity {
         sv.setClipToPadding(false);
         newsScroll = sv;
         attachPullRefresh123(page, sv, true); // Q124（件五）：资讯页下拉只刷资讯/常识两源
-        if (Build.VERSION.SDK_INT >= 23) sv.setOnScrollChangeListener((v, sx, sy, ox, oy) -> { pageScrollSaveY.put("news", sy); updateTopFabVisibility(sy); });
+        if (Build.VERSION.SDK_INT >= 23) sv.setOnScrollChangeListener((v, sx, sy, ox, oy) -> { notePageScroll152("news", sy); updateTopFabVisibility(sy); }); // Q152：滚动位单写漏斗
         page.addView(sv, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         LinearLayout scrollContent = new LinearLayout(this);
         scrollContent.setOrientation(LinearLayout.VERTICAL);
@@ -21309,7 +21383,7 @@ public class MainActivity extends Activity {
         aboutPageOpen = false;
         aboutSponsorBody = null; aboutSponsorArrow = null; aboutScroll = null;
         if (navWrap != null) navWrap.setVisibility(View.VISIBLE); // Q32
-        showTab(tab);
+        setVisibleTab152(tab, "about-close"); // Q152：可见页唯一入口
     }
 
     View buildAboutPage() {
@@ -21673,7 +21747,7 @@ public class MainActivity extends Activity {
             helloClosing = false;
             helloView = null;
             if (navWrap != null) navWrap.setVisibility(View.VISIBLE); // Q32
-            showTab(tab);
+            setVisibleTab152(tab, "hello-finish"); // Q152：可见页唯一入口
             // Q127（2.39，审计 A3/B1）：欢迎预建若还没搭完（首屏 4 行由 renderHomeList
             // 同步保底、余下按 A2 让路在进入后补齐），点击段不许同步等——未落定就先
             // 亮兜底加载层，落定自摘（addCardRowsChunked 落定处回调用）。
@@ -21936,7 +22010,7 @@ public class MainActivity extends Activity {
             }
             return;
         }
-        showTab(tab);
+        setVisibleTab152(tab, "changelog-close"); // Q152：可见页唯一入口
     }
 
     // Q50：更新日志底部动作行——对照混合版 styles.css .cl-actions（display:flex;gap:10px;justify-content:center）
@@ -22492,7 +22566,7 @@ public class MainActivity extends Activity {
         thinScrollbar(sv);
         sv.setClipToPadding(false);
         settingsScroll = sv;
-        if (Build.VERSION.SDK_INT >= 23) sv.setOnScrollChangeListener((v, sx, sy, ox, oy) -> { pageScrollSaveY.put("settings", sy); updateTopFabVisibility(sy); });
+        if (Build.VERSION.SDK_INT >= 23) sv.setOnScrollChangeListener((v, sx, sy, ox, oy) -> { notePageScroll152("settings", sy); updateTopFabVisibility(sy); }); // Q152：滚动位单写漏斗
         // P2d-fix：此前这里把 basePage 的顶部留白覆盖成 12dp，标题被压进状态栏；改用 pageTopPad()/dockPad()
         page.setPadding(dp(this, 14), pageTopPad(), dp(this, 14), dockPad());
         sv.addView(page);
