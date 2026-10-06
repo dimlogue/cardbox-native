@@ -5318,6 +5318,7 @@ public class MainActivity extends Activity {
     // 搜索命中可一键转为本机 CustomCard（自有条目），断网仅看缓存并明示。规格空缺如实标注，不编造。
     static class ExtCard {
         String id, name, bank, org, type, url, image;
+        String status, source; // Q154（件十四）：核实状态/来源——extended.json 现有条目无此二字段，解析时 status 缺省 pending、source 回落 url（不编造）
     }
     View extSheet = null;
     boolean extClosing = false;
@@ -5830,7 +5831,7 @@ public class MainActivity extends Activity {
     Set<String> mine = new HashSet<>();
     // 我的卡片拖动顺序（Phase 3c，对照 app.js 的 cbMineOrder）：卡 id 的有序列表
     List<String> mineOrder = new ArrayList<>();
-    long lastDragEndAt = 0;
+    long lastDragEndAt = 0; // Q154（件九·隐患3/6）：时刻口径统一 uptimeMillis（写方 finishCustomDrag/库卡拖动落点、读方两处 450ms 点击锁同源，不许再混 currentTimeMillis）
     String tab = "home";
     Card detailCard = null;
     View detailView = null; // Q6：详情贴底浮窗根（遮罩+窗体+关闭字形），底层页面不切走
@@ -8098,13 +8099,21 @@ public class MainActivity extends Activity {
     // beforeOpen 重建/清扫过则计数对不齐自动跳过，新子视图自带 VISIBLE 不受扰）。
     final java.util.Map<LinearLayout, int[]> foldChildVis152 = new java.util.WeakHashMap<>();
 
+    // Q154（件八补）：折展落定统一出口——所有权版本先行，落定回调随后。
+    void settleFold154(final Runnable onSettled130) {
+        scrollOwnerVersion154++;
+        if (onSettled130 != null) onSettled130.run();
+    }
+
     void foldHeightSpring(final LinearLayout box, final boolean open,
                           final Runnable beforeOpen, final Runnable afterHidden,
                           final SpringDriver driver, final Runnable onSettled130) {
-        if (box == null) { if (onSettled130 != null) onSettled130.run(); return; }
+        if (box == null) { settleFold154(onSettled130); return; }
         final ViewGroup.LayoutParams lp = box.getLayoutParams();
-        if (lp == null) { box.setVisibility(open ? View.VISIBLE : View.GONE); if (onSettled130 != null) onSettled130.run(); return; }
+        if (lp == null) { box.setVisibility(open ? View.VISIBLE : View.GONE); settleFold154(onSettled130); return; }
+        scrollOwnerVersion154++; // Q154（件八补）：折展启动即夺所有权，此前捕获的保位 post 全部过期
         if (open) {
+            driver.cancel(); // Q154（件八补）：展开分支起手显式杀旧驱动（drive 内部本会摘旧任务，此为显式口径——注意与收起分支的既有 driver.cancel() 对齐成同套）
             if (beforeOpen != null) beforeOpen.run();
             int[] vis152 = foldChildVis152.remove(box); // Q152：展开恢复收起时摘除的内容子视图（计数对齐才恢复）
             if (vis152 != null && vis152.length == box.getChildCount()) {
@@ -8133,12 +8142,12 @@ public class MainActivity extends Activity {
             box.measure(View.MeasureSpec.makeMeasureSpec(w, View.MeasureSpec.EXACTLY),
                 View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED));
             final int toH = box.getMeasuredHeight();
-            if (toH <= 0) { lp.height = ViewGroup.LayoutParams.WRAP_CONTENT; box.setLayoutParams(lp); if (onSettled130 != null) onSettled130.run(); return; }
+            if (toH <= 0) { lp.height = ViewGroup.LayoutParams.WRAP_CONTENT; box.setLayoutParams(lp); settleFold154(onSettled130); return; }
             final Spring1D s = new Spring1D(lp.height > 0 ? lp.height : 0f);
             lp.height = Math.round(s.x); box.setLayoutParams(lp);
             driver.drive(s, toH, SPRING_FOLD_K, SPRING_FOLD_Z,
                 x -> { int h = Math.round(x); if (lp.height != h) { lp.height = h; box.setLayoutParams(lp); } },
-                () -> { lp.height = ViewGroup.LayoutParams.WRAP_CONTENT; box.setLayoutParams(lp); if (onSettled130 != null) onSettled130.run(); });
+                () -> { lp.height = ViewGroup.LayoutParams.WRAP_CONTENT; box.setLayoutParams(lp); settleFold154(onSettled130); });
         } else {
             driver.cancel(); // 审查三①：先杀在飞弹簧
             box.setLayerType(View.LAYER_TYPE_NONE, null); // 审查三①：清硬件层缓存，残影不借层驻留
@@ -8154,7 +8163,7 @@ public class MainActivity extends Activity {
                 lp.height = ViewGroup.LayoutParams.WRAP_CONTENT; box.setLayoutParams(lp);
                 box.jumpDrawablesToCurrentState(); box.invalidate(); // 审查三④
                 if (afterHidden != null) afterHidden.run();
-                if (onSettled130 != null) onSettled130.run();
+                settleFold154(onSettled130);
                 return;
             }
             lp.height = Math.round(s.x); box.setLayoutParams(lp);
@@ -8166,7 +8175,7 @@ public class MainActivity extends Activity {
                     lp.height = ViewGroup.LayoutParams.WRAP_CONTENT; box.setLayoutParams(lp);
                     box.setLayerType(View.LAYER_TYPE_NONE, null); box.jumpDrawablesToCurrentState(); box.invalidate(); // 审查三①④收尾
                     if (afterHidden != null) afterHidden.run();
-                    if (onSettled130 != null) onSettled130.run();
+                    settleFold154(onSettled130);
                 });
         }
     }
@@ -11072,6 +11081,170 @@ public class MainActivity extends Activity {
         }, 2600);
     }
 
+    // ---------- Q154（件十三）：列数切换 FLIP（首页/学生/我的卡片统一入口） ----------
+    // 硬切的构造性根源：三处切列都是整表重建、新瓷砖出生即在终位、无旧位可退。
+    // 改 FLIP：切换前只快照可视区±1 屏瓷砖（全局下标＋旧位/旧尺寸），重排后 post
+    // 一帧按下标找新瓷砖 Invert（translation＋scale 摆回旧位、pivot 钉左上），
+    // Spring1D（k=280/ζ=0.90）逐帧步进归零；滚动位按锚卡全局下标换算（旧行距→
+    // 新行距）保锚点不跳；colsFlipGen 代次作废防连点叠加；过渡期首页续搭让路
+    // 120ms（见 addCardRowsChunked 步进）；scale 变化超 ±15% 的瓷砖直接落终位
+    // 不做 FLIP（大跨度列数硬拉伸比硬切更难看）；硬件层只对快照内瓷砖开、落定
+    // 同帧关。结构差异按本仓实际：首页/我的卡片恒「行→瓷砖」两层；学生页 ≤1 列
+    // 为卡直列、>1 列为行内瓷砖——快照/Invert 两侧各按当时列数判 direct。
+    int colsFlipGen154 = 0;
+    boolean colsFlipActive154 = false;
+
+    static class FlipSnap154 {
+        int idx; float x0, y0; int w0, h0;
+        View v; // Invert 后的新瓷砖（play 期持有）
+        Spring1D tx, ty, sx, sy;
+    }
+
+    // 瓷砖枚举（下标即全局序）：direct 时容器子（ViewGroup）本身为瓷砖；否则容器
+    // 子（ViewGroup）为行、行内子为瓷砖，行主序展开。非 ViewGroup 子（学生页尾
+    // 注、首页横幅内的文本等）不计序；行内补位 spacer 占序不入快照（宽高近零或
+    // 与新位同为 spacer，Invert 天然无感）。
+    java.util.List<View> flipTiles154(ViewGroup container, boolean direct) {
+        java.util.List<View> out = new ArrayList<>();
+        if (direct) {
+            for (int i = 0; i < container.getChildCount(); i++) {
+                View c = container.getChildAt(i);
+                if (c instanceof ViewGroup) out.add(c);
+            }
+            return out;
+        }
+        for (int i = 0; i < container.getChildCount(); i++) {
+            View row = container.getChildAt(i);
+            if (!(row instanceof ViewGroup)) continue;
+            ViewGroup rg = (ViewGroup) row;
+            for (int j = 0; j < rg.getChildCount(); j++) out.add(rg.getChildAt(j));
+        }
+        return out;
+    }
+
+    // 容器相对坐标（屏幕坐标差，滚动/平移不影响相对值）
+    int[] flipRel154(View container, View v) {
+        int[] cl = new int[2]; container.getLocationOnScreen(cl);
+        int[] vl = new int[2]; v.getLocationOnScreen(vl);
+        return new int[]{ vl[0] - cl[0], vl[1] - cl[1] };
+    }
+
+    // 行距：前两行/卡顶距；不足两行退首行高＋10dp 既有行距口径
+    int flipPitch154(ViewGroup container) {
+        View first = null, second = null;
+        for (int i = 0; i < container.getChildCount(); i++) {
+            View c = container.getChildAt(i);
+            if (!(c instanceof ViewGroup)) continue;
+            if (first == null) first = c; else { second = c; break; }
+        }
+        if (first == null) return 0;
+        int[] f = flipRel154(container, first);
+        if (second != null) {
+            int[] s2 = flipRel154(container, second);
+            if (s2[1] > f[1]) return s2[1] - f[1];
+        }
+        return first.getHeight() + dp(this, 10);
+    }
+
+    void beginColsFlip154(final ViewGroup container, final ScrollView sv, final int oldCols, final int newCols,
+                          final boolean snapDirect, final boolean newDirect, final Runnable applyChange) {
+        final int gen = ++colsFlipGen154;
+        colsFlipActive154 = true;
+        // ① 快照：仅可视区±1 屏
+        final java.util.List<FlipSnap154> snaps = new ArrayList<>();
+        try {
+            int[] svLoc = new int[2]; sv.getLocationOnScreen(svLoc);
+            int svTop = svLoc[1], svBot = svLoc[1] + sv.getHeight(), svH = Math.max(1, sv.getHeight());
+            java.util.List<View> tiles = flipTiles154(container, snapDirect);
+            for (int idx = 0; idx < tiles.size(); idx++) {
+                View t = tiles.get(idx);
+                if (t == null || t.getWidth() <= 0 || t.getHeight() <= 0) continue;
+                int[] tl = new int[2]; t.getLocationOnScreen(tl);
+                int cy = tl[1] + t.getHeight() / 2;
+                if (cy < svTop - svH || cy > svBot + svH) continue;
+                int[] rel = flipRel154(container, t);
+                FlipSnap154 sn = new FlipSnap154();
+                sn.idx = idx; sn.x0 = rel[0]; sn.y0 = rel[1];
+                sn.w0 = Math.round(t.getWidth() * t.getScaleX()); sn.h0 = Math.round(t.getHeight() * t.getScaleY());
+                snaps.add(sn);
+            }
+        } catch (Throwable ignored) {}
+        final int pitchOld = flipPitch154(container);
+        final int cTop = sv == null ? 0 : contentTopInScroll131(container, sv);
+        final int scrollY0 = sv == null ? 0 : sv.getScrollY();
+        // ② 落码重排（调用方原切换体：改列数字段＋重渲＋钮重涂）
+        applyChange.run();
+        // ③ post 一帧：锚点换算＋Invert＋Play
+        container.post(() -> {
+            if (gen != colsFlipGen154) return; // 已被更新一代切换接管，旧 post 自弃（在飞标记由新代持有）
+            try {
+                int pitchNew = flipPitch154(container);
+                if (sv != null && pitchOld > 0 && pitchNew > 0 && oldCols > 0 && newCols > 0) {
+                    float anchorIdxF = (scrollY0 - cTop) / (float) pitchOld * oldCols;
+                    int newY = cTop + Math.round(anchorIdxF / newCols * pitchNew);
+                    sv.scrollTo(0, Math.max(0, newY));
+                }
+                java.util.List<View> tiles = flipTiles154(container, newDirect);
+                java.util.List<FlipSnap154> play = new ArrayList<>();
+                for (FlipSnap154 sn : snaps) {
+                    if (sn.idx < 0 || sn.idx >= tiles.size()) continue;
+                    View nv = tiles.get(sn.idx);
+                    if (nv == null || nv.getWidth() <= 0 || nv.getHeight() <= 0) continue;
+                    float sxr = (float) sn.w0 / Math.max(1, nv.getWidth());
+                    float syr = (float) sn.h0 / Math.max(1, nv.getHeight());
+                    if (Math.abs(sxr - 1f) > 0.15f || Math.abs(syr - 1f) > 0.15f) continue; // 大跨度直接落终位，不做 FLIP
+                    int[] rel = flipRel154(container, nv);
+                    sn.v = nv;
+                    sn.tx = new Spring1D(sn.x0 - rel[0]); sn.ty = new Spring1D(sn.y0 - rel[1]);
+                    sn.sx = new Spring1D(sxr); sn.sy = new Spring1D(syr);
+                    nv.setPivotX(0f); nv.setPivotY(0f);
+                    nv.setTranslationX(sn.tx.x); nv.setTranslationY(sn.ty.x);
+                    nv.setScaleX(sxr); nv.setScaleY(syr);
+                    nv.setLayerType(View.LAYER_TYPE_HARDWARE, null); // 硬件层只对快照内瓷砖开
+                    play.add(sn);
+                }
+                if (play.isEmpty()) { colsFlipActive154 = false; return; }
+                playColsFlip154(play, gen);
+            } catch (Throwable ignored) { colsFlipActive154 = false; }
+        });
+    }
+
+    // FLIP 播放回路：全部快照瓷砖四路 Spring1D 同步步进（k=280/ζ=0.90，与审查
+    // 骨架同参），全落定同帧清变换/pivot/硬件层并放行续搭。
+    void playColsFlip154(final java.util.List<FlipSnap154> play, final int gen) {
+        final long[] last = { android.os.SystemClock.uptimeMillis() };
+        final Runnable[] task = new Runnable[1];
+        task[0] = () -> {
+            if (gen != colsFlipGen154) return; // 代次作废：旧回路当帧自尽（瓷砖已随重排换代，悬空变换写在脱树视图上无害）
+            long now = android.os.SystemClock.uptimeMillis();
+            float dt = Math.min(0.032f, Math.max(0.001f, (now - last[0]) / 1000f)); last[0] = now;
+            boolean allDone = true;
+            for (FlipSnap154 sn : play) {
+                if (sn.v == null) continue;
+                boolean d1 = sn.tx.step(0f, 280f, 0.90f, dt, 0.5f, 8f);
+                boolean d2 = sn.ty.step(0f, 280f, 0.90f, dt, 0.5f, 8f);
+                boolean d3 = sn.sx.step(1f, 280f, 0.90f, dt, 0.002f, 0.02f);
+                boolean d4 = sn.sy.step(1f, 280f, 0.90f, dt, 0.002f, 0.02f);
+                sn.v.setTranslationX(sn.tx.x); sn.v.setTranslationY(sn.ty.x);
+                sn.v.setScaleX(sn.sx.x); sn.v.setScaleY(sn.sy.x);
+                if (!(d1 && d2 && d3 && d4)) allDone = false;
+            }
+            if (allDone) {
+                for (FlipSnap154 sn : play) {
+                    if (sn.v == null) continue;
+                    sn.v.setTranslationX(0f); sn.v.setTranslationY(0f);
+                    sn.v.setScaleX(1f); sn.v.setScaleY(1f);
+                    sn.v.setPivotX(sn.v.getWidth() / 2f); sn.v.setPivotY(sn.v.getHeight() / 2f);
+                    sn.v.setLayerType(View.LAYER_TYPE_NONE, null); // 落定同帧关硬件层
+                }
+                colsFlipActive154 = false;
+                return;
+            }
+            mainHandler.postDelayed(task[0], 16);
+        };
+        mainHandler.post(task[0]);
+    }
+
     void addCardRowsChunked(final LinearLayout container, final List<Card> list, final int gen) {
         final int rows = (list.size() + cols - 1) / cols;
         final int[] insertAt = { container.getChildCount() };
@@ -11095,6 +11268,9 @@ public class MainActivity extends Activity {
                 afterHomeChunkTokenReturned153();
                 return;
             }
+            // Q154（件十三）：列数 FLIP 过渡期（约 320ms）续搭让路——每 120ms
+            // 再探，过渡帧先行；代次/令牌归还口径不变（上方 gen 判已先行）。
+            if (colsFlipActive154) { mainHandler.postDelayed(step[0], 120); return; }
             // Q116（2.29）：续帧搭的全是视口外的尾部行——用户正在甩列表的这几帧不跟
             // 甩动抢主线程，滚动停稳后立即续上；首帧 4 行同步节奏与最终产出不变。
             // Q127（2.39，审计 A2）：让路扩围——切页过渡弹簧在跑（tabAnim.task 非空）
@@ -11647,8 +11823,12 @@ public class MainActivity extends Activity {
             final int nCols = Integer.parseInt(co[0]);
             // Q13 A 案：按银行折叠时列数整组置灰禁用（当前所选以哑光蓝灰保留可见），切回显示全部即恢复可点
             colChips.add(filterChip(co[1], cols == nCols, () -> {
-                cols = nCols; persistViewPrefs();
-                rebuildFilterPanel(panel); refreshHome();
+                // Q154（件十三）：列数切换走统一 FLIP 入口；分组模式结构不同构
+                // 直切（列数 chip 本就置灰禁用，此为双保险）。
+                final int oldCols154 = cols;
+                Runnable apply154 = () -> { cols = nCols; persistViewPrefs(); rebuildFilterPanel(panel); refreshHome(); };
+                if (groupBank || homeList == null || homeScroll == null) apply154.run();
+                else beginColsFlip154(homeList, homeScroll, oldCols154, nCols, false, false, apply154);
             }, groupBank));
         }
         addChipFlow(panel, colChips);
@@ -13836,17 +14016,24 @@ public class MainActivity extends Activity {
                 if (studentCols152 == mv) return;
                 haptic();
                 try { prefs.edit().putInt("student_cols", mv).apply(); } catch (Throwable ignored) {}
-                // Q152（追加B）：就地换列——只重渲列表盒＋模式钮重涂，整页不重建
-                // （旧 pages.remove+showTab 老路删除）；滚动位/页签/玻璃带一概不动。
-                studentCols152 = mv;
-                if (stuModeRow152 != null) {
-                    String[][] modes152 = {{"1"}, {"2"}, {"3"}};
-                    for (int ci152 = 0; ci152 < stuModeRow152.getChildCount() && ci152 < modes152.length; ci152++) {
-                        View cv152 = stuModeRow152.getChildAt(ci152);
-                        if (cv152 instanceof TextView) softFormChipPaint((TextView) cv152, Integer.parseInt(modes152[ci152][0]) == mv);
+                // Q154（件十三）：与首页/我的卡片同一 FLIP 入口（结构按旧/新列数
+                // 各判 direct，见 beginColsFlip154）；把手缺失退回直切。
+                final int oldStuCols154 = studentCols152;
+                Runnable applyStu154 = () -> {
+                    // Q152（追加B）：就地换列——只重渲列表盒＋模式钮重涂，整页不重建
+                    // （旧 pages.remove+showTab 老路删除）；滚动位/页签/玻璃带一概不动。
+                    studentCols152 = mv;
+                    if (stuModeRow152 != null) {
+                        String[][] modes152 = {{"1"}, {"2"}, {"3"}};
+                        for (int ci152 = 0; ci152 < stuModeRow152.getChildCount() && ci152 < modes152.length; ci152++) {
+                            View cv152 = stuModeRow152.getChildAt(ci152);
+                            if (cv152 instanceof TextView) softFormChipPaint((TextView) cv152, Integer.parseInt(modes152[ci152][0]) == mv);
+                        }
                     }
-                }
-                if (stuListBox152 != null && stuData152 != null) fillStuList152(stuListBox152, stuData152, mv, stuDragBar152);
+                    if (stuListBox152 != null && stuData152 != null) fillStuList152(stuListBox152, stuData152, mv, stuDragBar152);
+                };
+                if (stuListBox152 == null || studentScroll == null) applyStu154.run();
+                else beginColsFlip154(stuListBox152, studentScroll, oldStuCols154, mv, oldStuCols154 <= 1, mv <= 1, applyStu154);
             });
         }
         LinearLayout stuListBox = new LinearLayout(this);
@@ -14800,23 +14987,29 @@ public class MainActivity extends Activity {
                 ct127.setOnClickListener(v -> {
                     if (cols == nCols127) return;
                     haptic();
-                    cols = nCols127; persistViewPrefs();
-                    // Q152（追加B，用户点名删老路）：就地换列——只重排库卡网格盒
-                    // ＋列数钮重涂，整页不重建（旧 refreshMineKeepScroll 的签名重建
-                    // 满屏闪退役）；色带盒/滚动位/页签不动，签名手动对齐防下次进页
-                    // 再整页重建。网格盒把手由 buildMinePage 落字段（声明在后）。
-                    if (mineGridBox152 != null && mineRowsRef152 != null) {
-                        mineGridBox152.removeAllViews();
-                        addMineCardRows(mineGridBox152, mineRowsRef152, mineScrollRef152);
-                    }
-                    if (mineColsRow152 != null) {
-                        int[] colNums152 = {1, 2, 3, 4};
-                        for (int ci152 = 0; ci152 < mineColsRow152.getChildCount() && ci152 < colNums152.length; ci152++) {
-                            View cv152 = mineColsRow152.getChildAt(ci152);
-                            if (cv152 instanceof TextView) softFormChipPaint((TextView) cv152, colNums152[ci152] == nCols127);
+                    // Q154（件十三）：与首页/学生同一 FLIP 入口；把手缺失退回直切。
+                    final int oldCols154 = cols;
+                    Runnable apply127 = () -> {
+                        cols = nCols127; persistViewPrefs();
+                        // Q152（追加B，用户点名删老路）：就地换列——只重排库卡网格盒
+                        // ＋列数钮重涂，整页不重建（旧 refreshMineKeepScroll 的签名重建
+                        // 满屏闪退役）；色带盒/滚动位/页签不动，签名手动对齐防下次进页
+                        // 再整页重建。网格盒把手由 buildMinePage 落字段（声明在后）。
+                        if (mineGridBox152 != null && mineRowsRef152 != null) {
+                            mineGridBox152.removeAllViews();
+                            addMineCardRows(mineGridBox152, mineRowsRef152, mineScrollRef152);
                         }
-                    }
-                    mineBuiltSig = computeMineSig();
+                        if (mineColsRow152 != null) {
+                            int[] colNums152 = {1, 2, 3, 4};
+                            for (int ci152 = 0; ci152 < mineColsRow152.getChildCount() && ci152 < colNums152.length; ci152++) {
+                                View cv152 = mineColsRow152.getChildAt(ci152);
+                                if (cv152 instanceof TextView) softFormChipPaint((TextView) cv152, colNums152[ci152] == nCols127);
+                            }
+                        }
+                        mineBuiltSig = computeMineSig();
+                    };
+                    if (mineGridBox152 == null || mineScrollRef152 == null) apply127.run();
+                    else beginColsFlip154(mineGridBox152, mineScrollRef152, oldCols154, nCols127, false, false, apply127);
                 });
             }
         }
@@ -14914,7 +15107,7 @@ public class MainActivity extends Activity {
                     if (j > 0) tlp.leftMargin = mineGap;
                     tile.setLayoutParams(tlp);
                     tile.setOnClickListener(v -> {
-                        if (System.currentTimeMillis() - lastDragEndAt < 450) return; // 拖后点击锁，同混合版
+                        if (android.os.SystemClock.uptimeMillis() - lastDragEndAt < 450) return; // 拖后点击锁，同混合版（Q154：uptimeMillis 统一口径）
                         openDetailEntry(c, mr.entry);
                     });
                     tile.setOnLongClickListener(v -> { startMineTileDrag(tile, list, idx, sv); return true; });
@@ -15048,7 +15241,7 @@ public class MainActivity extends Activity {
                     case MotionEvent.ACTION_CANCEL: {
                         tile.setOnTouchListener(null);
                         if (sv != null) sv.requestDisallowInterceptTouchEvent(false);
-                        lastDragEndAt = System.currentTimeMillis(); // 450ms 拖后点击锁，既有口径
+                        lastDragEndAt = android.os.SystemClock.uptimeMillis(); // 450ms 拖后点击锁（Q154：uptimeMillis 统一口径）
                         if (liveIdx141[0] != fromIdx) {
                             // 条目顺序即 mineEntries 中这些条目的相对顺序：抽出后按新序插回原段首位（既有口径逐字沿用）
                             java.util.List<MineEntry> ordered = new ArrayList<>();
@@ -15209,7 +15402,7 @@ public class MainActivity extends Activity {
             row.addView(customMoveBtn("↓", i == customCards.size() - 1, v -> moveCustom(customTileIndex(tileF), 1, tileF)));
             row.addView(customMoveBtn("✕", false, v -> { int ci = customTileIndex(tileF); if (ci >= 0 && ci < customCards.size()) confirmDeleteCustom(customCards.get(ci)); }));
             tile.setOnClickListener(v -> {
-                if (System.currentTimeMillis() - lastDragEndAt < 450) return;
+                if (android.os.SystemClock.uptimeMillis() - lastDragEndAt < 450) return; // Q154：uptimeMillis 统一口径
                 int ci = customTileIndex(tileF);
                 if (ci >= 0 && ci < customCards.size()) openCustomDetail(customCards.get(ci));
             });
@@ -15259,7 +15452,7 @@ public class MainActivity extends Activity {
             if (!(child instanceof FrameLayout)) continue;
             FrameLayout tile = (FrameLayout) child;
             CustomCard c = customCards.get(i);
-            boolean last = i == customCards.size() - 1;
+            boolean last = i == n - 1; // Q154（件九·隐患7）：last 按子序有效末位判（n=min(子数,数据数)）——旧按全局数据末位，区间重染且子数/数据数不一致时末带的淡接/底旗会误挂漏挂
             // Q56 ②：重排后交界上叠量按新位置归位（首带不叠、其余 -1dp），重衔接后仍无缝
             if (tile.getLayoutParams() instanceof LinearLayout.LayoutParams) {
                 LinearLayout.LayoutParams tlp = (LinearLayout.LayoutParams) tile.getLayoutParams();
@@ -15386,6 +15579,19 @@ public class MainActivity extends Activity {
     // root 逐层 disallow，不预设只有 mineScrollView 一条（既有 MOVE 内祖先链
     // 重申保留，另加持有字段直调双保险）。
     Runnable bandPressTimer152 = null;
+    ScrollView bandScrollAnc152 = null; // Q154（件九①）：按下/起拖时沿父链实查到的真实滚动祖先（显式持有，不再单靠 mineScrollView 字段——整页重建后字段可能指向已摘除的旧容器）
+
+    // Q154（件九①）：沿父链实查真实滚动祖先（installBandPress/startCustomDrag 共用）。
+    ScrollView findScrollAncestor152(View v) {
+        try {
+            android.view.ViewParent p152 = v == null ? null : v.getParent();
+            while (p152 != null) {
+                if (p152 instanceof ScrollView) return (ScrollView) p152;
+                p152 = (p152 instanceof View) ? ((View) p152).getParent() : null;
+            }
+        } catch (Throwable ignored) {}
+        return null;
+    }
 
     void bandChainDisallow152(View v, boolean dis152) {
         try {
@@ -15402,26 +15608,45 @@ public class MainActivity extends Activity {
         tile.setOnTouchListener(new View.OnTouchListener() {
             float pDownY = -1, pDownX = -1;
             boolean pArmed = false;
+            boolean pMoved152 = false; // Q154：已超距交还滚动——此后 UP 不许再补点开（防滑走又开详情）
             public boolean onTouch(View v, MotionEvent e) {
                 switch (e.getActionMasked()) {
                     case MotionEvent.ACTION_DOWN:
-                        pDownY = e.getRawY(); pDownX = e.getRawX(); pArmed = true;
+                        pDownY = e.getRawY(); pDownX = e.getRawX(); pArmed = true; pMoved152 = false;
+                        // Q154（件九①·起拖所有权）：DOWN 起显式持有真实滚动祖先
+                        // （沿父链实查，不单靠 mineScrollView 字段）＋全链 disallow。
+                        bandScrollAnc152 = findScrollAncestor152(v);
+                        if (bandScrollAnc152 != null) bandScrollAnc152.requestDisallowInterceptTouchEvent(true);
                         bandChainDisallow152(v, true);
                         final Runnable t152 = () -> { if (pArmed) { pArmed = false; startCustomDrag(tile, customTileIndex(tile)); } };
                         bandPressTimer152 = t152;
                         mainHandler.postDelayed(t152, 380);
-                        return false;
+                        // Q154（件九①）：DOWN 改消费（旧 return false 不持有事件链，
+                        // 380ms 内祖先拦截状态一变长按即丢，正是「长按不起拖/起拖
+                        // 滑走」一源）。持有整链后短点语义在 UP 手动补回（见 UP 支）。
+                        return true;
                     case MotionEvent.ACTION_MOVE:
                         if (pArmed && (Math.abs(e.getRawY() - pDownY) > dp(MainActivity.this, 10) || Math.abs(e.getRawX() - pDownX) > dp(MainActivity.this, 10))) {
-                            pArmed = false;
+                            pArmed = false; pMoved152 = true;
                             if (bandPressTimer152 != null) mainHandler.removeCallbacks(bandPressTimer152);
+                            if (bandScrollAnc152 != null) { bandScrollAnc152.requestDisallowInterceptTouchEvent(false); bandScrollAnc152 = null; }
                             bandChainDisallow152(v, false); // 未入拖动态：交还页面滚动
+                            return false; // 本事件起交还，后续 MOVE 由滚动祖先接管
                         }
-                        return false;
+                        return pArmed; // 等待长按期间消费、不透传；已交还则透传
                     case MotionEvent.ACTION_UP:
                     case MotionEvent.ACTION_CANCEL:
+                        boolean tap152 = pArmed && !pMoved152 && e.getActionMasked() == MotionEvent.ACTION_UP;
                         pArmed = false;
                         if (bandPressTimer152 != null) mainHandler.removeCallbacks(bandPressTimer152);
+                        // Q154（件九①）：UP/CANCEL 全链释放——旧实现此支不放
+                        // disallow，残留禁拦截能把整页滚动卡死（审查实证）。
+                        if (bandScrollAnc152 != null) { bandScrollAnc152.requestDisallowInterceptTouchEvent(false); bandScrollAnc152 = null; }
+                        bandChainDisallow152(v, false);
+                        // Q154：DOWN 已消费、系统 click 不再触发——真短点（未起拖、
+                        // 未超距）在 UP 手动 performClick 补回原点开详情语义（450ms
+                        // 拖后锁仍在 OnClickListener 内把关，口径不变）。
+                        if (tap152) v.performClick();
                         return false;
                 }
                 return false;
@@ -15431,6 +15656,7 @@ public class MainActivity extends Activity {
 
     void startCustomDrag(final View tile, final int fromIdx) {
         haptic();
+        tile.animate().cancel(); // Q154（件九④）：起拖先清本带在飞补间——残存 FLIP/落位补间不清，起拖首帧会把 translationY 写回与手指抢位
         customDragGen131++; // Q131：新拖作废上一落位未完的收尾回调（防误摘新拖动态框）
         dragReorderTouchMs131 = android.os.SystemClock.uptimeMillis(); // Q131：拖动态背板冻结计时起跑（tick 同名守卫）
         // Q152（A②，用户点名「拖动中被拖带颜色会变」）：拖动态只许位置/阴影变——
@@ -15441,6 +15667,8 @@ public class MainActivity extends Activity {
         // Q148 的方角剪影取舍随之退役：位次圆角旗标留给落位 restyle 对齐。
         setCustomTileDragFrame(tile, true, null);
         bandChainDisallow152(tile, true); // Q152（A①）：入拖动态再刷一遍全链 disallow（审查二）
+        bandScrollAnc152 = findScrollAncestor152(tile); // Q154（件九①）：真实滚动祖先显式持有（落位 UP/CANCEL 时按此全链释放）
+        if (bandScrollAnc152 != null) bandScrollAnc152.requestDisallowInterceptTouchEvent(true);
         if (mineScrollView != null) mineScrollView.requestDisallowInterceptTouchEvent(true); // 持有字段直调双保险
         // Q56：不再 bringChildToFront 改子序（那一下正是起拖闪烁源）；靠 setCustomTileDragFrame 的 elevation 18 浮在兄弟之上
         if (mineScrollView != null) mineScrollView.requestDisallowInterceptTouchEvent(true);
@@ -15672,15 +15900,18 @@ public class MainActivity extends Activity {
         // （移动区间及两侧各一），原位拖回恒零重染。数据落位口径（Q7 子序优先）不变。
         // Q152（A③）：落位收尾只剩两件——摘前景描边、elevation 复 0。背景自起拖
         // 起从未换过（A②），淡接层从未藏过，无「换回旧实例在终点帧跳几何」的
-        // 旧病灶（Q133 注所指路径自此不存在）；换位带由 restyleCustomRange131
-        // 在落位前以新位次重染，其渐变色值与静止渲染同源同值，终帧衔接恒等。
+        // 旧病灶（Q133 注所指路径自此不存在）。
+        // Q154（2.65，件九②）再进一步：换位带的 restyleCustomRange131 不再在落位
+        // 首帧同步执行（首帧同步重染正是落位闪的最后一程），挪进 140ms 落位动画
+        // 的 endAction 与摘框同帧（settle154 原子帧）；原位拖回也走一次区间重染
+        // 收口——Q131「原位零重染」与 Q152「落位前重染」两口径至此退役。
         final int gen131 = ++customDragGen131;
-        final Runnable frameOff131 = () -> {
-            if (gen131 != customDragGen131) return;
-            setCustomTileDragFrame(tile, false, null);
-        };
+        // Q154（件九①）：UP/CANCEL 落闸全链释放——显式祖先＋整条父链一并放行，
+        // 杜绝 requestDisallow 残留把整页滚动卡死（旧实现此处只放 mineScrollView）。
+        bandChainDisallow152(tile, false);
+        if (bandScrollAnc152 != null) { bandScrollAnc152.requestDisallowInterceptTouchEvent(false); bandScrollAnc152 = null; }
         if (mineScrollView != null) mineScrollView.requestDisallowInterceptTouchEvent(false);
-        lastDragEndAt = System.currentTimeMillis();
+        lastDragEndAt = android.os.SystemClock.uptimeMillis(); // Q154（件九·隐患3/6）：与 dragReorderTouchMs131 及两处 450ms 点击锁读方统一 uptimeMillis
         // Q7：以拖动手势中就地换位后的实际子序为准（dy 仅作兜底），避免实时换位与按位移换算双重作用
         int liveIdx = -1;
         try { if (tile.getParent() instanceof ViewGroup) liveIdx = ((ViewGroup) tile.getParent()).indexOfChild(tile); } catch (Throwable ignored) {}
@@ -15691,44 +15922,64 @@ public class MainActivity extends Activity {
             int dRow = th > 0 ? Math.round(dy / (float) th) : 0;
             toIdx = Math.max(0, Math.min(fromIdx + dRow, customCards.size() - 1));
         }
-        if (toIdx != fromIdx) {
+        final boolean orderChanged154 = toIdx != fromIdx;
+        if (orderChanged154) {
             CustomCard moved = customCards.remove(fromIdx);
             customCards.add(toIdx, moved);
             saveCustomCards();
-            showFloatToast("顺序已保存");
+            // Q154（件九②·隐患9）：「顺序已保存」提示随原子帧在落位终点才出，
+            // 不再松手首帧先声夺人（旧实现提示已落定、带体还在飞）。
         }
         // Q56：落位只就地重衔接（对照 restyleTiles），不再 refreshMineKeepScroll 整页重建闪一下；
         // live 换位已使物理子序与新顺序一致，兜底路径（未实时换位）先把带体挪到目标位再重算
+        final ViewGroup box154 = (tile.getParent() instanceof ViewGroup) ? (ViewGroup) tile.getParent() : null;
+        final int lo154 = Math.max(0, Math.min(fromIdx, toIdx) - 1);
+        final int hi154 = box154 == null ? -1 : Math.min(box154.getChildCount() - 1, Math.max(fromIdx, toIdx) + 1);
+        final boolean[] settled154 = { false };
+        // Q154（件九②）：落位原子帧——区间重染＋摘框＋已保存提示同一帧发生。
+        // 有动画走 endAction、无动画兜底同帧直跑，两路终点语义一致；代次守卫防
+        // 与新拖冲突（新拖起手 tile.animate().cancel() 会摘掉本 endAction，此时
+        // settled154 未落、新拖自有落位收尾，不误摘新拖动态框）。
+        final Runnable settle154 = () -> {
+            if (gen131 != customDragGen131 || settled154[0]) return;
+            settled154[0] = true;
+            if (box154 != null && customTilesBox == box154 && box154.getChildCount() == customCards.size() && hi154 >= lo154)
+                restyleCustomRange131(box154, lo154, hi154);
+            setCustomTileDragFrame(tile, false, null);
+            if (orderChanged154) showFloatToast("顺序已保存");
+        };
         try {
-            ViewGroup box = (tile.getParent() instanceof ViewGroup) ? (ViewGroup) tile.getParent() : null;
+            ViewGroup box = box154;
             if (box != null && customTilesBox == box) {
+                // Q154（件九③）：落位动画起跑前 cancel 全部兄弟在飞 FLIP 补间——
+                // 不清，兄弟残存补间会把 translationY 写回与落定终值打架（拖动
+                // swap 期间在飞补间同源）；拖带本体由紧接着的 translationY(0)
+                // 新动画接管（ViewPropertyAnimator 起跑自动摘旧动画）。
+                for (int i154 = 0; i154 < box.getChildCount(); i154++) {
+                    View sib154 = box.getChildAt(i154);
+                    if (sib154 != tile) sib154.animate().cancel();
+                }
                 int cur = box.indexOfChild(tile);
                 boolean liveSettled = cur == toIdx;
                 if (cur >= 0 && cur != toIdx) { box.removeView(tile); box.addView(tile, Math.min(toIdx, box.getChildCount())); }
                 // Q127：子数与数据对不齐（拖动中途异常）时整盒按新序重填，不许带病落位
                 if (box.getChildCount() != customCards.size()) { box.removeAllViews(); fillCustomTiles124((LinearLayout) box); }
-                else if (toIdx != fromIdx) {
-                    // Q131：换序只染移动区间及两侧各一条（首尾旗标/淡接指向/序号/钮态
-                    // 只受这些带影响），不再全列重造背景；原位拖回（toIdx==fromIdx）零重染
-                    int lo131 = Math.max(0, Math.min(fromIdx, toIdx) - 1);
-                    int hi131 = Math.min(box.getChildCount() - 1, Math.max(fromIdx, toIdx) + 1);
-                    restyleCustomRange131(box, lo131, hi131);
-                }
                 if (liveSettled) {
                     // Q131：140ms 落位动画，终点才摘框影（见上）；Q152：scale/alpha
-                    // 拖动态未动过（A②），动画只剩平移归零一件事
+                    // 拖动态未动过（A②），动画只剩平移归零一件事；Q154：重染＋摘框
+                    // ＋提示同在 endAction 原子帧（settle154）
                     tile.animate().translationY(0f)
-                        .setDuration(140).setInterpolator(ANIM_EXIT).withEndAction(frameOff131).start();
+                        .setDuration(140).setInterpolator(ANIM_EXIT).withEndAction(settle154).start();
                 } else {
                     tile.setTranslationY(0);
-                    frameOff131.run();
+                    settle154.run();
                 }
             } else {
                 tile.setTranslationY(0);
-                frameOff131.run();
+                settle154.run();
                 refreshMineKeepScroll();
             }
-        } catch (Throwable ignored) { tile.setTranslationY(0); frameOff131.run(); refreshMineKeepScroll(); }
+        } catch (Throwable ignored) { tile.setTranslationY(0); settle154.run(); refreshMineKeepScroll(); }
     }
 
     TextView customActBtn(String label, boolean disabled, View.OnClickListener onClick) {
@@ -18056,6 +18307,11 @@ public class MainActivity extends Activity {
     final SpringDriver newsFoldSpring = new SpringDriver();
     String glossaryAnimId123 = null;
     String newsAnimId123 = null;
+    // Q154（件八补）：滚动位所有权版本——折展启动/折展落定/深链落点 done 各自
+    // ++（见 foldHeightSpring 与 renderGlossary 落点回调）；renderNews、renderGlossary
+    // 的 keepY 延迟贴回 post 捕获当时的版本、落地时版本已变即整笔作废。与 Q153
+    // 手势/钳位守卫并行，优先序：深链 > 守卫窗 > 落定写位 > 版本匹配 post。
+    int scrollOwnerVersion154 = 0;
     String glossaryAcctTierId = "acct3"; // Q115：合并条当前档（默认 III）；Q123（件十）：存储序 III/II/I 不动、显示序经 acctTiersDisplay123 排一/二/三；深链/点档覆盖
     boolean glossaryFetchStarted = false;
     LinearLayout glossaryBox = null;
@@ -18571,7 +18827,7 @@ public class MainActivity extends Activity {
                 // Q151（N6）：折展在途吞掉成员切换——旧实现动画中点成员行即整表重建，
                 // 动画中的卡被整张换下、旧弹簧在脱树卡上落定后用过期锚回写实时页（落定
                 // 闪/弹位根源）；与箭头 foldBusy130 同口径，落定后点才生效。
-                if (!foldBusy130.isEmpty()) return;
+                if (foldBusy130.contains(g.id)) return; // Q154（件八补）：判本卡——别卡折展在途不再误挡本卡成员切换（renderGlossary 入口整表在途锁保留，防动画中的卡被换下树）
                 haptic(); glossaryPick123.put(g.id, mm.id); renderGlossary();
             });
         }
@@ -18617,7 +18873,7 @@ public class MainActivity extends Activity {
             plp.rightMargin = dp(this, 8);
             pill.setLayoutParams(plp);
             pill.setOnClickListener(v -> {
-                if (!foldBusy130.isEmpty()) return; // Q151（N6）：同成员行——折展在途不整表重建
+                if (foldBusy130.contains(g.id)) return; // Q154（件八补）：判本卡（原 Q151 全局判空——别卡在途误挡本卡档位切换；整表在途锁仍在 renderGlossary 入口）
                 haptic(); glossaryAcctTierId = tg.id; renderGlossary();
             });
             tierRow.addView(pill);
@@ -18640,6 +18896,7 @@ public class MainActivity extends Activity {
 
     void renderGlossary() {
         if (glossaryBox == null) return;
+        glossaryAnimId123 = null; // Q154（件八补）：入口无条件消费——深链 id 只许由本轮落点逻辑在本函数内命中消费（18999），跨轮残值不许把入场折展打到已重建的卡上
         // Q151（N6）：折展在途不整表重建——数据到达回调（fetchGlossaryUpdate）与成员
         // 切换都可能落在某卡弹簧在途的约 0.4s 内，整表重建会把动画中的卡整张换下树，
         // 旧弹簧在脱树卡上落定后以过期锚 settleFoldScroll142 回写实时页（落定闪＋紧接
@@ -18831,6 +19088,7 @@ public class MainActivity extends Activity {
             // 18:36 红圈）；且落点后 900ms 内资讯页保位恢复不许抢位（防关窗回调迟到
             // 把页面拽回旧位置）。pendingGlossaryId 的清除随落点一并走（Q98 口径）。
             scrollTargetBelowFixedHead(newsScroll, target, 10, () -> {
+                scrollOwnerVersion154++; // Q154（件八补）：深链落点完成——所有权移交落点，在途保位 post 全作废
                 glossaryLandGuardUntil = android.os.SystemClock.uptimeMillis() + 900;
                 pendingGlossaryId = null;
             });
@@ -18841,7 +19099,8 @@ public class MainActivity extends Activity {
         if (jumpView == null && glossKeepY151 > 0 && newsScroll != null) {
             final int y151 = glossKeepY151;
             final long keepMs153 = android.os.SystemClock.uptimeMillis(); // Q153（件八）：同 renderNews 守卫口径
-            newsScroll.post(() -> { if (newsScroll != null && lastUserTouchScrollMs153 <= keepMs153) newsScroll.scrollTo(0, y151); });
+            final int keepVer154 = scrollOwnerVersion154; // Q154（件八补）：捕获所有权版本，落地不符即弃
+            newsScroll.post(() -> { if (newsScroll != null && keepVer154 == scrollOwnerVersion154 && lastUserTouchScrollMs153 <= keepMs153) newsScroll.scrollTo(0, y151); });
         }
     }
 
@@ -18874,6 +19133,11 @@ public class MainActivity extends Activity {
                 e.type = nz125(o.optString("type", ""));
                 e.url = nz125(o.optString("url", ""));
                 e.image = nz125(o.optString("image", ""));
+                // Q154（件十四）：status/source 最小字段——缺失按 pending 待核呈现，source 缺失回落官网 url，不编造
+                e.status = nz125(o.optString("status", "")).trim().toLowerCase();
+                if (e.status.isEmpty()) e.status = "pending";
+                e.source = nz125(o.optString("source", ""));
+                if (e.source.isEmpty()) e.source = e.url;
                 if (e.name == null || e.name.trim().isEmpty()) continue;
                 if (e.id == null || e.id.trim().isEmpty()) e.id = "ext-" + i + "-" + Math.abs((e.bank + "|" + e.name).hashCode());
                 out.add(e);
@@ -19000,20 +19264,220 @@ public class MainActivity extends Activity {
         extResultBox.addView(h, lp);
     }
 
+
+    // ---------- Q154（件十四）：在线搜卡双源整合（核心库＋扩展索引） ----------
+    // 双源并扫同一分层匹配：normalize（去空白/全角转半角/繁转简常用字小表/银行
+    // 名剥企业后缀）后 精确→前缀→包含→别名→拼音首字母 取最优层；同 key（银行
+    // ＋卡名＋组织，卡名先剥银行前缀）判重，扩展条目挂核心卡下不重复出；扩展
+    // 按 status 分区：verified 进「可加入」，其余（含缺字段 pending）进「仅索引
+    // 待核」，不给加入钮、不编造来源。索引（normalize 字段＋别名＋拼音首字母）
+    // 随数据预生成缓存在内存，扩展索引/核心数据换版才重建，不逐键实时算。
+    static final java.util.Map<Character, Character> S2T154 = new java.util.HashMap<>();
+    static { String pr154 = "銀银萬万達达豐丰匯汇國国際际東东廣广華华興兴證证託托聯联總总點点區区縣县農农業业發发長长門门開开關关臺台灣湾馬马來来雲云龍龙鳳凤寶宝貴贵陽阳陰阴島岛嶼屿鎮镇鄉乡橋桥頭头場场園园學学醫医鐵铁車车電电話话郵邮儲储貸贷險险資资產产債债務务戶户賬账號号碼码認认麼么這这們们個个為为與与對对將将從从還还進进過过運运遠远邊边連连適适選选錢钱鑰钥額额廈厦肅肃寧宁烏乌義义樂乐喬乔習习濱滨濟济瀋沈蘇苏錫锡蕪芜滁滁蚌蚌淮淮鹽盐揚扬溫温麗丽衢衢鄭郑洛洛蘭兰臨临隴陇慶庆綿绵瀘泸內内欽钦凱凯盤盘錦锦撫抚營营遼辽嶺岭齊齐鶴鹤雞鸡鴨鸭"; for (int i154 = 0; i154 + 1 < pr154.length(); i154 += 2) S2T154.put(pr154.charAt(i154), pr154.charAt(i154 + 1)); }
+
+    String normSearch154(String s154) {
+        if (s154 == null) return "";
+        StringBuilder b154 = new StringBuilder();
+        for (int i154 = 0; i154 < s154.length(); i154++) {
+            char c154 = s154.charAt(i154);
+            if (c154 >= 0xFF01 && c154 <= 0xFF5E) c154 = (char) (c154 - 0xFEE0); // 全角转半角
+            if (Character.isWhitespace(c154)) continue;
+            Character m154 = S2T154.get(c154);
+            if (m154 != null) c154 = m154.charValue();
+            b154.append(Character.toLowerCase(c154));
+        }
+        return b154.toString();
+    }
+
+    // 银行名归一：normalize 后剥企业后缀（精确比对/判重/别名生成共用）
+    String normBank154(String bank154) {
+        String b154 = normSearch154(bank154);
+        String[] suf154 = { "股份有限公司", "有限责任公司", "有限公司", "股份公司" };
+        boolean again154 = true;
+        while (again154) {
+            again154 = false;
+            for (String sf154 : suf154) if (b154.endsWith(sf154) && b154.length() > sf154.length()) { b154 = b154.substring(0, b154.length() - sf154.length()); again154 = true; }
+        }
+        return b154;
+    }
+
+    // 预置行简称表（银行归一名→简称，如工商银行→工行）；另自动生成简称＝剥
+    // 「农村商业银行/商业银行/信用社/银行」尾（如桂林银行→桂林）。
+    static final java.util.Map<String, String> BANK_ALIAS154 = new java.util.HashMap<>();
+    static {
+        String[][] a154 = {
+            {"中国工商银行", "工行"}, {"工商银行", "工行"}, {"中国农业银行", "农行"}, {"农业银行", "农行"},
+            {"中国银行", "中行"}, {"中国建设银行", "建行"}, {"建设银行", "建行"}, {"交通银行", "交行"},
+            {"中国邮政储蓄银行", "邮储"}, {"邮政储蓄银行", "邮储"}, {"招商银行", "招行"},
+            {"上海浦东发展银行", "浦发"}, {"浦东发展银行", "浦发"}, {"广东发展银行", "广发"},
+            {"兴业银行", "兴业"}, {"中信银行", "中信"}, {"中国光大银行", "光大"}, {"光大银行", "光大"},
+            {"华夏银行", "华夏"}, {"中国民生银行", "民生"}, {"民生银行", "民生"}, {"平安银行", "平安"},
+            {"恒丰银行", "恒丰"}, {"浙商银行", "浙商"}, {"渤海银行", "渤海"}, {"北京银行", "北京"},
+            {"上海银行", "上海"}, {"南京银行", "南京"}, {"宁波银行", "宁波"}, {"杭州银行", "杭州"},
+            {"江苏银行", "江苏"}, {"徽商银行", "徽商"}, {"厦门银行", "厦门"}, {"重庆银行", "重庆"}
+        };
+        for (String[] kv154 : a154) BANK_ALIAS154.put(kv154[0], kv154[1]);
+    }
+
+    String bankAlias154(String bankKey154) {
+        StringBuilder out154 = new StringBuilder();
+        String hit154 = BANK_ALIAS154.get(bankKey154);
+        if (hit154 != null) out154.append(hit154);
+        String[] tails154 = { "农村商业银行", "商业银行", "信用社", "银行" };
+        for (String t154 : tails154) {
+            if (bankKey154.endsWith(t154) && bankKey154.length() > t154.length()) {
+                if (out154.length() > 0) out154.append(' ');
+                out154.append(bankKey154, 0, bankKey154.length() - t154.length());
+                break;
+            }
+        }
+        return out154.toString();
+    }
+
+    // 拼音首字母：国标常用分界字＋中文 Collator 比对（汉字按拼音序）；非汉字
+    // 保留小写字母/数字。仅在建索引时算，不逐键实时转。
+    static final String PINYIN_BOUNDS154 = "阿芭擦搭蛾发噶哈击喀垃妈拿哦啪期然撒塌挖昔压匝";
+    static final char[] PINYIN_LETTERS154 = { 'a','b','c','d','e','f','g','h','j','k','l','m','n','o','p','q','r','s','t','w','x','y','z' };
+    java.text.Collator pinyinCollator154 = null;
+    char pinyinInitial154(char c154) {
+        if ((c154 >= 'a' && c154 <= 'z') || (c154 >= '0' && c154 <= '9')) return c154;
+        try {
+            if (pinyinCollator154 == null) pinyinCollator154 = java.text.Collator.getInstance(java.util.Locale.CHINA);
+            String cs154 = String.valueOf(c154);
+            int lo154 = 0, hi154 = PINYIN_BOUNDS154.length() - 1, ans154 = -1;
+            while (lo154 <= hi154) {
+                int mid154 = (lo154 + hi154) / 2;
+                if (pinyinCollator154.compare(cs154, String.valueOf(PINYIN_BOUNDS154.charAt(mid154))) >= 0) { ans154 = mid154; lo154 = mid154 + 1; }
+                else hi154 = mid154 - 1;
+            }
+            if (ans154 >= 0) return PINYIN_LETTERS154[ans154];
+        } catch (Throwable ignored) {}
+        return '#';
+    }
+    String pinyinInitials154(String norm154) {
+        StringBuilder b154 = new StringBuilder();
+        for (int i154 = 0; i154 < norm154.length(); i154++) {
+            char ini154 = pinyinInitial154(norm154.charAt(i154));
+            if (ini154 != '#') b154.append(ini154);
+        }
+        return b154.toString();
+    }
+
+    static class SearchEntry154 {
+        Card card; ExtCard ext;
+        String bankKey, nameKey, fullKey, aliasKey, initials, dedupeKey;
+        int tier = -1;
+    }
+    java.util.List<SearchEntry154> searchIndex154 = null;
+    Object searchIndexFor154 = null;
+    int searchIndexDataVer154 = -1;
+
+    // 判重键：银行＋卡名＋组织（卡名先剥银行前缀——核心库卡名常含银行全名、
+    // 扩展索引不含，对齐后才判得上）
+    String dedupeKey154(String bank154, String name154, String org154) {
+        String bk154 = normBank154(bank154);
+        String nk154 = normSearch154(name154);
+        if (!bk154.isEmpty() && nk154.startsWith(bk154)) nk154 = nk154.substring(bk154.length());
+        return bk154 + "|" + nk154 + "|" + normSearch154(org154 == null ? "" : org154);
+    }
+
+    void ensureSearchIndex154() {
+        if (searchIndex154 != null && searchIndexFor154 == extItems && searchIndexDataVer154 == Store.dataVersion) return;
+        java.util.List<SearchEntry154> idx154 = new ArrayList<>();
+        for (Card c154 : Store.all) {
+            SearchEntry154 e154 = new SearchEntry154();
+            e154.card = c154;
+            e154.bankKey = normBank154(c154.bank);
+            e154.nameKey = normSearch154(c154.name);
+            e154.fullKey = e154.bankKey + e154.nameKey;
+            e154.aliasKey = bankAlias154(e154.bankKey);
+            e154.initials = pinyinInitials154(e154.fullKey);
+            e154.dedupeKey = dedupeKey154(c154.bank, c154.name, c154.org);
+            idx154.add(e154);
+        }
+        if (extItems != null) for (ExtCard x154 : extItems) {
+            SearchEntry154 e154 = new SearchEntry154();
+            e154.ext = x154;
+            e154.bankKey = normBank154(x154.bank);
+            e154.nameKey = normSearch154(x154.name);
+            e154.fullKey = e154.bankKey + e154.nameKey;
+            e154.aliasKey = bankAlias154(e154.bankKey);
+            e154.initials = pinyinInitials154(e154.fullKey);
+            e154.dedupeKey = dedupeKey154(x154.bank, x154.name, x154.org);
+            idx154.add(e154);
+        }
+        searchIndex154 = idx154;
+        searchIndexFor154 = extItems;
+        searchIndexDataVer154 = Store.dataVersion;
+    }
+
+    // 分层匹配（q 已 normalize）：0 精确 1 前缀 2 包含（含 BIN/关键词/组织）
+    // 3 别名 4 拼音首字母；-1 未命中
+    int searchTier154(SearchEntry154 e154, String q154) {
+        if (q154.isEmpty()) return -1;
+        if (q154.equals(e154.bankKey) || q154.equals(e154.fullKey) || q154.equals(e154.nameKey)) return 0;
+        if (e154.fullKey.startsWith(q154) || e154.bankKey.startsWith(q154) || e154.nameKey.startsWith(q154)) return 1;
+        if (e154.fullKey.contains(q154)) return 2;
+        if (e154.card != null) {
+            String kw154 = e154.card.keywords == null ? "" : normSearch154(e154.card.keywords);
+            if (!kw154.isEmpty() && kw154.contains(q154)) return 2;
+            String bin154 = e154.card.spec("BIN");
+            if (!bin154.isEmpty() && bin154.contains(q154)) return 2;
+        }
+        if (e154.ext != null) {
+            String orgHay154 = normSearch154((e154.ext.org == null ? "" : e154.ext.org) + " " + orgLabel(e154.ext.org == null ? "" : e154.ext.org) + " " + (e154.ext.type == null ? "" : e154.ext.type));
+            if (orgHay154.contains(q154)) return 2;
+        }
+        if (!e154.aliasKey.isEmpty()) {
+            for (String a154 : e154.aliasKey.split(" ")) if (!a154.isEmpty() && (a154.equals(q154) || (q154.length() >= 2 && a154.startsWith(q154)))) return 3;
+        }
+        if (q154.length() >= 2 && isAsciiLetters154(q154) && (e154.initials.equals(q154) || (q154.length() >= 3 && e154.initials.startsWith(q154)))) return 4;
+        return -1;
+    }
+    boolean isAsciiLetters154(String q154) {
+        for (int i154 = 0; i154 < q154.length(); i154++) { char c154 = q154.charAt(i154); if (c154 < 'a' || c154 > 'z') return false; }
+        return true;
+    }
+
     void renderExtResults() {
         if (extResultBox == null) return;
         extResultBox.removeAllViews();
         ensureExtended();
-        String q = extQuery == null ? "" : extQuery.trim().toLowerCase();
-        // Q91：本地核心库结果与首页搜索同口径（卡名/银行/BIN/关键词）——不论扩展拉没拉到都直接列在窗内，
-        // 不再只报一个「本地有 N 张」的人数把人打发回首页（真机搜「南京银行」一张不列的根因）。
+        String qRaw154 = extQuery == null ? "" : extQuery.trim();
+        String q = normSearch154(qRaw154);
+        // Q154（件十四）：双源整合——核心库与扩展索引并扫同一分层匹配（精确→
+        // 前缀→包含→别名→拼音首字母，索引预生成见 ensureSearchIndex154），取代
+        // Q91 两边各一套子串口径；同 key 判重的扩展条目挂核心卡下不重复出（核心
+        // 行尾「扩展索引同条」标注）；扩展按 status 分区（verified 可加入/其余
+        // 仅索引待核）。Q91 的窗内分区列行、不论扩展拉没拉到核心结果都列的口径
+        // 守恒（真机搜「南京银行」一张不列的根因不许复发）。
+        ensureSearchIndex154();
         java.util.List<Card> localCards = new ArrayList<>();
-        if (!q.isEmpty()) {
-            for (Card lc : Store.all) {
-                String bin = lc.spec("BIN");
-                if (lc.name.toLowerCase().contains(q) || lc.bank.toLowerCase().contains(q)
-                    || bin.contains(q) || (lc.keywords != null && lc.keywords.toLowerCase().contains(q))) localCards.add(lc);
+        java.util.List<ExtCard> hitsJoin = new ArrayList<>();
+        java.util.List<ExtCard> hitsPend = new ArrayList<>();
+        java.util.Set<String> dupKeys154 = new HashSet<>();
+        if (searchIndex154 != null) {
+            java.util.Set<String> coreKeys154 = new HashSet<>();
+            for (SearchEntry154 e154 : searchIndex154) if (e154.card != null) coreKeys154.add(e154.dedupeKey);
+            java.util.List<SearchEntry154> coreHitE154 = new ArrayList<>(), joinE154 = new ArrayList<>(), pendE154 = new ArrayList<>();
+            for (SearchEntry154 e154 : searchIndex154) {
+                if (!q.isEmpty()) {
+                    int t154 = searchTier154(e154, q);
+                    if (t154 < 0) continue;
+                    e154.tier = t154;
+                    if (e154.card != null) coreHitE154.add(e154);
+                    else if (coreKeys154.contains(e154.dedupeKey)) dupKeys154.add(e154.dedupeKey); // 判重：挂核心卡下
+                    else if ("verified".equals(e154.ext.status)) joinE154.add(e154); else pendE154.add(e154);
+                } else if (e154.ext != null && !coreKeys154.contains(e154.dedupeKey)) {
+                    // 空查询浏览：沿旧口径只列扩展（核心不列），Q154 起按 status 分区、判重不重复出
+                    if ("verified".equals(e154.ext.status)) joinE154.add(e154); else pendE154.add(e154);
+                }
             }
+            java.util.Comparator<SearchEntry154> byTier154 = (a154, b154) -> a154.tier != b154.tier ? Integer.compare(a154.tier, b154.tier) : a154.fullKey.compareTo(b154.fullKey);
+            coreHitE154.sort(byTier154); joinE154.sort(byTier154); pendE154.sort(byTier154);
+            for (SearchEntry154 e154 : coreHitE154) localCards.add(e154.card);
+            for (SearchEntry154 e154 : joinE154) hitsJoin.add(e154.ext);
+            for (SearchEntry154 e154 : pendE154) hitsPend.add(e154.ext);
         }
         if (extMeta != null) {
             int total = extItems == null ? 0 : extItems.size();
@@ -19022,18 +19486,12 @@ public class MainActivity extends Activity {
             else if (total == 0) extMeta.setText("扩展索引暂无缓存 · 本地核心库 " + Store.all.size() + " 张仍可搜");
             else extMeta.setText("扩展卡库 " + total + " 条 · 本地核心库 " + Store.all.size() + " 张");
         }
-        java.util.List<ExtCard> hits = new ArrayList<>();
-        if (extItems != null) for (ExtCard e : extItems) {
-            if (q.isEmpty()) { hits.add(e); continue; }
-            String hay = ((e.name == null ? "" : e.name) + " " + (e.bank == null ? "" : e.bank) + " " + (e.org == null ? "" : e.org) + " " + orgLabel(e.org == null ? "" : e.org) + " " + (e.type == null ? "" : e.type)).toLowerCase();
-            if (hay.contains(q)) hits.add(e);
-        }
         boolean anyShown = false;
         boolean noteShown = false;
         // Q91：本地核心库分区——命中直接列行，点行关窗进详情；扩展拉不到也不许让这一区缺席
         if (!localCards.isEmpty()) {
             anyShown = true;
-            addExtSectionHead("本地卡库 · " + localCards.size() + " 张（点开看详情）");
+            addExtSectionHead("已收录 · " + localCards.size() + " 张（点开看详情）"); // Q154（件十四）：三区命名收口
             int shownL = 0;
             for (final Card lc : localCards) {
                 if (shownL++ >= 60) break;
@@ -19067,11 +19525,12 @@ public class MainActivity extends Activity {
                 if (!lol.isEmpty()) { if (lsub.length() > 0) lsub.append(" · "); lsub.append(lol); }
                 if (lsub.length() > 0) lsub.append(" · ");
                 lsub.append(lc.isCredit() ? "信用卡" : "借记卡").append(" · 本地卡库");
+                if (dupKeys154.contains(dedupeKey154(lc.bank, lc.name, lc.org))) lsub.append(" · 扩展索引同条"); // Q154（件十四）：判重扩展条目挂此核心卡下、不另行重复出
                 lmid.addView(tv(this, lsub.toString(), 12, colText2(), false));
                 lrow.setOnClickListener(v -> { haptic(); closeExtendedSearchNow(); openDetail(lc); });
             }
         }
-        if (hits.isEmpty()) {
+        if (hitsJoin.isEmpty() && hitsPend.isEmpty()) {
             // Q91：扩展侧只给一行状态说明，不再整窗躺平；本地有结果时这一行退居次席
             String note = null;
             if (extLoading) note = "扩展卡库正在拉取…";
@@ -19085,12 +19544,12 @@ public class MainActivity extends Activity {
                 extResultBox.addView(nt, nlp);
             }
         }
-        if (!hits.isEmpty()) {
+        if (!hitsJoin.isEmpty()) {
             anyShown = true;
-            addExtSectionHead("扩展卡库 · " + hits.size() + " 条" + (hits.size() > 60 ? "（只显示前 60 条，输入更准的关键词）" : ""));
+            addExtSectionHead("可加入 · " + hitsJoin.size() + " 条" + (hitsJoin.size() > 60 ? "（只显示前 60 条，输入更准的关键词）" : "")); // Q154（件十四）：verified 才进本区
         }
         int shown = 0;
-        for (final ExtCard e : hits) {
+        for (final ExtCard e : hitsJoin) {
             if (shown++ >= 60) break;
             LinearLayout row = new LinearLayout(this);
             row.setOrientation(LinearLayout.HORIZONTAL);
@@ -19156,6 +19615,73 @@ public class MainActivity extends Activity {
             alp.leftMargin = dp(this, 8);
             row.addView(addBtn, alp);
             if (!added) addBtn.setOnClickListener(v -> { haptic(); addExtToMine(e); });
+        }
+        // Q154（件十四）：第三区「仅索引待核」——status 非 verified（含缺字段
+        // pending）只给索引行＋官网来源，不给加入钮、不编造核实状态；行视觉与
+        // 可加入区同族（拇指/名/副标/官网链），右端以灰「待核」签代加入钮。
+        if (!hitsPend.isEmpty()) {
+            anyShown = true;
+            addExtSectionHead("仅索引待核 · " + hitsPend.size() + " 条" + (hitsPend.size() > 60 ? "（只显示前 60 条，输入更准的关键词）" : ""));
+        }
+        int shownP154 = 0;
+        for (final ExtCard e : hitsPend) {
+            if (shownP154++ >= 60) break;
+            LinearLayout row = new LinearLayout(this);
+            row.setOrientation(LinearLayout.HORIZONTAL);
+            row.setGravity(Gravity.CENTER_VERTICAL);
+            row.setBackground(rippleBg(Color.rgb(0xF8, 0xF8, 0xFA), 12));
+            row.setPadding(dp(this, 10), dp(this, 10), dp(this, 10), dp(this, 10));
+            LinearLayout.LayoutParams rlp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            rlp.topMargin = dp(this, 8);
+            extResultBox.addView(row, rlp);
+            FrameLayout thumb = new FrameLayout(this);
+            thumb.setBackground(placeholderGradFor(e.id != null && !e.id.isEmpty() ? e.id : ((e.bank == null ? "" : e.bank) + (e.name == null ? "" : e.name)), cardSmallR129(8f), this));
+            roundClip(thumb, cardSmallR129(8f), this);
+            { // Q104/2.18：卡面组织小标全撤，有无标一律走文字兜底（与可加入区同式）
+                TextView orgShort = tv(this, (e.org == null || e.org.trim().isEmpty()) ? "卡" : orgLabel(e.org.trim()), 10, Color.WHITE, true);
+                orgShort.setGravity(Gravity.CENTER);
+                orgShort.setShadowLayer(dp(this, 1), 0, dp(this, 0.5f), Color.argb(120, 0, 0, 0));
+                thumb.addView(orgShort, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+            }
+            row.addView(thumb, new LinearLayout.LayoutParams(dp(this, 56), dp(this, 36)));
+            LinearLayout mid = new LinearLayout(this);
+            mid.setOrientation(LinearLayout.VERTICAL);
+            LinearLayout.LayoutParams mlp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+            mlp.leftMargin = dp(this, 10);
+            row.addView(mid, mlp);
+            mid.addView(tv(this, e.name == null ? "" : e.name, 15, colText(), true));
+            String typeTxt = "credit".equals(e.type) ? "信用卡" : ("debit".equals(e.type) ? "借记卡" : (e.type == null ? "" : e.type));
+            StringBuilder sub = new StringBuilder();
+            if (e.bank != null && !e.bank.trim().isEmpty()) sub.append(e.bank.trim());
+            String ol2 = (e.org == null || e.org.trim().isEmpty()) ? "" : orgLabel(e.org.trim());
+            if (!ol2.isEmpty()) { if (sub.length() > 0) sub.append(" · "); sub.append(ol2); }
+            if (!typeTxt.isEmpty()) { if (sub.length() > 0) sub.append(" · "); sub.append(typeTxt); }
+            sub.append(" · 扩展索引 · 待核");
+            mid.addView(tv(this, sub.toString(), 12, colText2(), false));
+            if (e.url != null && !e.url.trim().isEmpty()) {
+                TextView link = tv(this, "发卡行官网 ›", 12, inkLink(), true);
+                LinearLayout.LayoutParams llp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+                llp.topMargin = dp(this, 3);
+                mid.addView(link, llp);
+                final String fu = e.url.trim();
+                link.setOnClickListener(v -> {
+                    haptic();
+                    try { startActivity(new android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(fu))); }
+                    catch (Throwable ex) { showFloatToast("打不开这个链接"); }
+                });
+                row.setOnClickListener(v -> {
+                    haptic();
+                    try { startActivity(new android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(fu))); }
+                    catch (Throwable ex) { showFloatToast("打不开这个链接"); }
+                });
+            }
+            TextView pendChip154 = tv(this, "待核", 12, Color.rgb(0x8E, 0x8E, 0x93), true);
+            pendChip154.setGravity(Gravity.CENTER);
+            pendChip154.setPadding(dp(this, 10), dp(this, 6), dp(this, 10), dp(this, 6));
+            pendChip154.setBackground(roundRect(Color.rgb(0xE9, 0xE9, 0xED), 999, this));
+            LinearLayout.LayoutParams pcp154 = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            pcp154.leftMargin = dp(this, 8);
+            row.addView(pendChip154, pcp154);
         }
         // Q91：两边都真没有（且扩展状态行也没出）才显空状态，不许拿「拉不到」冒充「没结果」
         if (!anyShown && !noteShown) {
@@ -19452,7 +19978,7 @@ public class MainActivity extends Activity {
             showcaseDensityBtnTv152.setBackground(roundRect(btnBg152, 999, this));
             showcaseDensityBtnTv152.setTextColor(ink152);
         }
-        if (showcasePanel152 != null) showcasePanel152.setBackground(showcaseBarBg151(20));
+        if (showcasePanel152 != null) showcasePanel152.setBackground(showcasePanelBg154(20)); // Q154（件十④）：换底时面板同刷近实底
     }
 
     // Q152（展柜②③）：头部钮→弹面板（一次只开一类，同钮再点收起；换类直换
@@ -19533,15 +20059,24 @@ public class MainActivity extends Activity {
             if (prefs != null) prefs.edit().remove("showcase_bg").putBoolean("showcase_bg_custom_on", false).apply();
             applyShowcaseBg152();
         });
-        row152.addView(def152);
         row152.addView(new View(this), new LinearLayout.LayoutParams(0, 1, 1f));
+        row152.addView(def152);
+        // Q154（件十③）：原单行＝6 色点＋默认＋弹性空＋恢复默认排布，面板窄时
+        // 「恢复默认排布」必被挤出右界裁成半截（用户图证）。改两行：行一色点＋
+        // 默认，行二右对齐单放恢复钮——两钮恒全显、不再互挤。
+        LinearLayout row2_154 = new LinearLayout(this);
+        row2_154.setOrientation(LinearLayout.HORIZONTAL);
+        row2_154.setGravity(Gravity.RIGHT | Gravity.CENTER_VERTICAL);
+        LinearLayout.LayoutParams row2Lp154 = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        row2Lp154.topMargin = dp(this, 10);
+        box152.addView(row2_154, row2Lp154);
         // 恢复默认（Q151 S4 语义守恒：清存位回默认排布；自竖栏胶囊迁入本面板）
         TextView rst152 = tv(this, "恢复默认排布", 12, showcaseOnBg(), true);
         rst152.setGravity(Gravity.CENTER);
         rst152.setPadding(dp(this, 10), dp(this, 5), dp(this, 10), dp(this, 5));
         rst152.setBackground(roundRect(showcaseDarkBg() ? Color.argb(70, 255, 255, 255) : Color.argb(220, 255, 255, 255), 999, this));
         rst152.setOnClickListener(v -> { haptic(); resetShowcaseDefault151(); });
-        row152.addView(rst152);
+        row2_154.addView(rst152); // Q154（件十③）：落第二行（见上）
     }
 
     void buildShowcaseDensityPanel152(LinearLayout box152) {
@@ -19725,7 +20260,7 @@ public class MainActivity extends Activity {
         // restyle/清引用同删（删功能连代码一起删）。
         // 弹出面板宿主（头部之下浮层，一次只开一类：palette/density/group）
         FrameLayout panel152 = new FrameLayout(this);
-        panel152.setBackground(showcaseBarBg151(20));
+        panel152.setBackground(showcasePanelBg154(20)); // Q154（件十④）：内容面板近实底（头部浮条薄透不动）
         panel152.setClickable(true); // 面板自身接住命中，不漏给画布
         FrameLayout.LayoutParams panelLp152 = new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         panelLp152.gravity = Gravity.TOP;
@@ -19855,6 +20390,23 @@ public class MainActivity extends Activity {
 
     // Q151（S1）：展柜浮条软底（dockBarBg 同族语言：薄透染色＋柔描边）——按展柜
     // 底色深浅取档（非 App 深浅色）：浅底＝白透、深底＝亮透，卡在栏下透得出。
+    // Q154（件十④）：内容承载型面板（色板/密度/分组）专用底——近实底（约 0.85
+    // 不透明）同族染色：原与头部浮条共用 showcaseBarBg151 薄透底，面板浮在花花
+    // 卡面上时文字对比塌陷（审查实证）。按展柜底色深浅同族取实色（深底深实、
+    // 浅底白实，文字 showcaseOnBg 语义不变）；头部浮条仍薄透、本函数不碰。
+    GradientDrawable showcasePanelBg154(int radiusDp) {
+        GradientDrawable g = new GradientDrawable();
+        if (showcaseDarkBg()) {
+            g.setColor(Color.argb(217, 26, 28, 38));
+            g.setStroke(dp(this, 1), Color.argb(120, 255, 255, 255));
+        } else {
+            g.setColor(Color.argb(217, 255, 255, 255));
+            g.setStroke(dp(this, 1), Color.argb(110, 255, 255, 255));
+        }
+        g.setCornerRadius(dp(this, radiusDp));
+        return g;
+    }
+
     GradientDrawable showcaseBarBg151(int radiusDp) {
         GradientDrawable g = new GradientDrawable();
         if (showcaseDarkBg()) {
@@ -21239,6 +21791,11 @@ public class MainActivity extends Activity {
         View hitChild143;
         ShowcaseHitLayout143(Context c) { super(c); }
         @Override public boolean dispatchTouchEvent(MotionEvent ev) {
+            // Q154（件十②）：画布落点起手即收已开面板——命中层只覆画布，能落到
+            // 这里的 DOWN 必在面板之外（面板 clickable 自接命中、不漏给画布），
+            // 先收面板再分发本事件（点卡放大/拖卡/平移缩放语义一概不变）。
+            if (ev.getActionMasked() == MotionEvent.ACTION_DOWN && showcasePanel152 != null
+                    && showcasePanel152.getVisibility() == View.VISIBLE) closeShowcasePanel152();
             if (hitChild143 != null && hitChild143.getVisibility() == View.VISIBLE) {
                 MotionEvent t143 = MotionEvent.obtain(ev);
                 try {
@@ -21372,8 +21929,35 @@ public class MainActivity extends Activity {
                 // 都把 pivot 追到当前双指中心，中心一漂整幅画布跟着滑动，读作「卡片
                 // 到处飞」；钉死开始锚后，缩放纯绕锚，中心漂移不再平移画布。
                 @Override public boolean onScaleBegin(android.view.ScaleGestureDetector d) {
-                    world.setPivotX(d.getFocusX()); world.setPivotY(d.getFocusY());
+                    // Q154（件十①）：锚点坐标系走查订正——focus 经命中层逆矩阵已是
+                    // world 本地坐标（ShowcaseHitLayout143 分发时已逆变换），真正病灶
+                    // 是换 pivot 不补偿 translation：屏上点 c＝t＋p＋s·(w－p)，pivot
+                    // 由 p 换 p' 时整幅瞬移 (1－s)(p'－p)，双指一落画布就飞。改：换
+                    // pivot 同帧按恒等式补 translation（t'＝t＋(p－p')(1－s)），焦点
+                    // 钉死不动；手势全程不再改 pivot（onScale 不动锚，Q149 口径守恒）。
+                    float s154 = Math.max(0.05f, world.getScaleX());
+                    float fx154 = d.getFocusX(), fy154 = d.getFocusY();
+                    world.setTranslationX(world.getTranslationX() + (world.getPivotX() - fx154) * (1f - s154));
+                    world.setTranslationY(world.getTranslationY() + (world.getPivotY() - fy154) * (1f - s154));
+                    world.setPivotX(fx154); world.setPivotY(fy154);
                     return true;
+                }
+                @Override public void onScaleEnd(android.view.ScaleGestureDetector d) {
+                    // Q154（件十①）：缩放落定才修平移——按内容矩形与视口至少重叠
+                    // 64dp 的既有防丢口径（clampShowcasePan*，数值不改、不做空气墙：
+                    // 手势中不回拉、画布无限口径不破）；内容万一完全丢失（矩形
+                    // 陈旧等极端情形）才走既有温和回正 resetShowcaseView。
+                    world.setTranslationX(clampShowcasePanX(world.getTranslationX()));
+                    world.setTranslationY(clampShowcasePanY(world.getTranslationY()));
+                    if (showcaseBody != null && showcaseBody.getWidth() > 0 && showcaseBody.getHeight() > 0) {
+                        float px154 = world.getPivotX(), py154 = world.getPivotY();
+                        float ss154 = Math.max(0.05f, world.getScaleX());
+                        float cx0 = world.getTranslationX() + px154 + ss154 * (showcaseMinX - px154);
+                        float cx1 = world.getTranslationX() + px154 + ss154 * (showcaseMaxX - px154);
+                        float cy0 = world.getTranslationY() + py154 + ss154 * (showcaseMinY - py154);
+                        float cy1 = world.getTranslationY() + py154 + ss154 * (showcaseMaxY - py154);
+                        if (cx1 < 0 || cx0 > showcaseBody.getWidth() || cy1 < 0 || cy0 > showcaseBody.getHeight()) resetShowcaseView();
+                    }
                 }
                 @Override public boolean onScale(android.view.ScaleGestureDetector d) {
                     // Q141（2.52，乙组②）：缩放护栏 0.05–20（近无限「一整个屏幕可以
@@ -21825,10 +22409,11 @@ public class MainActivity extends Activity {
     }
 
     void animateNewsCard135(final LinearLayout card, final int fromH, final int toH, final Runnable onDone) {
+        scrollOwnerVersion154++; // Q154（件八补）：资讯折展启动夺滚动位所有权（expand/collapse/enter 三路共经此驱动）
         final ViewGroup.LayoutParams clp = card.getLayoutParams();
         if (clp == null || toH <= 0 || fromH <= 0 || Math.abs(toH - fromH) < 1) {
             if (clp != null) { clp.height = ViewGroup.LayoutParams.WRAP_CONTENT; card.setLayoutParams(clp); }
-            if (onDone != null) onDone.run();
+            settleFold154(onDone); // Q154（件八补）：无动画落定同走所有权出口
             return;
         }
         clp.height = fromH; card.setLayoutParams(clp);
@@ -21836,7 +22421,7 @@ public class MainActivity extends Activity {
         final Spring1D s = new Spring1D(fromH);
         new SpringDriver().drive(s, toH, SPRING_FOLD_K, SPRING_FOLD_Z,
             x -> { int h = Math.round(x); if (clp.height != h) { clp.height = h; card.setLayoutParams(clp); } },
-            () -> { setFoldClip144(card, false); clp.height = ViewGroup.LayoutParams.WRAP_CONTENT; card.setLayoutParams(clp); card.setLayerType(View.LAYER_TYPE_NONE, null); if (onDone != null) onDone.run(); });
+            () -> { setFoldClip144(card, false); clp.height = ViewGroup.LayoutParams.WRAP_CONTENT; card.setLayoutParams(clp); card.setLayerType(View.LAYER_TYPE_NONE, null); settleFold154(onDone); });
     }
 
     void expandNewsCard135(final LinearLayout card, final TextView ttl, final TextView sm,
@@ -21940,7 +22525,7 @@ public class MainActivity extends Activity {
         final int uSpec = View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED);
         int curH = card.getHeight();
         if (curH <= 0) { card.measure(wSpec, uSpec); curH = card.getMeasuredHeight(); }
-        if (det == null || curH <= 0) { if (onDone != null) onDone.run(); return; }
+        if (det == null || curH <= 0) { settleFold154(onDone); return; } // Q154（件八补）：同上
         final long[] foldCap142 = captureFoldScroll142(card); // Q142：收起开始先记滚动锚
         // 临时量收起高：换到收起态量一次，立即换回展开态（同步完成、不可见）
         final int detIdx = card.indexOfChild(det);
@@ -22010,10 +22595,11 @@ public class MainActivity extends Activity {
     }
 
     void animateGlossaryCard139(final LinearLayout card, final int fromH, final int toH, final Runnable onDone) {
+        scrollOwnerVersion154++; // Q154（件八补）：常识折展启动夺滚动位所有权（expand/collapse/enter 三路共经此驱动）
         final ViewGroup.LayoutParams clp = card.getLayoutParams();
         if (clp == null || toH <= 0 || fromH <= 0 || Math.abs(toH - fromH) < 1) {
             if (clp != null) { clp.height = ViewGroup.LayoutParams.WRAP_CONTENT; card.setLayoutParams(clp); }
-            if (onDone != null) onDone.run();
+            settleFold154(onDone); // Q154（件八补）：无动画落定同走所有权出口
             return;
         }
         clp.height = fromH; card.setLayoutParams(clp);
@@ -22021,7 +22607,7 @@ public class MainActivity extends Activity {
         final Spring1D s = new Spring1D(fromH);
         new SpringDriver().drive(s, toH, SPRING_FOLD_K, SPRING_FOLD_Z,
             x -> { int h = Math.round(x); if (clp.height != h) { clp.height = h; card.setLayoutParams(clp); } },
-            () -> { setFoldClip144(card, false); clp.height = ViewGroup.LayoutParams.WRAP_CONTENT; card.setLayoutParams(clp); card.setLayerType(View.LAYER_TYPE_NONE, null); if (onDone != null) onDone.run(); });
+            () -> { setFoldClip144(card, false); clp.height = ViewGroup.LayoutParams.WRAP_CONTENT; card.setLayoutParams(clp); card.setLayerType(View.LAYER_TYPE_NONE, null); settleFold154(onDone); });
     }
 
     // 展开：调用前卡须处于收起态（正文 2 行、无附加盒/尾注）；box/boxIdx 为待挂的
@@ -22072,7 +22658,7 @@ public class MainActivity extends Activity {
     void collapseGlossaryCard139(final LinearLayout card, final TextView bd,
                                  final LinearLayout box, final View note,
                                  final Runnable onDone) {
-        if (box == null && note == null && bd == null) { if (onDone != null) onDone.run(); return; }
+        if (box == null && note == null && bd == null) { settleFold154(onDone); return; } // Q154（件八补）：同上
         final int wSpec = glossaryCardWidthSpec139(card);
         final int uSpec = View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED);
         int curH = card.getHeight();
@@ -22273,7 +22859,8 @@ public class MainActivity extends Activity {
         }
         if (keepY > 0 && newsScroll != null) { // Q153（件八）：重建保位 post 加手势/位置守卫，用户重建后已动手滚动即作废
             final long keepMs153 = android.os.SystemClock.uptimeMillis();
-            newsScroll.post(() -> { if (newsScroll != null && lastUserTouchScrollMs153 <= keepMs153) newsScroll.scrollTo(0, keepY); });
+            final int keepVer154 = scrollOwnerVersion154; // Q154（件八补）：捕获所有权版本，落地不符即弃
+            newsScroll.post(() -> { if (newsScroll != null && keepVer154 == scrollOwnerVersion154 && lastUserTouchScrollMs153 <= keepMs153) newsScroll.scrollTo(0, keepY); });
         }
     }
 
