@@ -5094,7 +5094,7 @@ public class MainActivity extends Activity {
         // Q153（件二定稿）：组织标仅无图占位终态（无路径/解码无果）才落英雄图
         // 右下角；有真实卡面一律不加。ai_redraw 左上标与说明灰字口径不变（另件）。
         bindGalleryBitmap152(hiv, f.image, imgW, true,
-            () -> addOrgBadgeBottomRight153(hero, normOrgKey152(f.org), false, 1.2f, 8));
+            () -> addOrgBadgeBottomRight153(hero, normOrgKey152(f.org), false, 1.2f, 2));
         if (f.aiRedraw) {
             FrameLayout.LayoutParams aiLp152 = new FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
             aiLp152.gravity = Gravity.TOP | Gravity.LEFT;
@@ -9194,6 +9194,25 @@ public class MainActivity extends Activity {
         }
     }
 
+    // Q156（2.67）：银联/VISA 官图直贴——位图按拟合框等比缩放居中绘制；
+    // 静态缓存防重复 decode（进程内两图各一份，只解引用不 recycle，Q21）。
+    // VISA 深底：以其 alpha 蒙版染白呈现（SRC_IN 换色保形），浅底用原蓝；
+    // 银联牌体自带白字、深浅同版。不再有 <32dp 极简变体——同图缩放直贴。
+    static Bitmap upBadgeBmpCache156, visaBadgeBmpCache156;
+    static Bitmap loadBadgeBmp156(Context ctx, String path156) {
+        try {
+            InputStream in156 = ctx.getAssets().open(path156);
+            try { return BitmapFactory.decodeStream(in156); } finally { in156.close(); }
+        } catch (Throwable t156) { return null; }
+    }
+    static Bitmap upBadgeBmp156(Context ctx) {
+        if (upBadgeBmpCache156 == null) upBadgeBmpCache156 = loadBadgeBmp156(ctx, "badges/unionpay.png");
+        return upBadgeBmpCache156;
+    }
+    static Bitmap visaBadgeBmp156(Context ctx) {
+        if (visaBadgeBmpCache156 == null) visaBadgeBmpCache156 = loadBadgeBmp156(ctx, "badges/visa.png");
+        return visaBadgeBmpCache156;
+    }
     class OrgBadgeView extends View {
         final String org;
         final boolean darkBg;
@@ -9205,25 +9224,19 @@ public class MainActivity extends Activity {
             int w = getWidth(), h = getHeight();
             if (w <= 0 || h <= 0 || org.isEmpty()) return;
             Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);
-            // Q153（2.64，件六·用户三度纠偏后的统一定稿）：组织标全 App 只留
-            // 一套画法——银联/VISA 按用户 2026-10-06 发的官方参考图重画（银联三色
-            // 斜切牌＋白字、VISA 深蓝斜体字标去金翼），万事达/Amex/JCB 沿现行画法
-            // 不动。旧「现行/扁平 B」二选与 badgeB129 分支整段删除（B 版实现存
-            // git 历史 fb55a8d，用户明示存档备查）。统一拟合（min 单位＋居中）
-            // 沿 Q148：任何框形不溢不亏。设置预览与卡面无图占位共用此一处现画。
+            // Q156（2.67，用户 2026-10-06 17:36 改口，覆盖 Q153 自绘定稿）：银联/VISA
+            // 改用用户提供的官方样图去底透明 PNG 直接贴（assets/badges/，制图期已
+            // 剔银联黑投影/倒影、白底转透明），不再自绘；万事达/Amex/JCB 沿现行
+            // 画法不动。统一拟合（min 单位＋居中）沿 Q148：任何框形不溢不亏。
+            // 设置预览与卡面无图占位共用此一处。
             int save148 = cv.save();
             try {
                 float u = Math.min(w / 240f, h / 120f);
                 int w2 = Math.round(240f * u), h2 = Math.round(120f * u);
                 cv.translate((w - w2) / 2f, (h - h2) / 2f);
                 if (org.equals("mastercard") || org.equals("mastercard-nucc")) badgeMastercard(cv, p, w2, h2, u, u);
-                else if (org.equals("unionpay")) {
-                    // Q153（件六 DeepSeek 参数）：实宽 <32dp 走极简——只留三色块＋「银联」
-                    // 中文，砍英文与字距（小到英文必糊成一团，按其验收清单 24dp 可区分）。
-                    if (w / getResources().getDisplayMetrics().density < 32f) badgeUnionPayMini153(cv, p, w2, h2, u, u);
-                    else badgeUnionPay153(cv, p, w2, h2, u, u);
-                }
-                else if (org.equals("visa")) badgeVisa153(cv, p, w2, h2, u, u);
+                else if (org.equals("unionpay")) drawBadgeImage156(cv, p, w2, h2, true);
+                else if (org.equals("visa")) drawBadgeImage156(cv, p, w2, h2, false);
                 else if (org.equals("jcb")) badgeJcb(cv, p, u, u);
                 else if (org.equals("amex-cn")) badgeAmex(cv, p, u, u);
             } catch (Throwable ignored) { /* 小标绘制失败只不显示，不为占位冒崩点 */ }
@@ -9234,124 +9247,21 @@ public class MainActivity extends Activity {
             Paint.FontMetrics fm = p.getFontMetrics();
             return cy - (fm.ascent + fm.descent) / 2f;
         }
-        // Q153 银联（按用户 268322 官方参考图重画，非贴图、自绘矢量）：红/蓝/青
-        // 三色平行四边形斜切牌面一体成型（牌体右倾、色带同倾无缝），白色粗斜体
-        // UnionPay 横贯＋「银联」压右下——旧画法是三段分离小梯形＋牌下深色小字，
-        // 小尺寸下读作碎块（用户「银联太丑了吧」即此）。色值按 DeepSeek 矢量
-        // 重构参数（2.64 件六细则）：红 #E21836 / 蓝 #00447C / 青 #007B84。
-        void badgeUnionPay153(Canvas cv, Paint p, int w, int h, float ux, float uy) {
-            float xTop = 46 * ux, xBot = 22 * ux, plateW = 172 * ux, plateY = 10 * uy, plateH = 100 * uy;
-            android.graphics.Path plate = new android.graphics.Path();
-            plate.moveTo(xTop, plateY);
-            plate.lineTo(xTop + plateW, plateY);
-            plate.lineTo(xBot + plateW, plateY + plateH);
-            plate.lineTo(xBot, plateY + plateH);
-            plate.close();
-            cv.save();
-            cv.clipPath(plate);
-            int[] cols = { Color.rgb(0xE2, 0x18, 0x36), Color.rgb(0x00, 0x44, 0x7C), Color.rgb(0x00, 0x7B, 0x84) };
-            float bandW = plateW / 3f, slant = xTop - xBot;
+        void drawBadgeImage156(Canvas cv, Paint p, int w2, int h2, boolean union156) {
+            Bitmap bmp156 = union156 ? upBadgeBmp156(getContext()) : visaBadgeBmp156(getContext());
+            if (bmp156 == null) return;
+            float s156 = Math.min(w2 / (float) bmp156.getWidth(), h2 / (float) bmp156.getHeight());
+            int dw156 = Math.max(1, Math.round(bmp156.getWidth() * s156));
+            int dh156 = Math.max(1, Math.round(bmp156.getHeight() * s156));
+            int dx156 = (w2 - dw156) / 2, dy156 = (h2 - dh156) / 2;
             p.setStyle(Paint.Style.FILL);
-            for (int i = 0; i < 3; i++) {
-                float bx = xTop + i * bandW;
-                android.graphics.Path band = new android.graphics.Path();
-                band.moveTo(bx, plateY - 2 * uy);
-                band.lineTo(bx + bandW, plateY - 2 * uy);
-                band.lineTo(bx + bandW - slant, plateY + plateH + 2 * uy);
-                band.lineTo(bx - slant, plateY + plateH + 2 * uy);
-                band.close();
-                p.setColor(cols[i]);
-                cv.drawPath(band, p);
-            }
-            cv.restore();
-            // Q153（件六细则）：深底加 1px 浅色外描防融底（牌体描边，字不动）
-            if (darkBg) {
-                p.setStyle(Paint.Style.STROKE);
-                p.setStrokeWidth(Math.max(1f, 1.2f * ux));
-                p.setColor(Color.argb(190, 255, 255, 255));
-                cv.drawPath(plate, p);
-                p.setStyle(Paint.Style.FILL);
-            }
-            // 白字：UnionPay 粗斜体横贯牌心（按实测字宽收字号防溢牌）
-            p.setColor(Color.WHITE);
-            p.setTypeface(weightTypeface(getContext(), 800));
-            p.setTextSkewX(-0.15f);
-            float ts = 37 * uy;
-            p.setTextSize(ts);
-            float tw = p.measureText("UnionPay");
-            float maxTw = plateW * 0.88f;
-            if (tw > maxTw) { ts *= maxTw / tw; p.setTextSize(ts); }
-            p.setTextAlign(Paint.Align.CENTER);
-            float pcx = xBot + plateW / 2f + slant / 2f;
-            cv.drawText("UnionPay", pcx, centeredBaseline(p, plateY + plateH * 0.44f), p);
-            p.setTextSkewX(0);
-            p.setTypeface(weightTypeface(getContext(), 800));
-            p.setTextSize(31 * uy);
-            p.setLetterSpacing(0.05f); // Q153（件六细则）：中文字距 0.05，画完即复位
-            cv.drawText("银联", pcx + plateW * 0.16f, centeredBaseline(p, plateY + plateH * 0.78f), p);
-            p.setLetterSpacing(0f);
-        }
-        // Q153（件六细则）：银联极简版（实宽 <32dp）——三色斜切块＋「银联」中文，
-        // 砍英文与字距；牌体贴满拟合框，小尺寸靠色块＋两汉字区分组织。
-        void badgeUnionPayMini153(Canvas cv, Paint p, int w, int h, float ux, float uy) {
-            float xTop = 34 * ux, xBot = 10 * ux, plateW = 196 * ux, plateY = 14 * uy, plateH = 92 * uy;
-            android.graphics.Path plate = new android.graphics.Path();
-            plate.moveTo(xTop, plateY);
-            plate.lineTo(xTop + plateW, plateY);
-            plate.lineTo(xBot + plateW, plateY + plateH);
-            plate.lineTo(xBot, plateY + plateH);
-            plate.close();
-            cv.save();
-            cv.clipPath(plate);
-            int[] cols = { Color.rgb(0xE2, 0x18, 0x36), Color.rgb(0x00, 0x44, 0x7C), Color.rgb(0x00, 0x7B, 0x84) };
-            float bandW = plateW / 3f, slant = xTop - xBot;
-            p.setStyle(Paint.Style.FILL);
-            for (int i = 0; i < 3; i++) {
-                float bx = xTop + i * bandW;
-                android.graphics.Path band = new android.graphics.Path();
-                band.moveTo(bx, plateY - 2 * uy);
-                band.lineTo(bx + bandW, plateY - 2 * uy);
-                band.lineTo(bx + bandW - slant, plateY + plateH + 2 * uy);
-                band.lineTo(bx - slant, plateY + plateH + 2 * uy);
-                band.close();
-                p.setColor(cols[i]);
-                cv.drawPath(band, p);
-            }
-            cv.restore();
-            if (darkBg) {
-                p.setStyle(Paint.Style.STROKE);
-                p.setStrokeWidth(Math.max(1f, 1.2f * ux));
-                p.setColor(Color.argb(190, 255, 255, 255));
-                cv.drawPath(plate, p);
-                p.setStyle(Paint.Style.FILL);
-            }
-            p.setColor(Color.WHITE);
-            p.setTypeface(weightTypeface(getContext(), 800));
-            p.setTextSize(52 * uy);
-            p.setTextAlign(Paint.Align.CENTER);
-            cv.drawText("银联", xBot + plateW / 2f + slant / 2f, centeredBaseline(p, plateY + plateH / 2f), p);
-        }
-        // Q153 VISA（按用户 268326 官方字标重画）：深蓝 #1A1F71 粗斜体字标一体，
-        // 旧金色小翼删除（现行官方字标无翼，金翼是旧版 Visa 识别物、压在卡面
-        // 自带标上更显杂乱）；深底预览仍转白保可读。字宽按实测收字号防溢框。
-        void badgeVisa153(Canvas cv, Paint p, int w, int h, float ux, float uy) {
-            p.setStyle(Paint.Style.FILL);
-            p.setColor(darkBg ? Color.WHITE : Color.rgb(0x1A, 0x1F, 0x71));
-            // Q153（件六细则，DeepSeek 参数）：Paint 文字版——serif 粗斜体＋
-            // textSkewX -0.22 右倾＋字距 0.08，不手绘 Path；深底现行转白字防融底
-            // （与银联牌体浅色外描同目的、按标形态分治，见 Q153 对账）。
-            p.setTypeface(android.graphics.Typeface.create(android.graphics.Typeface.SERIF, android.graphics.Typeface.BOLD_ITALIC));
-            p.setTextSkewX(-0.22f);
-            p.setLetterSpacing(0.08f);
-            float ts = 88 * uy;
-            p.setTextSize(ts);
-            float tw = p.measureText("VISA");
-            float maxTw = 208 * ux;
-            if (tw > maxTw) { ts *= maxTw / tw; p.setTextSize(ts); }
-            p.setTextAlign(Paint.Align.CENTER);
-            cv.drawText("VISA", w / 2f, centeredBaseline(p, h / 2f), p);
-            p.setTextSkewX(0);
-            p.setLetterSpacing(0f);
+            p.setColorFilter((!union156 && darkBg)
+                    ? new android.graphics.PorterDuffColorFilter(Color.WHITE, PorterDuff.Mode.SRC_IN)
+                    : null);
+            p.setFilterBitmap(true);
+            cv.drawBitmap(bmp156, null, new android.graphics.Rect(dx156, dy156, dx156 + dw156, dy156 + dh156), p);
+            p.setColorFilter(null);
+            p.setFilterBitmap(false);
         }
         // 万事达/万事网联：红 #EB001B / 橙 #F79E1B 双等圆交叠、交叠区独立填 #FF5F00（不用半透叠色冒充）
         void badgeMastercard(Canvas cv, Paint p, int w, int h, float ux, float uy) {
@@ -9447,7 +9357,7 @@ public class MainActivity extends Activity {
     // 标带 tag "orgBadge153"，远程图后落盘换入真图时由 swapInFetchedIn133
     // 摘除（防占位转真图后标压真卡面）。
     void addOrgBadgeBottomRight153(FrameLayout host, String org, boolean darkBg, float scale) {
-        addOrgBadgeBottomRight153(host, org, darkBg, scale, 6);
+        addOrgBadgeBottomRight153(host, org, darkBg, scale, 2);
     }
     void addOrgBadgeBottomRight153(FrameLayout host, String org, boolean darkBg, float scale, int bottomMarginDp) {
         if (host == null || !hasOrgBadge(org)) return;
@@ -9458,7 +9368,9 @@ public class MainActivity extends Activity {
             int bh153 = Math.round(dp(this, 24 * scale));
             FrameLayout.LayoutParams lp153 = new FrameLayout.LayoutParams(bw153, bh153);
             lp153.gravity = Gravity.BOTTOM | Gravity.RIGHT;
-            lp153.rightMargin = dp(this, 6);
+            // Q156（2.67，用户 17:37）：再下移＋右移贴近边框——右/下距统一 2dp
+            // 贴边小距（不压出图外、不盖圆角裁切），六落点同此一处收口。
+            lp153.rightMargin = dp(this, 2);
             lp153.bottomMargin = dp(this, bottomMarginDp);
             host.addView(badge153, lp153);
         } catch (Throwable ignored) { }
@@ -13561,7 +13473,7 @@ public class MainActivity extends Activity {
             // 一律不加。标是框内姊妹视图不随位图横摆，落位恒视觉右下。子版本
             // 无独立组织字段（Q152 数据实查），全廊用本卡组织。
             bindGalleryBitmap152(iv, slidePath152, slideW152, true, () -> {
-                addOrgBadgeBottomRight153(imgFrame, normOrgKey152(c.org), false, 1.25f, 8);
+                addOrgBadgeBottomRight153(imgFrame, normOrgKey152(c.org), false, 1.25f, 2);
                 if (placeholderCustomEnabled) imgFrame.setOnLongClickListener(v -> { haptic(); openPlaceholderColorPicker(c); return true; });
             });
             if (slideName != null && !slideName.isEmpty()) {
@@ -17209,7 +17121,7 @@ public class MainActivity extends Activity {
         FrameLayout hitWrap152 = new FrameLayout(this);
         hitWrap152.addView(box, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
         if (c.image == null || c.image.isEmpty())
-            addOrgBadgeBottomRight153(hitWrap152, normOrgKey152(c.org), false, 0.7f, 4);
+            addOrgBadgeBottomRight153(hitWrap152, normOrgKey152(c.org), false, 0.7f, 2);
         return hitWrap152;
     }
 
@@ -25029,7 +24941,7 @@ public class MainActivity extends Activity {
         box.addView(tv(this, S("org_badge_style"), 14, colText(), true));
         // Q153（件六定稿）：样式二选切换已删——全 App 一套画法，预览即卡面无图
         // 占位右下角的正式画法（落点规则不变），此处五标与卡面同源现画。
-        TextView desc = tv(this, L("全 App 统一这一套：银联/VISA 按官方标画法，卡面无图时右下角就是这个样子。", "One unified style app-wide: UnionPay/VISA follow the official marks — this is exactly what appears at the lower-right of no-image card faces."), 11.5f, colText2(), false);
+        TextView desc = tv(this, L("全 App 统一这一套：银联、VISA 用官方标图直接贴，卡面无图时右下角贴边就是这个样子。", "One unified style app-wide: UnionPay/VISA use the official mark images pasted directly — this is exactly what appears at the lower-right edge of no-image card faces."), 11.5f, colText2(), false);
         bodyLH(desc);
         box.addView(desc);
         // 五组织真实预览（OrgBadgeView 现画，与卡面占位标同一套唯一画法）
