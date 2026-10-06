@@ -14681,7 +14681,7 @@ public class MainActivity extends Activity {
                 int ci = customTileIndex(tileF);
                 if (ci >= 0 && ci < customCards.size()) openCustomDetail(customCards.get(ci));
             });
-            tile.setOnLongClickListener(v -> { startCustomDrag(tile, customTileIndex(tileF)); return true; });
+            installBandPress152(tileF); // Q152（A①）：长按拖动改自建 380ms 按压计时（见该处根因注），不再走系统长按
         }
     }
 
@@ -14785,20 +14785,22 @@ public class MainActivity extends Activity {
     // 背景（见 startCustomDrag），剪影保持方角与兄弟交界齐平，圆角缺口退场；
     // outline 塑形改由方角背景自身承担，elevation 浮起不变。
     void setCustomTileDragFrame(View tile, boolean on, Drawable orig) {
-        if (tile instanceof ViewGroup) {
-            ViewGroup vg = (ViewGroup) tile;
-            if (on) {
-                Drawable cur = tile.getBackground();
-                if (cur instanceof GradientDrawable) ((GradientDrawable) cur).setStroke(dp(this, 2), Color.argb(178, 0, 122, 255));
-                tile.setClipToOutline(false);
-                if (Build.VERSION.SDK_INT >= 21) tile.setElevation(dp(this, 18));
-            } else {
-                if (orig instanceof GradientDrawable) ((GradientDrawable) orig).setStroke(0, 0);
-                tile.setBackground(orig);
-                tile.setClipToOutline(false);
-                if (Build.VERSION.SDK_INT >= 21) tile.setElevation(0);
-            }
+        // Q152（A②③）：拖动态框改前景描边（minSdk 24，setForeground 恒可用）——
+        // 旧法把蓝描边直接 setStroke 写进带体背景渐变实例、落位再整只背景换回/
+        // 换新，颜色在拖动态与落定帧两跳；新式背景全程不碰，框只是一层画在内
+        // 容之上的前景，摘时整层撤除。elevation 静 0/拖 18dp 沿现码，clipToOutline
+        // 维持旧收尾口径（恒 false）。
+        if (on) {
+            GradientDrawable fg152 = new GradientDrawable();
+            fg152.setColor(Color.TRANSPARENT);
+            fg152.setStroke(dp(this, 2), Color.argb(178, 0, 122, 255));
+            fg152.setCornerRadius(dp(this, cardR129(14f)));
+            tile.setForeground(fg152);
+        } else {
+            tile.setForeground(null);
         }
+        tile.setClipToOutline(false);
+        if (Build.VERSION.SDK_INT >= 21) tile.setElevation(on ? dp(this, 18) : 0);
     }
 
     // Q148（2.59，拖动三度）：色带位次状态归位——topMargin（首带 0、余 -1dp 上叠）
@@ -14841,24 +14843,73 @@ public class MainActivity extends Activity {
     }
 
     // P-deck ① 长按拖动：跟手平移+放大，松手按位移换序并保存（对照混合版 startTileDrag）
+    // Q152（2.63，追加A①＋审查二）：色带长按拖动的按下计时——旧实现走系统
+    // OnLongClick（约 500ms）：手指落下后 ScrollView 一旦在 slop 内 intercept
+    // 夺链，长按回调根本到不了、到了链也已属页面（N13「同一实例仍滑」实证），
+    // 起拖后的 disallow 对已夺走的链无效。改自建：DOWN 即沿父链逐层 disallow
+    // （页读不到这条手势）＋380ms 计时；未入拖动态前 MOVE 超 10dp 即释放
+    // disallow 交还页面滚动（普通滑动照常能滚）、UP/CANCEL 撤计时；计时到点
+    // 才调 startCustomDrag 接管本手势余下事件（监听在同一视图上换装，后续
+    // MOVE/UP 直达拖动处理器）。第二滚动容器普查：色带祖先链实走 while 到
+    // root 逐层 disallow，不预设只有 mineScrollView 一条（既有 MOVE 内祖先链
+    // 重申保留，另加持有字段直调双保险）。
+    Runnable bandPressTimer152 = null;
+
+    void bandChainDisallow152(View v, boolean dis152) {
+        try {
+            android.view.ViewParent p152 = v.getParent();
+            while (p152 != null) {
+                p152.requestDisallowInterceptTouchEvent(dis152);
+                p152 = (p152 instanceof View) ? ((View) p152).getParent() : null;
+            }
+        } catch (Throwable ignored) {}
+    }
+
+    void installBandPress152(final View tile) {
+        if (tile == null) return;
+        tile.setOnTouchListener(new View.OnTouchListener() {
+            float pDownY = -1, pDownX = -1;
+            boolean pArmed = false;
+            public boolean onTouch(View v, MotionEvent e) {
+                switch (e.getActionMasked()) {
+                    case MotionEvent.ACTION_DOWN:
+                        pDownY = e.getRawY(); pDownX = e.getRawX(); pArmed = true;
+                        bandChainDisallow152(v, true);
+                        final Runnable t152 = () -> { if (pArmed) { pArmed = false; startCustomDrag(tile, customTileIndex(tile)); } };
+                        bandPressTimer152 = t152;
+                        mainHandler.postDelayed(t152, 380);
+                        return false;
+                    case MotionEvent.ACTION_MOVE:
+                        if (pArmed && (Math.abs(e.getRawY() - pDownY) > dp(MainActivity.this, 10) || Math.abs(e.getRawX() - pDownX) > dp(MainActivity.this, 10))) {
+                            pArmed = false;
+                            if (bandPressTimer152 != null) mainHandler.removeCallbacks(bandPressTimer152);
+                            bandChainDisallow152(v, false); // 未入拖动态：交还页面滚动
+                        }
+                        return false;
+                    case MotionEvent.ACTION_UP:
+                    case MotionEvent.ACTION_CANCEL:
+                        pArmed = false;
+                        if (bandPressTimer152 != null) mainHandler.removeCallbacks(bandPressTimer152);
+                        return false;
+                }
+                return false;
+            }
+        });
+    }
+
     void startCustomDrag(final View tile, final int fromIdx) {
         haptic();
         customDragGen131++; // Q131：新拖作废上一落位未完的收尾回调（防误摘新拖动态框）
         dragReorderTouchMs131 = android.os.SystemClock.uptimeMillis(); // Q131：拖动态背板冻结计时起跑（tick 同名守卫）
-        final Drawable origBg = tile.getBackground();
-        tile.setTag(origBg);
-        // Q148（2.59，拖动三度·融合）：拖动态先把带体换成「同色方角」背景并藏掉
-        // 底部淡接层——旧法拖着原背景走，背景里的位次圆角旗标（首/末带圆角）＋
-        // roundClip 全圆剪影到了新交界必然露出圆角缺口、读作两张独立卡（用户点名
-        // 「不融合」）；方角剪影＋elevation 浮起、交界齐平。淡接层拖动态仍指向旧
-        // 邻居的顶色，一并藏掉。原背景留 tag：落位时已换位走 restyle 换新背景、
-        // 原位拖回走 setCustomTileDragFrame 还原（Q131/Q133 身份判定口径不变）。
-        if (fromIdx >= 0 && fromIdx < customCards.size())
-            tile.setBackground(customBandGradient(customCards.get(fromIdx).style, false, false));
-        if (tile instanceof ViewGroup && ((ViewGroup) tile).getChildCount() > 1)
-            ((ViewGroup) tile).getChildAt(1).setVisibility(View.GONE);
-        setCustomTileDragFrame(tile, true, origBg);
-        tile.setScaleX(1.02f); tile.setScaleY(1.02f); tile.setAlpha(0.98f);
+        // Q152（A②，用户点名「拖动中被拖带颜色会变」）：拖动态只许位置/阴影变——
+        // 背景一字不换（旧法换「同色方角」渐变＋藏淡接＋scale 1.02＋alpha .98：
+        // 渐变随缩放重采样、半透混底色，读数即变色）、淡接层不藏、scale/alpha
+        // 不动；浮起只靠 elevation＋前景描边（setCustomTileDragFrame 新式）。带体
+        // 背景实例全程同一只，落定帧与静止渲染天然同值（A③衔接由此闭口）。
+        // Q148 的方角剪影取舍随之退役：位次圆角旗标留给落位 restyle 对齐。
+        setCustomTileDragFrame(tile, true, null);
+        bandChainDisallow152(tile, true); // Q152（A①）：入拖动态再刷一遍全链 disallow（审查二）
+        if (mineScrollView != null) mineScrollView.requestDisallowInterceptTouchEvent(true); // 持有字段直调双保险
         // Q56：不再 bringChildToFront 改子序（那一下正是起拖闪烁源）；靠 setCustomTileDragFrame 的 elevation 18 浮在兄弟之上
         if (mineScrollView != null) mineScrollView.requestDisallowInterceptTouchEvent(true);
         // Q127（2.39，用户 05:30 点名）：拖位记账本——被拖带的布局顶只认自维护的
@@ -14887,6 +14938,7 @@ public class MainActivity extends Activity {
                         // 会被页面滚动半路接管、被拖带收到 CANCEL 停在半路（「拖不
                         // 到目标位」一源）。祖先链实查、每 MOVE 重申，成本可忽略。
                         try { android.view.ViewParent anc148 = v.getParent(); while (anc148 != null && !(anc148 instanceof ScrollView)) anc148 = anc148.getParent(); if (anc148 instanceof ScrollView) ((ScrollView) anc148).requestDisallowInterceptTouchEvent(true); } catch (Throwable ignored) {}
+                        if (mineScrollView != null) mineScrollView.requestDisallowInterceptTouchEvent(true); // Q152（A①双保险）：持有字段每 MOVE 直调重申，与祖先链并行
                         if (downY < 0) downY = e.getRawY();
                         if (dragTop127[0] < 0) { dragTop127[0] = v.getTop(); grabTop151[0] = dragTop127[0]; }
                         // Q151（N13·窜动根因）：平移不许只写 rawY-downY——每次过中线
@@ -15078,7 +15130,7 @@ public class MainActivity extends Activity {
     }
 
     void finishCustomDrag(View tile, int fromIdx, float dy) {
-        tile.setOnTouchListener(null);
+        installBandPress152(tile); // Q152：收尾把按下计时监听装回（拖动态监听使命完）
         dragReorderTouchMs131 = android.os.SystemClock.uptimeMillis(); // Q133（2.45，件二 B）：落位 140ms 动画也圈进背板冻结窗——旧版只在 MOVE 打点，拖后停顿再松手时冻结已过期，落位中途 captureBackdropTick 整树重抓＋三遍模糊正撞动画帧
         // Q131（2.43，件一）：松手放下闪的落点收口——旧顺序是先把拖动态的蓝框/圆角
         // 裁切/18dp elevation 一瞬全摘（影子与框先于带体消失），再把整列每条带的
@@ -15086,31 +15138,14 @@ public class MainActivity extends Activity {
         // 落位首帧，正是「放下闪一帧」。改：框与影保留到落位动画终点才随 animator
         // 的 endAction 一起摘（代次守卫防与新拖冲突）；重衔接只染真正受影响的带
         // （移动区间及两侧各一），原位拖回恒零重染。数据落位口径（Q7 子序优先）不变。
-        final Object dragBg131 = tile.getTag();
-        tile.setTag(null);
-        final Drawable dragBgNow133 = tile.getBackground(); // 拖动态背景实例（蓝框描边就地写在此实例上）
+        // Q152（A③）：落位收尾只剩两件——摘前景描边、elevation 复 0。背景自起拖
+        // 起从未换过（A②），淡接层从未藏过，无「换回旧实例在终点帧跳几何」的
+        // 旧病灶（Q133 注所指路径自此不存在）；换位带由 restyleCustomRange131
+        // 在落位前以新位次重染，其渐变色值与静止渲染同源同值，终帧衔接恒等。
         final int gen131 = ++customDragGen131;
         final Runnable frameOff131 = () -> {
             if (gen131 != customDragGen131) return;
-            // Q133（2.45，件二 B）：落位重衔接已把被拖带背景换成新位次的带渐变
-            // （无蓝框）时，终点不许再回换拖前旧背景——旧实例的首/末圆角旗标停在
-            // 旧位次，换回即在动画终点帧跳一次几何，正是 2.43 真机仍报「放下闪」
-            // 的一帧。当前背景仍是拖动态实例才走旧收尾（还原原背景并清描边）；
-            // 已被重衔接换新时终点只收海拔与裁切两项。
-            if (tile.getBackground() == dragBgNow133) {
-                if (dragBg131 instanceof Drawable) setCustomTileDragFrame(tile, false, (Drawable) dragBg131);
-                // Q148：原位拖回无 restyle 兜底——拖动态藏掉的淡接层在此复位
-                // （非末带才有此层；已换位时背景与淡接已由 restyle 换新，不走此支）
-                try {
-                    ViewGroup tp148 = (ViewGroup) tile.getParent();
-                    if (tp148 != null && tile instanceof ViewGroup && ((ViewGroup) tile).getChildCount() > 1
-                        && tp148.indexOfChild(tile) < tp148.getChildCount() - 1)
-                        ((ViewGroup) tile).getChildAt(1).setVisibility(View.VISIBLE);
-                } catch (Throwable ignored) {}
-            } else {
-                if (Build.VERSION.SDK_INT >= 21) tile.setElevation(0);
-                tile.setClipToOutline(false);
-            }
+            setCustomTileDragFrame(tile, false, null);
         };
         if (mineScrollView != null) mineScrollView.requestDisallowInterceptTouchEvent(false);
         lastDragEndAt = System.currentTimeMillis();
@@ -15148,16 +15183,15 @@ public class MainActivity extends Activity {
                     restyleCustomRange131(box, lo131, hi131);
                 }
                 if (liveSettled) {
-                    // Q131：缩放/透明/平移并作一支 140ms 落位动画，终点才摘框影（见上）
-                    tile.animate().scaleX(1f).scaleY(1f).alpha(1f).translationY(0f)
+                    // Q131：140ms 落位动画，终点才摘框影（见上）；Q152：scale/alpha
+                    // 拖动态未动过（A②），动画只剩平移归零一件事
+                    tile.animate().translationY(0f)
                         .setDuration(140).setInterpolator(ANIM_EXIT).withEndAction(frameOff131).start();
                 } else {
-                    tile.animate().scaleX(1f).scaleY(1f).alpha(1f).setDuration(140).setInterpolator(ANIM_EXIT).start();
                     tile.setTranslationY(0);
                     frameOff131.run();
                 }
             } else {
-                tile.animate().scaleX(1f).scaleY(1f).alpha(1f).setDuration(140).setInterpolator(ANIM_EXIT).start();
                 tile.setTranslationY(0);
                 frameOff131.run();
                 refreshMineKeepScroll();
