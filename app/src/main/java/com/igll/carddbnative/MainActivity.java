@@ -5256,7 +5256,13 @@ public class MainActivity extends Activity {
         if ("news".equals(key) && (pendingGlossaryId != null
             || android.os.SystemClock.uptimeMillis() < glossaryLandGuardUntil)) return;
         final int y = savedPageScrollY(key, sv);
-        if (y > 0) sv.post(() -> sv.scrollTo(0, y));
+        if (y > 0) {
+            // Q152（2.63，加卡闪屏同源）：已布局的页同步先归位再 post 兜底——旧实现
+            // 只 post：首帧停在顶部、下一帧跳到存位，即用户所见闪屏一帧。未布局完
+            // 的新页同步 scrollTo 会被钳零、无副作用，布局后由 post 对齐。
+            if (sv.getWidth() > 0 && sv.getChildCount() > 0) sv.scrollTo(0, y);
+            sv.post(() -> sv.scrollTo(0, y));
+        }
     }
 
     // 明确该回顶的入口（如从自定义卡跳去卡库搜这家银行看结果）专用，不走默认保位
@@ -5542,6 +5548,34 @@ public class MainActivity extends Activity {
     // 监听实时回写的 mineScrollSaveY 守恒，buildMinePage 无条件恢复（见该处
     // 注）；卡区收起时加卡也不再被强行展开——原地不动含折叠态不动。
     void refreshMineAfterAdd151() {
+        // Q152（2.63，加卡闪屏）：本人在我的卡片页上加卡（详情/BIN/自定义保存自
+        // 本页发起）时旧路 pages.remove＋showTab 触发整页重建＋同页交叉淡化＋滚
+        // 动 post 次帧跳位——闪屏一帧三源齐备。改原地换页：离屏建新页、无动画
+        // 同位替换、滚动同步归位，全程无过渡动画帧。不在本页时旧路不变（签名
+        // 守卫进页必重建，落点语义沿 Q151 N4 原地不动口径）。
+        if ("mine".equals(tab) && pageHost != null && pages.get("mine") != null && tabAnimOut == null) {
+            try {
+                View oldPage152 = pages.get("mine");
+                final int keepY152 = mineScrollView != null ? mineScrollView.getScrollY() : 0;
+                View newPage152 = buildMinePage();
+                pages.put("mine", newPage152);
+                int idx152 = pageHost.indexOfChild(oldPage152);
+                pageHost.removeView(oldPage152);
+                FrameLayout.LayoutParams lp152 = new FrameLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT);
+                if (idx152 >= 0) pageHost.addView(newPage152, Math.min(idx152, pageHost.getChildCount()), lp152);
+                else pageHost.addView(newPage152, lp152);
+                newPage152.setVisibility(View.VISIBLE);
+                newPage152.setAlpha(1f); newPage152.setTranslationX(0f); newPage152.setTranslationY(0f);
+                currentPageView = newPage152;
+                if (mineScrollView != null) {
+                    mineScrollView.scrollTo(0, keepY152); // 已布局同步归位，post 兜底防内容高未定
+                    final ScrollView fsv152 = mineScrollView;
+                    fsv152.post(() -> fsv152.scrollTo(0, keepY152));
+                }
+                return;
+            } catch (Throwable ignored) { /* 就地失败回落旧路，不许加卡收口断链 */ }
+        }
         pages.remove("mine");
         refreshMineKeepScroll();
     }
@@ -10567,6 +10601,17 @@ public class MainActivity extends Activity {
     // （网格瓷砖宽＋列表 72dp 拇指）预解进缓存，进页构建直接命中。只做一次，
     // 列数设置变更后新桶位由构建时同步解码兜底（一次性，不成常态）。
     boolean stuWarmDone = false;
+    // Q152（追加B）：列数就地切换把手——学生页列表盒/数据/拖条/模式行与我的卡片
+    // 网格盒/行数据/滚动/列数行在构建时留引用，切换只重渲盒内、不重建整页。
+    LinearLayout stuListBox152 = null;
+    java.util.List<Card> stuData152 = null;
+    DragBarView stuDragBar152 = null;
+    LinearLayout stuModeRow152 = null;
+    int studentCols152 = 1;
+    LinearLayout mineGridBox152 = null;
+    java.util.List<MineRow> mineRowsRef152 = null;
+    ScrollView mineScrollRef152 = null;
+    LinearLayout mineColsRow152 = null;
     void warmStudentImages() {
         if (stuWarmDone) return;
         stuWarmDone = true;
@@ -13320,6 +13365,7 @@ public class MainActivity extends Activity {
         // 2/3 列走首页同款瓷砖紧凑排（图/名/评分＋适合小字），完整理由在详情
         // 「学生推荐」段兜底（见 buildDetailSheetBody）；选择存本机 student_cols，默认列表。
         final int stuCols = Math.max(1, Math.min(3, prefs == null ? 1 : prefs.getInt("student_cols", 1)));
+        studentCols152 = stuCols;
         LinearLayout modeRow = new LinearLayout(this);
         modeRow.setOrientation(LinearLayout.HORIZONTAL);
         LinearLayout.LayoutParams mrlp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
@@ -13336,17 +13382,37 @@ public class MainActivity extends Activity {
             mlp.rightMargin = dp(this, 8);
             modeRow.addView(mt, mlp);
             mt.setOnClickListener(v -> {
-                if (stuCols == mv) return;
+                if (studentCols152 == mv) return;
                 haptic();
                 try { prefs.edit().putInt("student_cols", mv).apply(); } catch (Throwable ignored) {}
-                pages.remove("student");
-                showTab("student");
+                // Q152（追加B）：就地换列——只重渲列表盒＋模式钮重涂，整页不重建
+                // （旧 pages.remove+showTab 老路删除）；滚动位/页签/玻璃带一概不动。
+                studentCols152 = mv;
+                if (stuModeRow152 != null) {
+                    String[][] modes152 = {{"1"}, {"2"}, {"3"}};
+                    for (int ci152 = 0; ci152 < stuModeRow152.getChildCount() && ci152 < modes152.length; ci152++) {
+                        View cv152 = stuModeRow152.getChildAt(ci152);
+                        if (cv152 instanceof TextView) softFormChipPaint((TextView) cv152, Integer.parseInt(modes152[ci152][0]) == mv);
+                    }
+                }
+                if (stuListBox152 != null && stuData152 != null) fillStuList152(stuListBox152, stuData152, mv, stuDragBar152);
             });
         }
         LinearLayout stuListBox = new LinearLayout(this);
         stuListBox.setOrientation(LinearLayout.VERTICAL);
         stuListBox.setClipChildren(false);
         col.addView(stuListBox, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        stuListBox152 = stuListBox; stuData152 = stu; stuDragBar152 = stuDragBar; stuModeRow152 = modeRow;
+        fillStuList152(stuListBox, stu, stuCols, stuDragBar);
+        restorePageScroll("student", sv);
+        return page;
+    }
+
+    // Q152（2.63，追加B）：学生页列表/网格渲染体（从 buildStudentPage 抽出）——
+    // 列数切换改为就地重渲本盒（旧路 pages.remove("student")+showTab 整页重建
+    // 满屏闪，用户点名删老路）；末尾注脚随盒重渲（原文案两档不变）。
+    void fillStuList152(LinearLayout box, java.util.List<Card> stu, int stuCols, DragBarView stuDragBar) {
+        box.removeAllViews();
         if (stuCols <= 1) {
         boolean stuAnchored = false;
         for (final Card c : stu) {
@@ -13358,7 +13424,7 @@ public class MainActivity extends Activity {
             cardBox.setPadding(dp(this, 12), dp(this, 10), dp(this, 12), dp(this, 12));
             LinearLayout.LayoutParams clp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
             clp.topMargin = dp(this, 10);
-            stuListBox.addView(cardBox, clp);
+            box.addView(cardBox, clp);
             if (!stuAnchored) { stuAnchored = true; anchorDragBarToList(stuDragBar, cardBox); } // Q98：首卡即列表头
             cardBox.setOnClickListener(v -> openDetail(c));
             attachCardMenuLongPress(cardBox, c, false);
@@ -13414,7 +13480,7 @@ public class MainActivity extends Activity {
         }
 
         } else {
-            anchorDragBarToList(stuDragBar, stuListBox);
+            anchorDragBarToList(stuDragBar, box);
             int stuGap = dp(this, 10);
             for (int i = 0; i < stu.size(); i += stuCols) {
                 LinearLayout grow = new LinearLayout(this);
@@ -13422,7 +13488,7 @@ public class MainActivity extends Activity {
                 grow.setClipChildren(false);
                 LinearLayout.LayoutParams grlp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
                 grlp.topMargin = dp(this, 10);
-                stuListBox.addView(grow, grlp);
+                box.addView(grow, grlp);
                 for (int j = 0; j < stuCols; j++) {
                     if (i + j < stu.size()) {
                         final Card c = stu.get(i + j);
@@ -13460,9 +13526,7 @@ public class MainActivity extends Activity {
         note.setGravity(Gravity.CENTER);
         LinearLayout.LayoutParams nlp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         nlp.topMargin = dp(this, 12);
-        col.addView(note, nlp);
-        restorePageScroll("student", sv);
-        return page;
+        box.addView(note, nlp);
     }
 
     LinearLayout stuStatLine(int dotColor, String label, int n) {
@@ -14271,6 +14335,7 @@ public class MainActivity extends Activity {
             LinearLayout.LayoutParams crLp127 = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
             crLp127.bottomMargin = dp(this, 2);
             zoneBox.addView(colsRow127, crLp127);
+            mineColsRow152 = colsRow127; // Q152：列数钮重涂把手
             String[][] colOpts127 = {{"1", "单列"}, {"2", "双列"}, {"3", "三列"}, {"4", "四列"}};
             for (final String[] co127 : colOpts127) {
                 final int nCols127 = Integer.parseInt(co127[0]);
@@ -14285,13 +14350,29 @@ public class MainActivity extends Activity {
                     if (cols == nCols127) return;
                     haptic();
                     cols = nCols127; persistViewPrefs();
-                    refreshMineKeepScroll(); // 签名含 cols → 必重建，滚动位由 buildMinePage 恢复口径接回
+                    // Q152（追加B，用户点名删老路）：就地换列——只重排库卡网格盒
+                    // ＋列数钮重涂，整页不重建（旧 refreshMineKeepScroll 的签名重建
+                    // 满屏闪退役）；色带盒/滚动位/页签不动，签名手动对齐防下次进页
+                    // 再整页重建。网格盒把手由 buildMinePage 落字段（声明在后）。
+                    if (mineGridBox152 != null && mineRowsRef152 != null) {
+                        mineGridBox152.removeAllViews();
+                        addMineCardRows(mineGridBox152, mineRowsRef152, mineScrollRef152);
+                    }
+                    if (mineColsRow152 != null) {
+                        int[] colNums152 = {1, 2, 3, 4};
+                        for (int ci152 = 0; ci152 < mineColsRow152.getChildCount() && ci152 < colNums152.length; ci152++) {
+                            View cv152 = mineColsRow152.getChildAt(ci152);
+                            if (cv152 instanceof TextView) softFormChipPaint((TextView) cv152, colNums152[ci152] == nCols127);
+                        }
+                    }
+                    mineBuiltSig = computeMineSig();
                 });
             }
         }
         final LinearLayout mineRowsBox = new LinearLayout(this);
         mineRowsBox.setOrientation(LinearLayout.VERTICAL);
         zoneBox.addView(mineRowsBox, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        mineGridBox152 = mineRowsBox; mineRowsRef152 = mineRows; mineScrollRef152 = sv; // Q152：列数就地换列把手
         final LinearLayout tilesBox126 = new LinearLayout(this);
         tilesBox126.setOrientation(LinearLayout.VERTICAL);
         tilesBox126.setBackground(roundRect(Color.WHITE, 16, this));
