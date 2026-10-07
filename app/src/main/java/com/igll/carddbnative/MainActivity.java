@@ -14325,7 +14325,7 @@ public class MainActivity extends Activity {
         return x;
     }
 
-    static String studentReason(Card c) {
+    String studentReason(Card c) { // Q164：去 static 以走 S() 一口（调用方全为实例语境）
         java.util.List<String> parts = new ArrayList<>();
         String curTxt = c.spec("币种支持");
         java.util.regex.Matcher mCur = java.util.regex.Pattern.compile("共\\s*(\\d+)\\s*币种").matcher(curTxt);
@@ -14351,7 +14351,7 @@ public class MainActivity extends Activity {
         return android.text.TextUtils.join("，", top) + "。";
     }
 
-    static java.util.List<String> studentFit(Card c) {
+    java.util.List<String> studentFit(Card c) { // Q164：同 studentReason
         java.util.LinkedHashSet<String> fit = new java.util.LinkedHashSet<>();
         String curTxt = c.spec("币种支持");
         java.util.regex.Matcher mCur = java.util.regex.Pattern.compile("共\\s*(\\d+)\\s*币种").matcher(curTxt);
@@ -18432,7 +18432,7 @@ public class MainActivity extends Activity {
             if (bestVer <= Store.dataVersion) {
                 pendingUpdateJson = null; pendingUpdateVer = -1; pendingUpdateSummary = "";
                 if (prefs != null) prefs.edit().remove("pending_update_version").apply();
-                runOnUiThread(() -> { otaFetchStarted = false; if (manual || fromPull) showFloatToast(String.format(S("upd_latest_fmt"), Store.dataVersion)); // Q164 if (onDone != null) onDone.run(); });
+                runOnUiThread(() -> { otaFetchStarted = false; if (manual || fromPull) showFloatToast(String.format(S("upd_latest_fmt"), Store.dataVersion)); if (onDone != null) onDone.run(); }); // Q164
                 return;
             }
             pendingUpdateJson = bestJson; pendingUpdateVer = bestVer;
@@ -18531,7 +18531,7 @@ public class MainActivity extends Activity {
         updateApplyArmed = false;
         if (updateApplying) return;
         final String json = pendingUpdateJson; final int ver = pendingUpdateVer;
-        if (json == null || ver <= Store.dataVersion) { showFloatToast(String.format(S("upd_latest_fmt"), Store.dataVersion)); // Q164 return; }
+        if (json == null || ver <= Store.dataVersion) { showFloatToast(String.format(S("upd_latest_fmt"), Store.dataVersion)); return; } // Q164
         updateApplying = true; showFloatToast("正在更新数据…");
         final int oldVer151 = Store.dataVersion; // Q151（N18）：更新前版本/卡数（回执 A→B 用）
         final int oldN151 = Store.all.size();
@@ -24647,7 +24647,7 @@ public class MainActivity extends Activity {
         LinearLayout.LayoutParams smLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         smLp.topMargin = dp(this, 18);
         page.addView(secMig, smLp);
-        TextView mig = tv(this, S("about_migrated"), 12.5f, colText2(), false // Q164);
+        TextView mig = tv(this, S("about_migrated"), 12.5f, colText2(), false); // Q164
         mig.setLineSpacing(0, 1.45f);
         LinearLayout.LayoutParams mgLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         mgLp.topMargin = dp(this, 8);
