@@ -1329,7 +1329,6 @@ public class MainActivity extends Activity {
         STR.put("news_collapse", new String[]{"收起","Collapse"});
         STR.put("news_expand", new String[]{"展开","Expand"});
         STR.put("sub_monthly_zero", new String[]{"填上金额后这里会折算每月约花多少 · 只存本机、不做记账流水","Add amounts to see your monthly total here · Stored on this device only, no ledger"});
-        STR.put("custom_del_msg_fmt", new String[]{"「%s」删了就没了，备注也会一起清掉。","Deleting \"%s\" removes it for good — notes go with it."});
         STR.put("chip_score_pending", new String[]{"总分待评分","Not Rated"});
         STR.put("news_meta_fmt", new String[]{"共 %d 条 · 公开信息整理，仅供参考","%d items · Compiled from public sources, for reference only"});
         STR.put("hero_orgs_full", new String[]{"组织全覆盖了","All networks covered"});
@@ -1422,6 +1421,12 @@ public class MainActivity extends Activity {
         STR.put("news_expand_arrow", new String[]{"展开 ›","Expand ›"});
         STR.put("news_collapse_arrow", new String[]{"收起 ‹","Collapse ‹"});
         STR.put("icon_switch_title", new String[]{"切换桌面图标","Switch App Icon"});
+        STR.put("pan_show", new String[]{"显示","Show"});
+        STR.put("tool_bin_sub", new String[]{"BIN 认行","BIN Lookup"});
+        STR.put("fx_cell_fallback", new String[]{"香港银行卡","Hong Kong Bank Cards"});
+        STR.put("pan_hide", new String[]{"隐藏","Hide"});
+        STR.put("pan_label", new String[]{"卡号","Card Number"});
+        STR.put("pan_note", new String[]{"卡号只存本机，离开本页自动隐藏。","Stored on this device only — auto-hidden when you leave this page."});
         STR.put("icon_switch_msg", new String[]{"切换桌面图标需要重启软件生效，数据不会丢失。","Switching the app icon takes a restart to apply. Your data won't be lost."});
         STR.put("icon_switch_ok", new String[]{"确认重启","Restart"});
         STR.put("stu_mode_list", new String[]{"列表","List"});
@@ -15255,10 +15260,10 @@ public class MainActivity extends Activity {
         // 本两格自此为唯一入口（openExtendedSearch/openBinQuery 本体未动）。
         cells.add(new Object[]{"extsearch", "在线搜卡", "扩展卡库",
             (Runnable) () -> openExtendedSearch()});
-        cells.add(new Object[]{"binquery", "在线查询卡信息", "BIN 认行",
+        cells.add(new Object[]{"binquery", "在线查询卡信息", S("tool_bin_sub"), // Q164
             (Runnable) () -> openBinQuery()});
         if (fxzoneEnabled()) { // Q132（2.44）：外卡专区入口，模块开关关掉即不见
-            cells.add(new Object[]{"fxzone", "外卡专区", FxStore.all != null ? String.format(S("fx_cell_sub_fmt"), FxStore.all.size()) : "香港银行卡", // Q164
+            cells.add(new Object[]{"fxzone", S("feat_fx_title"), FxStore.all != null ? String.format(S("fx_cell_sub_fmt"), FxStore.all.size()) : S("fx_cell_fallback"), // Q164
                 (Runnable) () -> openFxZone()});
         }
         if (cells.isEmpty()) return new View(this);
@@ -16548,7 +16553,7 @@ public class MainActivity extends Activity {
         card.setOnClickListener(v -> {}); // 窗体吃点击防穿透遮罩
         card.setPadding(dp(this, 18), dp(this, 18), dp(this, 18), dp(this, 14) + navBarH());
         card.addView(tv(this, "删除这张自定义卡？", 17, colText(), true));
-        TextView msg = tv(this, "「" + c.name + "」删了就没了，备注也会一起清掉。", 13.5f, colText2(), false);
+        TextView msg = tv(this, String.format(S("custom_del_msg_fmt"), c.name), 13.5f, colText2(), false); // Q164
         LinearLayout.LayoutParams msgLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         msgLp.topMargin = dp(this, 8);
         card.addView(msg, msgLp);
@@ -16841,11 +16846,11 @@ public class MainActivity extends Activity {
             LinearLayout.LayoutParams pp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT); pp.topMargin = dp(this, 12); panRow.setLayoutParams(pp);
             final TextView panTv = tv(this, maskPan(c.pan), 14, colText(), true); panTv.setLetterSpacing(0.04f);
             final boolean[] panShown = {false};
-            TextView eye = tv(this, "显示", 12.5f, accentColor(), true); eye.setPadding(dp(this, 12), dp(this, 6), dp(this, 12), dp(this, 6));
-            eye.setOnClickListener(v -> { haptic(); panShown[0] = !panShown[0]; panTv.setText(panShown[0] ? fmtPan(c.pan) : maskPan(c.pan)); ((TextView) v).setText(panShown[0] ? "隐藏" : "显示"); });
-            panRow.addView(tv(this, "卡号", 13, colText2(), false)); View _sp = new View(this); panRow.addView(_sp, new LinearLayout.LayoutParams(0, 1, 1f)); panRow.addView(panTv); panRow.addView(eye);
+            TextView eye = tv(this, S("pan_show"), 12.5f, accentColor(), true); eye.setPadding(dp(this, 12), dp(this, 6), dp(this, 12), dp(this, 6)); // Q164
+            eye.setOnClickListener(v -> { haptic(); panShown[0] = !panShown[0]; panTv.setText(panShown[0] ? fmtPan(c.pan) : maskPan(c.pan)); ((TextView) v).setText(panShown[0] ? S("pan_hide") : S("pan_show")); });
+            panRow.addView(tv(this, S("pan_label"), 13, colText2(), false)); // Q164 View _sp = new View(this); panRow.addView(_sp, new LinearLayout.LayoutParams(0, 1, 1f)); panRow.addView(panTv); panRow.addView(eye);
             inner.addView(panRow);
-            inner.addView(tv(this, "卡号只存本机，离开本页自动隐藏。", 11, colText2(), false));
+            inner.addView(tv(this, S("pan_note"), 11, colText2(), false)); // Q164
         }
         // Q65：详情内直接改类别（不标/一类/二类）
         // Q126（2.38，件七）：改完不再重开本窗——旧 close＋open 整窗重建连带背板重抓
