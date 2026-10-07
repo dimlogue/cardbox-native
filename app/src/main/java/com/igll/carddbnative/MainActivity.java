@@ -9419,9 +9419,10 @@ public class MainActivity extends Activity {
             p.setFilterBitmap(false);
         }
         // 万事达/万事网联：红 #EB001B / 橙 #F79E1B 双等圆交叠、交叠区独立填 #FF5F00（不用半透叠色冒充）
+        // 2.71：用户图证三自绘标（万事达/Amex/JCB）较银联/VISA 官图视觉偏小，按 DeepSeek 审定值放大对齐（本法圆 r 40→46、Amex/JCB 色块外扩＋字号升 56）。
         void badgeMastercard(Canvas cv, Paint p, int w, int h, float ux, float uy) {
-            float r = 40 * uy, cy = 60 * uy;
-            float cx = (120f - 0.56f * 40f) * ux, cx2 = cx + 1.12f * r;
+            float r = 46 * uy, cy = 60 * uy;
+            float cx = (120f - 0.56f * 46f) * ux, cx2 = cx + 1.12f * r;
             p.setStyle(Paint.Style.FILL);
             p.setColor(Color.rgb(0xEB, 0x00, 0x1B));
             cv.drawCircle(cx, cy, r, p);
@@ -9440,19 +9441,19 @@ public class MainActivity extends Activity {
         }
         // 美国运通：#2E77BC 圆角方标 + 白粗字 AMEX
         void badgeAmex(Canvas cv, Paint p, float ux, float uy) {
-            RectF box = new RectF(25 * ux, 18 * uy, 215 * ux, 102 * uy);
+            RectF box = new RectF(14 * ux, 10 * uy, 226 * ux, 110 * uy);
             p.setStyle(Paint.Style.FILL);
             p.setColor(Color.rgb(0x2E, 0x77, 0xBC));
             cv.drawRoundRect(box, 12 * ux, 12 * uy, p);
             p.setColor(Color.WHITE);
             p.setTypeface(weightTypeface(getContext(), 800));
-            p.setTextSize(52 * uy);
+            p.setTextSize(56 * uy);
             p.setTextAlign(Paint.Align.CENTER);
             cv.drawText("AMEX", box.centerX(), centeredBaseline(p, box.centerY()), p);
         }
         // JCB：蓝 #0B4EA2 底 + 红 #E60012 / 绿 #009944 三段斜切（官方三段弧的画板简化版），白粗字 JCB 压中
         void badgeJcb(Canvas cv, Paint p, float ux, float uy) {
-            RectF box = new RectF(25 * ux, 18 * uy, 215 * ux, 102 * uy);
+            RectF box = new RectF(14 * ux, 10 * uy, 226 * ux, 110 * uy);
             float bw = box.width();
             cv.save();
             android.graphics.Path clip = new android.graphics.Path();
@@ -9480,7 +9481,7 @@ public class MainActivity extends Activity {
             cv.restore();
             p.setColor(Color.WHITE);
             p.setTypeface(weightTypeface(getContext(), 800));
-            p.setTextSize(48 * uy);
+            p.setTextSize(56 * uy);
             p.setTextAlign(Paint.Align.CENTER);
             cv.drawText("JCB", box.centerX(), centeredBaseline(p, box.centerY()), p);
         }
@@ -22680,6 +22681,7 @@ public class MainActivity extends Activity {
                 // 都把 pivot 追到当前双指中心，中心一漂整幅画布跟着滑动，读作「卡片
                 // 到处飞」；钉死开始锚后，缩放纯绕锚，中心漂移不再平移画布。
                 @Override public boolean onScaleBegin(android.view.ScaleGestureDetector d) {
+                    world.animate().cancel(); // 2.71：回正动画在飞时新捏合先收动画，防 animate 与 onScale 抢 scale
                     // Q154（件十①）：锚点坐标系走查订正——focus 经命中层逆矩阵已是
                     // world 本地坐标（ShowcaseHitLayout143 分发时已逆变换），真正病灶
                     // 是换 pivot 不补偿 translation：屏上点 c＝t＋p＋s·(w－p)，pivot
@@ -22720,7 +22722,9 @@ public class MainActivity extends Activity {
             });
         world.setOnTouchListener(new View.OnTouchListener() {
             float downRawX, downRawY, startTx, startTy;
-            long showcaseLastTapMs122 = 0;
+            long showcaseLastTapMs122 = 0; // 2.71 改义：上一次合格点按的 UP 时刻（旧版记 DOWN 时刻，连续捏合的每次落指互 <320ms 被误判双击回正）
+            boolean tapPending271; // 2.71：待发——已有一个合格点按，等下一个 DOWN 在 320ms 内落下才算双击
+            long tapDownMs271; float tapSlop271 = -1f; boolean tapOk271; // 2.71：本手势的点按候选资格（全程单指、未出 slop、未长按）
             boolean panReanchor149; // Q149：双指抬起剩单指后，下一 MOVE 先重钉平移锚（旧锚作废，防一跳）
             public boolean onTouch(View v, MotionEvent ev) {
                 showcaseLastTouchMs = System.currentTimeMillis();
@@ -22731,8 +22735,8 @@ public class MainActivity extends Activity {
                 // Q149：指的增减在平移判据之前截住——第二指落下＝双指接管缩放；
                 // 任一指抬起后剩下的单指，锚已失真，置旗等下一 MOVE 重钉（见下）。
                 int act149 = ev.getActionMasked();
-                if (act149 == MotionEvent.ACTION_POINTER_DOWN) return true;
-                if (act149 == MotionEvent.ACTION_POINTER_UP) { panReanchor149 = true; return true; }
+                if (act149 == MotionEvent.ACTION_POINTER_DOWN) { tapOk271 = false; tapPending271 = false; return true; } // 2.71：多指手势不记 tap、解除待发
+                if (act149 == MotionEvent.ACTION_POINTER_UP) { panReanchor149 = true; tapOk271 = false; return true; }
                 if (ev.getPointerCount() > 1) return true;
                 switch (ev.getActionMasked()) {
                     case MotionEvent.ACTION_DOWN:
@@ -22740,12 +22744,23 @@ public class MainActivity extends Activity {
                         panReanchor149 = false;
                         downRawX = ev.getRawX(); downRawY = ev.getRawY();
                         startTx = v.getTranslationX(); startTy = v.getTranslationY();
-                        // Q122（件十六补）：双击画布一键回正（与点标题同一兜底）
+                        world.animate().cancel(); // 2.71：回正动画在飞时新手势先收动画，防与平移/缩放抢属性
+                        // Q122（件十六补）：双击画布一键回正（与点标题同一兜底）。
+                        // 2.71 订正：旧版拿「与上次 DOWN 间隔 <320ms」判双击，连续捏合
+                        // 的每次落指都互 <320ms，缩放中途被误判双击整幅弹回原形。改只
+                        // 认真实单指短点：上一手势全程单指、位移未出 touchSlop、DOWN→UP
+                        // <320ms，才在 UP 时记一记 tap 并待发；本 DOWN 距该 UP <320ms
+                        // 才触发回正并解除待发；多指、移动过、长按的手势一律解除待发。
                         long now122 = System.currentTimeMillis();
-                        if (now122 - showcaseLastTapMs122 < 320) resetShowcaseView();
-                        showcaseLastTapMs122 = now122;
+                        if (tapSlop271 < 0) tapSlop271 = android.view.ViewConfiguration.get(v.getContext()).getScaledTouchSlop();
+                        if (tapPending271 && now122 - showcaseLastTapMs122 < 320) resetShowcaseView();
+                        tapPending271 = false;
+                        tapDownMs271 = now122;
+                        tapOk271 = true;
                         return true;
                     case MotionEvent.ACTION_MOVE:
+                        // 2.71：本手势一旦移出 touchSlop 即非点按，取消 tap 资格（待发已在 DOWN 消费/解除）
+                        if (tapOk271 && Math.hypot(ev.getRawX() - downRawX, ev.getRawY() - downRawY) > tapSlop271) tapOk271 = false;
                         // Q149：双指收成单指的第一帧只重钉锚、不平移——旧版沿用最初
                         // 落指的 downRaw/startT，手一抬画布直接跳一截（「抽搐」病灶）。
                         if (panReanchor149) {
@@ -22759,9 +22774,22 @@ public class MainActivity extends Activity {
                         v.setTranslationY(clampShowcasePanY(startTy + (ev.getRawY() - downRawY)));
                         return true;
                     case MotionEvent.ACTION_UP:
+                        panReanchor149 = false;
+                        showcaseTouching140 = false;
+                        // 2.71：合格短点（全程单指、位移未出 slop、DOWN→UP <320ms）
+                        // 才在 UP 时记 tap 并待发；长按/移动/多指收尾一律解除待发。
+                        if (tapOk271 && System.currentTimeMillis() - tapDownMs271 < 320
+                                && Math.hypot(ev.getRawX() - downRawX, ev.getRawY() - downRawY) <= tapSlop271) {
+                            showcaseLastTapMs122 = System.currentTimeMillis();
+                            tapPending271 = true;
+                        } else tapPending271 = false;
+                        tapOk271 = false;
+                        return true;
                     case MotionEvent.ACTION_CANCEL:
                         panReanchor149 = false;
                         showcaseTouching140 = false;
+                        tapOk271 = false;
+                        tapPending271 = false;
                         return true;
                 }
                 return true;
