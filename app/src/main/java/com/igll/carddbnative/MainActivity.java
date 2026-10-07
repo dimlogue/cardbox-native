@@ -186,22 +186,37 @@ public class MainActivity extends Activity {
     // 以下助手为本批唯一落点：二级页头、主/次按钮、开关、工具宫格图标、菜单图标全走这里，
     // 不再各页自创形制。图标一律 Canvas 细线自绘（24 网格、1.7 线宽、圆头），禁用 emoji。
 
+    /** Q161（2.76）：全 App 箭头唯一画法——24 网格细线 chevron，左右只差朝向。
+     * 文字「›」在 CJK 字体下进宽居中≠墨迹居中、墨迹偏左沉底（关于页咖啡箭头
+     * 即此病，见 diag-about-arrow），定框箭头一律走这里自绘、不再塞文本字。 */
+    void drawChevron161(Canvas cv, int w, int h, int color, boolean left) {
+        Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);
+        p.setStyle(Paint.Style.STROKE);
+        p.setStrokeCap(Paint.Cap.ROUND);
+        styleIconPaint129(p); // Q129：图标包风格层（现行包空转）
+        p.setStrokeJoin(Paint.Join.ROUND);
+        p.setColor(color);
+        float sx = w / 24f, sy = h / 24f;
+        p.setStrokeWidth(2f * sx);
+        float ax = left ? 14.5f : 9.5f, bx = left ? 8f : 16f;
+        cv.drawLine(ax * sx, 5.5f * sy, bx * sx, 12f * sy, p);
+        cv.drawLine(bx * sx, 12f * sy, ax * sx, 18.5f * sy, p);
+    }
+
     /** 细线左箭头（二级页返回钮专用，与 SceneIconView 同语言）。 */
     class BackChevronView extends View {
         int iconColor = 0;
         BackChevronView(Context c) { super(c); }
-        @Override protected void onDraw(Canvas cv) {
-            Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);
-            p.setStyle(Paint.Style.STROKE);
-            p.setStrokeCap(Paint.Cap.ROUND);
-            styleIconPaint129(p); // Q129：图标包风格层（现行包空转）
-            p.setStrokeJoin(Paint.Join.ROUND);
-            p.setColor(iconColor != 0 ? iconColor : colText());
-            float sx = getWidth() / 24f, sy = getHeight() / 24f;
-            p.setStrokeWidth(2f * sx);
-            cv.drawLine(14.5f * sx, 5.5f * sy, 8f * sx, 12f * sy, p);
-            cv.drawLine(8f * sx, 12f * sy, 14.5f * sx, 18.5f * sy, p);
-        }
+        @Override protected void onDraw(Canvas cv) { drawChevron161(cv, getWidth(), getHeight(), iconColor != 0 ? iconColor : colText(), true); }
+    }
+
+    /** 细线右箭头（行尾/折展指示专用，与 BackChevronView 同画法反向；
+     * 展开旋转照走 View.setRotation，墨迹恒居中、不吃字体度量）。 */
+    class ChevronView extends View {
+        int iconColor = 0;
+        ChevronView(Context c) { super(c); }
+        ChevronView(Context c, int col) { super(c); iconColor = col; }
+        @Override protected void onDraw(Canvas cv) { drawChevron161(cv, getWidth(), getHeight(), iconColor != 0 ? iconColor : colText2(), false); }
     }
 
     /** 圆形细线图标钮（返回/关闭同形制）：柔色面 + pressBounce，不用白药丸、不用原生 Button。 */
@@ -4187,6 +4202,10 @@ public class MainActivity extends Activity {
         static List<Card> all = new ArrayList<>();
         static Map<String, Card> byId = new HashMap<>();
         static int dataVersion = 0;
+        // Q161（2.76，详情旧图根治·主案A）：根级图指纹清单 images{文件名:{sha256,size}}，
+        // 由 publish-data.js 发布时注入；老数据无此字段＝空表，Img 校验整体退化旧行为。
+        static java.util.Map<String, String> imgSha161 = new java.util.HashMap<>();
+        static java.util.Map<String, Long> imgSize161 = new java.util.HashMap<>();
         // Q105（2.19）：包内资产自带数据的版本（与 dataVersion=当前生效数据版本分开记）——
         // 生效版本高于它时说明在跑 OTA 新数据，同名卡图应优先远程新图（Img.preferRemote），
         // 否则包内旧图会永久压住远端新图（v37 旋转新图真机仍旧图即此病）。只在 load() 里
@@ -4247,6 +4266,11 @@ public class MainActivity extends Activity {
                 }
                 all = tmp; byId = tmpBy;
                 dataVersion = root.optInt("data_version", dataVersion);
+                // Q161：图指纹清单随数据整体换入（先解临时表、成功才换，口径同上）
+                java.util.Map<String, String> sha161 = new java.util.HashMap<>(); java.util.Map<String, Long> siz161 = new java.util.HashMap<>();
+                JSONObject im161 = root.optJSONObject("images");
+                if (im161 != null) { JSONArray nm161 = im161.names(); if (nm161 != null) for (int q161 = 0; q161 < nm161.length(); q161++) { String fn161 = nm161.optString(q161, ""); JSONObject e161 = im161.optJSONObject(fn161); if (e161 == null || fn161.isEmpty()) continue; String s161 = e161.optString("sha256", ""); if (s161.length() == 64) sha161.put(fn161, s161); long z161 = e161.optLong("size", -1); if (z161 >= 0) siz161.put(fn161, z161); } }
+                imgSha161 = sha161; imgSize161 = siz161;
                 return true;
             } catch (Exception e) { logErr("store.parse", e); return false; }
         }
@@ -4416,6 +4440,46 @@ public class MainActivity extends Activity {
             catch (Exception e) { return false; }
         }
 
+        // Q161（2.76）：内容指纹校验中枢（DeepSeek 主案 A 回函第 3 条）——命中
+        // 已落盘文件先字节数同步快检（不等 sha）：大小不符当场删＋重拉一次；
+        // 大小合则 sha 后台单线程串行补验「先给图后纠错」，同 path 去重，不符
+        // 同样删＋重拉（fetchRemote 落盘再验、失败有 30s 退避，不成循环）。无
+        // 清单项（老数据/未收录图）直接跳过，行为与旧版逐字一致。
+        static final java.util.Set<String> shaPending161 = java.util.Collections.synchronizedSet(new java.util.HashSet<>());
+        static volatile long lastVerifyFetch161 = 0; // 大小不符重拉节流时戳（复审二轮：防一次 apply 后齐发）
+        static final java.util.concurrent.ExecutorService shaPool161 = java.util.concurrent.Executors.newSingleThreadExecutor(r -> { Thread t = new Thread(r, "cardimg-sha"); t.setDaemon(true); return t; });
+        static String sha256Of161(File f) { try { java.security.MessageDigest md = java.security.MessageDigest.getInstance("SHA-256"); java.io.FileInputStream in = new java.io.FileInputStream(f); byte[] b = new byte[8192]; int n; while ((n = in.read(b)) > 0) md.update(b, 0, n); in.close(); StringBuilder sb = new StringBuilder(); for (byte x : md.digest()) sb.append(String.format("%02x", x & 0xff)); return sb.toString(); } catch (Exception e) { logErr("img.sha256", e); return null; } }
+        static void verifyDiskImage161(final Context c, final String path) {
+            final String name161 = new File(path).getName();
+            final String wantSha161 = Store.imgSha161.get(name161); final Long wantSize161 = Store.imgSize161.get(name161);
+            if (wantSha161 == null && wantSize161 == null) return;
+            final File f161 = new File(remoteCacheDir(c), name161);
+            try {
+                if (!f161.exists()) return;
+                if (wantSize161 != null && f161.length() != wantSize161.longValue()) {
+                    // 复审二轮：300ms 滑动窗口节流——大小快检是同步判定、无 sha 串
+                    // 行器的天然间隔，一次 apply 后 verifyDir 遍历可齐发 O(N) 入队；
+                    // 窗口内跳过纠错（坏文件留下，下次命中过窗再删重拉，仍自愈）。
+                    long now161 = android.os.SystemClock.uptimeMillis();
+                    if (now161 - lastVerifyFetch161 < 300) return;
+                    if (f161.delete()) { lastVerifyFetch161 = now161; fetchRemote(c.getApplicationContext(), path, f161); }
+                    return;
+                }
+            } catch (Throwable ignored) { return; }
+            if (wantSha161 == null || !shaPending161.add(path)) return;
+            final Context app161 = c.getApplicationContext();
+            try { shaPool161.execute(() -> { try { String got161 = sha256Of161(f161); if (got161 != null && !got161.equalsIgnoreCase(wantSha161) && f161.exists() && f161.delete()) fetchRemote(app161, path, f161); } catch (Throwable ignored) { /* 补验失败下次命中再验 */ } finally { shaPending161.remove(path); } }); }
+            catch (Throwable t161) { shaPending161.remove(path); }
+        }
+        // Q161：当前版本目录落盘图逐张补验（数据应用拷贝前进后于预热线程跑）。
+        static void verifyDirImages161(final Context c) {
+            try {
+                File[] fs161 = remoteCacheDir(c).listFiles();
+                if (fs161 == null) return;
+                for (File f161 : fs161) { if (f161 != null && f161.isFile() && (Store.imgSha161.containsKey(f161.getName()) || Store.imgSize161.containsKey(f161.getName()))) verifyDiskImage161(c, "data/images/" + f161.getName()); }
+            } catch (Throwable ignored) { /* 目录补验失败不挡预热 */ }
+        }
+
         /** 按取源优先级开一条图流：remoteFirst 时远程文件优先（缺失触发后台拉取后回落资产），
          *  否则资产优先（缺失回落远程文件，再缺失触发拉取并抛异常让调用方回占位）。 */
         static InputStream openImageStream(Context c, String path, boolean remoteFirst) throws Exception {
@@ -4447,7 +4511,7 @@ public class MainActivity extends Activity {
             if (b == null) {
                 try { b = decode(openImageStream(c, path, !remoteFirst)); } catch (Exception e) { logErr("img.get.fallback", e); /* 拿不到图就占位，不崩 */ }
             }
-            if (b != null) { if (!provisional) cachePut(path, b); return b; }
+            if (b != null) { if (!provisional) cachePut(path, b); verifyDiskImage161(c, path); return b; }
             healRemoteFile151(c, path); // Q151（N17）：两源皆坏→坏文件自愈（删毒文件+退避重拉）
             return null;
         }
@@ -4473,7 +4537,7 @@ public class MainActivity extends Activity {
             Bitmap b = decodeSized(c, path, bucket, remoteFirst);
             if (b == null) b = decodeSized(c, path, bucket, !remoteFirst); // 主源解码失败换另一源（旧版双源兜底同语义）
             if (decT153 != 0L) perfTask153("img.decode", decT153);
-            if (b != null) { if (!provisional) cachePut(key, b); return b; }
+            if (b != null) { if (!provisional) cachePut(key, b); verifyDiskImage161(c, path); return b; }
             healRemoteFile151(c, path); // Q151（N17）：两源皆坏→坏文件自愈（删毒文件+退避重拉）
             return null;
         }
@@ -4570,7 +4634,11 @@ public class MainActivity extends Activity {
                                     while ((n = in.read(buf)) > 0) fos.write(buf, 0, n);
                                     in.close(); fos.close();
                                     if (tmp151.length() > 0 && tmp151.renameTo(dest)) { ok151 = true; }
-                                    break;
+                                    // Q161：落盘指纹校验——CDN 窗口期回旧图也是 200，字节
+                                    // 与清单对不上即删、本图不算下到、换下一线再试；两线
+                                    // 皆错判失败进 30s 退避，绝不把旧字节冻进盘（回函第 5 条）。
+                                    if (ok151) { Long ws161 = Store.imgSize161.get(name); String wh161 = Store.imgSha161.get(name); boolean bad161 = (ws161 != null && dest.length() != ws161.longValue()) || (wh161 != null && !wh161.equalsIgnoreCase(String.valueOf(sha256Of161(dest)))); if (bad161) { try { dest.delete(); } catch (Throwable ignored) { /* 删不掉下次校验再删 */ } ok151 = false; } }
+                                    if (ok151) break;
                                 }
                             } catch (Exception e151) { logErr("img.fetch.line", e151); /* 换下一条线 */ }
                             finally { if (conn != null) conn.disconnect(); }
@@ -5511,6 +5579,13 @@ public class MainActivity extends Activity {
     // 换底色时统一重套（restyleShowcaseHead152/updateShowcaseChips 一把收口）。
     FrameLayout showcasePanel152 = null;
     String showcasePanelKind152 = null; // palette/density/group，null=未开
+    // Q161（2.76）：底色面板选中态原子——syncSelectionUi161 只定向刷这些，不重建视图
+    TextView[] scModeChips161 = null;
+    View[] scPresetDots161 = null;
+    ShowcasePaletteView152 scPalView161 = null;
+    EditText scHexInput161 = null;
+    View scHexPreview161 = null;
+    TextView scHexCode161 = null, scHexErr161 = null;
     View showcaseShield152 = null; // 2.74：面板在场时的全屏透明盾（防点穿，show/hideShowcaseShield152 管）
     View showcaseBackBtn152 = null, showcasePaletteBtn152 = null, showcaseSegBox152 = null,
          showcaseDensityBtn152 = null;
@@ -5993,6 +6068,7 @@ public class MainActivity extends Activity {
     long lastDragEndAt = 0; // Q154（件九·隐患3/6）：时刻口径统一 uptimeMillis（写方 finishCustomDrag/库卡拖动落点、读方两处 450ms 点击锁同源，不许再混 currentTimeMillis）
     String tab = "home";
     Card detailCard = null;
+    String detailRefreshPending161 = null; // Q161：数据应用时详情在场登记的待重开卡 id（关窗落定消费一次）
     View detailView = null; // Q6：详情贴底浮窗根（遮罩+窗体+关闭字形），底层页面不切走
     View detailSheetWrap = null;
     View detailShade = null;
@@ -6047,7 +6123,7 @@ public class MainActivity extends Activity {
     boolean aboutPageOpen = false;
     ScrollView aboutScroll = null;
     View aboutSponsorBody = null;
-    TextView aboutSponsorArrow = null;
+    View aboutSponsorArrow = null;
     boolean aboutSponsorOpen = false;
     boolean sponsorSavePending = false;
 
@@ -13144,6 +13220,12 @@ public class MainActivity extends Activity {
             () -> detailClosing, d -> detailTouchDown133 = d, this::closeDetail);
     }
 
+    // Q161（2.76）：数据应用时详情窗正开着（窗内仍是旧 Card 与已贴位图）——
+    // 只登记待重开 id，真正的重开在 closeDetail 落定后消费（回函第 7 条）：
+    // 那时按新 Store 取同一张卡重开，卡已下架则不重开、回底层列表；延迟
+    // 200ms 避开同帧拉图，登记只被消费一次（防抖）。
+    void scheduleDetailRefresh161(String cid161) { if (cid161 != null && !cid161.isEmpty()) detailRefreshPending161 = cid161; }
+
     void closeDetail() {
         if (detailCard == null || detailClosing) return;
         detailClosing = true;
@@ -13178,9 +13260,19 @@ public class MainActivity extends Activity {
             // 一卡；改 post 到下一帧让关窗落定帧先走完。这一帧内若用户已点开别的
             // 卡，openDetail 自带排队逻辑接管（detailCard 非空即入队），排队卡不丢。
             final Card next133 = detailQueue.poll();
-            if (next133 != null) {
+            // 复审 #4：排队卡按当前 Store 二次核验——数据刚换版时队列里可能攥着
+            // 旧 Card 对象，卡已下架不强开（与详情重开「卡没了回列表」同口径）。
+            final Card live133 = next133 == null ? null : Store.byId.get(next133.id);
+            if (live133 != null) {
                 final boolean wiz133 = wasWiz && wizardOpen;
-                mainHandler.post(() -> openDetail(next133, wiz133));
+                mainHandler.post(() -> openDetail(live133, wiz133));
+            }
+            // Q161：数据应用后首次关窗——按新数据重开同一张卡（清单已换版、
+            // 位图缓存已清，新窗取到的是新图）；队列有用户新点选时让位队列
+            // （那张本就来自新数据）；卡已下架不重开。登记在此消费、只一次。
+            if (detailRefreshPending161 != null) {
+                final String rid161 = detailRefreshPending161; detailRefreshPending161 = null;
+                if (live133 == null) { final Card rc161 = Store.byId.get(rid161); if (rc161 != null) mainHandler.postDelayed(() -> { if (detailCard == null) openDetail(rc161); }, 200); }
             }
         };
         if (overlay == null || wrap == null) { finish.run(); return; }
@@ -14428,10 +14520,9 @@ public class MainActivity extends Activity {
             LinearLayout.LayoutParams bnlp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
             bnlp.leftMargin = dp(this, 10);
             brow.addView(bn, bnlp);
-            TextView bch = tv(this, "›", 16, Color.rgb(0xC7, 0xC7, 0xCC), true);
-            LinearLayout.LayoutParams bchlp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            LinearLayout.LayoutParams bchlp = new LinearLayout.LayoutParams(dp(this, 16), dp(this, 16));
             bchlp.leftMargin = dp(this, 4);
-            brow.addView(bch, bchlp);
+            brow.addView(new ChevronView(this, Color.rgb(0xC7, 0xC7, 0xCC)), bchlp); // Q161：同源自绘箭头替文本字
             brow.setOnClickListener(v -> openDetail(bestF));
         }
         if (!gaps.isEmpty()) {
@@ -15053,8 +15144,7 @@ public class MainActivity extends Activity {
         barRow.addView(cnt, cntLp);
         View sp = new View(this);
         barRow.addView(sp, new LinearLayout.LayoutParams(0, 1, 1f));
-        TextView chev = tv(this, "›", 19, Color.rgb(0xC7, 0xC7, 0xCC), true);
-        chev.setGravity(Gravity.CENTER);
+        ChevronView chev = new ChevronView(this, Color.rgb(0xC7, 0xC7, 0xCC)); // Q161：同源自绘箭头替文本字
         chev.setRotation(mineOpen ? 90 : 0);
         barRow.addView(chev, new LinearLayout.LayoutParams(dp(this, 24), dp(this, 24)));
         // 卡区内容盒：上＝库卡网格，下＝自定义色带盒（白底 16dp 外框沿旧 tilesBox 样式）
@@ -17260,9 +17350,7 @@ public class MainActivity extends Activity {
         mvLp.topMargin = dp(this, 3);
         texts.addView(mv, mvLp);
         box.addView(texts, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
-        TextView arrow = tv(this, "›", 20, Color.rgb(0x0A, 0x5C, 0xD6), false);
-        arrow.setGravity(Gravity.CENTER);
-        box.addView(arrow, new LinearLayout.LayoutParams(dp(this, 20), ViewGroup.LayoutParams.WRAP_CONTENT));
+        box.addView(new ChevronView(this, Color.rgb(0x0A, 0x5C, 0xD6)), new LinearLayout.LayoutParams(dp(this, 20), dp(this, 20))); // Q161：同源自绘箭头替文本字（原 20sp 非粗体同病）
         box.setOnClickListener(v -> {
             haptic();
             final Card target = c;
@@ -18124,6 +18212,33 @@ public class MainActivity extends Activity {
         } catch (Exception e) { return ""; }
     }
 
+    // Q161（2.76）：拷贝前进——旧版图目录里「大小与新清单一致」的图搬进新版
+    // 目录，免数据更新后全量重下；大小对不上不搬（留在旧目录由 prune 收尾、
+    // 新目录按需重拉且落盘再验）。同在本 filesDir 卷内，renameTo 直改名；
+    // 失败（目标已存/跨挂载）回退拷贝＋字节对齐才删源，不静默丢图（回函第 4 条）。
+    void carryForwardImages161(int oldVer161) {
+        try {
+            if (oldVer161 <= 0 || oldVer161 == Store.dataVersion) return;
+            File base161 = new File(getFilesDir(), "ota-images");
+            File oldDir161 = new File(base161, "v" + oldVer161);
+            File newDir161 = new File(base161, "v" + Math.max(0, Store.dataVersion));
+            if (!oldDir161.isDirectory()) return;
+            if (!newDir161.exists()) newDir161.mkdirs();
+            File[] fs161 = oldDir161.listFiles();
+            if (fs161 == null) return;
+            for (File f161 : fs161) {
+                if (f161 == null || !f161.isFile()) continue;
+                Long ws161 = Store.imgSize161.get(f161.getName());
+                if (ws161 == null || f161.length() != ws161.longValue()) continue;
+                File to161 = new File(newDir161, f161.getName());
+                // 复审 #5：新目录已有同名残留且大小与新清单不符（上版毒图）先删，免跨版本累积
+                if (to161.exists()) { if (to161.length() == ws161.longValue()) continue; to161.delete(); }
+                if (f161.renameTo(to161)) continue;
+                try { java.io.FileInputStream in161 = new java.io.FileInputStream(f161); java.io.FileOutputStream out161 = new java.io.FileOutputStream(to161); byte[] b161 = new byte[8192]; int n161; while ((n161 = in161.read(b161)) > 0) out161.write(b161, 0, n161); in161.close(); out161.close(); if (to161.length() == f161.length()) f161.delete(); } catch (Throwable ignored) { /* 拷贝失败留在旧目录 */ }
+            }
+        } catch (Throwable ignored) { /* 拷贝前进失败不挡更新主线，缺图按需重拉 */ }
+    }
+
     void applyPendingUpdate() {
         // Q91：没有确认窗「去更新」的武装标记，一律不写库（cards-ota.json 唯一写入口在此收口）
         if (!updateApplyArmed) return;
@@ -18154,6 +18269,9 @@ public class MainActivity extends Activity {
                 int diskVer152 = Store.versionOf(diskJson152);
                 if (diskVer152 != ver) throw new Exception("disk verify failed");
                 ok = Store.parseInto(json);
+                // Q161：拷贝前进——旧版目录里大小与新清单对得上的图搬进新版目录
+                // （免全量重下），须在 parseInto（清单就位）后、预热前跑（本线程）。
+                if (ok) carryForwardImages161(oldVer151);
             } catch (Exception e) { logErr("ota.data.apply", e); ok = false; try { if (tmp151.exists()) tmp151.delete(); } catch (Throwable ignored) {} }
             final boolean fok = ok;
             runOnUiThread(() -> {
@@ -18177,7 +18295,9 @@ public class MainActivity extends Activity {
                 // Q151（N18）：回执报全账——版本 A→B、卡数 X→Y，两条入口（设置检查/
                 // 下拉同步）都经此收口，不许无变化也报「完成」。
                 showFloatToast("数据已更新 v" + oldVer151 + " → v" + Store.dataVersion + " · 卡片 " + oldN151 + " → " + Store.all.size() + " 张");
-                pages.clear(); if (detailCard == null) rebuildPages();
+                pages.clear();
+                if (detailCard == null) rebuildPages();
+                else scheduleDetailRefresh161(detailCard.id); // Q161：详情窗在场——登记待重开，关窗落定按新数据重开（closeDetail finish 消费一次）
             });
         }).start();
     }
@@ -20434,32 +20554,94 @@ public class MainActivity extends Activity {
         double lum152 = (0.299 * Color.red(c152) + 0.587 * Color.green(c152) + 0.114 * Color.blue(c152)) / 255.0;
         return lum152 < 0.5;
     }
-    // ==== Q158（件八）模式层 · 2.74 删自选色后形态 ====
+    // ==== Q161（2.76）模式层：色板恢复后口径（承 DeepSeek 回函，先审后写） ====
     // showcase_bg_mode：0=自适应（跟随深色模式：深→末档、浅→0 档）、1=强制
-    // 深色（恒末档）、2=手选预设档（showcase_bg 下标，无独立档钮，点常用色即
-    // 落此位即时生效）。点阵调色格与自选任意色已删：showcase_bg_custom /
-    // showcase_bg_custom_on 永不再读；老偏好用过调色格（custom_on=true）的
-    // mode=2 在 showcaseBgMode158() 读时钳回自适应，且任一 setShowcaseBg-
-    // Mode158 写盘时顺手清掉两枚残 key，此后自然失效。
+    // 深色（恒末档）、2=手选（无独立档钮）：custom_on=true 走 showcase_bg_
+    // custom 自定义色、false 走 showcase_bg 预设下标。2.74 连色板一并删净的
+    // custom 两键本批恢复可读可写；顶上「自适应/强制深色」两档文案与行为
+    // 不动——用户口中的「自己调」＝色板＋代码输入，就是 mode=2 这一路。
     static final int SC_BG_AUTO158 = 0, SC_BG_DARK158 = 1, SC_BG_SELF158 = 2;
     int showcaseBgMode158() {
         if (prefs == null) return SC_BG_AUTO158;
         int m158 = prefs.getInt("showcase_bg_mode", SC_BG_AUTO158);
         if (m158 < 0 || m158 > 2) return SC_BG_AUTO158;
-        if (m158 == SC_BG_SELF158 && prefs.getBoolean("showcase_bg_custom_on", false)) return SC_BG_AUTO158; // 老调色格残值落回自适应
+        // Q161：新读口径——mode=2 且自定义在场即合法手选，不再照 2.74 一见
+        // custom_on 就钳回自适应（那正是把用户色板色误杀的旧写法）。
+        // 2.74 尸体迁移（diff 复审 #9 裁决）：2.74 任意写模式都删光 custom
+        // 两键——若 mode=2 而 custom_on 键不存在、预设下标也从未写过，说明这
+        // 个手选位是色板时代的残骸、自定义色早已被清、无据可依，钳回自适应
+        // 保面板选中态与生效色一致；两路存据任一在场即照常尊重手选。
+        if (m158 == SC_BG_SELF158 && !prefs.contains("showcase_bg_custom_on") && !prefs.contains("showcase_bg")) return SC_BG_AUTO158;
         return m158;
     }
+    boolean showcaseCustomOn161() { return prefs != null && prefs.getBoolean("showcase_bg_custom_on", false) && prefs.contains("showcase_bg_custom"); }
     void setShowcaseBgMode158(int m158) {
-        if (prefs != null) prefs.edit().putInt("showcase_bg_mode", m158)
-            .remove("showcase_bg_custom").remove("showcase_bg_custom_on").apply(); // 2.74：写模式顺手清自选色残 key
+        if (prefs == null) return;
+        android.content.SharedPreferences.Editor e158 = prefs.edit().putInt("showcase_bg_mode", m158);
+        if (m158 != SC_BG_SELF158) e158.remove("showcase_bg_custom").putBoolean("showcase_bg_custom_on", false); // 只在离开手选时清自定义残值（2.73 前兜底）
+        e158.apply();
     }
+    // Q161：手选统一落盘口——三来源（预设点/色板/输码）各写各的位、都先落
+    // mode=2；选中态不存第二份，面板按 mode＋custom_on＋生效色派生（见
+    // syncSelectionUi161），天然互斥、不写优先级表。
+    void setShowcasePreset161(int idx161) { if (prefs != null) prefs.edit().putInt("showcase_bg", idx161).putBoolean("showcase_bg_custom_on", false).apply(); setShowcaseBgMode158(SC_BG_SELF158); }
+    void setShowcaseCustom161(int argb161) { if (prefs != null) prefs.edit().putInt("showcase_bg_custom", argb161).putBoolean("showcase_bg_custom_on", true).apply(); setShowcaseBgMode158(SC_BG_SELF158); }
 
-    // Q152（展柜③）：当前展柜底色——先过模式层（见上），手选才走预设档。
+    // Q152（展柜③）＋Q161：当前展柜底色——先过模式层，手选再分自定义/预设两路。
     int showcaseBgColor152() {
         int m158 = showcaseBgMode158();
         if (m158 == SC_BG_DARK158) return SHOWCASE_BGS[SHOWCASE_BGS.length - 1];
         if (m158 == SC_BG_AUTO158) return darkEff() ? SHOWCASE_BGS[SHOWCASE_BGS.length - 1] : SHOWCASE_BGS[0];
+        if (showcaseCustomOn161()) return prefs.getInt("showcase_bg_custom", SHOWCASE_BGS[showcaseBgIdx()]);
         return SHOWCASE_BGS[showcaseBgIdx()];
+    }
+
+    // Q161：颜色代码解析——# 可有可无、大小写不论；3 位逐位扩（abc→aabbcc），
+    // 4/5 位与其他长度一律非法返 -1（输错不崩、不生效、不落盘；回函第 4 条）。
+    static int parseHexColor161(String s161) {
+        if (s161 == null) return -1;
+        String t161 = s161.trim();
+        if (t161.startsWith("#")) t161 = t161.substring(1);
+        if (t161.length() == 3) { StringBuilder b161 = new StringBuilder(); for (int i161 = 0; i161 < 3; i161++) { b161.append(t161.charAt(i161)); b161.append(t161.charAt(i161)); } t161 = b161.toString(); }
+        if (t161.length() != 6) return -1;
+        try { return Color.rgb(Integer.parseInt(t161.substring(0, 2), 16), Integer.parseInt(t161.substring(2, 4), 16), Integer.parseInt(t161.substring(4, 6), 16)); } catch (Exception e161) { return -1; }
+    }
+
+    // Q161：代码输入实时校验——合法只刷预览块、清错误行，绝不落盘；apply161
+    // （点「应用」）且合法才走与色板同一条落盘口。非法/清空时预览回生效色、
+    // 非法另给一行「颜色格式应为 #RRGGBB」，不闪烁、不清空预览（回函第 4 条）。
+    void syncHexPreview161(boolean apply161) {
+        if (scHexInput161 == null || scHexPreview161 == null) return;
+        String t161 = String.valueOf(scHexInput161.getText());
+        int p161 = parseHexColor161(t161);
+        GradientDrawable pv161 = new GradientDrawable(); pv161.setShape(GradientDrawable.OVAL);
+        if (t161.trim().isEmpty()) { pv161.setColor(showcaseBgColor152()); if (scHexErr161 != null) scHexErr161.setText(""); }
+        else if (p161 >= 0) { pv161.setColor(p161); if (scHexErr161 != null) scHexErr161.setText(""); if (apply161) { setShowcaseCustom161(p161); applyShowcaseBg152(); } }
+        else { pv161.setColor(showcaseBgColor152()); if (scHexErr161 != null) scHexErr161.setText("颜色格式应为 #RRGGBB"); }
+        scHexPreview161.setBackground(pv161);
+    }
+
+    // Q161：面板选中态统一刷新口（回函第 5 条）——两档 chip、预设圈、色板环、
+    // 预览块、当前色代码全部由「mode＋custom_on＋生效色」派生，各自独立点亮、
+    // 天然互斥；只改状态位＋invalidate/setText，不重建任何视图。面板构建尾、
+    // 各落盘口（applyShowcaseBg152）同调一次，不另起机制。
+    // full161=true 才回填输码框文本：拖色板时 sink 每帧走轻量口（false），
+    // 免 EditText.setText 连锁 watcher＋字形重排拖垮拖动（diff 复审阻断 #2）；
+    // 手指离板由 colorCommit152 补一次全量口收尾。
+    void syncSelectionUi161() { syncSelectionUi161(true); }
+    void syncSelectionUi161(boolean full161) {
+        if (showcasePanel152 == null) return;
+        int m161 = showcaseBgMode158();
+        boolean cust161 = m161 == SC_BG_SELF158 && showcaseCustomOn161();
+        if (scModeChips161 != null) for (int i161 = 0; i161 < scModeChips161.length; i161++) { TextView ch161 = scModeChips161[i161]; if (ch161 == null) continue; boolean sel161 = m161 == i161; ch161.setBackground(roundRect(sel161 ? (showcaseDarkBg() ? Color.argb(120, 255, 255, 255) : Color.argb(40, 0, 0, 0)) : (showcaseDarkBg() ? Color.argb(40, 255, 255, 255) : Color.argb(230, 255, 255, 255)), 999, this)); }
+        if (scPresetDots161 != null) for (int i161 = 0; i161 < scPresetDots161.length; i161++) { View d161 = scPresetDots161[i161]; if (d161 == null) continue; boolean sel161 = m161 == SC_BG_SELF158 && !cust161 && showcaseBgIdx() == i161; GradientDrawable dg161 = new GradientDrawable(); dg161.setShape(GradientDrawable.OVAL); dg161.setColor(SHOWCASE_BGS[i161]); dg161.setStroke(dp(this, sel161 ? 2 : 1), showcaseDotStroke122(sel161)); d161.setBackground(dg161); }
+        if (scPalView161 != null) scPalView161.invalidate(); // 环在 onDraw 按生效色现算
+        int eff161 = showcaseBgColor152();
+        // 预览块：输入框正握着合法待应用色时归 syncHexPreview161 管，这里不抢
+        if (scHexPreview161 != null && (scHexInput161 == null || parseHexColor161(String.valueOf(scHexInput161.getText())) < 0)) { GradientDrawable pv161 = new GradientDrawable(); pv161.setShape(GradientDrawable.OVAL); pv161.setColor(eff161); scHexPreview161.setBackground(pv161); }
+        if (scHexCode161 != null) scHexCode161.setText(String.format("#%06X", 0xFFFFFF & eff161)); // 当前生效底色代码，只读（用户 02:10 点名；hex 展示回函：色块同行、无前缀）
+        // 输码框回填（仅全量口）：自定义色在场且框未聚焦时跟随生效自定义色，不打断正在输入的手
+        if (full161 && scHexInput161 != null && cust161 && !scHexInput161.hasFocus()) { String want161 = String.format("#%06X", 0xFFFFFF & prefs.getInt("showcase_bg_custom", eff161)); if (!String.valueOf(scHexInput161.getText()).trim().equalsIgnoreCase(want161)) scHexInput161.setText(want161); }
     }
     int showcaseOnBg() { return showcaseDarkBg() ? Color.WHITE : Color.rgb(0x1C, 0x1C, 0x1E); }
     int showcaseOnBg2() { return showcaseDarkBg() ? Color.argb(170, 255, 255, 255) : Color.rgb(0x8E, 0x8E, 0x93); }
@@ -20517,6 +20699,9 @@ public class MainActivity extends Activity {
             else showcaseCanvasChip.setBackground(null);
             showcaseCanvasChip.setTextColor(canvas ? Color.WHITE : showcaseOnBg());
         }
+        // Q161（裁决 c）：密度只管平放——堆叠模式下密度钮置灰，点击只轻提示
+        // 走展开/收起，绝不进面板（不许隔空调整；零新键、零新参数）。
+        if (showcaseDensityBtnTv152 != null) showcaseDensityBtnTv152.setAlpha(canvas ? 1f : 0.4f);
         boolean grp = prefs != null && prefs.getBoolean("showcase_bank_group", false);
         if (showcaseGroupChip != null) {
             showcaseGroupChip.setBackground(roundRect(grp ? accentColor() : (showcaseDarkBg() ? Color.argb(70, 255, 255, 255) : Color.argb(220, 255, 255, 255)), 999, this));
@@ -20554,20 +20739,78 @@ public class MainActivity extends Activity {
         }
     }
 
+    // Q161（2.76）：点阵色板恢复——取回 2.74 删净的旧 ShowcasePaletteView152
+    // 改造复用（HSV 点阵＋点/拖选色＋白环描边，手势边角旧类已趟过）。改两点：
+    // ①删 selFx/selFy 会话态——选中环按「当前生效色恰等于某格色」onDraw 现
+    // 算（色板点选的色天然落格点必命中；输码色命中不到就不画环、靠代码预
+    // 览块表达，诚实口径）；②colorSink 只落盘＋定向刷新，绝不重建面板（旧
+    // 坑：sink 里整块重搭、拖动中视图被摘、手势流断裂）。口径见 DeepSeek 回函。
+    class ShowcasePaletteView152 extends View {
+        java.util.function.Consumer<Integer> colorSink152;
+        Runnable colorCommit152; // 手指离板时回调一次（全量同步收口，见面板装配）
+        ShowcasePaletteView152(Context c) { super(c); setClickable(true); }
+        int colorAt152(float fx, float fy) {
+            float hue = Math.max(0f, Math.min(1f, fx)) * 360f;
+            float sat = 0.15f + 0.85f * Math.max(0f, Math.min(1f, fy));
+            float val = 1.0f - 0.45f * Math.max(0f, Math.min(1f, fy));
+            return Color.HSVToColor(new float[]{ hue, sat, val });
+        }
+        @Override protected void onDraw(Canvas cv) {
+            int w = getWidth(), h = getHeight();
+            if (w <= 0 || h <= 0) return;
+            int cols152 = 28, rows152 = 11;
+            float cellW = w / (float) cols152, cellH = h / (float) rows152;
+            float dotR = Math.min(cellW, cellH) * 0.36f;
+            Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);
+            p.setStyle(Paint.Style.FILL);
+            int eff152 = showcaseBgColor152();
+            int hitX152 = -1, hitY152 = -1;
+            for (int y = 0; y < rows152; y++) {
+                for (int x = 0; x < cols152; x++) {
+                    int cc152 = colorAt152((x + 0.5f) / cols152, (y + 0.5f) / rows152);
+                    p.setColor(cc152);
+                    cv.drawCircle((x + 0.5f) * cellW, (y + 0.5f) * cellH, dotR, p);
+                    if (cc152 == eff152) { hitX152 = x; hitY152 = y; }
+                }
+            }
+            if (hitX152 >= 0) {
+                float hx152 = (hitX152 + 0.5f) * cellW, hy152 = (hitY152 + 0.5f) * cellH;
+                p.setStyle(Paint.Style.STROKE);
+                p.setStrokeWidth(dp(MainActivity.this, 2));
+                p.setColor(Color.WHITE);
+                cv.drawCircle(hx152, hy152, dotR + dp(MainActivity.this, 2.5f), p);
+                p.setStrokeWidth(dp(MainActivity.this, 1));
+                p.setColor(Color.argb(160, 0, 0, 0));
+                cv.drawCircle(hx152, hy152, dotR + dp(MainActivity.this, 4f), p);
+            }
+        }
+        @Override public boolean onTouchEvent(MotionEvent ev) {
+            int w = getWidth(), h = getHeight();
+            if (w <= 0 || h <= 0) return true;
+            switch (ev.getActionMasked()) {
+                case MotionEvent.ACTION_DOWN:
+                case MotionEvent.ACTION_MOVE: {
+                    float fx152 = Math.max(0f, Math.min(1f, ev.getX() / (float) w));
+                    float fy152 = Math.max(0f, Math.min(1f, ev.getY() / (float) h));
+                    if (colorSink152 != null) colorSink152.accept(colorAt152(fx152, fy152));
+                    return true;
+                }
+                case MotionEvent.ACTION_UP:
+                case MotionEvent.ACTION_CANCEL:
+                    if (colorCommit152 != null) colorCommit152.run();
+                    return true;
+                default: return true;
+            }
+        }
+    }
+
     // Q152（展柜③）：换底统一出口——设 overlay 底色＋头部整套重套对比＋面板
     // （色板开着时）重建保态；所有选色路径（预设/默认）只许走这一处。
     void applyShowcaseBg152() {
         if (showcaseView != null) showcaseView.setBackgroundColor(showcaseBgColor152());
         restyleShowcaseHead152();
         updateShowcaseChips();
-        if (showcasePanel152 != null && showcasePanel152.getVisibility() == View.VISIBLE && "palette".equals(showcasePanelKind152)) {
-            showcasePanel152.removeAllViews();
-            LinearLayout box152 = new LinearLayout(this);
-            box152.setOrientation(LinearLayout.VERTICAL);
-            box152.setPadding(dp(this, 14), dp(this, 12), dp(this, 14), dp(this, 12));
-            showcasePanel152.addView(box152, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
-            buildShowcasePalettePanel152(box152);
-        }
+        syncSelectionUi161(); // Q161：面板在场只定向刷选中态、不整块重建（色板拖动中视图不被摘，见 DeepSeek 回函坑 A）
     }
 
     // Q158（件八）：面板就地重建（段选态/撤销行刷新；与 applyShowcaseBg152 的
@@ -20680,9 +20923,11 @@ public class MainActivity extends Activity {
                 haptic();
                 setShowcaseBgMode158(mm158);
                 applyShowcaseBg152();
-                rebuildShowcasePanel152(); // 段选态就地刷新
+                rebuildShowcasePanel152(); // 段选态就地刷新（点按非拖动，整块重搭不伤手势）
             });
             modeRow158.addView(chip158);
+            if (scModeChips161 == null || scModeChips161.length != 2) scModeChips161 = new TextView[2]; // Q161：句柄交 syncSelectionUi161
+            scModeChips161[mi158] = chip158;
         }
         // 常用色排（6 档预设）：点选即写 showcase_bg＋手选位、即时生效；选中
         // 圈只在手选态（mode=2）亮，自适应/强制深色下不亮（生效色非手选）。
@@ -20698,7 +20943,7 @@ public class MainActivity extends Activity {
             GradientDrawable dg152 = new GradientDrawable();
             dg152.setShape(GradientDrawable.OVAL);
             dg152.setColor(SHOWCASE_BGS[i]);
-            boolean sel152 = showcaseBgMode158() == SC_BG_SELF158 && showcaseBgIdx() == i;
+            boolean sel152 = showcaseBgMode158() == SC_BG_SELF158 && !showcaseCustomOn161() && showcaseBgIdx() == i;
             dg152.setStroke(dp(this, sel152 ? 2 : 1), showcaseDotStroke122(sel152));
             dot152.setBackground(dg152);
             LinearLayout.LayoutParams dLp152 = new LinearLayout.LayoutParams(dp(this, 24), dp(this, 24));
@@ -20706,12 +20951,13 @@ public class MainActivity extends Activity {
             dot152.setLayoutParams(dLp152);
             dot152.setOnClickListener(v -> {
                 haptic();
-                if (prefs != null) prefs.edit().putInt("showcase_bg", bi152).apply();
-                setShowcaseBgMode158(SC_BG_SELF158); // 点常用色即落手选位、即时生效
+                setShowcasePreset161(bi152); // Q161：统一落盘口（写下标位＋手选位）
                 applyShowcaseBg152();
                 rebuildShowcasePanel152();
             });
             row152.addView(dot152);
+            if (scPresetDots161 == null || scPresetDots161.length != SHOWCASE_BGS.length) scPresetDots161 = new View[SHOWCASE_BGS.length]; // Q161
+            scPresetDots161[i] = dot152;
         }
         TextView def152 = tv(this, "默认", 12, showcaseOnBg(), true);
         def152.setGravity(Gravity.CENTER);
@@ -20729,6 +20975,60 @@ public class MainActivity extends Activity {
         });
         row152.addView(new View(this), new LinearLayout.LayoutParams(0, 1, 1f));
         row152.addView(def152);
+        // Q161（2.76，用户 02:04 点名）：点阵色板恢复——点/拖即把该格色定为
+        // 展柜固定底色（与输码同一条落盘口），格高与 2.73 前旧板同为 118dp。
+        scPalView161 = new ShowcasePaletteView152(this);
+        // 复审阻断 #2：拖动中只走轻量口（落盘＋换底＋定向刷、跳过输码框回填），离板补全量口一次
+        scPalView161.colorSink152 = argb161 -> { setShowcaseCustom161(argb161); if (showcaseView != null) showcaseView.setBackgroundColor(argb161); restyleShowcaseHead152(); updateShowcaseChips(); syncSelectionUi161(false); };
+        scPalView161.colorCommit152 = () -> syncSelectionUi161(true);
+        LinearLayout.LayoutParams palLp161 = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(this, 118));
+        palLp161.topMargin = dp(this, 12);
+        box152.addView(scPalView161, palLp161);
+        // Q161：颜色代码行＝预览块＋当前色代码（只读，05 件）＋输入框＋应用钮
+        // ＋错误小字。实时校验只刷预览与错误行、不落盘；点「应用」合法才落盘。
+        LinearLayout hexRow161 = new LinearLayout(this);
+        hexRow161.setOrientation(LinearLayout.HORIZONTAL);
+        hexRow161.setGravity(Gravity.CENTER_VERTICAL);
+        LinearLayout.LayoutParams hexLp161 = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        hexLp161.topMargin = dp(this, 12);
+        box152.addView(hexRow161, hexLp161);
+        scHexPreview161 = new View(this);
+        GradientDrawable pv0_161 = new GradientDrawable(); pv0_161.setShape(GradientDrawable.OVAL); pv0_161.setColor(showcaseBgColor152());
+        scHexPreview161.setBackground(pv0_161);
+        hexRow161.addView(scHexPreview161, new LinearLayout.LayoutParams(dp(this, 22), dp(this, 22)));
+        scHexCode161 = tv(this, String.format("#%06X", 0xFFFFFF & showcaseBgColor152()), 12.5f, showcaseOnBg2(), false);
+        LinearLayout.LayoutParams codeLp161 = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        codeLp161.leftMargin = dp(this, 8);
+        hexRow161.addView(scHexCode161, codeLp161);
+        scHexInput161 = new EditText(this);
+        scHexInput161.setHint("#RRGGBB");
+        scHexInput161.setTextSize(13);
+        scHexInput161.setSingleLine(true);
+        scHexInput161.setTextColor(showcaseOnBg());
+        scHexInput161.setHintTextColor(showcaseOnBg2());
+        scHexInput161.setBackground(roundRect(showcaseDarkBg() ? Color.argb(50, 255, 255, 255) : Color.argb(160, 255, 255, 255), 10, this));
+        scHexInput161.setPadding(dp(this, 10), dp(this, 6), dp(this, 10), dp(this, 6));
+        if (showcaseBgMode158() == SC_BG_SELF158 && showcaseCustomOn161()) scHexInput161.setText(String.format("#%06X", 0xFFFFFF & prefs.getInt("showcase_bg_custom", 0))); // 自定义色在场回填（watcher 未挂前直设）
+        LinearLayout.LayoutParams inLp161 = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+        inLp161.leftMargin = dp(this, 12);
+        hexRow161.addView(scHexInput161, inLp161);
+        TextView hexGo161 = tv(this, "应用", 12.5f, Color.WHITE, true);
+        hexGo161.setGravity(Gravity.CENTER);
+        hexGo161.setPadding(dp(this, 12), dp(this, 7), dp(this, 12), dp(this, 7));
+        hexGo161.setBackground(roundRect(accentColor(), 999, this));
+        LinearLayout.LayoutParams goLp161 = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        goLp161.leftMargin = dp(this, 8);
+        hexRow161.addView(hexGo161, goLp161);
+        scHexErr161 = tv(this, "", 11.5f, Color.rgb(0xD6, 0x3A, 0x30), false);
+        LinearLayout.LayoutParams errLp161 = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        errLp161.topMargin = dp(this, 6);
+        box152.addView(scHexErr161, errLp161);
+        scHexInput161.addTextChangedListener(new TextWatcher() {
+            public void beforeTextChanged(CharSequence s, int a, int b, int c) {}
+            public void onTextChanged(CharSequence s, int a, int b, int c) {}
+            public void afterTextChanged(Editable e161) { syncHexPreview161(false); }
+        });
+        hexGo161.setOnClickListener(v -> { haptic(); syncHexPreview161(true); });
         // Q154（件十③）：原单行＝6 色点＋默认＋弹性空＋恢复默认排布，面板窄时
         // 「恢复默认排布」必被挤出右界裁成半截（用户图证）。改两行：行一色点＋
         // 默认，行二右对齐单放恢复钮——两钮恒全显、不再互挤。
@@ -20916,7 +21216,7 @@ public class MainActivity extends Activity {
         showcaseDensityBtnTv152.setGravity(Gravity.CENTER);
         showcaseDensityBtnTv152.setPadding(dp(this, 11), dp(this, 7), dp(this, 11), dp(this, 7));
         showcaseDensityBtnTv152.setBackground(roundRect(showcaseDarkBg() ? Color.argb(70, 255, 255, 255) : Color.argb(220, 255, 255, 255), 999, this));
-        showcaseDensityBtnTv152.setOnClickListener(v -> { haptic(); toggleShowcasePanel152("density"); });
+        showcaseDensityBtnTv152.setOnClickListener(v -> { haptic(); if (prefs == null || !"canvas".equals(prefs.getString("showcase_mode", "stack"))) { showFloatToast("堆叠疏密请用展开/收起"); return; } toggleShowcasePanel152("density"); }); // Q161：堆叠拦截（裁决 c）
         head.addView(showcaseDensityBtnTv152);
         showcaseDensityBtn152 = showcaseDensityBtnTv152;
         // 分组钮（点开分组面板二选；选中态兼示当前开关）
@@ -23923,8 +24223,7 @@ public class MainActivity extends Activity {
         LinearLayout.LayoutParams stlp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
         stlp.leftMargin = dp(this, 8);
         toggle.addView(sponsorTx, stlp);
-        aboutSponsorArrow = tv(this, "›", 18, colText2(), false);
-        aboutSponsorArrow.setGravity(Gravity.CENTER);
+        aboutSponsorArrow = new ChevronView(this, colText2()); // Q161：自绘细线箭头替 18sp 文本字（原字墨迹偏左沉底像被砍，展开旋转照旧）
         toggle.addView(aboutSponsorArrow, new LinearLayout.LayoutParams(dp(this, 20), dp(this, 20)));
 
         // 赞助内容（对照 #sponsorBody，初始收起）
@@ -25319,8 +25618,12 @@ public class MainActivity extends Activity {
             for (Card c : list152) {
                 if (c == null || c.image == null || c.image.isEmpty()) continue;
                 Img.prefetchSized(this, c.image, tw);
+                // Q161：同卡变体图随主图一并预热（详情图廊首开即命中；旧字节靠
+                // 落盘指纹校验纠偏），只跟已预热的 24 张走、不放大预热面（回函第 6 条）。
+                if (c.variants != null) for (int vi161 = 0; vi161 < c.variants.length(); vi161++) { JSONObject vo161 = c.variants.optJSONObject(vi161); String vp161 = vo161 == null ? "" : nz125(vo161.optString("image")); if (!vp161.isEmpty() && !vp161.equals(c.image)) Img.prefetchSized(this, vp161, Math.max(64, getResources().getDisplayMetrics().widthPixels)); }
                 if (++n >= 24) break;
             }
+            Img.verifyDirImages161(this); // Q161：新目录落盘图逐张指纹补验（本线程即预热后台线程）
         } catch (Throwable ignored) {}
     }
 
