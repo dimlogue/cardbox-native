@@ -9389,7 +9389,7 @@ public class MainActivity extends Activity {
             // 改用用户提供的官方样图去底透明 PNG 直接贴（assets/badges/，制图期已
             // 剔银联黑投影/倒影、白底转透明），不再自绘；万事达/Amex/JCB 沿现行
             // 画法不动。统一拟合（min 单位＋居中）沿 Q148：任何框形不溢不亏。
-            // 设置预览与卡面无图占位共用此一处。
+            // 设置预览与卡面无图占位共用此一处。2.73（用户回执 VISA 好、万/银靠右）：万事达/银联改右对齐（DeepSeek 定值：万右缘 238、银右缘 236 视觉补偿），VISA 居中不动。
             int save148 = cv.save();
             try {
                 float u = Math.min(w / 240f, h / 120f);
@@ -9414,7 +9414,7 @@ public class MainActivity extends Activity {
             float s156 = Math.min(w2 / (float) bmp156.getWidth(), h2 / (float) bmp156.getHeight());
             int dw156 = Math.max(1, Math.round(bmp156.getWidth() * s156));
             int dh156 = Math.max(1, Math.round(bmp156.getHeight() * s156));
-            int dx156 = (w2 - dw156) / 2, dy156 = (h2 - dh156) / 2;
+            int dx156 = union156 ? (w2 - dw156 - Math.round(w2 / 60f)) : (w2 - dw156) / 2, dy156 = (h2 - dh156) / 2; // 2.73：银联右对齐右缘 236（内收 4）
             p.setStyle(Paint.Style.FILL);
             p.setColorFilter((!union156 && darkBg)
                     ? new android.graphics.PorterDuffColorFilter(Color.WHITE, PorterDuff.Mode.SRC_IN)
@@ -9425,10 +9425,10 @@ public class MainActivity extends Activity {
             p.setFilterBitmap(false);
         }
         // 万事达/万事网联：红 #EB001B / 橙 #F79E1B 双等圆交叠、交叠区独立填 #FF5F00（不用半透叠色冒充）
-        // 2.71：用户图证三自绘标（万事达/Amex/JCB）较银联/VISA 官图视觉偏小，按 DeepSeek 审定值放大对齐（本法圆 r 40→46、Amex/JCB 色块外扩＋字号升 56）。2.72：真机回执万事达仍略小（双圆视觉面积吃亏），单独再放大 1.18 倍（r 46→54.28，双圆总宽 143.5→169.4 单位），Amex/JCB 不动。
+        // 2.71：用户图证三自绘标（万事达/Amex/JCB）较银联/VISA 官图视觉偏小，按 DeepSeek 审定值放大对齐（本法圆 r 40→46、Amex/JCB 色块外扩＋字号升 56）。2.72：真机回执万事达仍略小（双圆视觉面积吃亏），单独再放大 1.18 倍（r 46→54.28，双圆总宽 143.5→169.4 单位），Amex/JCB 不动。2.73：按 DeepSeek 定值 r 46→58（直径 116、总宽 181.0）并改右对齐（右缘 238、左缘 57.0），Amex/JCB 不动。
         void badgeMastercard(Canvas cv, Paint p, int w, int h, float ux, float uy) {
-            float r = 46f * 1.18f * uy, cy = 60 * uy;
-            float cx = (120f - 0.56f * 46f * 1.18f) * ux, cx2 = cx + 1.12f * r;
+            float r = 58f * uy, cy = 60 * uy;
+            float cx = (238f - 2.12f * 58f) * ux, cx2 = cx + 1.12f * r;
             p.setStyle(Paint.Style.FILL);
             p.setColor(Color.rgb(0xEB, 0x00, 0x1B));
             cv.drawCircle(cx, cy, r, p);
