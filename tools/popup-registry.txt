@@ -1,0 +1,55 @@
+# 弹层册（Q164/2.79 批2 立，全弹窗审查⑧）：机器初版册＋逐个销项
+# 生成：python3 tools/gen-popup-registry.py（行号仅当日定位，后续以方法名为准）
+# 系统 Dialog/PopupWindow/AlertDialog 全仓 0 命中——弹层一律手写贴屏窗，
+# 枚举口径：buildUpdateSheet 调用点＋content/rootView 贴屏挂载点。
+# 销项标记：S=走 STR(S(key)) 或冻结 EN 表全覆盖 · L=存量 L()/EN_TXT 覆盖
+# （冻结可用、不新增） · D=数据驱动非 chrome · 残=已知残留（条目注明）。
+# 纪律：新增弹层必须先在本册登记并注明销项口径；check-arch 第 5 段
+# 以本册登记数＋渲染出口计数双基线防回归。计数只防回归、不证全覆盖。
+POPUP_POINTS=41
+
+L5079	整页挂载 fullScreenPage（页面非弹层，册内备查）	openFxZone	content.addView(fullScreenPage);	销：EN/S（随所在页销项）
+L5441	贴屏挂载 overlay	openFxDetail	content.addView(overlay, new FrameLayout.LayoutParams(	销：S（批2 外卡详情全量落串 fx_*/verify_*/缺字段）
+L7350	贴屏挂载 toastWrap	showFloatToast	rootView.addView(toastWrap, lp);	销：EN/S（随所在页销项）
+L7602	贴屏挂载 overlay	openAcctClassPicker	rootView.addView(overlay, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGrou	销：S/EN（acct_hint S、移除 fmt S、标题/取消 EN）
+L7833	贴屏挂载 overlay	openPlaceholderColorPicker	rootView.addView(overlay, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGrou	销：EN（卡面颜色 EN_TXT）
+L10362	贴屏挂载 backdrop	openCardMenu	rootView.addView(backdrop, new FrameLayout.LayoutParams(	销：EN/S（随所在页销项）
+L10401	贴屏挂载 clone	openCardMenu	rootView.addView(clone, clp);	销：EN/S（随所在页销项）
+L10480	贴屏挂载 popWrap	openCardMenu	rootView.addView(popWrap, wlp);	销：EN/S（随所在页销项）
+L12056	贴屏挂载 sheet	openFilterSheet	content.addView(sheet);	销：S（窗头/清空/面板全量，批2）
+L12720	贴屏挂载 sheet	showWizardPage	content.addView(sheet);	销：L 三元主体；残：推荐理由模板短语（wizAdd）仍中文模板，归下一轮
+L13383	贴屏挂载 overlay	openDetail	content.addView(overlay, new FrameLayout.LayoutParams(	销：S/EN（标记/加卡/移除/色钮批1+批2；规格键 specKeyEn）
+L15090	贴屏挂载 ov	openOwnActs	hideChrome(); content.addView(ov); ownActsOverlay = ov;	销：EN/S（活动整页，含已完成后缀批2）
+L16596	贴屏挂载 sheet	confirmDeleteCustom	content.addView(sheet);	销：S（custom_del_msg_fmt，批2）
+L16736	贴屏挂载 overlay	openCustomDetail	content.addView(overlay, new FrameLayout.LayoutParams(	销：S/EN（日行 spec_monthly_day_fmt、显示/隐藏 EN）
+L17754	贴屏挂载 sheet	openBinQuery	content.addView(sheet);	销：EN（国家名英文主名＋中文括注，用户 2026-10-03 定版）
+L18366	贴屏挂载 sheet	openCustomForm	content.addView(sheet);	销：S/EN（标签 EN、hint S、组织片显示映射，批2）
+L18727	贴屏挂载 sheet	showExitConfirm151	content.addView(sheet);	销：L 三元（批1）
+L18769	update-sheet（统一玻璃窗工厂）	showUpdateTip	FrameLayout sheet=buildUpdateSheet(S("upd_new_title"), String.format(S("upd_new_fmt"), ver), S("upd_	销：S（upd_new_*，批2）
+L18770	贴屏挂载 sheet	showUpdateTip	updateTipSheet=sheet; content.addView(sheet); animateUpdateSheetIn(sheet);	销：S（upd_new_*，批2）
+L18781	update-sheet（统一玻璃窗工厂）	showUpdateConfirm	FrameLayout sheet=buildUpdateSheet(S("upd_title"),msg123,S("cancel"),S("upd_go"),()->{ updateApplyAr	销：S（upd_*，批2）
+L18782	贴屏挂载 sheet	showUpdateConfirm	updateConfirmSheet=sheet; content.addView(sheet); animateUpdateSheetIn(sheet);	销：S（upd_*，批2）
+L19010	update-sheet（统一玻璃窗工厂）	showAppInstallPermissionGuide159	FrameLayout sheet = buildUpdateSheet(S("software_update"), msg, S("cancel"), L("去开启", "Open Settings	销：L（标题 S software_update、钮 L 存量）
+L19019	贴屏挂载 sheet	showAppInstallPermissionGuide159	content.addView(sheet);	销：L（标题 S software_update、钮 L 存量）
+L19174	贴屏挂载 sheet	showAppUpdateSheet159	content.addView(sheet);	销：S（标题/下载短钮批2）＋L 存量（说明/状态长文，冻结可用）
+L19644	贴屏挂载 overlay	openGlossarySheet	rootView.addView(overlay, new FrameLayout.LayoutParams(	销：EN/S（随所在页销项）
+L21675	贴屏挂载 overlay	openShowcase	content.addView(overlay, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup	销：S（顶栏+三面板 sc_*，批2）
+L22100	贴屏挂载 overlay	openSimKeep	content.addView(overlay, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup	销：S/EN（批2 徽记/meta/hint）
+L22324	贴屏挂载 sheet	openSimKeepForm	content.addView(sheet, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.L	销：S/EN（hint S、标签 EN）
+L22433	贴屏挂载 overlay	openSubFollow	content.addView(overlay, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup	销：S（批2 汇总/分区/徽记）
+L22669	贴屏挂载 sheet	openSubFollowForm	content.addView(sheet, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.L	销：S/EN（hint S、周期片显示映射，标签 EN）
+L22773	贴屏挂载 overlay	openFootprint	content.addView(overlay, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup	销：S（journey_*，批2）
+L23042	贴屏挂载 sheet	openFootprintForm	content.addView(sheet, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.L	销：S/EN（jf_* 两标签 S、余 EN）
+L23677	贴屏挂载 sheet	openExtendedSearch	content.addView(sheet);	销：S（ext_* 全量，批2；结果行语义色）
+L24491	整页挂载 fullScreenPage（页面非弹层，册内备查）	openAbout	content.addView(fullScreenPage);	销：EN/S（随所在页销项）
+L24881	整页挂载 helloView（页面非弹层，册内备查）	showHello	content.addView(helloView);	销：EN/S（随所在页销项）
+L25147	整页挂载 fullScreenPage（页面非弹层，册内备查）	showChangelog	content.addView(fullScreenPage);	销：EN/S（随所在页销项）
+L25509	贴屏挂载 overlay	openMoreMenu	content.addView(overlay, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup	销：EN（批1 菜单项）
+L25715	update-sheet（统一玻璃窗工厂）	buildSettingsPage	final FrameLayout sheet = buildUpdateSheet(isEn() ? "Clear Downloaded Data" : "清除已下载数据",	销：L 三元（清除下载数据窗）＋S（外卡专区开关行批2）
+L25733	贴屏挂载 sheet	buildSettingsPage	content.addView(sheet);	销：L 三元（清除下载数据窗）＋S（外卡专区开关行批2）
+L26629	update-sheet（统一玻璃窗工厂）	confirmLauncherIcon131	final FrameLayout sheet = buildUpdateSheet(S("icon_switch_title"),	销：S（icon_switch_*，批2）
+L26646	贴屏挂载 sheet	confirmLauncherIcon131	content.addView(sheet);	销：S（icon_switch_*，批2）
+手工	整页挂载 fullScreenPage	buildAboutPage（关于）	销：S/EN（版本行 about_verinfo_fmt＋迁移行 about_migrated，批2）
+手工	整页挂载 fullScreenPage	buildChangelogPage（更新日志）	销：EN（版本条目为数据双份，类B）
+手工	贴屏挂载 toastWrap	showFloatToast（悬浮提示条基建）	销：出口走 tv 链，调用点文案各自销项
+手工	贴屏挂载 helloView	欢迎页	销：EN（批1）

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """卡盒改版门禁检查（Step0 建，Step1 补 catch 基线）。
 
-四项检查：
+五项检查（第 5 项为 2.79 批2/Q164 新增的渲染出口与弹层册门禁）：
   1. 行数上限：MainActivity.java 只许减不许增。基线在 tools/line-baseline.txt
      （首跑若缺失则以当前行数落基线并注明）。当前 > 基线 => 报警；
      加 --strict 时退出码为 1（构建失败模式，Step9 再默认开启）。
@@ -42,6 +42,27 @@ SWALLOW_OK_MARKER = "swallow-ok"
 # 含多 put 同行逐个计）；未收编候选 = 字面量含 CJK 或 [A-Za-z]{2,} 且非纯标识符/
 # 纯格式串、且不在 STR.put / EN_TXT.put 声明行、不作 S("key") 键名（批1实测 1668）。
 I18N_BASELINE_FILE = os.path.join(ROOT, "tools", "i18n-baseline.txt")
+
+# i18n 批2（Q164/2026-10-08）第 5 段：渲染出口枚举 + 弹层册计数。
+# 出口 = 文案最终落到屏幕的调用点（setText/setHint/setTitle/Toast/drawText/
+# setContentDescription/setError）。口径：出口点只许减不许增——新增出口
+# 必须随附 STR 落串或在本册登记豁免，并在 tools/i18n-outlet-baseline.txt
+# 里人工调高登记（登记即声明已知）。弹层册 tools/popup-registry.txt 的
+# POPUP_POINTS 与手工条目合计为弹层点基线，新弹层先入册再调基线。
+# 注意（门禁注释，用户裁量原文）：计数只防回归、不证全覆盖——出口数
+# 不涨只说明没有新增未登记的渲染面，单个出口背后的文案是否真走 STR
+# 仍靠逐页销项与真机验收，本段不作覆盖证明。
+OUTLET_BASELINE_FILE = os.path.join(ROOT, "tools", "i18n-outlet-baseline.txt")
+POPUP_REGISTRY_FILE = os.path.join(ROOT, "tools", "popup-registry.txt")
+OUTLET_PATTERNS = [
+    ("setText", re.compile(r"\.setText\(")),
+    ("setHint", re.compile(r"\.setHint\(")),
+    ("setTitle", re.compile(r"\.setTitle\(")),
+    ("Toast", re.compile(r"Toast\.makeText")),
+    ("drawText", re.compile(r"\.drawText\(")),
+    ("setContentDescription", re.compile(r"\.setContentDescription\(")),
+    ("setError", re.compile(r"\.setError\(")),
+]
 
 
 def strip_code(text):
@@ -268,6 +289,45 @@ def main():
             low = [k for k in cur if k in i18n_base and cur[k] < i18n_base[k]]
             tip = "；已低于基线，请人工调低 i18n-baseline.txt：" + ",".join(low) if low else ""
             print(f"[i18n] 基线 OK（只减不增）{tip}")
+
+    # ---------- 5. 渲染出口枚举 + 弹层册（批2 Q164） ----------
+    # 计数只防回归、不证全覆盖：出口总数与弹层登记数双基线，只涨即报警；
+    # 出口背后的文案是否真走 STR 仍靠逐页销项与真机验收（见段首注释）。
+    outlet_counts = {name: len(pat.findall(src)) for name, pat in OUTLET_PATTERNS}
+    outlet_total = sum(outlet_counts.values())
+    outlet_base = {}
+    if os.path.exists(OUTLET_BASELINE_FILE):
+        for ln in open(OUTLET_BASELINE_FILE, encoding="utf-8"):
+            m = re.match(r"\s*(OUTLETS|POPUPS)\s*=\s*(\d+)", ln)
+            if m:
+                outlet_base[m.group(1)] = int(m.group(2))
+    popup_points = None
+    if os.path.exists(POPUP_REGISTRY_FILE):
+        for ln in open(POPUP_REGISTRY_FILE, encoding="utf-8"):
+            m = re.match(r"POPUP_POINTS\s*=\s*(\d+)", ln)
+            if m:
+                popup_points = int(m.group(1))
+    detail = " ".join(f"{k}={v}" for k, v in outlet_counts.items())
+    print(f"[出口] 渲染出口共 {outlet_total}（{detail}）；弹层册登记 {popup_points} 点"
+          f"（基线 OUTLETS={outlet_base.get('OUTLETS')} POPUPS={outlet_base.get('POPUPS')}）")
+    if not outlet_base or popup_points is None:
+        problems.append("i18n 出口/弹层册基线缺失（tools/i18n-outlet-baseline.txt 或 tools/popup-registry.txt）")
+        print("[出口] ⚠ 基线或弹层册缺失")
+    else:
+        obad = []
+        if outlet_total > outlet_base.get("OUTLETS", 0):
+            obad.append(f"渲染出口 {outlet_total} 超基线 {outlet_base.get('OUTLETS')}（+{outlet_total - outlet_base.get('OUTLETS', 0)}）"
+                        "——新出口须随 STR 落串或在弹层册登记豁免，登记后人工调高基线；计数只防回归不证覆盖")
+        if popup_points < outlet_base.get("POPUPS", 0):
+            obad.append(f"弹层册登记 {popup_points} 低于基线 {outlet_base.get('POPUPS')}——弹层条目只许增不许删")
+        if obad:
+            for b in obad:
+                problems.append("i18n 出口门禁：" + b)
+            print("[出口] ⚠ " + "；".join(obad))
+        else:
+            low = outlet_total < outlet_base.get("OUTLETS", 0)
+            tip = "；出口已低于基线，请人工调低 i18n-outlet-baseline.txt" if low else ""
+            print(f"[出口] 基线 OK（只涨报警）{tip}")
 
     # ---------- 结论 ----------
     if problems:

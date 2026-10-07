@@ -1175,7 +1175,7 @@ public class MainActivity extends Activity {
         STR.put("software_downloading", new String[]{"正在下载…","Downloading…"});
         STR.put("software_verifying", new String[]{"正在校验…","Verifying…"});
         STR.put("software_install", new String[]{"安装","Install"});
-        STR.put("software_download_update", new String[]{"下载并更新","Download & Update"});
+        STR.put("software_download_update", new String[]{"下载","Download"}); // Q164（2.79 批2，承补审施工单）：短文案防钮内切字（旧「下载并更新」半宽钮溢出）
         STR.put("version", new String[]{"版本","Version"});
         STR.put("changelog", new String[]{"更新日志","Changelog"});
         STR.put("welcome", new String[]{"欢迎页","Welcome"});
@@ -1323,7 +1323,6 @@ public class MainActivity extends Activity {
         STR.put("gap_no_3ds", new String[]{"没有支持 3DS 的卡，部分境外网站付款可能过不了验证","No 3DS card — some overseas checkouts may fail verification"});
         STR.put("gap_prefix", new String[]{"短板：","Gap: "});
         STR.put("mine_missing_fmt", new String[]{"还差 %s","Missing %s"});
-        STR.put("sw_download", new String[]{"下载","Download"});
         STR.put("news_cat_new", new String[]{"新卡上市","New Cards"});
         STR.put("news_source", new String[]{"来源：","Source: "});
         STR.put("news_date", new String[]{"日期：","Date: "});
@@ -1368,6 +1367,7 @@ public class MainActivity extends Activity {
         STR.put("upd_new_nodetail", new String[]{"本次变化明细暂未算出，更新后以新版数据为准。","Change details are not ready yet; the new data applies once updated."});
         STR.put("upd_warn", new String[]{"\n更新可能短暂卡顿，并将覆盖当前卡库数据；你自己添加的卡片和收藏不会被改动，重复的卡会被合并删除。不更新就点取消，新版会一直留着等你。","\nUpdating may briefly stutter and overwrites the current library data. Your own cards and favorites stay untouched; duplicates are merged away. Tap Cancel and the new version will keep waiting."});
         STR.put("upd_know", new String[]{"知道了","Got It"});
+        STR.put("upd_title", new String[]{"更新数据","Update Data"});
         STR.put("upd_go", new String[]{"去更新","Update Now"});
         STR.put("hl_cur_fmt", new String[]{"%s 个币种一卡走天下","%s currencies, one card"});
         STR.put("hl_multicur", new String[]{"人民币 + 外币多币种","CNY + multi-currency"});
@@ -1421,6 +1421,12 @@ public class MainActivity extends Activity {
         STR.put("news_no_link", new String[]{"暂无原文链接","No original link"});
         STR.put("news_expand_arrow", new String[]{"展开 ›","Expand ›"});
         STR.put("news_collapse_arrow", new String[]{"收起 ‹","Collapse ‹"});
+        STR.put("icon_switch_title", new String[]{"切换桌面图标","Switch App Icon"});
+        STR.put("icon_switch_msg", new String[]{"切换桌面图标需要重启软件生效，数据不会丢失。","Switching the app icon takes a restart to apply. Your data won't be lost."});
+        STR.put("icon_switch_ok", new String[]{"确认重启","Restart"});
+        STR.put("stu_mode_list", new String[]{"列表","List"});
+        STR.put("stu_mode_2", new String[]{"2 列","2 Col"});
+        STR.put("stu_mode_3", new String[]{"3 列","3 Col"});
     }
     // Q106（2.20）英文全量扫：纯展示串英文表（精确整串匹配、仅 EN 模式在 tvW 出口生效；
     // tv/toast/chip 同走此出口）。红线：与数据匹配的逻辑串一律不入表——评分维度名与短标签
@@ -5550,7 +5556,7 @@ public class MainActivity extends Activity {
         cr1.setOrientation(LinearLayout.HORIZONTAL);
         LinearLayout.LayoutParams cr1lp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         cr1lp.topMargin = dp(this, 10);
-        body.addView(cr1, cr1lp);
+        body.addView(chipScrollRow164(cr1), cr1lp); // Q164：片行通则——横滑+渐隐+禁父拦截
         cr1.addView(chip(fxOrgLabel164(f), chipBg, colText(), 11.5f));
         addChipGap(cr1); cr1.addView(chip(fxTypeLabel164(f), chipBg, colText(), 11.5f));
         if (f.level != null && !f.level.isEmpty()) { addChipGap(cr1); cr1.addView(chip(f.level, chipBg, colText(), 11.5f)); }
@@ -5559,7 +5565,7 @@ public class MainActivity extends Activity {
         cr2.setOrientation(LinearLayout.HORIZONTAL);
         LinearLayout.LayoutParams cr2lp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         cr2lp.topMargin = dp(this, 6);
-        body.addView(cr2, cr2lp);
+        body.addView(chipScrollRow164(cr2), cr2lp); // Q164：片行通则
         cr2.addView(chip(f.bank, chipBg, colText(), 11.5f));
         if (f.tier != null && !f.tier.isEmpty()) { addChipGap(cr2); cr2.addView(chip(f.tier, chipBg, colText(), 11.5f)); }
         addChipGap(cr2);
@@ -6677,7 +6683,7 @@ public class MainActivity extends Activity {
         // 整包 apply() 异步落盘，单列卡多卡死进程时写盘未达、冷启读回默
         // 认双列（「没点自己变回双列」真根子）；列数是用户刚点过的显式
         // 选择，必须点完即落盘。其余键维持 apply 不变。
-        try { prefs.edit().putInt("cols", cols).commit(); } catch (Throwable ignored) {}
+        try { prefs.edit().putInt("cols", cols).commit(); } catch (Throwable ignored) { /* swallow-ok: 偏好同步写失败无备路可走，内存值已生效、不拦列数切换 */ }
     }
 
     static final String[][] FEATS = {
@@ -14466,7 +14472,7 @@ public class MainActivity extends Activity {
         String[][] stuModes = {{"1", "列表"}, {"2", "2 列"}, {"3", "3 列"}};
         for (String[] mo : stuModes) {
             final int mv = Integer.parseInt(mo[0]);
-            TextView mt = tv(this, mo[1], 12, colText(), mv == stuCols);
+            TextView mt = tv(this, mv == 1 ? S("stu_mode_list") : S("stu_mode_" + mv), 12, colText(), mv == stuCols); // Q164
             mt.setGravity(Gravity.CENTER);
             mt.setPadding(dp(this, 14), dp(this, 6), dp(this, 14), dp(this, 6));
             softFormChipPaint(mt, mv == stuCols);
@@ -15451,7 +15457,7 @@ public class MainActivity extends Activity {
             String[][] colOpts127 = {{"1", "单列"}, {"2", "双列"}, {"3", "三列"}, {"4", "四列"}};
             for (final String[] co127 : colOpts127) {
                 final int nCols127 = Integer.parseInt(co127[0]);
-                TextView ct127 = tv(this, co127[1], 12, colText(), cols == nCols127);
+                TextView ct127 = tv(this, S("cols_" + nCols127), 12, colText(), cols == nCols127); // Q164：与筛选面板列数片同 S 表一口
                 ct127.setGravity(Gravity.CENTER);
                 ct127.setPadding(dp(this, 12), dp(this, 5), dp(this, 12), dp(this, 5));
                 softFormChipPaint(ct127, cols == nCols127);
@@ -15486,6 +15492,14 @@ public class MainActivity extends Activity {
                     else beginColsFlip154(mineGridBox152, mineScrollRef152, oldCols154, nCols127, false, false, apply127);
                 });
             }
+        }
+        // Q164（2.79 批2）：与全部卡片同件——>30 张且单列时列数行下双语卡顿提示
+        if (!mineRows.isEmpty() && cols == 1 && Store.all != null && Store.all.size() > 30) {
+            TextView lagWarn164 = tv(this, "⚠ " + S("cols_single_lag_warn"), 11.5f, Color.rgb(0xB2, 0x6A, 0x00), false);
+            LinearLayout.LayoutParams lwp164 = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            lwp164.topMargin = dp(this, 4);
+            lwp164.bottomMargin = dp(this, 4);
+            zoneBox.addView(lagWarn164, lwp164);
         }
         final LinearLayout mineRowsBox = new LinearLayout(this);
         mineRowsBox.setOrientation(LinearLayout.VERTICAL);
@@ -18764,7 +18778,7 @@ public class MainActivity extends Activity {
             ? S("upd_new_nodetail") : pendingUpdateSummary; // Q164
         String msg123 = String.format(S("upd_new_msg_fmt"), pendingUpdateVer, sum123) // Q164
             + S("upd_warn"); // Q164
-        FrameLayout sheet=buildUpdateSheet("更新数据",msg123,"取消","去更新",()->{ updateApplyArmed = true; applyPendingUpdate(); });
+        FrameLayout sheet=buildUpdateSheet(S("upd_title"),msg123,S("cancel"),S("upd_go"),()->{ updateApplyArmed = true; applyPendingUpdate(); }); // Q164
         updateConfirmSheet=sheet; content.addView(sheet); animateUpdateSheetIn(sheet);
     }
     void animateUpdateSheetIn(FrameLayout sheet){
@@ -21368,7 +21382,7 @@ public class MainActivity extends Activity {
         { int acc164 = accentColor(); scHexInput161.setHighlightColor(Color.argb(70, Color.red(acc164), Color.green(acc164), Color.blue(acc164))); // Q164：选区随强调色（光标本体走系统随文字色）
           GradientDrawable cur164 = new GradientDrawable(); cur164.setShape(GradientDrawable.RECTANGLE); cur164.setSize(dp(this, 2), dp(this, 20)); cur164.setColor(accentColor());
           GradientDrawable inBg164 = roundRect(showcaseDarkBg() ? Color.argb(50, 255, 255, 255) : Color.argb(160, 255, 255, 255), 10, this); inBg164.setStroke(Math.max(1, dp(this, 1) / 2), showcaseDivider164()); scHexInput161.setBackground(inBg164);
-          if (android.os.Build.VERSION.SDK_INT >= 29) { try { scHexInput161.setTextCursorDrawable(cur164); } catch (Throwable ignored) {} } }
+          if (android.os.Build.VERSION.SDK_INT >= 29) { try { scHexInput161.setTextCursorDrawable(cur164); } catch (Throwable ignored) { /* swallow-ok: 已判 API29，光标 drawable 个别 ROM 不支持时回落系统光标 */ } } }
         scHexInput161.setPadding(dp(this, 10), dp(this, 6), dp(this, 10), dp(this, 6));
         // Q163（2.78，用户 03:24 点名）：输入框只收颜色代码字符（# 与 0-9A-Fa-f，
         // 粘贴同走一道过滤、非法字当场滤除），长度封顶 7＝#RRGGBB 口径（含 3
@@ -26612,9 +26626,9 @@ public class MainActivity extends Activity {
     void confirmLauncherIcon131(final String targetId) {
         if (iconConfirmSheet131 != null && iconConfirmSheet131.getParent() != null) return; // 在场则不叠开
         iconConfirmSheet131 = null; // 已被摘除的旧窗（取消/点遮罩）不占位
-        final FrameLayout sheet = buildUpdateSheet("切换桌面图标",
-            "切换桌面图标需要重启软件生效，数据不会丢失。",
-            "取消", "确认重启", () -> {
+        final FrameLayout sheet = buildUpdateSheet(S("icon_switch_title"),
+            S("icon_switch_msg"),
+            S("cancel"), S("icon_switch_ok"), () -> { // Q164
                 iconConfirmSheet131 = null;
                 // 先记回落点（重启后回设置页原滚动位），再启停 alias（先启新后禁旧
                 // 的老铁则在 applyLauncherIcon129 内），最后重启拉起新图标。回落点

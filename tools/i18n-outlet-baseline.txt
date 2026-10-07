@@ -1,0 +1,12 @@
+OUTLETS=87
+POPUPS=41
+# i18n 批2 基线（2026-10-08，Q164，用户裁量「全弹窗审查」件）：
+#   OUTLETS = MainActivity.java 渲染出口总数（check-arch.py 第 5 段口径：
+#             setText/setHint/setTitle/Toast.makeText/drawText/
+#             setContentDescription/setError 全文出现数，批2 实测 87）。
+#   POPUPS  = tools/popup-registry.txt 机器枚举弹层点（批2 实测 41，另有
+#             手工条目 4：关于/更新日志整页、toast 基建、欢迎页）。
+# 纪律：两数只许人工调高（登记新出口/新弹层即声明已知并随 STR 落串或
+# 在弹层册注明豁免）；自动上涨即报警。计数只防回归、不证全覆盖——出口
+# 背后的文案是否真走 STR 仍靠逐页销项与真机验收，本基线不作覆盖证明。
+# 出口数下降时同步调低本值。
