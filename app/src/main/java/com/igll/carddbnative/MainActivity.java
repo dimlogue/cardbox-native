@@ -270,7 +270,7 @@ public class MainActivity extends Activity {
 
     /** 柔和主按钮：主色柔面、48dp 高、圆角 14、白字 15sp/600；统一替代原生蓝 Button。 */
     TextView softPrimaryBtn(String label) {
-        TextView b = tv(this, label, 15, Color.WHITE, true);
+        TextView b = tv(this, label, 15, onAccentInk(), true); // Q165：主色面字走 onAccentInk（flat 恒白）
         b.setGravity(Gravity.CENTER);
         b.setSingleLine(true);
         GradientDrawable g = new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
@@ -292,7 +292,7 @@ public class MainActivity extends Activity {
     // Q104（2.18）：柔和强调钮——主题色竖向微渐变（上沿向白柔和 22%）＋16dp 圆角（与输入框同档）
     // ＋发丝白边光＋Ripple，替 softPrimaryBtn 的平实色块（用户评 BIN 窗查询钮生硬）；色仍走 accentColor() 主题色。
     TextView softAccentBtn(String label) {
-        TextView b = tv(this, label, 15, Color.WHITE, true);
+        TextView b = tv(this, label, 15, onAccentInk(), true); // Q165：同 softPrimaryBtn 口径
         b.setGravity(Gravity.CENTER);
         b.setSingleLine(true);
         int acc = accentColor();
@@ -330,7 +330,7 @@ public class MainActivity extends Activity {
 
     /** 迷你行内钮（卡片内操作：顺延/编辑等）：小一号的主/次面，圆角 10。 */
     TextView softMiniBtn(String label, boolean primary) {
-        TextView b = tv(this, label, 13, primary ? Color.WHITE : colText(), true);
+        TextView b = tv(this, label, 13, primary ? onAccentInk() : colText(), true);
         b.setGravity(Gravity.CENTER);
         b.setSingleLine(true);
         pinFixedText125(b); // Q125：主要按钮钉角色行高（字体件）
@@ -1871,6 +1871,9 @@ public class MainActivity extends Activity {
     // （正文 0x3A3A3C / 链接 0x0A5CD6，主字与次字直接复用 colText/colText2——其浅档即
     // 0x1C1C1E / 0x8E8E93），故浅色模式像素不变，只补深色档；凡文字直接坐在语义面
     // （softFaceBg/softSheetBg/深色页底）上的，禁止再写浅档常量。
+    // Q165：主色面上的字——flat 恒白（与旧各钮逐位一致）；墨曜走 text_on_primary 墨字
+    // （金属青底白字对比不足，规格定版 #0A0C0E）。主按钮/选中片只许走此口配 accentColor。
+    int onAccentInk() { return styleMoyao() ? MY_ON_PRIMARY : Color.WHITE; }
     int inkBody() { return styleMoyao() ? MY_TEXT1 : (darkEff() ? Color.argb(196, 255, 255, 255) : Color.rgb(0x3A, 0x3A, 0x3C)); }
     int inkLink() { return styleMoyao() ? MY_PRIMARY : (darkEff() ? Color.rgb(0x6E, 0xB3, 0xFF) : Color.rgb(0x0A, 0x5C, 0xD6)); }
     int iconInk() { return styleMoyao() ? MY_TEXT1 : (darkEff() ? Color.argb(238, 255, 255, 255) : Color.rgb(0x1C, 0x1C, 0x1E)); }
@@ -2239,13 +2242,18 @@ public class MainActivity extends Activity {
         } catch (Throwable ignored) { /* 个别机型阴影色异常时保留默认影，不为柔影冒崩点 */ }
     }
     /** Soft 面上的墨色：浅档深蓝墨、深档回白系。 */
-    int softInk() { return darkEff() ? Color.WHITE : Color.rgb(0x14, 0x31, 0x52); }
-    int softInk2() { return darkEff() ? Color.argb(224, 255, 255, 255) : Color.rgb(0x4A, 0x64, 0x84); }
+    int softInk() { return styleMoyao() ? MY_TEXT1 : (darkEff() ? Color.WHITE : Color.rgb(0x14, 0x31, 0x52)); }
+    int softInk2() { return styleMoyao() ? MY_TEXT2 : (darkEff() ? Color.argb(224, 255, 255, 255) : Color.rgb(0x4A, 0x64, 0x84)); }
     /** Q94 搜索胶囊收淡染色：近白雾面、低饱和（用户 19:08 点名悬浮搜索栏不再染成一团蓝）；
      * 比 glassTintDrawable 更白更厚一档，身后模糊只隐隐透出，圆角由宿主 clip 决定故给大圆角。 */
     GradientDrawable softSearchTint() {
         GradientDrawable g;
-        if (darkEff()) {
+        if (styleMoyao()) {
+            // Q165：墨曜搜索胶囊墨染色（机制不动，只换染色值；MY_ELEVATED 近实薄染）。
+            g = new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
+                new int[]{Color.argb(205, Color.red(MY_ELEVATED), Color.green(MY_ELEVATED), Color.blue(MY_ELEVATED)), Color.argb(195, Color.red(MY_ELEVATED), Color.green(MY_ELEVATED), Color.blue(MY_ELEVATED))});
+            g.setStroke(dp(this, 1), Color.argb(26, 255, 255, 255));
+        } else if (darkEff()) {
             g = new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
                 new int[]{Color.argb(150, 44, 54, 72), Color.argb(138, 34, 42, 58)});
             g.setStroke(dp(this, 1), Color.argb(70, 255, 255, 255));
@@ -2260,6 +2268,16 @@ public class MainActivity extends Activity {
     /** Q94 dock 染色去花：比通用玻璃染色更白更匀，糊色不抢眼（用户 19:08 点名）。 */
     GradientDrawable dockBarBg() {
         GradientDrawable g;
+        if (styleMoyao()) {
+            // Q165：墨曜 dock 只换染色不动机制——玻璃开态薄墨染、关态近实墨面兜底（同 Q117 口径）。
+            int er = Color.red(MY_ELEVATED), eg = Color.green(MY_ELEVATED), eb = Color.blue(MY_ELEVATED);
+            g = new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
+                glassDisabled ? new int[]{Color.argb(242, er, eg, eb), Color.argb(242, er, eg, eb)}
+                              : new int[]{Color.argb(205, er, eg, eb), Color.argb(195, er, eg, eb)});
+            g.setStroke(dp(this, 1), Color.argb(26, 255, 255, 255));
+            g.setCornerRadius(dp(this, dockR129())); // Q129：dock 类收口
+            return g;
+        }
         if (glassDisabled) {
             // Q117（2.30）：玻璃关停时 GlassBackdropView 整面不画（onDraw 首行即退），dock
             // 只剩本层染色——旧 178/166 半透压不住下层正文，「还没有自定义卡片，点＋添加」
@@ -2293,7 +2311,10 @@ public class MainActivity extends Activity {
      * 微透让身后玻璃糊层隐隐透出；全 App 提示条只此一处出口（showFloatToast）。 */
     GradientDrawable softToastBg() {
         GradientDrawable g = new GradientDrawable();
-        if (darkEff()) {
+        if (styleMoyao()) {
+            g.setColor(Color.argb(242, Color.red(MY_SURFACE2), Color.green(MY_SURFACE2), Color.blue(MY_SURFACE2))); // Q165：提示条墨面
+            g.setStroke(dp(this, 1), Color.argb(26, 255, 255, 255));
+        } else if (darkEff()) {
             g.setColor(Color.argb(242, 32, 40, 54));
             g.setStroke(dp(this, 1), Color.argb(80, 255, 255, 255));
         } else {
@@ -5100,8 +5121,8 @@ public class MainActivity extends Activity {
         for (final String key153 : keys153) {
             final boolean sel153 = key153.equals(fxRegionSel153);
             TextView seg153 = chip(key153.isEmpty() ? (isEn() ? "All" : "全部") : fxRegionLabel153(key153),
-                sel153 ? accentColor() : (darkEff() ? Color.rgb(0x2E, 0x2E, 0x33) : Color.rgb(0xEF, 0xF1, 0xF6)),
-                sel153 ? Color.WHITE : colText(), 11.5f);
+                sel153 ? accentColor() : (styleMoyao() ? MY_SURFACE2 : (darkEff() ? Color.rgb(0x2E, 0x2E, 0x33) : Color.rgb(0xEF, 0xF1, 0xF6))),
+                sel153 ? onAccentInk() : colText(), 11.5f);
             LinearLayout.LayoutParams sLp153 = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
             if (!firstSeg153) sLp153.leftMargin = dp(this, 8);
             firstSeg153 = false;
@@ -5187,13 +5208,13 @@ public class MainActivity extends Activity {
         chipRow.setPadding(dp(this, 16), dp(this, 10), dp(this, 16), dp(this, 2));
         root.addView(chipRow);
         final TextView coreChip = chip(S("fx_core_only"),
-            fxCoreOnly ? accentColor() : (darkEff() ? Color.rgb(0x2E, 0x2E, 0x33) : Color.rgb(0xEF, 0xF1, 0xF6)),
-            fxCoreOnly ? Color.WHITE : colText(), 11.5f);
+            fxCoreOnly ? accentColor() : (styleMoyao() ? MY_SURFACE2 : (darkEff() ? Color.rgb(0x2E, 0x2E, 0x33) : Color.rgb(0xEF, 0xF1, 0xF6))),
+            fxCoreOnly ? onAccentInk() : colText(), 11.5f);
         coreChip.setOnClickListener(v -> {
             haptic();
             fxCoreOnly = !fxCoreOnly;
-            coreChip.setBackground(roundRect(fxCoreOnly ? accentColor() : (darkEff() ? Color.rgb(0x2E, 0x2E, 0x33) : Color.rgb(0xEF, 0xF1, 0xF6)), 999, this));
-            coreChip.setTextColor(fxCoreOnly ? Color.WHITE : colText());
+            coreChip.setBackground(roundRect(fxCoreOnly ? accentColor() : (styleMoyao() ? MY_SURFACE2 : (darkEff() ? Color.rgb(0x2E, 0x2E, 0x33) : Color.rgb(0xEF, 0xF1, 0xF6))), 999, this));
+            coreChip.setTextColor(fxCoreOnly ? onAccentInk() : colText());
             renderFxList();
         });
         chipRow.addView(coreChip);
@@ -5351,8 +5372,8 @@ public class MainActivity extends Activity {
             if (f.level != null && !f.level.isEmpty()) meta += " · " + f.level;
             tx.addView(tv(this, meta, 11, colText2(), false));
             TextView vc = chip(fxVerifyLabel164(f),
-                f.coreVerified() ? accentColor() : (darkEff() ? Color.rgb(0x2E, 0x2E, 0x33) : Color.rgb(0xEF, 0xF1, 0xF6)),
-                f.coreVerified() ? Color.WHITE : colText2(), 10.5f);
+                f.coreVerified() ? accentColor() : (styleMoyao() ? MY_SURFACE2 : (darkEff() ? Color.rgb(0x2E, 0x2E, 0x33) : Color.rgb(0xEF, 0xF1, 0xF6))),
+                f.coreVerified() ? onAccentInk() : colText2(), 10.5f);
             top.addView(vc);
 
             LinearLayout metaRow = new LinearLayout(this);
@@ -5618,7 +5639,7 @@ public class MainActivity extends Activity {
         cr2.addView(chip(f.bank, chipBg, colText(), 11.5f));
         if (f.tier != null && !f.tier.isEmpty()) { addChipGap(cr2); cr2.addView(chip(f.tier, chipBg, colText(), 11.5f)); }
         addChipGap(cr2);
-        cr2.addView(chip(fxVerifyLabel164(f), f.coreVerified() ? accentColor() : chipBg, f.coreVerified() ? Color.WHITE : colText2(), 11.5f));
+        cr2.addView(chip(fxVerifyLabel164(f), f.coreVerified() ? accentColor() : chipBg, f.coreVerified() ? onAccentInk() : colText2(), 11.5f));
 
         // 核实状态卡
         body.addView(detailSectionTitle(S("sec_verify")));
@@ -8202,11 +8223,20 @@ public class MainActivity extends Activity {
         // 近实柔蓝面＋白描边，压在玻璃糊色之上仍明确成块；旧薄透染色在花底上看不出选中谁。
         // Q125（2.37，用户 03:47 更正）：圆角 20dp→12dp——旧值近药丸/圆形，改偏
         // 圆角矩形；只动这一处半径，胶囊尺寸/位置/底栏机制与手感全冻结。
-        GradientDrawable g = new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
-            darkEff() ? new int[]{Color.rgb(0x37, 0x54, 0x82), Color.rgb(0x2B, 0x45, 0x6B)}
-                      : new int[]{Color.rgb(0xE6, 0xF1, 0xFD), Color.rgb(0xCC, 0xE0, 0xF7)});
+        GradientDrawable g;
+        if (styleMoyao()) {
+            // Q165：墨曜选中药丸＝主色软底（@20%→@16%）＋主色 @60% 描边（border_strong），字走 navOnColor 墨青口。
+            int pr = Color.red(MY_PRIMARY), pg = Color.green(MY_PRIMARY), pb = Color.blue(MY_PRIMARY);
+            g = new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
+                new int[]{Color.argb(51, pr, pg, pb), Color.argb(41, pr, pg, pb)});
+            g.setStroke(dp(this, 1), Color.argb(153, pr, pg, pb));
+        } else {
+            g = new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
+                darkEff() ? new int[]{Color.rgb(0x37, 0x54, 0x82), Color.rgb(0x2B, 0x45, 0x6B)}
+                          : new int[]{Color.rgb(0xE6, 0xF1, 0xFD), Color.rgb(0xCC, 0xE0, 0xF7)});
+            g.setStroke(dp(this, 1), darkEff() ? Color.argb(70, 255, 255, 255) : Color.argb(190, 255, 255, 255));
+        }
         g.setCornerRadius(dp(this, pillR129())); // Q129：dock 选中胶囊走 dock 类收口
-        g.setStroke(dp(this, 1), darkEff() ? Color.argb(70, 255, 255, 255) : Color.argb(190, 255, 255, 255));
         return g;
     }
 
@@ -8399,8 +8429,8 @@ public class MainActivity extends Activity {
     // so icon and label tint together). Fires only on discrete tab crossings; lens motion itself stays
     // pure drawing-layer (translation/scale/alpha), no layout passes per frame.
     // Q72：底栏未选/选中字色随深浅走语义色（深色下未选为 60% 白、选中为强调色前景深字面上的主字）
-    int navOffColor() { return darkEff() ? Color.argb(153,255,255,255) : Color.rgb(0x3A,0x3A,0x3C); }
-    int navOnColor() { return darkEff() ? Color.argb(235,255,255,255) : Color.rgb(0x1C,0x1C,0x1E); }
+    int navOffColor() { return styleMoyao() ? MY_TEXT2 : (darkEff() ? Color.argb(153,255,255,255) : Color.rgb(0x3A,0x3A,0x3C)); }
+    int navOnColor() { return styleMoyao() ? MY_ACCENT : (darkEff() ? Color.argb(235,255,255,255) : Color.rgb(0x1C,0x1C,0x1E)); }
     void tintNavTo(int idx) {
         if (idx < 0 || idx >= navOrder.size()) return;
         navTintIdx = idx;
@@ -12067,10 +12097,11 @@ public class MainActivity extends Activity {
             });
         });
         chead.addView(clearT);
-        TextView doneT = tv(this, "\u5b8c\u6210", 13.5f, Color.WHITE, true);
+        TextView doneT = tv(this, "\u5b8c\u6210", 13.5f, onAccentInk(), true);
         doneT.setGravity(Gravity.CENTER);
         GradientDrawable doneBg = new GradientDrawable(GradientDrawable.Orientation.LEFT_RIGHT,
-            new int[]{Color.rgb(0x0A, 0x84, 0xFF), Color.rgb(0x00, 0x66, 0xE6)});
+            styleMoyao() ? new int[]{MY_PRIMARY, Color.rgb(0x2F, 0xA8, 0xA3)} // Q165：墨曜走主色梯度（flat 蓝逐位不动）
+                         : new int[]{Color.rgb(0x0A, 0x84, 0xFF), Color.rgb(0x00, 0x66, 0xE6)});
         doneBg.setCornerRadius(dp(this, pillR143())); // Q143：整圆药丸类收口
         doneT.setBackground(doneBg);
         doneT.setMinWidth(dp(this, 68)); doneT.setMinHeight(dp(this, 34));
@@ -12370,7 +12401,7 @@ public class MainActivity extends Activity {
 
     // Q13 置灰禁用态：哑光灰底灰字、无点击无按压无震动；若为当前所选则以哑光蓝灰保留勾与选中可辨
     TextView filterChip(String label, boolean on, final Runnable act, boolean disabled) {
-        TextView t = tv(this, (on ? "\u2713 " : "") + label, 13, on ? Color.WHITE : colText(), on);
+        TextView t = tv(this, (on ? "\u2713 " : "") + label, 13, on ? onAccentInk() : colText(), on); // Q165：选中字走主色面字口（flat 恒白）
         t.setSingleLine(true);
         t.setEllipsize(android.text.TextUtils.TruncateAt.END);
         t.setGravity(Gravity.CENTER);
@@ -12396,7 +12427,8 @@ public class MainActivity extends Activity {
         }
         if (on) {
             GradientDrawable g = new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
-                new int[]{Color.rgb(0x0A, 0x84, 0xFF), Color.rgb(0x00, 0x66, 0xE6)});
+                styleMoyao() ? new int[]{MY_PRIMARY, Color.rgb(0x2F, 0xA8, 0xA3)} // Q165：选中片墨曜走主色→按下色梯度（flat 蓝梯度逐位不动）
+                             : new int[]{Color.rgb(0x0A, 0x84, 0xFF), Color.rgb(0x00, 0x66, 0xE6)});
             g.setCornerRadius(dp(this, pillR143())); // Q143：整圆药丸类收口（筛选 chip）
             t.setBackground(g);
             softShadow(t, 2); // Q125 补（按钮黑边扫查，用户 04:11 截图主犯）：蓝 pill 默认 elevation 黑影在下沿/角部发硬，改 Soft 蓝灰柔影
@@ -13255,9 +13287,9 @@ public class MainActivity extends Activity {
         side.addView(score);
         // Q14：加卡钮照 .wiz-add——30dp 浅色圆（未加 #EEF4FF 蓝字＋、已加 #0A84FF 白字 ✓），废 38dp 大实心蓝圆
         final boolean inMine = mine.contains(c.id);
-        TextView add = tv(this, inMine ? "✓" : "＋", 15, inMine ? Color.WHITE : Color.rgb(0x0A, 0x5C, 0xD6), true);
+        TextView add = tv(this, inMine ? "✓" : "＋", 15, inMine ? onAccentInk() : (styleMoyao() ? MY_PRIMARY : Color.rgb(0x0A, 0x5C, 0xD6)), true);
         add.setGravity(Gravity.CENTER);
-        add.setBackground(roundRect(inMine ? Color.rgb(0x0A, 0x84, 0xFF) : Color.rgb(0xEE, 0xF4, 0xFF), 999, this));
+        add.setBackground(roundRect(styleMoyao() ? (inMine ? MY_PRIMARY : MY_SURFACE2) : (inMine ? Color.rgb(0x0A, 0x84, 0xFF) : Color.rgb(0xEE, 0xF4, 0xFF)), 999, this)); // Q165：加卡圆钮墨曜走主色/墨面（flat 蓝圆逐位不动）
         LinearLayout.LayoutParams alp = new LinearLayout.LayoutParams(dp(this, 30), dp(this, 30));
         alp.topMargin = dp(this, 7);
         alp.gravity = Gravity.RIGHT;
@@ -14267,7 +14299,7 @@ public class MainActivity extends Activity {
         if (c.bank != null && !c.bank.isEmpty()) chips.add(chip(c.bank, chipBg, colText(), 12f));
         if (c.hasScore) chips.add(chip((isEn() ? "Score " : "评分 ") + String.format(java.util.Locale.US, "%.1f", c.score), scoreBandColor143(c.score), Color.WHITE, 12f)); // Q143：评分档色脱钩主题色（旧 accentColor 误染：换主题后高低分同色）
         for (String[] f : FEATS) if (featMatch(c, f[0])) chips.add(chip(EN_MODE ? featLabelEn(f[0]) : f[1], chipBg, colText(), 12f)); // Q114：英文缩略表，与瓷砖同口径
-        if (c.studentPick) chips.add(chip("学生推荐", accentColor(), Color.WHITE, 12f));
+        if (c.studentPick) chips.add(chip("学生推荐", accentColor(), onAccentInk(), 12f));
         // Q133（2.45，件四）：AI 重绘小标原与本行胶囊同档一枚；Q136（2.48）用户点名挪走，
         // Q138（2.49）维持：标在详情大卡图左上角与「存疑」竖排（见 buildDetailSheetBody
         // 图廊），本标签行不出 AI 标；带标卡另在标签行下出一段说明（同函数内）。
@@ -14330,9 +14362,10 @@ public class MainActivity extends Activity {
             detailPrimaryBtn.setBackground(joinedBg);
         } else {
             detailPrimaryBtn.setText(S("add_to_mine"));
-            detailPrimaryBtn.setTextColor(Color.WHITE);
+            detailPrimaryBtn.setTextColor(onAccentInk()); // Q165：主色面字口（flat 恒白）
             GradientDrawable g = new GradientDrawable(GradientDrawable.Orientation.LEFT_RIGHT,
-                new int[]{Color.rgb(0x0A, 0x84, 0xFF), Color.rgb(0x5E, 0x5C, 0xE6)});
+                styleMoyao() ? new int[]{MY_PRIMARY, Color.rgb(0x2F, 0xA8, 0xA3)} // Q165：墨曜主钮走主色梯度（flat 蓝紫逐位不动）
+                             : new int[]{Color.rgb(0x0A, 0x84, 0xFF), Color.rgb(0x5E, 0x5C, 0xE6)});
             g.setCornerRadius(dp(this, pillR143())); // Q143：整圆药丸类收口（详情主钮）
             detailPrimaryBtn.setBackground(g);
         }
@@ -21125,12 +21158,12 @@ public class MainActivity extends Activity {
         if (showcaseStackChip != null) {
             if (!canvas) showcaseStackChip.setBackground(roundRect(accentColor(), 999, this));
             else showcaseStackChip.setBackground(null);
-            showcaseStackChip.setTextColor(!canvas ? Color.WHITE : showcaseOnBg());
+            showcaseStackChip.setTextColor(!canvas ? onAccentInk() : showcaseOnBg());
         }
         if (showcaseCanvasChip != null) {
             if (canvas) showcaseCanvasChip.setBackground(roundRect(accentColor(), 999, this));
             else showcaseCanvasChip.setBackground(null);
-            showcaseCanvasChip.setTextColor(canvas ? Color.WHITE : showcaseOnBg());
+            showcaseCanvasChip.setTextColor(canvas ? onAccentInk() : showcaseOnBg());
         }
         // Q161（裁决 c）→Q163（2.78，用户 03:25 改判）：堆叠密度正式恢复——
         // 密度钮两模式恒可点（堆叠调收起露条 40–72dp、平放调卡尺寸），2.76
@@ -21138,7 +21171,7 @@ public class MainActivity extends Activity {
         boolean grp = prefs != null && prefs.getBoolean("showcase_bank_group", false);
         if (showcaseGroupChip != null) {
             showcaseGroupChip.setBackground(roundRect(grp ? accentColor() : showcaseBarBtnBg162(), 999, this));
-            showcaseGroupChip.setTextColor(grp ? Color.WHITE : showcaseOnBg());
+            showcaseGroupChip.setTextColor(grp ? onAccentInk() : showcaseOnBg());
         }
         tintShowcaseSeek(); // Q122：换底/换模式后密度行对比同步刷新
     }
@@ -22216,7 +22249,7 @@ public class MainActivity extends Activity {
         final int[] rdOpts = {0, 1, 3, 7};
         for (final int dv : rdOpts) {
             final boolean on = dv == remindDays;
-            TextView chip = tv(this, dv == 0 ? "当天" : String.format(S("fmt_days_before"), dv), 12.5f, on ? Color.WHITE : colText(), on); // Q164
+            TextView chip = tv(this, dv == 0 ? "当天" : String.format(S("fmt_days_before"), dv), 12.5f, on ? onAccentInk() : colText(), on); // Q164＋Q165：选中字走主色面字口
             chip.setGravity(Gravity.CENTER); chip.setPadding(dp(this, 12), dp(this, 7), dp(this, 12), dp(this, 7));
             chip.setBackground(roundRect(on ? accentColor() : colChipOff(), 999, this));
             LinearLayout.LayoutParams clp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT); if (rdRow.getChildCount() > 0) clp.leftMargin = dp(this, 6);
@@ -22548,7 +22581,7 @@ public class MainActivity extends Activity {
         final int[] rdOpts = {0, 1, 3, 7};
         for (final int dv : rdOpts) {
             final boolean on = dv == remindDays;
-            TextView chip = tv(this, dv == 0 ? "当天" : String.format(S("fmt_days_before"), dv), 12.5f, on ? Color.WHITE : colText(), on); // Q164
+            TextView chip = tv(this, dv == 0 ? "当天" : String.format(S("fmt_days_before"), dv), 12.5f, on ? onAccentInk() : colText(), on); // Q164＋Q165：选中字走主色面字口
             chip.setGravity(Gravity.CENTER); chip.setPadding(dp(this, 12), dp(this, 7), dp(this, 12), dp(this, 7));
             chip.setBackground(roundRect(on ? accentColor() : colChipOff(), 999, this));
             LinearLayout.LayoutParams clp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT); clp.leftMargin = dp(this, 6);
@@ -22865,7 +22898,7 @@ public class MainActivity extends Activity {
         mainHandler.postDelayed(() -> { if (footprintView == v && footprintClosing) { closeFootprintNow(); restoreChrome(); } }, ANIM_DUR_SHEET_OUT + 130); // Q98 兜底，同 closeShowcase
     }
     TextView footFilterChip(String label, boolean on) {
-        TextView chip = tv(this, label, 12.5f, on ? Color.WHITE : colText(), on);
+        TextView chip = tv(this, label, 12.5f, on ? onAccentInk() : colText(), on);
         chip.setGravity(Gravity.CENTER); chip.setPadding(dp(this, 12), dp(this, 7), dp(this, 12), dp(this, 7));
         chip.setBackground(roundRect(on ? accentColor() : colChipOff(), 999, this));
         return chip;
