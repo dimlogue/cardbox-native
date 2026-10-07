@@ -1832,8 +1832,14 @@ public class MainActivity extends Activity {
             return m == android.content.res.Configuration.UI_MODE_NIGHT_YES;
         } catch (Throwable ignored) { return false; }
     }
+    // Q165 墨曜 primitive 原始值表：只许下方语义口引用，组件层禁直引、禁写死 hex。
+    static final int MY_BG = 0xFF0A0C0E, MY_ELEVATED = 0xFF12151A, MY_SURFACE1 = 0xFF171B21, MY_SURFACE2 = 0xFF1E232B;
+    static final int MY_PRIMARY = 0xFF3FD0C9, MY_ACCENT = 0xFF7BEFE6, MY_ON_PRIMARY = 0xFF0A0C0E;
+    static final int MY_TEXT1 = 0xFFF2F5F7, MY_TEXT2 = 0xFFA8B1BB, MY_TEXT3 = 0xFF5C6670;
+    static final int MY_BORDER_SUBTLE = 0xFF23282F, MY_BORDER_DEFAULT = 0xFF2E353D;
     // 强调色：深色档同色相降饱和、提明度保对比（Q72 参数口径）
     int accentColor() {
+        if (styleMoyao()) return MY_PRIMARY; // Q165：墨曜主色金属青；主题色偏好仍存、切回扁平再生效
         boolean d = darkEff();
         switch (themeColorKey) {
             case "teal": return d ? Color.rgb(0x5E,0xC8,0xB4) : Color.rgb(0x0E,0x7C,0x7B);
@@ -1844,25 +1850,27 @@ public class MainActivity extends Activity {
         }
     }
     int accentSoftBg() {
+        if (styleMoyao()) return Color.argb(31, Color.red(MY_PRIMARY), Color.green(MY_PRIMARY), Color.blue(MY_PRIMARY)); // Q165：accent_soft＝主色 @12%
         return darkEff() ? Color.argb(56, Color.red(accentColor()), Color.green(accentColor()), Color.blue(accentColor()))
                          : Color.rgb(0xE8,0xF1,0xFD);
     }
     // 语义色板（Q72）：底/面/浮层/主字/次字/禁用/边线，深浅两套，禁止各页再硬编码白底黑字时优先走这里
-    int colBg() { return darkEff() ? Color.rgb(0x12,0x12,0x12) : Color.rgb(0xF2,0xF3,0xF7); }
-    int colSurface() { return darkEff() ? Color.rgb(0x1E,0x1E,0x1E) : Color.WHITE; }
-    int colSheet() { return darkEff() ? Color.rgb(0x23,0x23,0x23) : Color.WHITE; }
-    int colText() { return darkEff() ? Color.argb(222,255,255,255) : Color.rgb(0x1C,0x1C,0x1E); }
-    int colText2() { return darkEff() ? Color.argb(153,255,255,255) : Color.rgb(0x8E,0x8E,0x93); }
-    int colText3() { return darkEff() ? Color.argb(97,255,255,255) : Color.rgb(0xAE,0xAE,0xB2); }
-    int colDivider() { return darkEff() ? Color.argb(26,255,255,255) : Color.argb(13,20,30,60); }
-    int colChipOff() { return darkEff() ? Color.rgb(0x2A,0x2A,0x2E) : Color.rgb(0xEE,0xF1,0xF6); }
+    // Q165：以下语义口墨曜先行（styleMoyao 时返回墨曜令牌），flat 深浅两路原值逐位不动。
+    int colBg() { return styleMoyao() ? MY_BG : (darkEff() ? Color.rgb(0x12,0x12,0x12) : Color.rgb(0xF2,0xF3,0xF7)); }
+    int colSurface() { return styleMoyao() ? MY_SURFACE1 : (darkEff() ? Color.rgb(0x1E,0x1E,0x1E) : Color.WHITE); }
+    int colSheet() { return styleMoyao() ? MY_SURFACE2 : (darkEff() ? Color.rgb(0x23,0x23,0x23) : Color.WHITE); }
+    int colText() { return styleMoyao() ? MY_TEXT1 : (darkEff() ? Color.argb(222,255,255,255) : Color.rgb(0x1C,0x1C,0x1E)); }
+    int colText2() { return styleMoyao() ? MY_TEXT2 : (darkEff() ? Color.argb(153,255,255,255) : Color.rgb(0x8E,0x8E,0x93)); }
+    int colText3() { return styleMoyao() ? MY_TEXT3 : (darkEff() ? Color.argb(97,255,255,255) : Color.rgb(0xAE,0xAE,0xB2)); }
+    int colDivider() { return styleMoyao() ? MY_BORDER_SUBTLE : (darkEff() ? Color.argb(26,255,255,255) : Color.argb(13,20,30,60)); }
+    int colChipOff() { return styleMoyao() ? MY_SURFACE2 : (darkEff() ? Color.rgb(0x2A,0x2A,0x2E) : Color.rgb(0xEE,0xF1,0xF6)); }
     // Q103（2.17）深色对比度扫查口径：三档墨色与链接蓝的深档值。浅档逐字等于旧硬编码常量
     // （正文 0x3A3A3C / 链接 0x0A5CD6，主字与次字直接复用 colText/colText2——其浅档即
     // 0x1C1C1E / 0x8E8E93），故浅色模式像素不变，只补深色档；凡文字直接坐在语义面
     // （softFaceBg/softSheetBg/深色页底）上的，禁止再写浅档常量。
-    int inkBody() { return darkEff() ? Color.argb(196, 255, 255, 255) : Color.rgb(0x3A, 0x3A, 0x3C); }
-    int inkLink() { return darkEff() ? Color.rgb(0x6E, 0xB3, 0xFF) : Color.rgb(0x0A, 0x5C, 0xD6); }
-    int iconInk() { return darkEff() ? Color.argb(238, 255, 255, 255) : Color.rgb(0x1C, 0x1C, 0x1E); }
+    int inkBody() { return styleMoyao() ? MY_TEXT1 : (darkEff() ? Color.argb(196, 255, 255, 255) : Color.rgb(0x3A, 0x3A, 0x3C)); }
+    int inkLink() { return styleMoyao() ? MY_PRIMARY : (darkEff() ? Color.rgb(0x6E, 0xB3, 0xFF) : Color.rgb(0x0A, 0x5C, 0xD6)); }
+    int iconInk() { return styleMoyao() ? MY_TEXT1 : (darkEff() ? Color.argb(238, 255, 255, 255) : Color.rgb(0x1C, 0x1C, 0x1E)); }
     // ---------- Q129（2.41）外观自定义中心：圆角引擎 / 图标包 / 组织 B / 桌面图标 ----------
     // 圆角全局一杆 t（偏好 ui_corner_t），0.5 = 现行标准档。全部收口函数在 t==0.5f 时精确
     // 返回原基准值（不走浮点乘法），默认档渲染与 2.40 逐位一致；偏离时按类别封顶缩放：
@@ -2119,6 +2127,9 @@ public class MainActivity extends Activity {
     // 的实值（不许另写近似色糊弄对照），故梯度色在此一处定义、softPageBg 与
     // 色样共用；色值与 Q148/Q150 定版逐位一致（原样档一字不动）。
     int[] pageBgColors151(boolean soft) {
+        // Q165：墨曜页底近纯色三段微渐变（相邻差 ≤2 阶防 OLED 带状）；柔和档在墨曜下
+        // 同值不另提亮（柔和体现于表面/描边，不与页底争亮度）。flat 两路逐位不动。
+        if (styleMoyao()) return new int[]{MY_BG, Color.rgb(0x0C, 0x0F, 0x12), MY_BG};
         if (darkEff()) return soft
             ? new int[]{Color.rgb(0x26, 0x33, 0x4E), Color.rgb(0x1D, 0x29, 0x42), Color.rgb(0x17, 0x21, 0x36)}
             : new int[]{Color.rgb(0x15, 0x1E, 0x2E), Color.rgb(0x10, 0x17, 0x25), Color.rgb(0x0C, 0x12, 0x1E)};
@@ -2143,7 +2154,11 @@ public class MainActivity extends Activity {
     /** 半透明浅蓝白柔面：顶部更白（内高光近似）＋白色细描边收口；radiusDp 取 20–28 档。 */
     GradientDrawable softFaceBg(float radiusDp) {
         GradientDrawable g;
-        if (darkEff()) {
+        if (styleMoyao()) {
+            // Q165：墨曜柔面走实色墨面（不留半透明，免叠任意底出青晕）；发丝描边白 10%。
+            g = new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM, new int[]{MY_SURFACE1, MY_SURFACE1});
+            g.setStroke(dp(this, 1), Color.argb(26, 255, 255, 255));
+        } else if (darkEff()) {
             g = new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
                 new int[]{Color.argb(240, 34, 45, 63), Color.argb(232, 25, 34, 50)});
             g.setStroke(dp(this, 1), Color.argb(70, 255, 255, 255));
@@ -2180,7 +2195,11 @@ public class MainActivity extends Activity {
     /** 弹层柔面：比卡面再透一档，让遮罩与身后内容隐隐透出（轻玻璃），圆角由调用方按窗形覆盖。 */
     GradientDrawable softSheetBg() {
         GradientDrawable g;
-        if (darkEff()) {
+        if (styleMoyao()) {
+            // Q165：墨曜弹层柔面实色 surface_2＋发丝描边（同 softFaceBg 口径，禁半透明青晕）。
+            g = new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM, new int[]{MY_SURFACE2, MY_SURFACE2});
+            g.setStroke(dp(this, 1), Color.argb(26, 255, 255, 255));
+        } else if (darkEff()) {
             g = new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
                 new int[]{Color.argb(243, 30, 39, 56), Color.argb(236, 22, 30, 45)});
             g.setStroke(dp(this, 1), Color.argb(80, 255, 255, 255));
@@ -2202,7 +2221,7 @@ public class MainActivity extends Activity {
     /** 图标胶囊底：柔蓝小托盘，图标坐进去（参照图口径）。 */
     GradientDrawable softCapsuleBg(float radiusDp) {
         GradientDrawable g = new GradientDrawable();
-        g.setColor(darkEff() ? Color.rgb(0x2B, 0x3D, 0x5E) : Color.rgb(0xD3, 0xE4, 0xF8));
+        g.setColor(styleMoyao() ? MY_SURFACE2 : (darkEff() ? Color.rgb(0x2B, 0x3D, 0x5E) : Color.rgb(0xD3, 0xE4, 0xF8))); // Q165：图标托盘墨曜走 surface_2
         g.setCornerRadius(dp(this, capsuleR129(radiusDp))); // Q129：胶囊类收口
         return g;
     }
