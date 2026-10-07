@@ -1063,6 +1063,12 @@ public class MainActivity extends Activity {
     // 只染界面强调元素（选中态/开关/链接/评分强调/底栏选中），绝不改卡面图与占位底色。
     String darkModePref = "system";
     String themeColorKey = "blue";
+    // Q165（墨曜风格包）：界面风格单源——ui_style=flat(默认·现行「扁平」)/moyao(墨曜)。
+    // 生效风格只许这一处存（本字段＋同名偏好键），全 App 取色一律由 styleMoyao()
+    // 现算派生，不许各页私存第二份风格判定、不许页面私自调色。flat 时全部取色
+    // 与 2.79 逐位一致（零回归线）；墨曜令牌见语义层 Q165 分支。
+    String uiStyle = "flat";
+    boolean styleMoyao() { return "moyao".equals(uiStyle); }
     static boolean pageBgSoft148 = false; // Q148（2.59）：页面底色柔和档（默认关＝原样；softPageBg 一处收口）
     static final String[][] THEME_OPTS = {{"blue","蓝"},{"teal","青绿"},{"violet","紫"},{"green","翠绿"},{"orange","橙"}};
     // Q114（2.27）：主题色英文名（key 与 THEME_OPTS 同序；数据键仍走 THEME_OPTS[i][0]，此处纯展示）
@@ -1075,7 +1081,9 @@ public class MainActivity extends Activity {
             boolean ok = false;
             for (String[] o : THEME_OPTS) if (o[0].equals(themeColorKey)) ok = true;
             if (!ok) themeColorKey = "blue";
-        } catch (Throwable ignored) { darkModePref = "system"; themeColorKey = "blue"; }
+            uiStyle = prefs == null ? "flat" : prefs.getString("ui_style", "flat");
+            if (!"moyao".equals(uiStyle)) uiStyle = "flat";
+        } catch (Throwable ignored) { darkModePref = "system"; themeColorKey = "blue"; uiStyle = "flat"; }
         // Q129（2.41）：外观自定义四偏好。圆角 t 只接受 [0,1]，非法回落 0.5 标准档；
         // 其余三项只接受枚举值，非法回落默认。prefs 为 null（极早期）时保持静态默认值。
         try {
@@ -1811,6 +1819,12 @@ public class MainActivity extends Activity {
         } catch (Throwable ignored) {}
     }
     boolean darkEff() {
+        // Q165：墨曜＝深色风格包，生效时有效深浅恒为深。全 App 深浅判定只许此一口
+        // 派生（同概念单源）：108 个调用点经 2026-10-08 全量审计均为视觉用途
+        // （取色/描边/渐变/状态栏明暗/展柜自适应底/组织标深底版/卡图 alpha），无
+        // 数据落盘与行为分支消费点（审计表见 moyao-batch-2026-10-08.md）。
+        // 警告：今后非视觉逻辑不许借道 darkEff()，需新开派生口先过评审。
+        if (styleMoyao()) return true;
         if ("dark".equals(darkModePref)) return true;
         if ("light".equals(darkModePref)) return false;
         try {
