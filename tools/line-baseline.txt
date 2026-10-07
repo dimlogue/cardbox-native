@@ -1,4 +1,13 @@
-27004
+27079
+# 2026-10-08 墨曜风格包批（Q165，用户睡前亲令整套、施工前 DeepSeek 方案审，
+# 净增 +75 相对 2.79 基线 27004：风格单源（uiStyle 字段/styleMoyao 派生口/
+# ui_style 加载校验/darkEff 墨曜恒深）+14、MY_* primitive 表＋语义层 13 口墨曜
+# 分支＋pageBgColors151 墨底＋softFace/softSheet/softCapsule 墨面 +19、设置风格
+# 段选＋S 表新键 3（ui_style/style_flat/style_moyao）+9、共享染色口（dock/nav
+# 药丸/搜索胶囊/提示条/softInk）墨曜分支＋onAccentInk 主色面字口收口与各页选中
+# 片配对 +33。缘由沿批准先例：用户点名件、先咨询后施工、flat 全部取色逐位
+# 零回归（所有改动 moyao 先行分支、原值内嵌），build＋check-arch 双模把关。
+# 此后只许减不许增（check-arch.sh 超限报警）。
 # 2026-10-08 2.79 批2 审后修正再登记：27004（+39：横滑守卫 hScrollGuard164 ＋周期 cyc 键，减死表 1）。
 # 五件施工单，净增 +352 相对 2.78 基线 26613：STR 双语新键约 +190 行（外
 # 卡专区/展柜 sc_*/工具二级页/双弹窗/表单 hint/资讯外壳等整批落串）、展柜
