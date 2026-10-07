@@ -35,6 +35,14 @@ STRICT = "--strict" in sys.argv
 CATCH_EMPTY_BASELINE = 212
 SWALLOW_OK_MARKER = "swallow-ok"
 
+# i18n 批1（2026-10-08）基线：字符串三套机制冻结 + 未收编字面量盘点。
+# 基线值落 tools/i18n-baseline.txt（实测登记，只许减不许增，降了要同步调低）。
+# 口径与批1盘点扫描一致：L( 调用按 `(?<![A-Za-z])L\("` 计数（36 真调用+定义/注释，
+# 批1实测 42 写死基线）；EN_TXT 条数按 `EN_TXT\.put\(` 计数（272 冻结，
+# 含多 put 同行逐个计）；未收编候选 = 字面量含 CJK 或 [A-Za-z]{2,} 且非纯标识符/
+# 纯格式串、且不在 STR.put / EN_TXT.put 声明行、不作 S("key") 键名（批1实测 1668）。
+I18N_BASELINE_FILE = os.path.join(ROOT, "tools", "i18n-baseline.txt")
+
 
 def strip_code(text):
     """去掉字符串/字符字面量与注释，保留行结构（换行与列位近似），供大括号配对。"""
@@ -201,6 +209,65 @@ def main():
         for x in fields:
             f.write(x + "\n")
     print(f"[静态] static 非 final 字段 {len(fields)} 条 -> tools/static-state-inventory.txt")
+
+    # ---------- 4. i18n 基线（三套机制冻结 + 未收编字面量只减不增） ----------
+    l_calls = len(re.findall(r'(?<![A-Za-z])L\("', src))
+    entxt_entries = len(re.findall(r'EN_TXT\.put\(', src))
+    str_decl_lines, entxt_decl_lines = set(), set()
+    for i, ln in enumerate(lines, 1):
+        if re.search(r'STR\.put\("', ln):
+            str_decl_lines.add(i)
+        if re.search(r'EN_TXT\.put\(', ln):
+            entxt_decl_lines.add(i)
+    keylike_re = re.compile(r'^[A-Za-z0-9_.\-/:]+$')
+    cand_n = 0
+    for i, ln in enumerate(lines, 1):
+        if i in str_decl_lines or i in entxt_decl_lines:
+            continue
+        for m in re.finditer(r'"((?:[^"\\]|\\.)*)"', ln):
+            t = m.group(1)
+            if len(t) < 2:
+                continue
+            pre = ln[:m.start()].rstrip()
+            if pre.endswith("S("):
+                continue
+            has_cjk = bool(re.search(r'[\u4e00-\u9fff]', t))
+            has_enw = bool(re.search(r'[A-Za-z]{2,}', t))
+            if not has_cjk and not has_enw:
+                continue
+            if keylike_re.match(t) and not has_cjk and ' ' not in t:
+                continue  # 纯标识符/键名/路径
+            if not has_cjk and re.search(r'%[-+0-9.]*[a-zA-Z%]', t) \
+                    and t.strip('%0123456789. -+dfsx') == '':
+                continue  # 纯格式串（口径同批1盘点扫描）
+            cand_n += 1
+    i18n_base = {}
+    if os.path.exists(I18N_BASELINE_FILE):
+        for ln in open(I18N_BASELINE_FILE, encoding="utf-8"):
+            m = re.match(r"\s*(L_CALLS|EN_TXT|CANDIDATES)\s*=\s*(\d+)", ln)
+            if m:
+                i18n_base[m.group(1)] = int(m.group(2))
+    if not i18n_base:
+        problems.append("i18n 基线文件 tools/i18n-baseline.txt 缺失或无有效键值")
+        print("[i18n] ⚠ 基线文件缺失")
+    else:
+        cur = {"L_CALLS": l_calls, "EN_TXT": entxt_entries, "CANDIDATES": cand_n}
+        labels = {"L_CALLS": "L() 调用（冻结）", "EN_TXT": "EN_TXT 条数（冻结）",
+                  "CANDIDATES": "未收编候选字面量（只减不增）"}
+        bad = []
+        for k in ("L_CALLS", "EN_TXT", "CANDIDATES"):
+            if k in i18n_base and cur[k] > i18n_base[k]:
+                bad.append(f"{labels[k]} {cur[k]} 超基线 {i18n_base[k]}（+{cur[k] - i18n_base[k]}）")
+        print(f"[i18n] L() {l_calls} / EN_TXT {entxt_entries} / 候选 {cand_n}（基线 "
+              f"L={i18n_base.get('L_CALLS')} EN={i18n_base.get('EN_TXT')} 候选={i18n_base.get('CANDIDATES')}）")
+        if bad:
+            for b in bad:
+                problems.append("i18n 基线：" + b + "——新串只许进 STR（S(key)）；L()/EN_TXT 冻结新增；候选降了请同步调低基线")
+            print("[i18n] ⚠ " + "；".join(bad))
+        else:
+            low = [k for k in cur if k in i18n_base and cur[k] < i18n_base[k]]
+            tip = "；已低于基线，请人工调低 i18n-baseline.txt：" + ",".join(low) if low else ""
+            print(f"[i18n] 基线 OK（只减不增）{tip}")
 
     # ---------- 结论 ----------
     if problems:
