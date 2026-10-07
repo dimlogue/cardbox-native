@@ -23,6 +23,12 @@
 - 远程：私有仓 dimlogue/cardbox-native（master）
 - 冻结备份：~/workspace/backups/cardbox-freeze-2026-10-03-v3.107.tar.gz
 
+## 施工纪律（改版期，2026-10-08 立）
+- **派活先定层**：任何新代码动工前先定它属于哪一层——`core.util`（日志/线程/Bitmap 池/兜底）→ `core.data`（解析/评分/prefs/原始资源）→ `core.state`（AppState 唯一可变状态）→ `ui`（主题令牌/玻璃/公共控件/展柜）→ `page`（每屏编排，目标 ≤600 行）；层归属写进当次施工说明与提交信息第一行。拿不准先停下问，不许先塞进 MainActivity 再说。
+- **改码先过 DeepSeek**：凡改/写代码，先把现状（含已知 bug 与拟改范围）发 DeepSeek 讨论出方案再施工；出包前再过一轮 diff 审查。意见经主会话筛选后转施工单，不许闷头 solo。
+- **门禁每步必跑**：`bash tools/check-arch.sh`（行数基线在 tools/line-baseline.txt，MainActivity 只许减不许增；catch 审计明细 tools/catch-audit.txt；静态可变状态清单 tools/static-state-inventory.txt）。新增 catch 必须带 `logErr(...)`/Log 或注释说明；关键路径（数据读写/OTA/图片解码/玻璃渲染/展柜手势）catch 必须带日志。新增长期 static 可变字段先对照清单说明理由。
+- **每步可回退**：一步一提交、独立可编译；改版各步按审计路线走（见 goals/debit-card-database-rebuild/hidden_files/deepseek-audit-2026-10-07/SUMMARY.md），未经主会话安排不跨步顺手改。
+
 ## 已完成
 - [x] Phase 1（2026-10-03 04:27，commit 870ea7e，APK 0.1-native）：五页骨架+底部导航；全部卡片（搜索+卡库总览英雄卡+双列瓷砖+点击详情）；详情（图/子版本/点评/加减收藏/参数表）；我的卡片（收藏网格+总数/组织覆盖/无转换费统计条）；学生推荐（学生/留学关键词+评分排序）；设置基础行；系统返回键关详情。收藏存 SharedPreferences(cardbox_native/mine_ids)。
 

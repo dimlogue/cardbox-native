@@ -2248,13 +2248,19 @@ public class MainActivity extends Activity {
         return r;
     }
 
+    // Step0/P0-A（2026-10-08）：关键路径异常最小留痕口——只往 Log 打一行，
+    // 不吞不抛、不改任何 catch 的控制流与返回值；非关键路径暂不接入。
+    static void logErr(String tag, Throwable t) {
+        try { android.util.Log.w("CardBox", tag + " :: " + t); } catch (Throwable ignoredLog) {}
+    }
+
     // ---------- Q18 崩溃留痕 + 玻璃自动降级 ----------
     void noteGlassFailure() {
         glassFailCount++;
         if (glassFailCount >= 3 && !glassDisabled) {
             glassDisabled = true;
             refreshDockBg(); // Q117：自动关停同为关态，dock 兜底同步换上
-            try { if (prefs != null) prefs.edit().putBoolean("glass_disabled", true).apply(); } catch (Throwable ignored) {}
+            try { if (prefs != null) prefs.edit().putBoolean("glass_disabled", true).apply(); } catch (Throwable ignored) { logErr("glass.persistDisabled", ignored);}
             // clear all live glass images/effects so tint fallback shows, never drag the page down
             try {
                 for (ImageView iv : new java.util.ArrayList<>(glassViews)) {
@@ -2288,7 +2294,7 @@ public class MainActivity extends Activity {
                     File f = new File(getFilesDir(), "crash_last.txt");
                     FileOutputStream fos = new FileOutputStream(f, false);
                     fos.write(txt.getBytes("UTF-8")); fos.close();
-                } catch (Throwable ignored) {}
+                } catch (Throwable ignored) { logErr("crash.writeFile", ignored);}
                 try {
                     if (prefs != null) prefs.edit().putString("crash_log", txt).commit();
                 } catch (Throwable ignored) {}
@@ -2314,7 +2320,7 @@ public class MainActivity extends Activity {
                         try { prefs.edit().putString("crash_log", crashLogText).apply(); } catch (Throwable ignored) {}
                     }
                 }
-            } catch (Throwable ignored) { crashLogText = null; }
+            } catch (Throwable ignored) { logErr("crash.loadFile", ignored); crashLogText = null; }
         }
         if (crashLogText != null && crashLogText.trim().isEmpty()) crashLogText = null;
     }
@@ -2776,7 +2782,7 @@ public class MainActivity extends Activity {
         glassAutoOff = true;
         refreshDockBg(); // Q117：自动停用同为关态，dock 兜底同步换上
         backdropFailStreak = 0; // Q98：关停落盘后计数归零，设置页重新打开即从干净状态重试
-        try { if (prefs != null) prefs.edit().putBoolean("glass_disabled", true).putBoolean("glass_auto_off", true).apply(); } catch (Throwable ignored) {}
+        try { if (prefs != null) prefs.edit().putBoolean("glass_disabled", true).putBoolean("glass_auto_off", true).apply(); } catch (Throwable ignored) { logErr("glass.disablePersist", ignored);}
         try {
             for (ImageView iv : new java.util.ArrayList<>(glassViews)) {
                 try { iv.setVisibility(View.INVISIBLE); } catch (Throwable ignored) {}
@@ -3037,11 +3043,11 @@ public class MainActivity extends Activity {
             if (dead != null) for (String k : dead.split(",")) { String t = k.trim(); if (!t.isEmpty() && hwOrderIdx(t) >= 0) hwDeadPieces.add(t); }
             String elig = prefs.getString("glass_hw_eligible", "");
             if (elig != null) for (String k : elig.split(",")) { String t = k.trim(); if (!t.isEmpty() && hwOrderIdx(t) >= 0 && !hwProven.contains(t) && !hwDeadPieces.contains(t)) hwEligible.add(t); }
-        } catch (Throwable ignored) {}
+        } catch (Throwable ignored) { logErr("glass.hw.load", ignored);}
     }
     /** 试验位落盘：绘制前申领（commit）——崩在本帧即留证，下次冷启据此判该件退软件。 */
     void hwArmTrial(String k) {
-        try { if (prefs != null) prefs.edit().putString("glass_hw_trial", k).commit(); } catch (Throwable ignored) {}
+        try { if (prefs != null) prefs.edit().putString("glass_hw_trial", k).commit(); } catch (Throwable ignored) { logErr("glass.hw.armTrial", ignored);}
     }
     /** 已证/已退/资格集落盘并清在试标记（入证与判死共用，commit 同步）。 */
     void hwPersistPieces() {
@@ -3053,7 +3059,7 @@ public class MainActivity extends Activity {
                 .putString("glass_hw_eligible", hwJoinCsv(hwEligible))
                 .putString("glass_hw_trial", "")
                 .commit();
-        } catch (Throwable ignored) {}
+        } catch (Throwable ignored) { logErr("glass.hw.persist", ignored);}
     }
 
     /** Q112 资格集单独落盘：不碰在试标记（挣资格与某件正在试验可同会话交错，
@@ -3062,7 +3068,7 @@ public class MainActivity extends Activity {
         try {
             if (prefs == null) return;
             prefs.edit().putString("glass_hw_eligible", hwJoinCsv(hwEligible)).commit();
-        } catch (Throwable ignored) {}
+        } catch (Throwable ignored) { logErr("glass.hw.persistEligible", ignored);}
     }
 
     /** Q112 资格挣取（每会话至多挣一件）：主页已稳定渲染满约 3 秒、进程还活着，
@@ -4207,7 +4213,7 @@ public class MainActivity extends Activity {
                     Object v = o.opt(k);
                     if (v instanceof Number) out.put(k, ((Number) v).doubleValue());
                 }
-            } catch (Exception ignored) { }
+            } catch (Exception ignored) { logErr("data.scoreDims.parse", ignored); }
             return out;
         }
 
@@ -4242,31 +4248,31 @@ public class MainActivity extends Activity {
                 all = tmp; byId = tmpBy;
                 dataVersion = root.optInt("data_version", dataVersion);
                 return true;
-            } catch (Exception e) { return false; }
+            } catch (Exception e) { logErr("store.parse", e); return false; }
         }
 
         static int versionOf(String json) {
-            try { return new JSONObject(json).optInt("data_version", 0); } catch (Exception e) { return 0; }
+            try { return new JSONObject(json).optInt("data_version", 0); } catch (Exception e) { logErr("store.version", e); return 0; }
         }
 
         static void load(Context c) {
             if (!all.isEmpty()) return;
             String assetJson = null;
-            try { assetJson = readAll(c.getAssets().open("data/cards.json")); } catch (Exception e) { /* 读不到走空 */ }
+            try { assetJson = readAll(c.getAssets().open("data/cards.json")); } catch (Exception e) { logErr("store.load.asset", e); /* 读不到走空 */ }
             if (assetJson != null) bundledVersion = versionOf(assetJson); // Q105：包内资产版本落定（Img 取源优先级依据）
             // OTA 文件（filesDir/cards-ota.json）比内置新才优先用它（对照混合版 boot 的 OTA 优先逻辑）
             String otaJson = null;
             try {
                 File f = new File(c.getFilesDir(), "cards-ota.json");
                 if (f.exists()) otaJson = readAll(new FileInputStream(f));
-            } catch (Exception e) { otaJson = null; }
+            } catch (Exception e) { logErr("store.load.otaFile", e); otaJson = null; }
             // Q98 双保险：OTA 文件只有「经确认窗应用成功后落下的标记 ota_applied_version 与文件
             // 版本一致」才认——系统备份/克隆把文件单独带回新装时标记对不上，一律回落包内资产，
             // 绝不再出现「一打开就是远端新版、没经过确认」。标记只由 applyPendingUpdate 在写入
             // 成功后落盘；老版本经确认更新过的机器首次跑本版会回落资产并重新走一次确认窗。
             int otaVer = otaJson == null ? -1 : versionOf(otaJson);
             int appliedVer = -1;
-            try { appliedVer = c.getSharedPreferences("cardbox_native", Context.MODE_PRIVATE).getInt("ota_applied_version", -1); } catch (Exception e) { appliedVer = -1; }
+            try { appliedVer = c.getSharedPreferences("cardbox_native", Context.MODE_PRIVATE).getInt("ota_applied_version", -1); } catch (Exception e) { logErr("store.load.appliedVer", e); appliedVer = -1; }
             boolean otaConfirmed = otaJson != null && otaVer > 0 && otaVer == appliedVer;
             if (otaConfirmed && assetJson != null && otaVer > versionOf(assetJson)) {
                 if (parseInto(otaJson)) return;
@@ -4274,7 +4280,7 @@ public class MainActivity extends Activity {
                 // 静默回落包内旧版却不清标记：进程内更新时是新版、冷重启悄悄变回
                 // 旧版，用户「更新完没变化、每次进 App 还得再更一遍」正源于此。
                 // 清标记保状态诚实：下次检查会如实再报新版可更，不许假装已应用。
-                try { c.getSharedPreferences("cardbox_native", Context.MODE_PRIVATE).edit().remove("ota_applied_version").apply(); } catch (Exception e) { /* 清不掉也只是下次再清 */ }
+                try { c.getSharedPreferences("cardbox_native", Context.MODE_PRIVATE).edit().remove("ota_applied_version").apply(); } catch (Exception e) { logErr("store.load.clearMark", e); /* 清不掉也只是下次再清 */ }
             }
             if (assetJson != null) parseInto(assetJson);
             if (all.isEmpty() && otaConfirmed) parseInto(otaJson);
@@ -4437,9 +4443,9 @@ public class MainActivity extends Activity {
             // 远程优先但新图未落盘时包内图只是过渡帧，不入缓存——免得刚下到的新图被它顶住
             boolean provisional = remoteFirst && !remoteFileExists(c, path);
             Bitmap b = null;
-            try { b = decode(openImageStream(c, path, remoteFirst)); } catch (Exception e) { /* 换另一源再试 */ }
+            try { b = decode(openImageStream(c, path, remoteFirst)); } catch (Exception e) { logErr("img.get.primary", e); /* 换另一源再试 */ }
             if (b == null) {
-                try { b = decode(openImageStream(c, path, !remoteFirst)); } catch (Exception e) { /* 拿不到图就占位，不崩 */ }
+                try { b = decode(openImageStream(c, path, !remoteFirst)); } catch (Exception e) { logErr("img.get.fallback", e); /* 拿不到图就占位，不崩 */ }
             }
             if (b != null) { if (!provisional) cachePut(path, b); return b; }
             healRemoteFile151(c, path); // Q151（N17）：两源皆坏→坏文件自愈（删毒文件+退避重拉）
@@ -4494,7 +4500,7 @@ public class MainActivity extends Activity {
                 InputStream in2 = openImageStream(c, path, remoteFirst);
                 b = BitmapFactory.decodeStream(in2, null, op);
                 try { in2.close(); } catch (Exception ignored) {}
-            } catch (Exception e) { /* 解码失败回落占位 */ }
+            } catch (Exception e) { logErr("img.decodeSized", e); /* 解码失败回落占位 */ }
             return insetFaceCrop(b);
         }
 
@@ -4566,10 +4572,10 @@ public class MainActivity extends Activity {
                                     if (tmp151.length() > 0 && tmp151.renameTo(dest)) { ok151 = true; }
                                     break;
                                 }
-                            } catch (Exception e151) { /* 换下一条线 */ }
+                            } catch (Exception e151) { logErr("img.fetch.line", e151); /* 换下一条线 */ }
                             finally { if (conn != null) conn.disconnect(); }
                         }
-                    } catch (Exception e) { /* 断网就下次再试 */ }
+                    } catch (Exception e) { logErr("img.fetch.outer", e); /* 断网就下次再试 */ }
                     if (!ok151) {
                         try { if (tmp151.exists()) tmp151.delete(); } catch (Throwable ignored) {}
                         fetchFail151.put(path, System.currentTimeMillis()); // Q151：失败记账进退避
@@ -4590,7 +4596,7 @@ public class MainActivity extends Activity {
             try {
                 File f = new File(remoteCacheDir(c), new File(path).getName());
                 if (f.exists()) { f.delete(); fetchRemote(c.getApplicationContext(), path, f); }
-            } catch (Throwable ignored) {}
+            } catch (Throwable ignored) { logErr("img.heal", ignored);}
         }
 
         // Q151（P0）：有图探活——只读尺寸头不解码（inJustDecodeBounds），替详情页
@@ -4611,7 +4617,7 @@ public class MainActivity extends Activity {
                 BitmapFactory.decodeStream(in, null, bo);
                 try { in.close(); } catch (Exception ignored) {}
                 return bo.outWidth > 0 && bo.outHeight > 0;
-            } catch (Exception e) { return false; }
+            } catch (Exception e) { logErr("img.probeBounds", e); return false; }
         }
     }
 
@@ -5648,10 +5654,10 @@ public class MainActivity extends Activity {
             String raw = prefs.getString("ownact_items", "[]");
             JSONArray a = new JSONArray(raw == null || raw.isEmpty() ? "[]" : raw);
             for (int i = 0; i < a.length(); i++) { JSONObject o = a.getJSONObject(i); OwnActItem it = new OwnActItem(); it.id = o.optString("id"); it.title = o.optString("title"); it.cardName = o.optString("card", ""); it.type = o.optString("type", "刷卡"); it.period = o.optString("period", ""); it.target = o.optInt("target", 0); it.done = o.optInt("done", 0); it.finished = o.optBoolean("fin", false); if (it.id == null || it.id.isEmpty()) it.id = "act-" + i; ownActs.add(it); }
-        } catch (Throwable ignored) { ownActs = new ArrayList<>(); }
+        } catch (Throwable ignored) { logErr("data.ownActs.load", ignored); ownActs = new ArrayList<>(); }
     }
     void saveOwnActs() {
-        try { JSONArray a = new JSONArray(); for (OwnActItem it : ownActs) { JSONObject o = new JSONObject(); o.put("id", it.id == null ? "" : it.id); o.put("title", it.title == null ? "" : it.title); o.put("card", it.cardName == null ? "" : it.cardName); o.put("type", it.type == null ? "" : it.type); o.put("period", it.period == null ? "" : it.period); o.put("target", it.target); o.put("done", it.done); o.put("fin", it.finished); a.put(o); } prefs.edit().putString("ownact_items", a.toString()).commit(); } catch (Throwable ignored) {}
+        try { JSONArray a = new JSONArray(); for (OwnActItem it : ownActs) { JSONObject o = new JSONObject(); o.put("id", it.id == null ? "" : it.id); o.put("title", it.title == null ? "" : it.title); o.put("card", it.cardName == null ? "" : it.cardName); o.put("type", it.type == null ? "" : it.type); o.put("period", it.period == null ? "" : it.period); o.put("target", it.target); o.put("done", it.done); o.put("fin", it.finished); a.put(o); } prefs.edit().putString("ownact_items", a.toString()).commit(); } catch (Throwable ignored) { logErr("data.ownActs.save", ignored);}
     }
 
     void loadCustomCards() {
@@ -5676,7 +5682,7 @@ public class MainActivity extends Activity {
                 if (c.style < 0 || c.style >= CUSTOM_STYLES.length) c.style = 0;
                 customCards.add(c);
             }
-        } catch (Throwable e) {
+        } catch (Throwable e) { logErr("data.customCards.load", e);
             // Q21：单条坏数据不许整表蒸发——退到逐条抢救，能读几张读几张；整表清空只会把用户卡一次丢光。
             customCards = new ArrayList<>();
             try {
@@ -5773,7 +5779,7 @@ public class MainActivity extends Activity {
             prefs.edit().putString("mine_entries", arr.toString())
                 .putStringSet("mine_ids", new HashSet<>(mine))
                 .putString("mine_order", new JSONArray(mineOrder).toString()).commit();
-        } catch (Throwable ignored) {}
+        } catch (Throwable ignored) { logErr("data.mineEntries.save", ignored);}
     }
 
     void loadMineEntries() {
@@ -5792,7 +5798,7 @@ public class MainActivity extends Activity {
                 syncMineProjection();
                 return;
             }
-        } catch (Throwable ignored) { mineEntries = new ArrayList<>(); }
+        } catch (Throwable ignored) { logErr("data.mineEntries.load", ignored); mineEntries = new ArrayList<>(); }
         // 迁移：旧 mine_ids + mine_order -> 每卡一条未标条目（不推断类别）
         try {
             java.util.LinkedHashSet<String> ids = new java.util.LinkedHashSet<>();
@@ -5803,7 +5809,7 @@ public class MainActivity extends Activity {
             syncMineProjection();
             if (prefs != null) prefs.edit().putString("mine_entries", new JSONArray().toString()).commit();
             saveMineEntries();
-        } catch (Throwable ignored) {}
+        } catch (Throwable ignored) { logErr("data.mineEntries.migrate", ignored);}
     }
 
     String newMineEntryKey(String cardId) {
@@ -6620,7 +6626,7 @@ public class MainActivity extends Activity {
         } catch (Throwable ignored) {}
         final Context app151 = getApplicationContext();
         new Thread(() -> {
-            try { Store.load(app151); } catch (Throwable ignored) {}
+            try { Store.load(app151); } catch (Throwable ignored) { logErr("boot.storeLoad", ignored);}
             // 首屏图预热：首页首 4 行（2 列口径 8 张、余量取 16）在后台按瓷砖桶
             // 预解进 Img 缓存——进门首帧直接命中，不再 8 张大图解码堵主线程。
             try {
@@ -6764,7 +6770,7 @@ public class MainActivity extends Activity {
                 else if (coldBoot155) { bootReason152 = "boot-cold-reset-home"; }
                 if (coldBoot155) resumeDetail152 = null; // Q155：冷启详情不自开（键已读即清，此处显式弃用防漏）
             }
-        } catch (Throwable ignored) {}
+        } catch (Throwable ignored) { logErr("boot.resumeState", ignored);}
         if ("settings".equals(bootTab152) && iconBackY152 > 0) notePageScroll152("settings", iconBackY152);
         setVisibleTab152(bootTab152, bootReason152);
         if ("settings".equals(bootTab152) && iconBackY152 > 0 && settingsScroll != null) {
@@ -7051,7 +7057,7 @@ public class MainActivity extends Activity {
     void persistMineSet() {
         // Q65 后真相在 mineEntries；保留此入口给旧调用，统一转条目落盘
         if (mineEntries != null) saveMineEntries();
-        else try { prefs.edit().putStringSet("mine_ids", new HashSet<>(mine)).commit(); } catch (Throwable ignored) {}
+        else try { prefs.edit().putStringSet("mine_ids", new HashSet<>(mine)).commit(); } catch (Throwable ignored) { logErr("data.mineSet.save", ignored);}
     }
 
     // Q65 加入：弹一类/二类选择（可不标），选完才落条目；同一库卡可再加第二条分别标记
@@ -9358,7 +9364,7 @@ public class MainActivity extends Activity {
         try {
             InputStream in156 = ctx.getAssets().open(path156);
             try { return BitmapFactory.decodeStream(in156); } finally { in156.close(); }
-        } catch (Throwable t156) { return null; }
+        } catch (Throwable t156) { logErr("img.badgeBmp", t156); return null; }
     }
     static Bitmap upBadgeBmp156(Context ctx) {
         if (upBadgeBmpCache156 == null) upBadgeBmpCache156 = loadBadgeBmp156(ctx, "badges/unionpay.png");
@@ -14293,7 +14299,7 @@ public class MainActivity extends Activity {
             for (String id : mineOrder) arr.put(id);
             // Q21：顺序同为用户资产，走 commit 同步落盘（理由同 saveCustomCards）。
             prefs.edit().putString("mine_order", arr.toString()).commit();
-        } catch (Throwable e) { /* 存不下就保持内存顺序 */ }
+        } catch (Throwable e) { logErr("data.mineOrder.save", e); /* 存不下就保持内存顺序 */ }
     }
 
     // 同 app.js applyMineOrder：已保存顺序的在前（按保存序），其余保持原相对序（List.sort 稳定）
@@ -16008,7 +16014,7 @@ public class MainActivity extends Activity {
         lastDragEndAt = android.os.SystemClock.uptimeMillis(); // Q154（件九·隐患3/6）：与 dragReorderTouchMs131 及两处 450ms 点击锁读方统一 uptimeMillis
         // Q7：以拖动手势中就地换位后的实际子序为准（dy 仅作兜底），避免实时换位与按位移换算双重作用
         int liveIdx = -1;
-        try { if (tile.getParent() instanceof ViewGroup) liveIdx = ((ViewGroup) tile.getParent()).indexOfChild(tile); } catch (Throwable ignored) {}
+        try { if (tile.getParent() instanceof ViewGroup) liveIdx = ((ViewGroup) tile.getParent()).indexOfChild(tile); } catch (Throwable ignored) { logErr("drag.custom.settle", ignored);}
         int toIdx;
         if (liveIdx >= 0) toIdx = Math.max(0, Math.min(liveIdx, customCards.size() - 1));
         else {
@@ -18034,9 +18040,9 @@ public class MainActivity extends Activity {
                     if (conn.getResponseCode() != 200) { conn.disconnect(); continue; }
                     String json = readAllDeadline(conn.getInputStream(), 9000); conn.disconnect(); // Q122（件六）：慢滴不能裸等，总期限到点按超时收口
                     int remoteVer = Store.versionOf(json);
-                    try { JSONObject probe = new JSONObject(json); JSONArray pa = probe.getJSONArray("cards"); if (pa == null || pa.length() == 0) continue; } catch (Exception e) { continue; }
+                    try { JSONObject probe = new JSONObject(json); JSONArray pa = probe.getJSONArray("cards"); if (pa == null || pa.length() == 0) continue; } catch (Exception e) { logErr("ota.data.probe", e); continue; }
                     if (remoteVer > bestVer) { bestVer = remoteVer; bestJson = json; }
-                } catch (Exception e) { if (e instanceof java.net.SocketTimeoutException) sawTimeout122[0] = true; }
+                } catch (Exception e) { logErr("ota.data.check", e); if (e instanceof java.net.SocketTimeoutException) sawTimeout122[0] = true; }
             }
             if (bestJson == null) {
                 // Q122（件六）：失败给人话原因——超时与连不上分开说，不再笼统一句「检查网络」
@@ -18143,7 +18149,7 @@ public class MainActivity extends Activity {
                 int diskVer152 = Store.versionOf(diskJson152);
                 if (diskVer152 != ver) throw new Exception("disk verify failed");
                 ok = Store.parseInto(json);
-            } catch (Exception e) { ok = false; try { if (tmp151.exists()) tmp151.delete(); } catch (Throwable ignored) {} }
+            } catch (Exception e) { logErr("ota.data.apply", e); ok = false; try { if (tmp151.exists()) tmp151.delete(); } catch (Throwable ignored) {} }
             final boolean fok = ok;
             runOnUiThread(() -> {
                 updateApplying = false;
@@ -18157,7 +18163,7 @@ public class MainActivity extends Activity {
                 // Q105（2.19）：数据已换版——内存图缓存仍按路径键存着旧版位图，同进程内不
                 // 清就会继续顶住新图（2.15 只做了磁盘按版本分目录，内存这层漏了）。只解除
                 // 引用交系统回收，不 recycle（Q21）；磨砂裁片缓存同清（源自旧位图派生）。
-                try { synchronized (Img.cache) { Img.cache.evictAll(); } } catch (Throwable ignored) {}
+                try { synchronized (Img.cache) { Img.cache.evictAll(); } } catch (Throwable ignored) { logErr("ota.data.evictImgCache", ignored);}
                 try { mineFrostCache.evictAll(); } catch (Throwable ignored) {}
                 // Q125（2.37，件二）：换版收口——后台清 ota-images 旧版本目录
                 // （只留当前＋上一版），并预热新版首页首屏卡图（刚 evictAll，
@@ -18400,7 +18406,7 @@ public class MainActivity extends Activity {
                     || !info.sha256.matches("[0-9a-f]{64}")) return null;
             if (info.versionName.length() == 0) info.versionName = String.valueOf(info.versionCode);
             return info;
-        } catch (Throwable ignored) { return null; }
+        } catch (Throwable ignored) { logErr("ota.app.parseManifest", ignored); return null; }
     }
 
     AppUpdateInfo159 loadCachedAppUpdateInfo159() {
@@ -18416,7 +18422,7 @@ public class MainActivity extends Activity {
             }
             appUpdateInfo159 = null;
             prefs.edit().remove("app_update_json159").apply();
-        } catch (Throwable ignored) {}
+        } catch (Throwable ignored) { logErr("ota.app.loadCache", ignored);}
         return null;
     }
 
@@ -18470,9 +18476,9 @@ public class MainActivity extends Activity {
                     String raw = readAllDeadline(conn.getInputStream(), 9000);
                     AppUpdateInfo159 parsed = parseAppUpdateInfo159(new JSONObject(raw), raw);
                     if (parsed != null && (best == null || parsed.versionCode > best.versionCode)) best = parsed;
-                } catch (java.net.SocketTimeoutException te) {
+                } catch (java.net.SocketTimeoutException te) { logErr("ota.app.checkTimeout", te);
                     timeout = true;
-                } catch (Throwable ignored) {
+                } catch (Throwable ignored) { logErr("ota.app.check", ignored);
                 } finally {
                     if (conn != null) conn.disconnect();
                 }
@@ -18847,10 +18853,10 @@ public class MainActivity extends Activity {
                     try { if (target.exists()) target.delete(); } catch (Throwable ignored) {}
                     failure = L("下载不完整，已删除，请重试", "The download was incomplete and has been deleted. Please try again.");
                 }
-            } catch (java.net.SocketTimeoutException te) {
+            } catch (java.net.SocketTimeoutException te) { logErr("ota.dl.timeout", te);
                 try { if (part.exists()) part.delete(); } catch (Throwable ignored) {}
                 failure = L("下载超时，安装包还没下完，请检查网络后重试", "The download timed out before the package finished. Check your network and try again.");
-            } catch (Throwable e) {
+            } catch (Throwable e) { logErr("ota.dl.fail", e);
                 try { if (part.exists()) part.delete(); } catch (Throwable ignored) {}
                 failure = L("下载失败，请检查网络后重试", "The download failed. Check your network and try again.");
             }
@@ -19116,7 +19122,7 @@ public class MainActivity extends Activity {
                     if (changed) runOnUiThread(() -> { if ("news".equals(tab) && glossaryBox != null) renderGlossary(); });
                     glossaryFetchOk124 = true; glossaryFetchChanged124 = changed; fireGlossaryFetchCb124(); // Q124
                     return;
-                } catch (Exception e) { /* 换下一条，失败保持内置/缓存 */ }
+                } catch (Exception e) { logErr("ota.glossary.fetch", e); /* 换下一条，失败保持内置/缓存 */ }
             }
             fireGlossaryFetchCb124(); // Q124：双线皆败也算一次完成
         }).start();
@@ -19782,7 +19788,7 @@ public class MainActivity extends Activity {
             String cached = prefs == null ? null : prefs.getString("extended_cache", null);
             java.util.List<ExtCard> c = cached == null ? null : parseExtended(cached);
             if (c != null) { extItems = c; return; }
-        } catch (Throwable ignored) {}
+        } catch (Throwable ignored) { logErr("data.extended.ensure", ignored);}
         extItems = new ArrayList<>();
     }
 
@@ -19808,7 +19814,7 @@ public class MainActivity extends Activity {
                     if (parsed == null) continue;
                     // Q91：双线全取（仿 Q59），不再首线命中就收工——jsDelivr 回旧缓存时还有 raw 兜底，取条数多者
                     if (best == null || parsed.size() > best.size()) { best = parsed; bestJson = json; }
-                } catch (Throwable ignored) {}
+                } catch (Throwable ignored) { logErr("ota.ext.fetch", ignored);}
             }
             final java.util.List<ExtCard> fBest = best;
             final String fJson = bestJson;
@@ -19819,7 +19825,7 @@ public class MainActivity extends Activity {
                     extItems = fBest;
                     extFetchFailed = false;
                     if (fJson != null && prefs != null) {
-                        try { prefs.edit().putString("extended_cache", fJson).apply(); } catch (Throwable ignored) {}
+                        try { prefs.edit().putString("extended_cache", fJson).apply(); } catch (Throwable ignored) { logErr("ota.ext.cacheWrite", ignored);}
                     }
                 } else {
                     // Q91：双线都没拉到——有缓存继续用缓存，只有手里一条都没有才算拉取失败
@@ -21338,7 +21344,7 @@ public class MainActivity extends Activity {
             }
         }
         if (dirty151 && prefs != null) {
-            try { prefs.edit().putString("showcase_positions", showcasePosJson.toString()).apply(); } catch (Throwable ignored) {}
+            try { prefs.edit().putString("showcase_positions", showcasePosJson.toString()).apply(); } catch (Throwable ignored) { logErr("showcase.positions.persist", ignored);}
         }
     }
     int showcaseDotStroke122(boolean selected) {
@@ -21373,7 +21379,7 @@ public class MainActivity extends Activity {
                 if (it.cycleDays <= 0) it.cycleDays = 30;
                 out.add(it);
             }
-        } catch (Throwable ignored) {}
+        } catch (Throwable ignored) { logErr("data.simkeeps.load", ignored);}
         return out;
     }
     void saveSimKeeps(java.util.List<SimKeepItem> items) {
@@ -21390,7 +21396,7 @@ public class MainActivity extends Activity {
                 arr.put(o);
             }
             prefs.edit().putString("simkeep_items", arr.toString()).commit();
-        } catch (Throwable ignored) {}
+        } catch (Throwable ignored) { logErr("data.simkeeps.save", ignored);}
     }
     static String simkeepTodayStr() {
         try { return new java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US).format(new java.util.Date()); }
@@ -21724,7 +21730,7 @@ public class MainActivity extends Activity {
                 if (it.cycleDays <= 0) it.cycleDays = 30;
                 out.add(it);
             }
-        } catch (Throwable ignored) {}
+        } catch (Throwable ignored) { logErr("data.subfollows.load", ignored);}
         return out;
     }
     void saveSubFollows(java.util.List<SubFollowItem> items) {
@@ -21740,7 +21746,7 @@ public class MainActivity extends Activity {
                 arr.put(o);
             }
             prefs.edit().putString("subfollow_items", arr.toString()).commit();
-        } catch (Throwable ignored) {}
+        } catch (Throwable ignored) { logErr("data.subfollows.save", ignored);}
     }
     java.util.List<SubFollowItem> subfollowSorted() {
         java.util.List<SubFollowItem> items = loadSubFollows();
@@ -22071,7 +22077,7 @@ public class MainActivity extends Activity {
                 if (it.id == null || it.id.isEmpty()) it.id = "foot-" + i;
                 out.add(it);
             }
-        } catch (Throwable ignored) {}
+        } catch (Throwable ignored) { logErr("data.footprints.load", ignored);}
         return out;
     }
     void saveFootprints(java.util.List<FootItem> items) {
@@ -22087,7 +22093,7 @@ public class MainActivity extends Activity {
                 arr.put(o);
             }
             prefs.edit().putString("footprint_items", arr.toString()).commit();
-        } catch (Throwable ignored) {}
+        } catch (Throwable ignored) { logErr("data.footprints.save", ignored);}
     }
     java.util.List<FootItem> footprintsSorted() {
         java.util.List<FootItem> items = loadFootprints();
@@ -22555,7 +22561,7 @@ public class MainActivity extends Activity {
                     android.graphics.Matrix inv143 = new android.graphics.Matrix();
                     if (hitChild143.getMatrix().invert(inv143)) t143.transform(inv143);
                     return hitChild143.dispatchTouchEvent(t143);
-                } catch (Throwable ignored) {
+                } catch (Throwable ignored) { logErr("showcase.hitDispatch", ignored);
                     // 逆矩阵/分发异常回落系统分发，不为命中层冒崩点
                 } finally { t143.recycle(); }
             }
@@ -22666,7 +22672,7 @@ public class MainActivity extends Activity {
                                 try {
                                     showcasePosJson.put(it.key, lp.leftMargin + "," + lp.topMargin);
                                     if (prefs != null) prefs.edit().putString("showcase_positions", showcasePosJson.toString()).apply();
-                                } catch (Throwable ignored) {}
+                                } catch (Throwable ignored) { logErr("showcase.pos.save", ignored);}
                             }
                             return true;
                     }
@@ -22845,7 +22851,7 @@ public class MainActivity extends Activity {
                             String[] parts122 = saved122.split(",");
                             x122 = Integer.parseInt(parts122[0].trim()); yy122 = Integer.parseInt(parts122[1].trim());
                             hasSaved141 = true;
-                        } catch (Throwable t122) { x122 = -1; yy122 = -1; hasSaved141 = false; }
+                        } catch (Throwable t122) { logErr("showcase.pos.parse", t122); x122 = -1; yy122 = -1; hasSaved141 = false; }
                     }
                     // Q127 的「过期记忆位作废＋落位双向夹取」随 Q141 拆墙一并作废：
                     // 旧密度/卡宽下存的出界位、半出界残位、负坐标都照原坐标回来，不再
@@ -23129,7 +23135,7 @@ public class MainActivity extends Activity {
                     if (changed) runOnUiThread(() -> { if ("news".equals(tab) && newsListBox != null) renderNews(); });
                     newsFetchOk124 = true; newsFetchChanged124 = changed; fireNewsFetchCb124(); // Q124
                     return;
-                } catch (Exception e) { /* 换下一条线路，失败就保持内置/缓存 */ }
+                } catch (Exception e) { logErr("ota.news.fetch", e); /* 换下一条线路，失败就保持内置/缓存 */ }
             }
             fireNewsFetchCb124(); // Q124：双线皆败也算一次完成（ok 保持 false）
         }).start();
@@ -23780,7 +23786,7 @@ public class MainActivity extends Activity {
             Bitmap b = BitmapFactory.decodeStream(in);
             try { in.close(); } catch (Exception e) {}
             return b;
-        } catch (Exception e) { return null; }
+        } catch (Exception e) { logErr("img.assetBitmap", e); return null; }
     }
 
     // Q88：关于改整页详情（原贴底弹窗+冻结玻璃退役——弹窗正文糊着旧页残影字，用户 06:38 点名；
