@@ -219,6 +219,11 @@ public class MainActivity extends Activity {
         @Override protected void onDraw(Canvas cv) { drawChevron161(cv, getWidth(), getHeight(), iconColor != 0 ? iconColor : colText2(), false); }
     }
 
+    /** Q162（2.77 折展收口）：折展角唯一现算口——expanded 为唯一状态，
+     * 角只许由它在此现算（构建初设/点击动画目标/即时回正三口同源）；角不
+     * 进任何字段、不被反读当状态，动画中间角不回写状态。 */
+    float chevRot162(boolean open162) { return open162 ? 90f : 0f; }
+
     /** 圆形细线图标钮（返回/关闭同形制）：柔色面 + pressBounce，不用白药丸、不用原生 Button。 */
     FrameLayout circleIconBtn(boolean back, int iconCol, final Runnable act) {
         FrameLayout b = new FrameLayout(this);
@@ -15145,7 +15150,7 @@ public class MainActivity extends Activity {
         View sp = new View(this);
         barRow.addView(sp, new LinearLayout.LayoutParams(0, 1, 1f));
         ChevronView chev = new ChevronView(this, Color.rgb(0xC7, 0xC7, 0xCC)); // Q161：同源自绘箭头替文本字
-        chev.setRotation(mineOpen ? 90 : 0);
+        chev.setRotation(chevRot162(mineOpen)); // Q162：角由唯一状态现算
         barRow.addView(chev, new LinearLayout.LayoutParams(dp(this, 24), dp(this, 24)));
         // 卡区内容盒：上＝库卡网格，下＝自定义色带盒（白底 16dp 外框沿旧 tilesBox 样式）
         final LinearLayout zoneBox = new LinearLayout(this);
@@ -15249,7 +15254,7 @@ public class MainActivity extends Activity {
             mineOpen = !mineOpen;
             try { prefs.edit().putBoolean("mine_open", mineOpen).commit(); } catch (Throwable ignored) {}
             chev.animate().cancel();
-            chev.animate().rotation(mineOpen ? 90 : 0).setDuration(200).setInterpolator(ANIM_ENTER).start();
+            chev.animate().rotation(chevRot162(mineOpen)).setDuration(200).setInterpolator(ANIM_ENTER).start(); // Q162：动画目标角由状态现算，中间角不回写
             toggleMineRowsBox(zoneBox, mineRowsBox, tilesBox126, mineRows, sv, mineOpen);
             mineBuiltSig = computeMineSig(); // Q116 签名与就地态对齐
         });
@@ -20536,6 +20541,9 @@ public class MainActivity extends Activity {
         if ("JCB".equals(o)) return "jcb";
         return "";
     }
+    // Q162（2.77 审查收口·取色锁）：本函数只供 mode=2 非自定义手选路径读
+    // 预设下标，其余任何路径取「当前底色」一律走 showcaseBgColor152()，
+    // 不许在此按 mode/深浅另推一份生效色（防再造同色不同步的打架）。
     int showcaseBgIdx() {
         if (prefs == null) return 0;
         if (prefs.contains("showcase_bg")) {
@@ -20633,10 +20641,16 @@ public class MainActivity extends Activity {
         if (showcasePanel152 == null) return;
         int m161 = showcaseBgMode158();
         boolean cust161 = m161 == SC_BG_SELF158 && showcaseCustomOn161();
-        if (scModeChips161 != null) for (int i161 = 0; i161 < scModeChips161.length; i161++) { TextView ch161 = scModeChips161[i161]; if (ch161 == null) continue; boolean sel161 = m161 == i161; ch161.setBackground(roundRect(sel161 ? (showcaseDarkBg() ? Color.argb(120, 255, 255, 255) : Color.argb(40, 0, 0, 0)) : (showcaseDarkBg() ? Color.argb(40, 255, 255, 255) : Color.argb(230, 255, 255, 255)), 999, this)); }
-        if (scPresetDots161 != null) for (int i161 = 0; i161 < scPresetDots161.length; i161++) { View d161 = scPresetDots161[i161]; if (d161 == null) continue; boolean sel161 = m161 == SC_BG_SELF158 && !cust161 && showcaseBgIdx() == i161; GradientDrawable dg161 = new GradientDrawable(); dg161.setShape(GradientDrawable.OVAL); dg161.setColor(SHOWCASE_BGS[i161]); dg161.setStroke(dp(this, sel161 ? 2 : 1), showcaseDotStroke122(sel161)); d161.setBackground(dg161); }
-        if (scPalView161 != null) scPalView161.invalidate(); // 环在 onDraw 按生效色现算
         int eff161 = showcaseBgColor152();
+        // Q162（2.77，用户 02:58 点名）：亮灯分两口，不许再存第二份判定——
+        // chip＝意图灯：自适应亮⇔mode=自适应；强制深亮⇔mode=强制深，或手选
+        // 恰命中预设末点（强制深与末点本就是同一个色、同一件事，互亮）；两灯
+        // 恒互斥。色点圈＝纯生效色灯：生效色命中哪颗亮哪颗，不问来路（自适
+        // 应逢系统深色时生效色即 #101014、末点同亮；输码恰落预设色同理）。
+        boolean chipSel161[] = { m161 == SC_BG_AUTO158, m161 == SC_BG_DARK158 || (m161 == SC_BG_SELF158 && !cust161 && showcaseBgIdx() == SHOWCASE_BGS.length - 1) };
+        if (scModeChips161 != null) for (int i161 = 0; i161 < scModeChips161.length; i161++) { TextView ch161 = scModeChips161[i161]; if (ch161 == null) continue; boolean sel161 = i161 < chipSel161.length && chipSel161[i161]; ch161.setBackground(roundRect(sel161 ? (showcaseDarkBg() ? Color.argb(120, 255, 255, 255) : Color.argb(40, 0, 0, 0)) : (showcaseDarkBg() ? Color.argb(40, 255, 255, 255) : Color.argb(230, 255, 255, 255)), 999, this)); }
+        if (scPresetDots161 != null) for (int i161 = 0; i161 < scPresetDots161.length; i161++) { View d161 = scPresetDots161[i161]; if (d161 == null) continue; boolean sel161 = SHOWCASE_BGS[i161] == eff161; GradientDrawable dg161 = new GradientDrawable(); dg161.setShape(GradientDrawable.OVAL); dg161.setColor(SHOWCASE_BGS[i161]); dg161.setStroke(dp(this, sel161 ? 2 : 1), showcaseDotStroke122(sel161)); d161.setBackground(dg161); }
+        if (scPalView161 != null) scPalView161.invalidate(); // 环在 onDraw 按生效色现算
         // 预览块：输入框正握着合法待应用色时归 syncHexPreview161 管，这里不抢
         if (scHexPreview161 != null && (scHexInput161 == null || parseHexColor161(String.valueOf(scHexInput161.getText())) < 0)) { GradientDrawable pv161 = new GradientDrawable(); pv161.setShape(GradientDrawable.OVAL); pv161.setColor(eff161); scHexPreview161.setBackground(pv161); }
         if (scHexCode161 != null) scHexCode161.setText(String.format("#%06X", 0xFFFFFF & eff161)); // 当前生效底色代码，只读（用户 02:10 点名；hex 展示回函：色块同行、无前缀）
@@ -20704,7 +20718,7 @@ public class MainActivity extends Activity {
         if (showcaseDensityBtnTv152 != null) showcaseDensityBtnTv152.setAlpha(canvas ? 1f : 0.4f);
         boolean grp = prefs != null && prefs.getBoolean("showcase_bank_group", false);
         if (showcaseGroupChip != null) {
-            showcaseGroupChip.setBackground(roundRect(grp ? accentColor() : (showcaseDarkBg() ? Color.argb(70, 255, 255, 255) : Color.argb(220, 255, 255, 255)), 999, this));
+            showcaseGroupChip.setBackground(roundRect(grp ? accentColor() : showcaseBarBtnBg162(), 999, this));
             showcaseGroupChip.setTextColor(grp ? Color.WHITE : showcaseOnBg());
         }
         tintShowcaseSeek(); // Q122：换底/换模式后密度行对比同步刷新
@@ -20828,7 +20842,7 @@ public class MainActivity extends Activity {
 
     void restyleShowcaseHead152() {
         int ink152 = showcaseOnBg();
-        int btnBg152 = showcaseDarkBg() ? Color.argb(70, 255, 255, 255) : Color.argb(220, 255, 255, 255);
+        int btnBg152 = showcaseBarBtnBg162(); // Q162：钮面走统一派生口（与栏底同口现算）
         if (showcaseHead151 != null) showcaseHead151.setBackground(showcaseBarBg151(20));
         // Q158（件四②）：返回/调色板两圆钮的面归统一圆钮 helper（restyle 只刷
         // 图标墨色，不再回写自绘方块面）；段选/密度仍浮画布走半透面（半径经
@@ -21192,7 +21206,7 @@ public class MainActivity extends Activity {
         LinearLayout seg152 = new LinearLayout(this);
         seg152.setOrientation(LinearLayout.HORIZONTAL);
         seg152.setGravity(Gravity.CENTER_VERTICAL);
-        seg152.setBackground(roundRect(showcaseDarkBg() ? Color.argb(70, 255, 255, 255) : Color.argb(220, 255, 255, 255), 999, this));
+        seg152.setBackground(roundRect(showcaseBarBtnBg162(), 999, this));
         seg152.setPadding(dp(this, 3), dp(this, 3), dp(this, 3), dp(this, 3));
         LinearLayout.LayoutParams segLp152 = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         segLp152.leftMargin = dp(this, 8);
@@ -21215,7 +21229,7 @@ public class MainActivity extends Activity {
         showcaseDensityBtnTv152 = tv(this, "密度", 12.5f, showcaseOnBg(), true);
         showcaseDensityBtnTv152.setGravity(Gravity.CENTER);
         showcaseDensityBtnTv152.setPadding(dp(this, 11), dp(this, 7), dp(this, 11), dp(this, 7));
-        showcaseDensityBtnTv152.setBackground(roundRect(showcaseDarkBg() ? Color.argb(70, 255, 255, 255) : Color.argb(220, 255, 255, 255), 999, this));
+        showcaseDensityBtnTv152.setBackground(roundRect(showcaseBarBtnBg162(), 999, this));
         showcaseDensityBtnTv152.setOnClickListener(v -> { haptic(); if (prefs == null || !"canvas".equals(prefs.getString("showcase_mode", "stack"))) { showFloatToast("堆叠疏密请用展开/收起"); return; } toggleShowcasePanel152("density"); }); // Q161：堆叠拦截（裁决 c）
         head.addView(showcaseDensityBtnTv152);
         showcaseDensityBtn152 = showcaseDensityBtnTv152;
@@ -21385,18 +21399,23 @@ public class MainActivity extends Activity {
         return g;
     }
 
+    // Q162（2.77，用户 02:59 点名）：栏面改近实底——argb(220, 生效色 RGB)，
+    // 与展柜底同体、换底经 restyleShowcaseHead152 随生效色跟随，压住身后任意
+    // 花图保证字清；禁用真高斯取样（身后内容不可控、与固定 UI 层定版相悖）。
+    // 1dp 描边随面深浅反相（深面亮边/浅面墨边），同色卡图上边界也不糊。
     GradientDrawable showcaseBarBg151(int radiusDp) {
         GradientDrawable g = new GradientDrawable();
-        if (showcaseDarkBg()) {
-            g.setColor(Color.argb(96, 255, 255, 255));
-            g.setStroke(dp(this, 1), Color.argb(110, 255, 255, 255));
-        } else {
-            g.setColor(Color.argb(196, 255, 255, 255));
-            g.setStroke(dp(this, 1), Color.argb(120, 255, 255, 255));
-        }
+        int eff162 = showcaseBgColor152();
+        g.setColor(Color.argb(220, Color.red(eff162), Color.green(eff162), Color.blue(eff162)));
+        g.setStroke(dp(this, 1), showcaseDarkBg() ? Color.argb(110, 255, 255, 255) : Color.argb(110, 0x1C, 0x1C, 0x1E));
         g.setCornerRadius(dp(this, floatR129(radiusDp))); // Q158（件四）：浮条半径走悬浮类一杆（t==0.5 逐位不变）
         return g;
     }
+
+    // Q162（2.77）：栏内钮面唯一派生口——段选盒/密度钮/分组钮的面只许走
+    // 这一处现算（按 showcaseDarkBg 与栏底同口），不许再各写 argb 字面量；
+    // 字色绑 showcaseOnBg() 于各刷新口，与栏面同批换刷。
+    int showcaseBarBtnBg162() { return showcaseDarkBg() ? Color.argb(70, 255, 255, 255) : Color.argb(220, 255, 255, 255); }
 
     // Q151（S2·自绘密度滑杆）：浅轨道＋圆钮，顶=密（1.3）底=疏（0.6）；拖动中
     // 经 densitySink151 就地改卡尺寸（不闪），松手 densityCommit151 落盘。颜色
@@ -24224,6 +24243,7 @@ public class MainActivity extends Activity {
         stlp.leftMargin = dp(this, 8);
         toggle.addView(sponsorTx, stlp);
         aboutSponsorArrow = new ChevronView(this, colText2()); // Q161：自绘细线箭头替 18sp 文本字（原字墨迹偏左沉底像被砍，展开旋转照旧）
+        aboutSponsorArrow.setRotation(chevRot162(aboutSponsorOpen)); // Q162：初角由唯一状态现算
         toggle.addView(aboutSponsorArrow, new LinearLayout.LayoutParams(dp(this, 20), dp(this, 20)));
 
         // 赞助内容（对照 #sponsorBody，初始收起）
@@ -24278,7 +24298,7 @@ public class MainActivity extends Activity {
             haptic();
             aboutSponsorOpen = !aboutSponsorOpen;
             sponsor.setVisibility(aboutSponsorOpen ? View.VISIBLE : View.GONE);
-            if (aboutSponsorArrow != null) aboutSponsorArrow.setRotation(aboutSponsorOpen ? 90f : 0f);
+            if (aboutSponsorArrow != null) aboutSponsorArrow.setRotation(chevRot162(aboutSponsorOpen)); // Q162：角由状态现算
             if (aboutSponsorOpen) {
                 sponsor.setAlpha(0f); sponsor.setTranslationY(dp(this, -6));
                 sponsor.animate().alpha(1f).translationY(0f).setDuration(ANIM_DUR_FADE)
