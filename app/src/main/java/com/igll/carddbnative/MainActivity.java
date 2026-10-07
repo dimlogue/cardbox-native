@@ -1329,6 +1329,98 @@ public class MainActivity extends Activity {
         STR.put("news_date", new String[]{"日期：","Date: "});
         STR.put("news_collapse", new String[]{"收起","Collapse"});
         STR.put("news_expand", new String[]{"展开","Expand"});
+        STR.put("sub_monthly_zero", new String[]{"填上金额后这里会折算每月约花多少 · 只存本机、不做记账流水","Add amounts to see your monthly total here · Stored on this device only, no ledger"});
+        STR.put("custom_del_msg_fmt", new String[]{"「%s」删了就没了，备注也会一起清掉。","Deleting \"%s\" removes it for good — notes go with it."});
+        STR.put("chip_score_pending", new String[]{"总分待评分","Not Rated"});
+        STR.put("news_meta_fmt", new String[]{"共 %d 条 · 公开信息整理，仅供参考","%d items · Compiled from public sources, for reference only"});
+        STR.put("hero_orgs_full", new String[]{"组织全覆盖了","All networks covered"});
+        // Q164 批2-C：在搜卡分区/注释、SIM·订阅徽记与元信息、数据更新 toast、表单 hint、详情亮点模板
+        STR.put("ext_sec_local_fmt", new String[]{"已收录 · %d 张（点开看详情）","In Library · %d (tap for details)"});
+        STR.put("ext_sec_join_fmt", new String[]{"可加入 · %d 条%s","Addable · %d%s"});
+        STR.put("ext_sec_pend_fmt", new String[]{"仅索引待核 · %d 条%s","Index Only · %d%s"});
+        STR.put("ext_sec_cap", new String[]{"（只显示前 60 条，输入更准的关键词）"," (first 60 shown — refine your keywords)"});
+        STR.put("ext_note_local", new String[]{" · 本地卡库"," · Local Library"});
+        STR.put("ext_note_dup", new String[]{" · 扩展索引同条"," · Also in Extended Index"});
+        STR.put("ext_note_fetching", new String[]{"扩展卡库正在拉取…","Fetching the extended library…"});
+        STR.put("ext_note_none_fmt", new String[]{"扩展卡库里没找到「%s」","No match in the extended library: \"%s\""});
+        STR.put("ext_note_spec_suffix", new String[]{" · 规格待补，以发卡行官网为准"," · Specs pending — see the issuer's official site"});
+        STR.put("ext_empty_none_fmt", new String[]{"本地与扩展卡库都没找到「%s」\n换个卡名或银行试试，冷门卡会随扩展索引持续增补。","Not in the local or extended library: \"%s\"\nTry another card or bank name — niche cards keep joining the extended index."});
+        STR.put("ext_empty_fail", new String[]{"扩展卡库暂时拉不到\n检查网络后点下方「刷新索引」再试；本地卡库在首页照常可搜。","The extended library is unreachable\nCheck your network, then tap Refresh Index below. The local library still works on Home."});
+        STR.put("sim_overdue_fmt", new String[]{"逾期 %d 天","%d d overdue"});
+        STR.put("sim_today", new String[]{"今天到期","Due today"});
+        STR.put("sim_in_days_fmt", new String[]{"%d 天后","In %d d"});
+        STR.put("sim_next_prefix", new String[]{"下次 ","Next "});
+        STR.put("sim_every_fmt", new String[]{" · 每 %d 天"," · every %d d"});
+        STR.put("sub_today_due", new String[]{"今天扣款","Charged today"});
+        STR.put("sub_cycle_custom_fmt", new String[]{"（每 %d 天）","(every %d d)"});
+        STR.put("sub_next_prefix", new String[]{" · 下次 "," · Next "});
+        STR.put("sub_due_soon", new String[]{"临期 ","Due soon "});
+        STR.put("upd_checking", new String[]{"正在检查更新…","Checking for updates…"});
+        STR.put("upd_timeout", new String[]{"检查超时：网络太慢或服务器没响应，请稍后再试","Check timed out — slow network or no server response. Try again later."});
+        STR.put("upd_fail", new String[]{"检查更新失败：两条线路都没连上，请检查网络后重试","Update check failed — both routes unreachable. Check your network and retry."});
+        STR.put("upd_latest_fmt", new String[]{"已是最新数据（v%d）","Data is up to date (v%d)"});
+        STR.put("upd_changes_fmt", new String[]{"本次变化：新增 %d 张 · 移除 %d 张 · 内容调整 %d 张。","Changes: %d added · %d removed · %d updated."});
+        STR.put("upd_write_fail", new String[]{"更新未能写入，数据未生效，请重试","The update could not be saved and did not take effect. Please retry."});
+        STR.put("upd_done_fmt", new String[]{"数据已更新 v%d → v%d · 卡片 %d → %d 张","Data updated v%d → v%d · Cards %d → %d"});
+        STR.put("upd_new_title", new String[]{"有新数据","New Data Available"});
+        STR.put("upd_new_fmt", new String[]{"检测到新数据 v%d，去更新？","New data v%d found. Update now?"});
+        STR.put("upd_new_msg_fmt", new String[]{"检测到新数据 v%d。\n%s","New data v%d detected.\n%s"});
+        STR.put("upd_new_nodetail", new String[]{"本次变化明细暂未算出，更新后以新版数据为准。","Change details are not ready yet; the new data applies once updated."});
+        STR.put("upd_warn", new String[]{"\n更新可能短暂卡顿，并将覆盖当前卡库数据；你自己添加的卡片和收藏不会被改动，重复的卡会被合并删除。不更新就点取消，新版会一直留着等你。","\nUpdating may briefly stutter and overwrites the current library data. Your own cards and favorites stay untouched; duplicates are merged away. Tap Cancel and the new version will keep waiting."});
+        STR.put("upd_know", new String[]{"知道了","Got It"});
+        STR.put("upd_go", new String[]{"去更新","Update Now"});
+        STR.put("hl_cur_fmt", new String[]{"%s 个币种一卡走天下","%s currencies, one card"});
+        STR.put("hl_multicur", new String[]{"人民币 + 外币多币种","CNY + multi-currency"});
+        STR.put("hl_ai", new String[]{"开卡达标送 AI 算力套餐和积分权益","Welcome target pays out AI credits and points"});
+        STR.put("hl_bili", new String[]{"联名卡面，免年费免管理费、境内 ATM 免费","Co-branded art · no annual/management fee · free domestic ATM"});
+        STR.put("hl_nofee", new String[]{"免年费","No annual fee"});
+        STR.put("hl_autofx", new String[]{"自动购汇，刷完自动换汇","Auto FX — converts right after each swipe"});
+        STR.put("hl_online_apply", new String[]{"网申就能办不用跑网点","Apply online, no branch visit"});
+        STR.put("hl_student_friendly", new String[]{"门槛低、费用省，学生党友好","Low bar, low fees — student friendly"});
+        STR.put("fit_first", new String[]{"第一次办卡","First Card"});
+        STR.put("fit_ai", new String[]{"AI 工具党","AI Tools"});
+        STR.put("fit_acg", new String[]{"二次元","ACG Fan"});
+        STR.put("mine_due_fmt", new String[]{"%s 每月%s日","%s · day %s"});
+        STR.put("mine_stat_fmt", new String[]{"%d 张","%d"});
+        STR.put("spec_monthly_day_fmt", new String[]{"每月 %d 日","Day %d of each month"});
+        STR.put("nfc_prefix", new String[]{"NFC 识别：","NFC: "});
+        STR.put("nfc_bank", new String[]{" · 发卡行 "," · Bank "});
+        STR.put("nfc_last4", new String[]{" · 尾号 "," · Last 4 "});
+        STR.put("nfc_found", new String[]{"识别到：","Detected: "});
+        STR.put("jf_from", new String[]{"变更前金额（提额时填，可空）","Before (limit raises only, optional)"});
+        STR.put("jf_to", new String[]{"变更后金额 / 当前额度（可空）","After / Current Limit (optional)"});
+        STR.put("feat_fx_title", new String[]{"外卡专区","Foreign Cards"});
+        STR.put("feat_fx_desc", new String[]{"香港银行卡专区，独立数据不混入主卡库，关掉后入口不出现","Hong Kong bank cards in their own zone — separate data, never mixed into the main library. Turn off to hide the entry."});
+        STR.put("fx_cell_sub_fmt", new String[]{"香港 · %d 张","Hong Kong · %d"});
+        STR.put("sheet_filter", new String[]{"筛选","Filter"});
+        STR.put("sheet_clear", new String[]{"清空","Clear"});
+        STR.put("toast_removed_card", new String[]{"已移除这张","Card removed"});
+        STR.put("toast_restored", new String[]{"已恢复","Restored"});
+        STR.put("font_custom_name", new String[]{"自定义字体","Custom Font"});
+        STR.put("font_custom_on_fmt", new String[]{"自定义字体已启用：%s","Custom font on: %s"});
+        STR.put("hint_act_name", new String[]{"活动名，如：开卡礼","Event name, e.g. Welcome Gift"});
+        STR.put("hint_act_card", new String[]{"卡名（可空）","Card name (optional)"});
+        STR.put("hint_act_target", new String[]{"目标次数/金额，如：3","Target count/amount, e.g. 3"});
+        STR.put("hint_cc_name", new String[]{"如：我的工资卡","e.g. My Salary Card"});
+        STR.put("hint_cc_bank", new String[]{"如：招商银行","e.g. China Merchants Bank"});
+        STR.put("hint_cc_note", new String[]{"可空","Optional"});
+        STR.put("hint_cc_bill", new String[]{"账单日，如：5","Statement day, e.g. 5"});
+        STR.put("hint_cc_due", new String[]{"还款日，如：25","Due day, e.g. 25"});
+        STR.put("hint_sim_num", new String[]{"如：+86 138…","e.g. +86 138…"});
+        STR.put("hint_sim_op", new String[]{"如：中国移动 / csl / Digi","e.g. China Mobile / csl / Digi"});
+        STR.put("hint_sim_country", new String[]{"如：中国 / 香港 / 马来西亚","e.g. China / Hong Kong / Malaysia"});
+        STR.put("hint_sim_fee", new String[]{"如：¥10 / 免费","e.g. ¥10 / Free"});
+        STR.put("hint_sub_name", new String[]{"如：视频会员 / 音乐 / 云盘","e.g. Video / Music / Cloud Storage"});
+        STR.put("hint_sub_note", new String[]{"如：绑了哪张卡 / 从哪扣","e.g. Which card it charges"});
+        STR.put("hint_jf_card", new String[]{"如：招商银行经典白 / 工行奋斗卡","e.g. CMB Classic White"});
+        STR.put("hint_jf_note", new String[]{"如：电话申请 / App 自助提额","e.g. Phone request / In-app raise"});
+        STR.put("ext_note_ext", new String[]{" · 扩展卡库"," · Extended Library"});
+        STR.put("ext_note_ext_pend", new String[]{" · 扩展索引 · 待核"," · Extended Index · Pending"});
+        STR.put("ext_note_fail2", new String[]{"扩展卡库暂时拉不到（两条线路都没通），检查网络后点下方「刷新索引」再试。","The extended library is unreachable (both routes failed). Check your network, then tap Refresh Index below."});
+        STR.put("news_view_orig", new String[]{"查看原文 ›","View Original ›"});
+        STR.put("news_no_link", new String[]{"暂无原文链接","No original link"});
+        STR.put("news_expand_arrow", new String[]{"展开 ›","Expand ›"});
+        STR.put("news_collapse_arrow", new String[]{"收起 ‹","Collapse ‹"});
     }
     // Q106（2.20）英文全量扫：纯展示串英文表（精确整串匹配、仅 EN 模式在 tvW 出口生效；
     // tv/toast/chip 同走此出口）。红线：与数据匹配的逻辑串一律不入表——评分维度名与短标签
@@ -5598,6 +5690,13 @@ public class MainActivity extends Activity {
         {0xE67E22, 0x7E2F0E}, {0x2C3E50, 0x0D1520}, {0xC0392B, 0x4D0F0A}
     };
     static final String[] CUSTOM_ORGS = {"Visa", "万事达", "美国运通", "银联", "JCB"};
+    // Q164：加卡表单组织片英文显示名（CUSTOM_ORGS 为存值口径，禁改；仅显示映射）
+    static String customOrgEn164(String o) {
+        if ("万事达".equals(o)) return "Mastercard";
+        if ("美国运通".equals(o)) return "American Express";
+        if ("银联".equals(o)) return "UnionPay";
+        return o;
+    }
     java.util.List<CustomCard> customCards = new ArrayList<>();
     // Q65 我的卡片条目（一张库卡可有多条，分别标一类/二类）：标记只存本机 mine_entries，不写回卡库/OTA
     static class MineEntry {
@@ -7321,12 +7420,12 @@ public class MainActivity extends Activity {
         saveMineEntries();
         pages.remove("mine");
         if (uiRefresh != null) uiRefresh.run();
-        showFloatToast("已移除这张", "撤销", () -> {
+        showFloatToast(S("toast_removed_card"), "撤销", () -> {
             mineEntries.add(Math.min(at, mineEntries.size()), e);
             saveMineEntries();
             pages.remove("mine");
             if (uiRefresh != null) uiRefresh.run();
-            showFloatToast("已恢复");
+            showFloatToast(S("toast_restored"));
         });
     }
 
@@ -7462,7 +7561,7 @@ public class MainActivity extends Activity {
         cardBox.addView(glossLink);
         glossLink.setOnClickListener(v -> { haptic(); closeAcctClassPicker(); openGlossaryTerm("acct1"); });
         if (manage) {
-            TextView rm = tv(this, "移除已有（全部 " + entriesForCard(c.id).size() + " 张）", 14, Color.rgb(0xE0, 0x31, 0x31), true);
+            TextView rm = tv(this, String.format(S("detail_remove_all_fmt"), entriesForCard(c.id).size()), 14, Color.rgb(0xE0, 0x31, 0x31), true); // Q164
             rm.setGravity(Gravity.CENTER);
             rm.setPadding(0, dp(this, 11), 0, dp(this, 11));
             LinearLayout.LayoutParams rmlp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
@@ -7591,7 +7690,7 @@ public class MainActivity extends Activity {
         cardBox.setOnClickListener(v -> {});
         cardBox.setPadding(dp(this, 18), dp(this, 18), dp(this, 18), dp(this, 14));
         cardBox.addView(tv(this, "卡面颜色", 17, colText(), true));
-        TextView sub = tv(this, c.name + " · 只改无图占位面，真卡图不受影响", 12.5f, colText2(), false);
+        TextView sub = tv(this, c.name + S("detail_color_sub_suffix"), 12.5f, colText2(), false); // Q164
         LinearLayout.LayoutParams subLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         subLp.topMargin = dp(this, 4);
         cardBox.addView(sub, subLp);
@@ -10003,7 +10102,7 @@ public class MainActivity extends Activity {
         name.setEllipsize(android.text.TextUtils.TruncateAt.END);
         body.addView(name, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
 
-        TextView sub = tv(this, c.bank + " · " + orgLabel(c.org) + (c.isCredit() ? " · 信用卡" : ""), nc >= 4 ? 9f : 10.5f, colText2(), false);
+        TextView sub = tv(this, c.bank + " · " + orgLabel(c.org) + (c.isCredit() ? S("tile_credit_suffix") : ""), nc >= 4 ? 9f : 10.5f, colText2(), false); // Q164
         sub.setMaxLines(1);
         sub.setEllipsize(android.text.TextUtils.TruncateAt.END);
         body.addView(sub);
@@ -11320,7 +11419,7 @@ public class MainActivity extends Activity {
             homeList.addView(emptyState("没有符合条件的卡\n换个筛选条件或清空筛选试试"));
             // Q68：本地搜不到时给扩展卡库入口，冷门卡走在线索引，不在本地硬编
             if (query != null && !query.trim().isEmpty()) {
-                TextView goExt = tv(this, "去扩展卡库搜「" + query.trim() + "」 ›", 13.5f, inkLink(), true);
+                TextView goExt = tv(this, String.format(S("search_go_ext_fmt"), query.trim()), 13.5f, inkLink(), true); // Q164
                 goExt.setGravity(Gravity.CENTER);
                 goExt.setPadding(dp(this, 14), dp(this, 10), dp(this, 14), dp(this, 10));
                 goExt.setBackground(rippleBg(Color.rgb(0xE8, 0xF1, 0xFD), 999));
@@ -11642,7 +11741,7 @@ public class MainActivity extends Activity {
         layer.addView(colL, colp);
         PullSpinView spin = new PullSpinView(this);
         colL.addView(spin, new LinearLayout.LayoutParams(dp(this, 36), dp(this, 36)));
-        TextView lab = tv(this, "加载中", 12.5f, colText2(), false);
+        TextView lab = tv(this, S("loading"), 12.5f, colText2(), false); // Q164
         lab.setGravity(Gravity.CENTER);
         LinearLayout.LayoutParams labp = new LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
@@ -11771,8 +11870,8 @@ public class MainActivity extends Activity {
         txlp.leftMargin = dp(this, 10);
         top.addView(tx, txlp);
         tx.addView(tv(this, bank, 14.5f, open ? inkLink() : colText(), true));
-        tx.addView(tv(this, "借记 " + nd + " · 信用 " + (cs.size() - nd), 11, colText2(), false));
-        TextView cnt = tv(this, cs.size() + " 张", 11, Color.rgb(0x0A, 0x5C, 0xD6), true);
+        tx.addView(tv(this, String.format(S("home_debit_credit_fmt"), nd, cs.size() - nd), 11, colText2(), false)); // Q164
+        TextView cnt = tv(this, String.format(S("fmt_cards_n"), cs.size()), 11, Color.rgb(0x0A, 0x5C, 0xD6), true); // Q164
         cnt.setBackground(roundRect(Color.rgb(0xE8, 0xF1, 0xFD), 999, this));
         cnt.setPadding(dp(this, 8), dp(this, 3), dp(this, 8), dp(this, 3));
         top.addView(cnt);
@@ -11807,7 +11906,7 @@ public class MainActivity extends Activity {
             activeFilterBar.addView(afPill(featLabel(f), () -> { filterFeats.remove(f); refreshHome(); }));
         if (filterType != null) activeFilterBar.addView(afPill("credit".equals(filterType) ? "信用卡" : "借记卡", () -> { filterType = null; refreshHome(); }));
         for (final String dim : selectedScoreDimsOrdered())
-            activeFilterBar.addView(afPill("评分·" + scoreDimShort(dim), () -> {
+            activeFilterBar.addView(afPill((isEn() ? "Score · " : "评分·") + (isEn() ? scoreDimShortEn(dim) : scoreDimShort(dim)), () -> { // Q164
                 scoreDimsSel.remove(dim);
                 if (("dim:" + dim).equals(sortMode)) sortMode = null;
                 persistViewPrefs(); refreshHome();
@@ -11853,9 +11952,9 @@ public class MainActivity extends Activity {
         chead.setPadding(dp(this, 18), dp(this, 14), dp(this, 14), dp(this, 10));
         // Q122（2.34，件八）：标题带旧 wash 层（Q77b headLift）退场——窗面已提实定形，
         // 标题带不再需要第二层近实 wash 压字，全窗只许一层有面。
-        TextView cttl = tv(this, "\u7b5b\u9009", 17, colText(), true);
+        TextView cttl = tv(this, S("sheet_filter"), 17, colText(), true); // Q164
         chead.addView(cttl, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
-        TextView clearT = tv(this, "\u6e05\u7a7a", 13, colText(), false);
+        TextView clearT = tv(this, S("sheet_clear"), 13, colText(), false); // Q164
         clearT.setGravity(Gravity.CENTER);
         GradientDrawable clearBg = new GradientDrawable();
         clearBg.setColor(colChipOff()); clearBg.setCornerRadius(dp(this, pillR143())); // Q143：整圆药丸类收口
@@ -12028,7 +12127,7 @@ public class MainActivity extends Activity {
         addChipFlow(panel, typeChips);
 
         panel.addView(filterSectionTitle("\u5361\u7ec4\u7ec7"));
-        String[][] orgs = {{"visa", "VISA"}, {"mastercard", "\u4e07\u4e8b\u8fbe"}, {"mastercard-nucc", "\u4e07\u4e8b\u8fbe-\u7f51\u8054"}, {"amex-cn", "\u8fd0\u901a-\u4eba\u6c11\u5e01"}, {"unionpay", "\u94f6\u8054"}, {"jcb", "JCB"}, {"__none__", "无卡组织"}}; // Q124（件十九）：末项筛组织未知全集
+        String[][] orgs = {{"visa", "VISA"}, {"mastercard", "\u4e07\u4e8b\u8fbe"}, {"mastercard-nucc", "\u4e07\u4e8b\u8fbe-\u7f51\u8054"}, {"amex-cn", "\u8fd0\u901a-\u4eba\u6c11\u5e01"}, {"unionpay", "\u94f6\u8054"}, {"jcb", "JCB"}, {"__none__", S("org_none")}}; // Q124（件十九）：末项筛组织未知全集
         List<View> orgChips = new ArrayList<>();
         for (final String[] o : orgs) {
             orgChips.add(filterChip(o[1], o[0].equals(filterOrg), () -> {
@@ -12122,7 +12221,7 @@ public class MainActivity extends Activity {
             List<View> dimSortChips = new ArrayList<>();
             for (final String dim : selDimsForSort) {
                 final String mode = "dim:" + dim;
-                dimSortChips.add(filterChip("按" + scoreDimShort(dim) + "评分", mode.equals(sortMode), () -> {
+                dimSortChips.add(filterChip(String.format(S("dim_sort_fmt"), isEn() ? scoreDimShortEn(dim) : scoreDimShort(dim)), mode.equals(sortMode), () -> { // Q164
                     sortMode = mode.equals(sortMode) ? null : mode;
                     persistViewPrefs();
                     rebuildFilterPanel(panel); refreshHome();
@@ -13663,7 +13762,7 @@ public class MainActivity extends Activity {
         box.setOrientation(LinearLayout.VERTICAL);
         box.setBackground(roundRect(darkEff() ? Color.argb(38, 255, 255, 255) : Color.rgb(0xF6, 0xF6, 0xF8), 12, this));
         box.setPadding(dp(this, 12), dp(this, 10), dp(this, 12), dp(this, 10));
-        box.addView(tv(this, "我的标记（这张）", 13, colText(), true));
+        box.addView(tv(this, S("detail_my_label"), 13, colText(), true)); // Q164
         LinearLayout chipsRow = new LinearLayout(this);
         chipsRow.setOrientation(LinearLayout.HORIZONTAL);
         LinearLayout.LayoutParams crlp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
@@ -13986,7 +14085,7 @@ public class MainActivity extends Activity {
         // Q151（P0）：探活改 bounds 尺寸头（hasImage151），不再全尺寸解码一张 1760 级
         // 源图只为判有无（旧 Img.get 口径，主线程白付整张大图像素）。
         if (!Img.hasImage151(this, c.image)) {
-            TextView colorBtn = tv(this, placeholderCustomEnabled ? "换卡面颜色 ›" : "换卡面颜色（先在设置开启自选） ›", 13.5f, inkLink(), true);
+            TextView colorBtn = tv(this, placeholderCustomEnabled ? S("detail_color_btn") : S("detail_color_btn_off"), 13.5f, inkLink(), true); // Q164
             colorBtn.setBackground(rippleBg(colSurface(), 10));
             colorBtn.setPadding(dp(this, 12), dp(this, 9), dp(this, 12), dp(this, 9));
             colorBtn.setGravity(Gravity.CENTER);
@@ -14230,8 +14329,8 @@ public class MainActivity extends Activity {
         java.util.List<String> parts = new ArrayList<>();
         String curTxt = c.spec("币种支持");
         java.util.regex.Matcher mCur = java.util.regex.Pattern.compile("共\\s*(\\d+)\\s*币种").matcher(curTxt);
-        if (mCur.find()) parts.add(mCur.group(1) + " 个币种一卡走天下");
-        else if (curTxt.contains("多币种")) parts.add("人民币 + 外币多币种");
+        if (mCur.find()) parts.add(String.format(S("hl_cur_fmt"), mCur.group(1))); // Q164
+        else if (curTxt.contains("多币种")) parts.add(S("hl_multicur")); // Q164
         if (featMatch(c, "noftf")) parts.add("无货币转换费");
         String promo = c.spec("优惠政策");
         java.util.regex.Matcher mAtm = java.util.regex.Pattern.compile("[^，。；]*ATM[^，。；]*免[^，。；]*笔[^，。；]*").matcher(promo);
@@ -14239,15 +14338,15 @@ public class MainActivity extends Activity {
         java.util.regex.Matcher mCash = java.util.regex.Pattern.compile("境外消费[^，。；]*返现[^，。；]*").matcher(promo);
         if (mCash.find() && java.util.regex.Pattern.compile("\\d").matcher(mCash.group()).find()
             && !parts.toString().contains("返现") && parts.size() < 3) parts.add(cleanPromo(mCash.group()));
-        if (java.util.regex.Pattern.compile("AI|算力").matcher((c.name == null ? "" : c.name) + promo).find()) parts.add("开卡达标送 AI 算力套餐和积分权益");
-        if (java.util.regex.Pattern.compile("哔哩哔哩|2233").matcher(c.name == null ? "" : c.name).find()) parts.add("联名卡面，免年费免管理费、境内 ATM 免费");
+        if (java.util.regex.Pattern.compile("AI|算力").matcher((c.name == null ? "" : c.name) + promo).find()) parts.add(S("hl_ai")); // Q164
+        if (java.util.regex.Pattern.compile("哔哩哔哩|2233").matcher(c.name == null ? "" : c.name).find()) parts.add(S("hl_bili")); // Q164
         boolean hasFree = false; for (String p : parts) if (p.contains("免年费")) hasFree = true;
-        if ("无".equals(c.spec("年费").trim()) && !hasFree && parts.size() < 3) parts.add("免年费");
+        if ("无".equals(c.spec("年费").trim()) && !hasFree && parts.size() < 3) parts.add(S("hl_nofee")); // Q164
         String autofx = c.spec("自动购汇").trim();
-        if ((autofx.startsWith("有") || autofx.startsWith("支持")) && parts.size() < 3) parts.add("自动购汇，刷完自动换汇");
+        if ((autofx.startsWith("有") || autofx.startsWith("支持")) && parts.size() < 3) parts.add(S("hl_autofx")); // Q164
         String issued = c.spec("发行情况");
-        if (issued.contains("网申") && !issued.contains("仅限线下") && parts.size() < 3) parts.add("网申就能办不用跑网点");
-        if (parts.isEmpty()) parts.add("门槛低、费用省，学生党友好");
+        if (issued.contains("网申") && !issued.contains("仅限线下") && parts.size() < 3) parts.add(S("hl_online_apply")); // Q164
+        if (parts.isEmpty()) parts.add(S("hl_student_friendly")); // Q164
         java.util.List<String> top = parts.subList(0, Math.min(3, parts.size()));
         return android.text.TextUtils.join("，", top) + "。";
     }
@@ -14263,9 +14362,9 @@ public class MainActivity extends Activity {
         String autofx = c.spec("自动购汇").trim();
         if (autofx.startsWith("有") || autofx.startsWith("支持")) fit.add("出境旅游");
         String issued = c.spec("发行情况");
-        if (issued.contains("网申") && !issued.contains("仅限线下")) fit.add("第一次办卡");
-        if (java.util.regex.Pattern.compile("AI|算力").matcher(c.name == null ? "" : c.name).find()) fit.add("AI 工具党");
-        if (java.util.regex.Pattern.compile("哔哩哔哩|2233").matcher(c.name == null ? "" : c.name).find()) fit.add("二次元");
+        if (issued.contains("网申") && !issued.contains("仅限线下")) fit.add(S("fit_first")); // Q164
+        if (java.util.regex.Pattern.compile("AI|算力").matcher(c.name == null ? "" : c.name).find()) fit.add(S("fit_ai")); // Q164
+        if (java.util.regex.Pattern.compile("哔哩哔哩|2233").matcher(c.name == null ? "" : c.name).find()) fit.add(S("fit_acg")); // Q164
         if ("unionpay".equals(c.org) || featMatch(c, "online")) fit.add("日常党");
         java.util.List<String> out = new ArrayList<>(fit);
         return out.subList(0, Math.min(3, out.size()));
@@ -14473,7 +14572,7 @@ public class MainActivity extends Activity {
                 LinearLayout.LayoutParams flp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
                 flp.topMargin = dp(this, 8);
                 cardBox.addView(fitRow, flp);
-                TextView fl = tv(this, "适合 ", 11.5f, colText2(), true);
+                TextView fl = tv(this, S("stu_fit") + " ", 11.5f, colText2(), true); // Q164
                 fitRow.addView(fl);
                 for (String f : fit) fitRow.addView(chip(f, Color.rgb(0xF5, 0xF6, 0xF8), Color.rgb(0x3A, 0x3A, 0x3C)));
             }
@@ -14498,7 +14597,7 @@ public class MainActivity extends Activity {
                             java.util.List<String> fit = studentFit(c);
                             if (!fit.isEmpty() && tile instanceof LinearLayout && ((LinearLayout) tile).getChildCount() > 1) {
                                 LinearLayout tbody = (LinearLayout) ((LinearLayout) tile).getChildAt(1);
-                                TextView ft = tv(this, "适合 " + android.text.TextUtils.join(" · ", fit), stuCols >= 3 ? 8.5f : 9.5f, colText2(), false);
+                                TextView ft = tv(this, S("stu_fit") + " " + android.text.TextUtils.join(" · ", fit), stuCols >= 3 ? 8.5f : 9.5f, colText2(), false); // Q164
                                 ft.setMaxLines(1);
                                 ft.setEllipsize(android.text.TextUtils.TruncateAt.END);
                                 LinearLayout.LayoutParams flp2 = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
@@ -14620,11 +14719,11 @@ public class MainActivity extends Activity {
             if (s > bestS) { bestS = s; best = c; }
         }
         List<String> gaps = new ArrayList<>();
-        if (nNoFtf == 0) gaps.add("还没有无货币转换费的卡，出境刷卡每笔会被收 1%~1.5% 转换费");
+        if (nNoFtf == 0) gaps.add(S("gap_no_ftf")); // Q164：短板句收编 S 表（旧路靠 EN_TXT.getOrDefault 恒未命中、英文直出中文）
         boolean hasJcb = false;
         for (Card c : owned) if ("jcb".equals(c.org)) { hasJcb = true; break; }
-        if (!hasJcb) gaps.add("没有 JCB，去日本线下会弱一点");
-        if (n3ds == 0) gaps.add("没有支持 3DS 的卡，部分境外网站付款可能过不了验证");
+        if (!hasJcb) gaps.add(S("gap_no_jcb"));
+        if (n3ds == 0) gaps.add(S("gap_no_3ds"));
         String verdict = owned.size() >= 8 ? "卡包比较齐整了"
             : owned.size() >= 4 ? "主力框架有了，再补短板就行" : "还在起步阶段，先把主力卡配齐";
 
@@ -14649,8 +14748,8 @@ public class MainActivity extends Activity {
         row1.addView(mineHeroTile(TIER_NAMES[topTier], null, "最高档次", null, true), mineTileLp(1f, false));
         row2.addView(mineHeroTile(hasOrgs.size() + " / " + ORG_LIST.length, null, "组织覆盖",
             hasOrgs.isEmpty() ? null : joinCn(hasOrgs), false), mineTileLp(1.25f, true));
-        row2.addView(mineHeroTile(nNoFtf + " 张", null, "无转换费",
-            missOrgs.isEmpty() ? "组织全覆盖了" : "还差 " + joinCn(missOrgs), false), mineTileLp(1f, false));
+        row2.addView(mineHeroTile(nNoFtf + (isEn() ? "" : " 张"), null, "无转换费", // Q164：英文计数仅数字（图 271115/271127 实证「4 张」漏译）
+            missOrgs.isEmpty() ? "组织全覆盖了" : S("mine_missing_fmt").replace("%s", mineOrgNamesEn164(missOrgs)), false), mineTileLp(1f, false));
         }
 
         // 境外能力白卡（Q22 对照 .dash-sect/.dash-card/.drow：分节 1.02rem/700、白卡圆角 16 内边距 4/16/12、行内图标+不截断标签+渐变条）
@@ -14668,7 +14767,7 @@ public class MainActivity extends Activity {
         wrap.addView(card, clp2);
         card.addView(mineProgRow("percent", "无货币转换费", nNoFtf, owned.size(), true));
         card.addView(mineProgRow("shield", "3DS 验证", n3ds, owned.size(), false));
-        card.addView(mineProgRow("swap", "自动购汇", nFx, owned.size(), false));
+        card.addView(mineProgRow("swap", S("feat_autofx_en"), nFx, owned.size(), false)); // Q164：featLabelEn 缩略表已有 autofx，此处旧直传中文字面量漏译
         card.addView(mineProgRow("atm", "境外 ATM 免发卡行费", nAtm, owned.size(), false));
         if (best != null) {
             final Card bestF = best;
@@ -14698,7 +14797,7 @@ public class MainActivity extends Activity {
             brow.setOnClickListener(v -> openDetail(bestF));
         }
         if (!gaps.isEmpty()) {
-            TextView g = tv(this, isEn() ? "Gap: " + EN_TXT.getOrDefault(gaps.get(0), gaps.get(0)) : "短板：" + gaps.get(0), 13, Color.rgb(0xB2, 0x6A, 0x00), false);
+            TextView g = tv(this, S("gap_prefix") + gaps.get(0), 13, Color.rgb(0xB2, 0x6A, 0x00), false); // Q164：gaps 本身已按 S 表取文，此处只拼前缀
             g.setBackground(roundRect(Color.rgb(0xFF, 0xF8, 0xEC), 10, this));
             g.setPadding(dp(this, 12), dp(this, 10), dp(this, 12), dp(this, 10));
             g.setLineSpacing(0, 1.5f);
@@ -14711,6 +14810,20 @@ public class MainActivity extends Activity {
         nlp2.topMargin = dp(this, 10);
         card.addView(note, nlp2);
         return wrap;
+    }
+
+    // Q164：英雄格「还差 …」的英文组织名——missOrgs 存的是 ORG_LIST 中文
+    // 名，反查键后过 orgLabel 取英文（VISA/Mastercard/…）；中文回退 joinCn。
+    String mineOrgNamesEn164(List<String> missOrgs) {
+        if (!isEn()) return joinCn(missOrgs);
+        StringBuilder sb = new StringBuilder();
+        for (String nm : missOrgs) {
+            String en = nm;
+            for (String[] o : ORG_LIST) if (o[1].equals(nm)) { en = orgLabel(o[0]); break; }
+            if (sb.length() > 0) sb.append(", ");
+            sb.append(en);
+        }
+        return sb.toString();
     }
 
     static String joinCn(List<String> xs) {
@@ -14926,7 +15039,7 @@ public class MainActivity extends Activity {
         if (!dues.isEmpty()) {
             dues.sort((a, b) -> Integer.compare(Integer.parseInt(a[1]), Integer.parseInt(b[1])));
             StringBuilder sb = new StringBuilder("还款日历：");
-            for (int i = 0; i < dues.size() && i < 6; i++) sb.append(i == 0 ? "" : " · ").append(dues.get(i)[0]).append(" 每月").append(dues.get(i)[1]).append("日");
+            for (int i = 0; i < dues.size() && i < 6; i++) { if (i > 0) sb.append(" · "); sb.append(String.format(S("mine_due_fmt"), dues.get(i)[0], dues.get(i)[1])); } // Q164
             box.addView(tv(this, sb.toString(), 12, colText2(), false));
         } else box.addView(tv(this, "在卡片编辑里填还款日后，这里按日历列出。", 12, colText2(), false));
     }
@@ -14953,7 +15066,7 @@ public class MainActivity extends Activity {
         for (final OwnActItem it : ownActs) {
             LinearLayout row = new LinearLayout(this); row.setOrientation(LinearLayout.VERTICAL); row.setBackground(rippleBg(colSurface(), 14)); row.setPadding(dp(this,14),dp(this,10),dp(this,14),dp(this,10));
             LinearLayout.LayoutParams rp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT); rp.topMargin = dp(this,8); row.setLayoutParams(rp);
-            row.addView(tvW(this, (it.title == null ? "" : it.title) + (it.finished ? " · 已完成" : ""), 14, colText(), 700));
+            row.addView(tvW(this, (it.title == null ? "" : it.title) + (it.finished ? S("act_done_suffix") : ""), 14, colText(), 700)); // Q164
             row.addView(tv(this, (it.cardName == null ? "" : it.cardName) + " · " + it.type + " · " + it.done + "/" + it.target + (it.period == null || it.period.isEmpty() ? "" : " · " + it.period), 12, colText2(), false));
             LinearLayout br = new LinearLayout(this); br.setOrientation(LinearLayout.HORIZONTAL);
             TextView doneB = tv(this, it.finished ? "取消完成" : "完成打勾", 12.5f, accentColor(), true); doneB.setPadding(dp(this,6),dp(this,6),dp(this,12),dp(this,6));
@@ -15008,7 +15121,7 @@ public class MainActivity extends Activity {
         } catch (Throwable ignored) {}
         // minimal inline form appended as sheet-like card at bottom of overlay
         LinearLayout f = new LinearLayout(this); f.setOrientation(LinearLayout.VERTICAL); f.setBackground(roundRect(colSheet(), 20, this)); f.setPadding(dp(this,16),dp(this,14),dp(this,16),dp(this,14));
-        final EditText t = customInput("活动名，如：开卡礼", "", 30); final EditText cn = customInput("卡名（可空）", "", 20); final EditText tg = customInput("目标次数/金额，如：3", "", 9);
+        final EditText t = customInput(S("hint_act_name"), "", 30); final EditText cn = customInput(S("hint_act_card"), "", 20); final EditText tg = customInput(S("hint_act_target"), "", 9); // Q164
         f.addView(tvW(this, "新增活动", 15, colText(), 700)); f.addView(t); f.addView(cn); f.addView(tg);
         TextView ok = softPrimaryBtn("保存");
         ok.setElevation(0); // Q122（件十）：钮下叠影来自 softPrimaryBtn 自带 2dp elevation 压在卡面上——本表单内归零，单层收口
@@ -15056,7 +15169,7 @@ public class MainActivity extends Activity {
         stats.addView(mineStatCell((rows.size() + customCards.size()) + "", "持有卡"), new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
         stats.addView(mineStatCell(owned.isEmpty() ? "—" : TIER_NAMES[topTier], "最高档次"), new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
         stats.addView(mineStatCell(orgHas + " / " + ORG_LIST.length, "组织覆盖"), new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
-        stats.addView(mineStatCell(nNoFtf + " 张", "无转换费"), new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+        stats.addView(mineStatCell(String.format(S("mine_stat_fmt"), nNoFtf), "无转换费"), new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)); // Q164
         TextView vd = tv(this, isEn() ? "My Wallet · " + EN_TXT.getOrDefault(verdict, verdict) : "我的卡包 · " + verdict, 12, colText2(), false);
         LinearLayout.LayoutParams vdlp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         vdlp.topMargin = dp(this, 8);
@@ -15139,7 +15252,7 @@ public class MainActivity extends Activity {
         cells.add(new Object[]{"binquery", "在线查询卡信息", "BIN 认行",
             (Runnable) () -> openBinQuery()});
         if (fxzoneEnabled()) { // Q132（2.44）：外卡专区入口，模块开关关掉即不见
-            cells.add(new Object[]{"fxzone", "外卡专区", FxStore.all != null ? ("香港 · " + FxStore.all.size() + " 张") : "香港银行卡",
+            cells.add(new Object[]{"fxzone", "外卡专区", FxStore.all != null ? String.format(S("fx_cell_sub_fmt"), FxStore.all.size()) : "香港银行卡", // Q164
                 (Runnable) () -> openFxZone()});
         }
         if (cells.isEmpty()) return new View(this);
@@ -15310,7 +15423,7 @@ public class MainActivity extends Activity {
         barLp.bottomMargin = dp(this, 10);
         inner.addView(barRow, barLp);
         barRow.addView(tvW(this, "我的卡片", 14.5f, inkBody(), 600));
-        TextView cnt = tv(this, (mineRows.size() + customCards.size()) + " 张", 13, colText2(), false);
+        TextView cnt = tv(this, String.format(S("fmt_cards_n"), mineRows.size() + customCards.size()), 13, colText2(), false); // Q164
         LinearLayout.LayoutParams cntLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         cntLp.leftMargin = dp(this, 8);
         barRow.addView(cnt, cntLp);
@@ -16689,8 +16802,8 @@ public class MainActivity extends Activity {
         if (isBankKind(c.kind)) rowList.add(new String[]{"账户类别", dash(c.acctClass)}); // Q126（件七）：恒加行（空标显 —），供标记切换原地改值，无布局跳变
         rowList.add(new String[]{"备注", dash(c.note)});
         if (isBankKind(c.kind) && c.limitYuan > 0) rowList.add(new String[]{"信用额度", "¥" + fmtMoney(c.limitYuan)});
-        if (isBankKind(c.kind) && c.billDay > 0) rowList.add(new String[]{"账单日", "每月 " + c.billDay + " 日"});
-        if (isBankKind(c.kind) && c.dueDay > 0) rowList.add(new String[]{"还款日", "每月 " + c.dueDay + " 日"});
+        if (isBankKind(c.kind) && c.billDay > 0) rowList.add(new String[]{"账单日", String.format(S("spec_monthly_day_fmt"), c.billDay)}); // Q164
+        if (isBankKind(c.kind) && c.dueDay > 0) rowList.add(new String[]{"还款日", String.format(S("spec_monthly_day_fmt"), c.dueDay)}); // Q164
         String[][] rows = rowList.toArray(new String[0][]);
         final TextView[] acctValTv126 = {null}; // Q126（件七）：「账户类别」值位，标记切换原地改
         for (int i = 0; i < rows.length; i++) {
@@ -17168,19 +17281,19 @@ public class MainActivity extends Activity {
             if (bank != null && bank.length() > 0 && t.bank != null && t.bank.getText().toString().trim().isEmpty())
                 t.bank.setText(bank);
             if (t.note != null && t.note.getText().toString().trim().isEmpty() && (type != null || bin != null || (bank != null && bank.length() > 0))) {
-                StringBuilder sb = new StringBuilder("NFC 识别：");
+                StringBuilder sb = new StringBuilder(S("nfc_prefix")); // Q164
                 sb.append(type != null && !"类型未知".equals(type) ? type : "银行卡");
                 if (label != null && label.length() > 0) sb.append("（").append(label).append("）");
-                if (bank != null && bank.length() > 0) sb.append(" · 发卡行 ").append(bank);
+                if (bank != null && bank.length() > 0) sb.append(S("nfc_bank")).append(bank); // Q164
                 if (bin != null && bin.length() > 0) sb.append(" · BIN ").append(bin);
-                if (last4 != null && last4.length() > 0) sb.append(" · 尾号 ").append(last4);
+                if (last4 != null && last4.length() > 0) sb.append(S("nfc_last4")).append(last4); // Q164
                 t.note.setText(sb.toString());
             }
             if (t.name != null && t.name.getText().toString().trim().isEmpty()
                 && org != null && org.length() > 0 && type != null && !"类型未知".equals(type))
                 t.name.setText(org + type);
         } catch (Throwable ignored) {}
-        StringBuilder toast = new StringBuilder("识别到：");
+        StringBuilder toast = new StringBuilder(S("nfc_found")); // Q164
         toast.append(org != null && org.length() > 0 ? org : "未知组织");
         if (type != null && type.length() > 0) toast.append(" · ").append(type);
         if (bank != null && bank.length() > 0) toast.append(" · ").append(bank);
@@ -17941,11 +18054,11 @@ public class MainActivity extends Activity {
             kindRow.addView(b);
         }
         form.addView(customFormLabel("卡片名称*"));
-        final EditText inName = customInput("如：我的工资卡", draft.name, 30);
+        final EditText inName = customInput(S("hint_cc_name"), draft.name, 30); // Q164
         form.addView(inName);
         final TextView bankLabel = customFormLabel("发卡银行");
         form.addView(bankLabel);
-        final EditText inBank = customInput("如：招商银行", draft.bank, 20);
+        final EditText inBank = customInput(S("hint_cc_bank"), draft.bank, 20); // Q164
         form.addView(inBank);
         final TextView orgLabel = customFormLabel("卡组织");
         form.addView(orgLabel);
@@ -17956,10 +18069,11 @@ public class MainActivity extends Activity {
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
         final java.util.List<TextView> orgChips = new ArrayList<>();
         Runnable paintOrgs = () -> {
-            for (TextView b : orgChips) softFormChipPaint(b, b.getText().toString().equals(orgSel[0])); // Q94：本窗选片走 Soft 漆法
+            for (TextView b : orgChips) softFormChipPaint(b, String.valueOf(b.getTag()).equals(orgSel[0])); // Q94：本窗选片走 Soft 漆法；Q164：比对走 tag 数据值（显示已英文化）
         };
         for (final String o : CUSTOM_ORGS) {
-            TextView b = formOrgChip(o);
+            TextView b = formOrgChip(isEn() ? customOrgEn164(o) : o); // Q164：组织片只改显示映射，存值不动
+            b.setTag(o);
             b.setOnClickListener(v -> { haptic(); orgSel[0] = o.equals(orgSel[0]) ? "" : o; paintOrgs.run(); });
             orgChips.add(b);
         }
@@ -18075,7 +18189,7 @@ public class MainActivity extends Activity {
             }
         }
         paintStyles.run();
-        final EditText inNote = customInput("可空", draft.note, 60);
+        final EditText inNote = customInput(S("hint_cc_note"), draft.note, 60); // Q164
         // Q9 NFC 贴卡按钮（对照混合版 index.html #ccNfc：全宽、浅蓝底、蓝字，禁用 emoji 改纯文字细线语言）：
         // 点它起 NFC 读卡，回填组织/银行/备注；无 NFC 或未开启给明确提示，不静默失败。
         TextView nfcBtn = tv(this, "NFC 贴卡识别（自动填卡组织 / 类型）", 14, Color.rgb(0x2C, 0x5F, 0x9E), true); // Q94：蓝字降饱和随柔面
@@ -18119,8 +18233,8 @@ public class MainActivity extends Activity {
         final EditText inLim = customInput("如：50000", draft.limitYuan > 0 ? String.valueOf(draft.limitYuan) : "", 9);
         final TextView billLabel = customFormLabel("账单日 / 还款日（几号，可空）");
         LinearLayout billRow = new LinearLayout(this); billRow.setOrientation(LinearLayout.HORIZONTAL);
-        final EditText inBill = customInput("账单日，如：5", draft.billDay > 0 ? String.valueOf(draft.billDay) : "", 2);
-        final EditText inDue = customInput("还款日，如：25", draft.dueDay > 0 ? String.valueOf(draft.dueDay) : "", 2);
+        final EditText inBill = customInput(S("hint_cc_bill"), draft.billDay > 0 ? String.valueOf(draft.billDay) : "", 2); // Q164
+        final EditText inDue = customInput(S("hint_cc_due"), draft.dueDay > 0 ? String.valueOf(draft.dueDay) : "", 2); // Q164
         LinearLayout.LayoutParams blp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
         LinearLayout.LayoutParams dlp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f); dlp.leftMargin = dp(this, 10);
         billRow.addView(inBill, blp); billRow.addView(inDue, dlp);
@@ -18289,7 +18403,7 @@ public class MainActivity extends Activity {
         otaFetchStarted = true;
         // Q122（2.34，件六）：手动点检查必须立刻有反馈——旧流程点完要等双线串行拉完
         // （最长十几秒）才出第一句 toast，用户对着无变化的界面以为卡死（01:30 点名）。
-        if (manual) runOnUiThread(() -> showFloatToast("正在检查更新…"));
+        if (manual) runOnUiThread(() -> showFloatToast(S("upd_checking"))); // Q164
         final String[] urls = {
             "https://cdn.jsdelivr.net/gh/dimlogue/cardbox-data@main/cards.json",
             "https://raw.githubusercontent.com/dimlogue/cardbox-data/main/cards.json"
@@ -18311,14 +18425,14 @@ public class MainActivity extends Activity {
             }
             if (bestJson == null) {
                 // Q122（件六）：失败给人话原因——超时与连不上分开说，不再笼统一句「检查网络」
-                final String failMsg122 = sawTimeout122[0] ? "检查超时：网络太慢或服务器没响应，请稍后再试" : "检查更新失败：两条线路都没连上，请检查网络后重试";
+                final String failMsg122 = sawTimeout122[0] ? S("upd_timeout") : S("upd_fail"); // Q164
                 runOnUiThread(() -> { otaFetchStarted = false; if (fromPull) showFloatToast(failMsg122); else if (manual) showFloatToast(failMsg122); if (onDone != null) onDone.run(); });
                 return;
             }
             if (bestVer <= Store.dataVersion) {
                 pendingUpdateJson = null; pendingUpdateVer = -1; pendingUpdateSummary = "";
                 if (prefs != null) prefs.edit().remove("pending_update_version").apply();
-                runOnUiThread(() -> { otaFetchStarted = false; if (manual || fromPull) showFloatToast("已是最新数据（v" + Store.dataVersion + "）"); if (onDone != null) onDone.run(); });
+                runOnUiThread(() -> { otaFetchStarted = false; if (manual || fromPull) showFloatToast(String.format(S("upd_latest_fmt"), Store.dataVersion)); // Q164 if (onDone != null) onDone.run(); });
                 return;
             }
             pendingUpdateJson = bestJson; pendingUpdateVer = bestVer;
@@ -18380,7 +18494,7 @@ public class MainActivity extends Activity {
             }
             int removed = 0;
             for (String id : cur.keySet()) if (!remoteIds.contains(id)) removed++;
-            return "本次变化：新增 " + added + " 张 · 移除 " + removed + " 张 · 内容调整 " + changed + " 张。";
+            return String.format(S("upd_changes_fmt"), added, removed, changed); // Q164
         } catch (Exception e) { return ""; }
     }
 
@@ -18417,7 +18531,7 @@ public class MainActivity extends Activity {
         updateApplyArmed = false;
         if (updateApplying) return;
         final String json = pendingUpdateJson; final int ver = pendingUpdateVer;
-        if (json == null || ver <= Store.dataVersion) { showFloatToast("已是最新数据（v" + Store.dataVersion + "）"); return; }
+        if (json == null || ver <= Store.dataVersion) { showFloatToast(String.format(S("upd_latest_fmt"), Store.dataVersion)); // Q164 return; }
         updateApplying = true; showFloatToast("正在更新数据…");
         final int oldVer151 = Store.dataVersion; // Q151（N18）：更新前版本/卡数（回执 A→B 用）
         final int oldN151 = Store.all.size();
@@ -18448,7 +18562,7 @@ public class MainActivity extends Activity {
             final boolean fok = ok;
             runOnUiThread(() -> {
                 updateApplying = false;
-                if (!fok) { showFloatToast("更新未能写入，数据未生效，请重试"); return; } // Q151（N18）：失败如实说（旧文案误报「检查网络」，实为写盘/解析失败）
+                if (!fok) { showFloatToast(S("upd_write_fail")); return; } // Q151（N18）：失败如实说（旧文案误报「检查网络」，实为写盘/解析失败）；Q164 落串
                 pendingUpdateJson = null; pendingUpdateVer = -1; pendingUpdateSummary = "";
                 // Q98：确认应用成功才落标记——Store.load 凭此标记（且须与文件版本一致）才认 OTA 文件
                 // Q152（更新链c）：标记改 commit 同步落盘（旧 apply 异步：rename 已
@@ -18466,7 +18580,7 @@ public class MainActivity extends Activity {
                 new Thread(() -> { pruneOldOtaImageDirs125(); warmHomeTiles125(); }).start();
                 // Q151（N18）：回执报全账——版本 A→B、卡数 X→Y，两条入口（设置检查/
                 // 下拉同步）都经此收口，不许无变化也报「完成」。
-                showFloatToast("数据已更新 v" + oldVer151 + " → v" + Store.dataVersion + " · 卡片 " + oldN151 + " → " + Store.all.size() + " 张");
+                showFloatToast(String.format(S("upd_done_fmt"), oldVer151, Store.dataVersion, oldN151, Store.all.size())); // Q164
                 pages.clear();
                 if (detailCard == null) rebuildPages();
                 else scheduleDetailRefresh161(detailCard.id); // Q161：详情窗在场——登记待重开，关窗落定按新数据重开（closeDetail finish 消费一次）
@@ -18638,7 +18752,7 @@ public class MainActivity extends Activity {
     void mainHandlerPost(Runnable r){ try{ new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(r,190);}catch(Throwable e){ r.run(); } }
     void showUpdateTip(final int ver){
         if(updateTipSheet!=null||updateConfirmSheet!=null) return; updateTipClosing=false;
-        FrameLayout sheet=buildUpdateSheet("有新数据","检测到新数据 v"+ver+"，去更新？","知道了","去更新",()->showUpdateConfirm());
+        FrameLayout sheet=buildUpdateSheet(S("upd_new_title"), String.format(S("upd_new_fmt"), ver), S("upd_know"), S("upd_go"), ()->showUpdateConfirm()); // Q164
         updateTipSheet=sheet; content.addView(sheet); animateUpdateSheetIn(sheet);
     }
     void showUpdateConfirm(){
@@ -18647,9 +18761,9 @@ public class MainActivity extends Activity {
         // Q123（2.35，件三）：确认窗先列变化摘要（检测时已算好；算不出则明说以新版为准），
         // 并把代价说在前面——可能短暂卡顿、覆盖原卡库；用户自有卡片/收藏不动，点确认才应用。
         String sum123 = pendingUpdateSummary == null || pendingUpdateSummary.isEmpty()
-            ? "本次变化明细暂未算出，更新后以新版数据为准。" : pendingUpdateSummary;
-        String msg123 = "检测到新数据 v" + pendingUpdateVer + "。\n" + sum123
-            + "\n更新可能短暂卡顿，并将覆盖当前卡库数据；你自己添加的卡片和收藏不会被改动，重复的卡会被合并删除。不更新就点取消，新版会一直留着等你。";
+            ? S("upd_new_nodetail") : pendingUpdateSummary; // Q164
+        String msg123 = String.format(S("upd_new_msg_fmt"), pendingUpdateVer, sum123) // Q164
+            + S("upd_warn"); // Q164
         FrameLayout sheet=buildUpdateSheet("更新数据",msg123,"取消","去更新",()->{ updateApplyArmed = true; applyPendingUpdate(); });
         updateConfirmSheet=sheet; content.addView(sheet); animateUpdateSheetIn(sheet);
     }
@@ -19885,7 +19999,7 @@ public class MainActivity extends Activity {
             cg.setBackground(roundRect(Color.rgb(0xE8, 0xF1, 0xFD), 999, this));
             cg.setPadding(dp(this, 8), dp(this, 3), dp(this, 8), dp(this, 3));
             meta.addView(cg);
-            TextView arrow = tv(this, open ? L("收起 ‹", "Collapse ‹") : L("展开 ›", "Expand ›"), 11, Color.rgb(0x0A, 0x5C, 0xD6), true); // Q158：chrome 补译
+            TextView arrow = tv(this, open ? S("news_collapse_arrow") : S("news_expand_arrow"), 11, Color.rgb(0x0A, 0x5C, 0xD6), true); // Q164
             arrow.setGravity(Gravity.RIGHT);
             meta.addView(arrow, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
 
@@ -19965,7 +20079,7 @@ public class MainActivity extends Activity {
                 haptic();
                 if (glossaryOpen.contains(g.id)) {
                     glossaryOpen.remove(g.id);
-                    arrow.setText("展开 ›");
+                    arrow.setText(S("news_expand_arrow")); // Q164
                     foldBusy130.add(g.id);
                     // Q139：整卡收拢（collapseGlossaryCard139）——内容保持展开态、卡高
                     // 钉住单调收拢、落定单帧内摘盒摘注＋正文复 2 行、落定同帧 Q142 回锚。
@@ -19978,7 +20092,7 @@ public class MainActivity extends Activity {
                     });
                 } else {
                     glossaryOpen.add(g.id);
-                    arrow.setText("收起 ‹");
+                    arrow.setText(S("news_collapse_arrow")); // Q164
                     foldBusy130.add(g.id);
                     // Q139：整卡展开（expandGlossaryCard139）——先量收起高、再装展开
                     // 态、整卡钉高一支弹簧揭示、落定回 WRAP_CONTENT。废旧法：正文
@@ -20166,8 +20280,8 @@ public class MainActivity extends Activity {
         else if (e.type != null) typeTxt = e.type;
         StringBuilder note = new StringBuilder();
         if (!typeTxt.isEmpty()) note.append(typeTxt);
-        note.append(note.length() > 0 ? " · 扩展卡库" : "扩展卡库");
-        note.append(" · 规格待补，以发卡行官网为准");
+        note.append(note.length() > 0 ? S("ext_note_ext") : S("ext_note_ext").substring(3)); // Q164
+        note.append(S("ext_note_spec_suffix")); // Q164
         if (e.url != null && !e.url.trim().isEmpty()) note.append(" · ").append(e.url.trim());
         c.note = note.toString();
         c.acctClass = ""; c.kind = "bank";
@@ -20414,24 +20528,24 @@ public class MainActivity extends Activity {
         }
         if (extMeta != null) {
             int total = extItems == null ? 0 : extItems.size();
-            if (extLoading) extMeta.setText("正在拉取扩展索引… 已缓存 " + total + " 条");
-            else if (total == 0 && extFetchFailed) extMeta.setText("本地核心库 " + Store.all.size() + " 张照常可搜"); // Q122（2.34，件七）：失败人话只许正文 note 一条承担，状态行不再重复「拉不到」
-            else if (total == 0) extMeta.setText("扩展索引暂无缓存 · 本地核心库 " + Store.all.size() + " 张仍可搜");
-            else extMeta.setText("扩展卡库 " + total + " 条 · 本地核心库 " + Store.all.size() + " 张");
+            if (extLoading) extMeta.setText(String.format(S("ext_fetching_fmt"), total));
+            else if (total == 0 && extFetchFailed) extMeta.setText(String.format(S("ext_local_only_fmt"), Store.all.size())); // Q122（2.34，件七）：失败人话只许正文 note 一条承担，状态行不再重复「拉不到」
+            else if (total == 0) extMeta.setText(String.format(S("ext_no_cache_fmt"), Store.all.size()));
+            else extMeta.setText(String.format(S("ext_meta_fmt"), total, Store.all.size())); // Q164：四态收编 S 表
         }
         boolean anyShown = false;
         boolean noteShown = false;
         // Q91：本地核心库分区——命中直接列行，点行关窗进详情；扩展拉不到也不许让这一区缺席
         if (!localCards.isEmpty()) {
             anyShown = true;
-            addExtSectionHead("已收录 · " + localCards.size() + " 张（点开看详情）"); // Q154（件十四）：三区命名收口
+            addExtSectionHead(String.format(S("ext_sec_local_fmt"), localCards.size())); // Q154（件十四）：三区命名收口；Q164 落串
             int shownL = 0;
             for (final Card lc : localCards) {
                 if (shownL++ >= 60) break;
                 LinearLayout lrow = new LinearLayout(this);
                 lrow.setOrientation(LinearLayout.HORIZONTAL);
                 lrow.setGravity(Gravity.CENTER_VERTICAL);
-                lrow.setBackground(rippleBg(Color.rgb(0xF8, 0xF8, 0xFA), 12));
+                lrow.setBackground(rippleBg(colSurface(), 12));
                 lrow.setPadding(dp(this, 10), dp(this, 10), dp(this, 10), dp(this, 10));
                 LinearLayout.LayoutParams lrlp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
                 lrlp.topMargin = dp(this, 8);
@@ -20457,8 +20571,8 @@ public class MainActivity extends Activity {
                 String lol = (lc.org == null || lc.org.trim().isEmpty()) ? "" : orgLabel(lc.org.trim());
                 if (!lol.isEmpty()) { if (lsub.length() > 0) lsub.append(" · "); lsub.append(lol); }
                 if (lsub.length() > 0) lsub.append(" · ");
-                lsub.append(lc.isCredit() ? "信用卡" : "借记卡").append(" · 本地卡库");
-                if (dupKeys154.contains(dedupeKey154(lc.bank, lc.name, lc.org))) lsub.append(" · 扩展索引同条"); // Q154（件十四）：判重扩展条目挂此核心卡下、不另行重复出
+                lsub.append(lc.isCredit() ? S("fx_type_credit") : S("fx_type_debit")).append(S("ext_note_local")); // Q164
+                if (dupKeys154.contains(dedupeKey154(lc.bank, lc.name, lc.org))) lsub.append(S("ext_note_dup")); // Q154（件十四）：判重扩展条目挂此核心卡下、不另行重复出
                 lmid.addView(tv(this, lsub.toString(), 12, colText2(), false));
                 lrow.setOnClickListener(v -> { haptic(); closeExtendedSearchNow(); openDetail(lc); });
             }
@@ -20466,9 +20580,9 @@ public class MainActivity extends Activity {
         if (hitsJoin.isEmpty() && hitsPend.isEmpty()) {
             // Q91：扩展侧只给一行状态说明，不再整窗躺平；本地有结果时这一行退居次席
             String note = null;
-            if (extLoading) note = "扩展卡库正在拉取…";
-            else if ((extItems == null || extItems.isEmpty()) && extFetchFailed) note = "扩展卡库暂时拉不到（两条线路都没通），检查网络后点下方「刷新索引」再试。";
-            else if (!q.isEmpty()) note = "扩展卡库里没找到「" + (extQuery == null ? "" : extQuery.trim()) + "」";
+            if (extLoading) note = S("ext_note_fetching"); // Q164
+            else if ((extItems == null || extItems.isEmpty()) && extFetchFailed) note = S("ext_note_fail2"); // Q164
+            else if (!q.isEmpty()) note = String.format(S("ext_note_none_fmt"), extQuery == null ? "" : extQuery.trim()); // Q164
             if (note != null) {
                 noteShown = true;
                 TextView nt = tv(this, note, 12.5f, colText2(), false);
@@ -20479,7 +20593,7 @@ public class MainActivity extends Activity {
         }
         if (!hitsJoin.isEmpty()) {
             anyShown = true;
-            addExtSectionHead("可加入 · " + hitsJoin.size() + " 条" + (hitsJoin.size() > 60 ? "（只显示前 60 条，输入更准的关键词）" : "")); // Q154（件十四）：verified 才进本区
+            addExtSectionHead(String.format(S("ext_sec_join_fmt"), hitsJoin.size(), hitsJoin.size() > 60 ? S("ext_sec_cap") : "")); // Q154（件十四）：verified 才进本区；Q164 落串
         }
         int shown = 0;
         for (final ExtCard e : hitsJoin) {
@@ -20487,7 +20601,7 @@ public class MainActivity extends Activity {
             LinearLayout row = new LinearLayout(this);
             row.setOrientation(LinearLayout.HORIZONTAL);
             row.setGravity(Gravity.CENTER_VERTICAL);
-            row.setBackground(rippleBg(Color.rgb(0xF8, 0xF8, 0xFA), 12));
+            row.setBackground(rippleBg(colSurface(), 12));
             row.setPadding(dp(this, 10), dp(this, 10), dp(this, 10), dp(this, 10));
             LinearLayout.LayoutParams rlp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
             rlp.topMargin = dp(this, 8);
@@ -20509,13 +20623,13 @@ public class MainActivity extends Activity {
             mlp.leftMargin = dp(this, 10);
             row.addView(mid, mlp);
             mid.addView(tv(this, e.name == null ? "" : e.name, 15, colText(), true));
-            String typeTxt = "credit".equals(e.type) ? "信用卡" : ("debit".equals(e.type) ? "借记卡" : (e.type == null ? "" : e.type));
+            String typeTxt = "credit".equals(e.type) ? S("fx_type_credit") : ("debit".equals(e.type) ? S("fx_type_debit") : (e.type == null ? "" : e.type)); // Q164
             StringBuilder sub = new StringBuilder();
             if (e.bank != null && !e.bank.trim().isEmpty()) sub.append(e.bank.trim());
             String ol2 = (e.org == null || e.org.trim().isEmpty()) ? "" : orgLabel(e.org.trim());
             if (!ol2.isEmpty()) { if (sub.length() > 0) sub.append(" · "); sub.append(ol2); }
             if (!typeTxt.isEmpty()) { if (sub.length() > 0) sub.append(" · "); sub.append(typeTxt); }
-            sub.append(" · 扩展卡库");
+            sub.append(S("ext_note_ext")); // Q164
             mid.addView(tv(this, sub.toString(), 12, colText2(), false));
             if (e.url != null && !e.url.trim().isEmpty()) {
                 TextView link = tv(this, "发卡行官网 ›", 12, inkLink(), true);
@@ -20554,7 +20668,7 @@ public class MainActivity extends Activity {
         // 可加入区同族（拇指/名/副标/官网链），右端以灰「待核」签代加入钮。
         if (!hitsPend.isEmpty()) {
             anyShown = true;
-            addExtSectionHead("仅索引待核 · " + hitsPend.size() + " 条" + (hitsPend.size() > 60 ? "（只显示前 60 条，输入更准的关键词）" : ""));
+            addExtSectionHead(String.format(S("ext_sec_pend_fmt"), hitsPend.size(), hitsPend.size() > 60 ? S("ext_sec_cap") : "")); // Q164
         }
         int shownP154 = 0;
         for (final ExtCard e : hitsPend) {
@@ -20562,7 +20676,7 @@ public class MainActivity extends Activity {
             LinearLayout row = new LinearLayout(this);
             row.setOrientation(LinearLayout.HORIZONTAL);
             row.setGravity(Gravity.CENTER_VERTICAL);
-            row.setBackground(rippleBg(Color.rgb(0xF8, 0xF8, 0xFA), 12));
+            row.setBackground(rippleBg(colSurface(), 12));
             row.setPadding(dp(this, 10), dp(this, 10), dp(this, 10), dp(this, 10));
             LinearLayout.LayoutParams rlp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
             rlp.topMargin = dp(this, 8);
@@ -20583,13 +20697,13 @@ public class MainActivity extends Activity {
             mlp.leftMargin = dp(this, 10);
             row.addView(mid, mlp);
             mid.addView(tv(this, e.name == null ? "" : e.name, 15, colText(), true));
-            String typeTxt = "credit".equals(e.type) ? "信用卡" : ("debit".equals(e.type) ? "借记卡" : (e.type == null ? "" : e.type));
+            String typeTxt = "credit".equals(e.type) ? S("fx_type_credit") : ("debit".equals(e.type) ? S("fx_type_debit") : (e.type == null ? "" : e.type)); // Q164
             StringBuilder sub = new StringBuilder();
             if (e.bank != null && !e.bank.trim().isEmpty()) sub.append(e.bank.trim());
             String ol2 = (e.org == null || e.org.trim().isEmpty()) ? "" : orgLabel(e.org.trim());
             if (!ol2.isEmpty()) { if (sub.length() > 0) sub.append(" · "); sub.append(ol2); }
             if (!typeTxt.isEmpty()) { if (sub.length() > 0) sub.append(" · "); sub.append(typeTxt); }
-            sub.append(" · 扩展索引 · 待核");
+            sub.append(S("ext_note_ext_pend")); // Q164
             mid.addView(tv(this, sub.toString(), 12, colText2(), false));
             if (e.url != null && !e.url.trim().isEmpty()) {
                 TextView link = tv(this, "发卡行官网 ›", 12, inkLink(), true);
@@ -20608,7 +20722,7 @@ public class MainActivity extends Activity {
                     catch (Throwable ex) { showFloatToast("打不开这个链接"); }
                 });
             }
-            TextView pendChip154 = tv(this, "待核", 12, Color.rgb(0x8E, 0x8E, 0x93), true);
+            TextView pendChip154 = tv(this, S("verify_pending"), 12, Color.rgb(0x8E, 0x8E, 0x93), true); // Q164
             pendChip154.setGravity(Gravity.CENTER);
             pendChip154.setPadding(dp(this, 10), dp(this, 6), dp(this, 10), dp(this, 6));
             pendChip154.setBackground(roundRect(Color.rgb(0xE9, 0xE9, 0xED), 999, this));
@@ -20620,8 +20734,8 @@ public class MainActivity extends Activity {
         if (!anyShown && !noteShown) {
             String msg;
             if (extLoading) msg = "正在拉取扩展卡库…";
-            else if (!q.isEmpty()) msg = "本地与扩展卡库都没找到「" + (extQuery == null ? "" : extQuery.trim()) + "」\n换个卡名或银行试试，冷门卡会随扩展索引持续增补。";
-            else if (extFetchFailed) msg = "扩展卡库暂时拉不到\n检查网络后点下方「刷新索引」再试；本地卡库在首页照常可搜。";
+            else if (!q.isEmpty()) msg = String.format(S("ext_empty_none_fmt"), extQuery == null ? "" : extQuery.trim()); // Q164
+            else if (extFetchFailed) msg = S("ext_empty_fail"); // Q164
             else msg = "扩展卡库暂无内容";
             TextView em = tv(this, msg, 13.5f, colText2(), false);
             em.setGravity(Gravity.CENTER);
@@ -22004,14 +22118,14 @@ public class MainActivity extends Activity {
         remindCard.addView(tvW(this, "到期提醒", 14, colText(), 600));
         final int remindDays = prefs == null ? 3 : prefs.getInt("simkeep_remind_days", 3);
         final String remindTime = prefs == null ? "09:00" : prefs.getString("simkeep_remind_time", "09:00");
-        remindCard.addView(tv(this, "提前 " + remindDays + " 天 · 每天 " + remindTime + " 提醒（先在本页标急展示，系统通知后续接）", 11.5f, colText2(), false));
+        remindCard.addView(tv(this, String.format(S("sim_remind_fmt"), remindDays, remindTime), 11.5f, colText2(), false)); // Q164
         LinearLayout rdRow = new LinearLayout(this); rdRow.setOrientation(LinearLayout.HORIZONTAL);
         LinearLayout.LayoutParams rdLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT); rdLp.topMargin = dp(this, 8);
         remindCard.addView(rdRow, rdLp);
         final int[] rdOpts = {0, 1, 3, 7};
         for (final int dv : rdOpts) {
             final boolean on = dv == remindDays;
-            TextView chip = tv(this, dv == 0 ? "当天" : (dv + "天前"), 12.5f, on ? Color.WHITE : colText(), on);
+            TextView chip = tv(this, dv == 0 ? "当天" : String.format(S("fmt_days_before"), dv), 12.5f, on ? Color.WHITE : colText(), on); // Q164
             chip.setGravity(Gravity.CENTER); chip.setPadding(dp(this, 12), dp(this, 7), dp(this, 12), dp(this, 7));
             chip.setBackground(roundRect(on ? accentColor() : colChipOff(), 999, this));
             LinearLayout.LayoutParams clp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT); if (rdRow.getChildCount() > 0) clp.leftMargin = dp(this, 6);
@@ -22025,7 +22139,7 @@ public class MainActivity extends Activity {
         inner.addView(addBtn, abLp);
         addBtn.setOnClickListener(v -> { haptic(); openSimKeepForm(null); });
         java.util.List<SimKeepItem> items = simkeepSorted();
-        TextView sec = tvW(this, "待保号 · " + items.size() + " 张", 13, colText2(), 600);
+        TextView sec = tvW(this, String.format(S("sim_pending_fmt"), items.size()), 13, colText2(), 600); // Q164
         LinearLayout.LayoutParams secLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT); secLp.topMargin = dp(this, 16); secLp.bottomMargin = dp(this, 4);
         inner.addView(sec, secLp);
         if (items.isEmpty()) {
@@ -22046,17 +22160,17 @@ public class MainActivity extends Activity {
             card.addView(top);
             String title = (it.operator == null || it.operator.isEmpty() ? "电话卡" : it.operator) + (it.number == null || it.number.isEmpty() ? "" : (" · " + it.number));
             top.addView(tvW(this, title, 15, colText(), 700), new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
-            String badge = left < 0 ? ("逾期 " + (-left) + " 天") : (left == 0 ? "今天到期" : (left + " 天后"));
-            TextView bd = tv(this, (urgent ? "急 · " : "") + badge, 11.5f, urgent ? Color.WHITE : colText2(), true);
+            String badge = left < 0 ? String.format(S("sim_overdue_fmt"), -left) : (left == 0 ? S("sim_today") : String.format(S("sim_in_days_fmt"), left)); // Q164
+            TextView bd = tv(this, (urgent ? S("urgent_prefix") : "") + badge, 11.5f, urgent ? Color.WHITE : colText2(), true); // Q164
             bd.setGravity(Gravity.CENTER); bd.setPadding(dp(this, 9), dp(this, 5), dp(this, 9), dp(this, 5));
             bd.setBackground(roundRect(urgent ? Color.rgb(0xE0, 0x31, 0x31) : colChipOff(), 999, this));
             top.addView(bd);
             StringBuilder meta = new StringBuilder();
             if (it.country != null && !it.country.isEmpty()) meta.append(it.country).append(" · ");
-            meta.append("下次 ").append(it.nextDue == null || it.nextDue.isEmpty() ? "未设日期" : it.nextDue);
+            meta.append(S("sim_next_prefix")).append(it.nextDue == null || it.nextDue.isEmpty() ? "未设日期" : it.nextDue); // Q164（「未设日期」为日期数据兜底、EN_TXT 已覆盖渲染口）
             meta.append(" · ").append(simkeepActionLabel(it.action));
             if (it.fee != null && !it.fee.isEmpty()) meta.append(" · ").append(it.fee);
-            meta.append(" · 每 ").append(it.cycleDays).append(" 天");
+            meta.append(String.format(S("sim_every_fmt"), it.cycleDays)); // Q164
             TextView mv = tv(this, meta.toString(), 12, colText2(), false); bodyLH(mv);
             LinearLayout.LayoutParams mvLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT); mvLp.topMargin = dp(this, 6);
             card.addView(mv, mvLp);
@@ -22117,11 +22231,11 @@ public class MainActivity extends Activity {
         card.addView(title122);
         card.addView(sv, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
         form.addView(customFormLabel("手机号码"));
-        final EditText inNum = customInput("如：+86 138…", draft.number, 24); form.addView(inNum);
+        final EditText inNum = customInput(S("hint_sim_num"), draft.number, 24); form.addView(inNum); // Q164
         form.addView(customFormLabel("运营商"));
-        final EditText inOp = customInput("如：中国移动 / csl / Digi", draft.operator, 24); form.addView(inOp);
+        final EditText inOp = customInput(S("hint_sim_op"), draft.operator, 24); form.addView(inOp); // Q164
         form.addView(customFormLabel("国家 / 地区"));
-        final EditText inCountry = customInput("如：中国 / 香港 / 马来西亚", draft.country, 20); form.addView(inCountry);
+        final EditText inCountry = customInput(S("hint_sim_country"), draft.country, 20); form.addView(inCountry); // Q164
         form.addView(customFormLabel("下次保号日期（yyyy-MM-dd）"));
         final EditText inDue = customInput("2026-11-01", draft.nextDue, 10); form.addView(inDue);
         form.addView(customFormLabel("保号动作"));
@@ -22138,7 +22252,7 @@ public class MainActivity extends Activity {
         }
         paintActs[0].run();
         form.addView(customFormLabel("费用（可空）"));
-        final EditText inFee = customInput("如：¥10 / 免费", draft.fee, 20); form.addView(inFee);
+        final EditText inFee = customInput(S("hint_sim_fee"), draft.fee, 20); form.addView(inFee); // Q164
         form.addView(customFormLabel("周期（天）"));
         final EditText inCycle = customInput("30", String.valueOf(draft.cycleDays), 4); form.addView(inCycle);
         LinearLayout acts = new LinearLayout(this); acts.setOrientation(LinearLayout.HORIZONTAL);
@@ -22223,6 +22337,7 @@ public class MainActivity extends Activity {
     // ---------- Q86 订阅与费用跟随（模块键 subfollow_，设置可关、关掉不占位） ----------
     static final String[] SUB_CYCLE_VALS = {"week", "month", "quarter", "year", "custom"};
     static final String[] SUB_CYCLE_LABELS = {"每周", "每月", "每季", "每年", "自定义"};
+    static final String[] SUB_CYCLE_LABELS_EN = {"Weekly", "Monthly", "Quarterly", "Yearly", "Custom"}; // Q164：周期片显示映射，存值走 SUB_CYCLE_VALS
     static int subCycleDays(SubFollowItem it) {
         if (it == null) return 30;
         if ("week".equals(it.cycle)) return 7;
@@ -22232,9 +22347,9 @@ public class MainActivity extends Activity {
         return 30;
     }
     static String subCycleLabel(String v) {
-        if (v == null) return "每月";
-        for (int i = 0; i < SUB_CYCLE_VALS.length; i++) if (SUB_CYCLE_VALS[i].equals(v)) return SUB_CYCLE_LABELS[i];
-        return "每月";
+        if (v == null) return EN_MODE ? "Monthly" : "每月"; // Q164
+        for (int i = 0; i < SUB_CYCLE_VALS.length; i++) if (SUB_CYCLE_VALS[i].equals(v)) return EN_MODE ? SUB_CYCLE_LABELS_EN[i] : SUB_CYCLE_LABELS[i]; // Q164
+        return EN_MODE ? "Monthly" : "每月";
     }
     boolean subfollowEnabled() { return prefs == null || prefs.getBoolean("subfollow_enabled", true); }
     java.util.List<SubFollowItem> loadSubFollows() {
@@ -22334,17 +22449,17 @@ public class MainActivity extends Activity {
         sumCard.setBackground(glassTintDrawable(panelR143(16f), false)); sumCard.setClipToOutline(true); glassClip(sumCard, panelR143(16f), false);
         sumCard.setPadding(dp(this, 14), dp(this, 12), dp(this, 14), dp(this, 12));
         inner.addView(sumCard, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
-        sumCard.addView(tvW(this, items.isEmpty() ? "还没有订阅" : (items.size() + " 项订阅"), 14, colText(), 600));
-        sumCard.addView(tv(this, monthly > 0 ? ("按周期折算约 ¥" + String.format(java.util.Locale.US, "%.0f", monthly) + " / 月 · 临期在本页标急（系统通知后续接）") : "填上金额后这里会折算每月约花多少 · 只存本机、不做记账流水", 11.5f, colText2(), false));
+        sumCard.addView(tvW(this, items.isEmpty() ? "还没有订阅" : String.format(S("sub_count_fmt"), items.size()), 14, colText(), 600)); // Q164（「还没有订阅」EN_TXT 已覆盖）
+        sumCard.addView(tv(this, monthly > 0 ? String.format(S("sub_monthly_fmt"), String.format(java.util.Locale.US, "%.0f", monthly)) : S("sub_monthly_zero"), 11.5f, colText2(), false)); // Q164
         final int remindDays = prefs == null ? 7 : prefs.getInt("subfollow_remind_days", 7);
         LinearLayout rdRow = new LinearLayout(this); rdRow.setOrientation(LinearLayout.HORIZONTAL);
         LinearLayout.LayoutParams rdLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT); rdLp.topMargin = dp(this, 8);
         sumCard.addView(rdRow, rdLp);
-        rdRow.addView(tv(this, "临期 ", 12, colText2(), false));
+        rdRow.addView(tv(this, S("sub_due_soon"), 12, colText2(), false)); // Q164
         final int[] rdOpts = {0, 1, 3, 7};
         for (final int dv : rdOpts) {
             final boolean on = dv == remindDays;
-            TextView chip = tv(this, dv == 0 ? "当天" : (dv + "天前"), 12.5f, on ? Color.WHITE : colText(), on);
+            TextView chip = tv(this, dv == 0 ? "当天" : String.format(S("fmt_days_before"), dv), 12.5f, on ? Color.WHITE : colText(), on); // Q164
             chip.setGravity(Gravity.CENTER); chip.setPadding(dp(this, 12), dp(this, 7), dp(this, 12), dp(this, 7));
             chip.setBackground(roundRect(on ? accentColor() : colChipOff(), 999, this));
             LinearLayout.LayoutParams clp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT); clp.leftMargin = dp(this, 6);
@@ -22357,7 +22472,7 @@ public class MainActivity extends Activity {
         LinearLayout.LayoutParams abLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT); abLp.topMargin = dp(this, 12);
         inner.addView(addBtn, abLp);
         addBtn.setOnClickListener(v -> { haptic(); openSubFollowForm(null); });
-        TextView sec = tvW(this, "按到期排序 · " + items.size() + " 项", 13, colText2(), 600);
+        TextView sec = tvW(this, String.format(S("sub_sort_fmt"), items.size()), 13, colText2(), 600); // Q164
         LinearLayout.LayoutParams secLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT); secLp.topMargin = dp(this, 16); secLp.bottomMargin = dp(this, 4);
         inner.addView(sec, secLp);
         if (items.isEmpty()) {
@@ -22376,16 +22491,16 @@ public class MainActivity extends Activity {
             LinearLayout top = new LinearLayout(this); top.setOrientation(LinearLayout.HORIZONTAL); top.setGravity(Gravity.CENTER_VERTICAL);
             card.addView(top);
             top.addView(tvW(this, it.name == null || it.name.isEmpty() ? "订阅" : it.name, 15, colText(), 700), new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
-            String badge = left < 0 ? ("逾期 " + (-left) + " 天") : (left == 0 ? "今天扣款" : (left + " 天后"));
-            TextView bd = tv(this, (urgent ? "急 · " : "") + badge, 11.5f, urgent ? Color.WHITE : colText2(), true);
+            String badge = left < 0 ? String.format(S("sim_overdue_fmt"), -left) : (left == 0 ? S("sub_today_due") : String.format(S("sim_in_days_fmt"), left)); // Q164
+            TextView bd = tv(this, (urgent ? S("urgent_prefix") : "") + badge, 11.5f, urgent ? Color.WHITE : colText2(), true); // Q164
             bd.setGravity(Gravity.CENTER); bd.setPadding(dp(this, 9), dp(this, 5), dp(this, 9), dp(this, 5));
             bd.setBackground(roundRect(urgent ? Color.rgb(0xE0, 0x31, 0x31) : colChipOff(), 999, this));
             top.addView(bd);
             StringBuilder meta = new StringBuilder();
             if (it.amount != null && !it.amount.isEmpty()) meta.append(it.amount).append(" · ");
             meta.append(subCycleLabel(it.cycle));
-            if ("custom".equals(it.cycle)) meta.append("（每 ").append(it.cycleDays).append(" 天）");
-            meta.append(" · 下次 ").append(it.nextDue == null || it.nextDue.isEmpty() ? "未设日期" : it.nextDue);
+            if ("custom".equals(it.cycle)) meta.append(String.format(S("sub_cycle_custom_fmt"), it.cycleDays)); // Q164
+            meta.append(S("sub_next_prefix")).append(it.nextDue == null || it.nextDue.isEmpty() ? "未设日期" : it.nextDue); // Q164
             meta.append(" · ").append(it.autoRenew ? "自动续费" : "手动续费");
             if (it.note != null && !it.note.isEmpty()) meta.append(" · ").append(it.note);
             TextView mv = tv(this, meta.toString(), 12, colText2(), false); bodyLH(mv);
@@ -22449,7 +22564,7 @@ public class MainActivity extends Activity {
         card.addView(title122);
         card.addView(sv, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
         form.addView(customFormLabel("订阅名称*"));
-        final EditText inName = customInput("如：视频会员 / 音乐 / 云盘", draft.name, 30); form.addView(inName);
+        final EditText inName = customInput(S("hint_sub_name"), draft.name, 30); form.addView(inName); // Q164
         form.addView(customFormLabel("金额（可空）"));
         final EditText inAmt = customInput("如：¥15 / $4.99", draft.amount, 20); form.addView(inAmt);
         form.addView(customFormLabel("扣款周期"));
@@ -22459,7 +22574,7 @@ public class MainActivity extends Activity {
         paintCyc[0] = () -> { for (int i = 0; i < cycChips.size(); i++) paintChoiceChip(cycChips.get(i), SUB_CYCLE_VALS[i].equals(cycleSel[0])); };
         for (int i = 0; i < SUB_CYCLE_VALS.length; i++) {
             final String cv = SUB_CYCLE_VALS[i];
-            TextView b = formOrgChip(SUB_CYCLE_LABELS[i]);
+            TextView b = formOrgChip(isEn() ? SUB_CYCLE_LABELS_EN[i] : SUB_CYCLE_LABELS[i]); // Q164
             b.setOnClickListener(v -> { haptic(); cycleSel[0] = cv; paintCyc[0].run(); });
             LinearLayout.LayoutParams blp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT); if (i > 0) blp.leftMargin = dp(this, 6);
             b.setLayoutParams(blp); cycChips.add(b); cycRow.addView(b);
@@ -22484,7 +22599,7 @@ public class MainActivity extends Activity {
         }
         paintAuto[0].run();
         form.addView(customFormLabel("备注（可空）"));
-        final EditText inNote = customInput("如：绑了哪张卡 / 从哪扣", draft.note, 40); form.addView(inNote);
+        final EditText inNote = customInput(S("hint_sub_note"), draft.note, 40); form.addView(inNote); // Q164
         LinearLayout acts = new LinearLayout(this); acts.setOrientation(LinearLayout.HORIZONTAL);
         LinearLayout.LayoutParams actLp2 = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT); actLp2.topMargin = dp(this, 16);
         form.addView(acts, actLp2);
@@ -22711,7 +22826,7 @@ public class MainActivity extends Activity {
         sumCard.setBackground(glassTintDrawable(panelR143(16f), false)); sumCard.setClipToOutline(true); glassClip(sumCard, panelR143(16f), false);
         sumCard.setPadding(dp(this, 14), dp(this, 12), dp(this, 14), dp(this, 12));
         inner.addView(sumCard, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
-        sumCard.addView(tvW(this, all.isEmpty() ? "还没有足迹" : ("共 " + all.size() + " 条 · 成功 " + okN + " · 拒绝 " + failN), 14, colText(), 600));
+        sumCard.addView(tvW(this, all.isEmpty() ? "还没有足迹" : String.format(S("journey_total_fmt"), all.size(), okN, failN), 14, colText(), 600)); // Q164
         sumCard.addView(tv(this, "记录申请、开卡、提额这些持卡事件，只存本机，不抓银行数据", 11.5f, colText2(), false));
         TextView addBtn = tv(this, "+ 添加一条", 14, Color.WHITE, true); addBtn.setGravity(Gravity.CENTER);
         addBtn.setPadding(0, dp(this, 12), 0, dp(this, 12)); addBtn.setBackground(roundRect(accentColor(), 12, this));
@@ -22753,7 +22868,7 @@ public class MainActivity extends Activity {
             if (!footFilterStatus.isEmpty() && !footFilterStatus.equals(it.status)) continue;
             items.add(it);
         }
-        TextView sec = tvW(this, "时间线 · " + items.size() + " 条（日期新到旧）", 13, colText2(), 600);
+        TextView sec = tvW(this, String.format(S("journey_timeline_fmt"), items.size()), 13, colText2(), 600); // Q164
         LinearLayout.LayoutParams secLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT); secLp.topMargin = dp(this, 16); secLp.bottomMargin = dp(this, 4);
         inner.addView(sec, secLp);
         if (items.isEmpty()) {
@@ -22825,7 +22940,7 @@ public class MainActivity extends Activity {
         card.addView(title122);
         card.addView(sv, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
         form.addView(customFormLabel("卡片名称*"));
-        final EditText inCard = customInput("如：招商银行经典白 / 工行奋斗卡", draft.cardName, 30); form.addView(inCard);
+        final EditText inCard = customInput(S("hint_jf_card"), draft.cardName, 30); form.addView(inCard); // Q164
         form.addView(customFormLabel("事件类型"));
         LinearLayout typeRow = new LinearLayout(this); typeRow.setOrientation(LinearLayout.HORIZONTAL); form.addView(typeRow);
         final java.util.List<TextView> typeChips = new ArrayList<>();
@@ -22854,12 +22969,12 @@ public class MainActivity extends Activity {
         paintSt[0].run();
         form.addView(customFormLabel("日期（yyyy-MM-dd）"));
         final EditText inDate = customInput("2026-10-04", draft.date, 10); form.addView(inDate);
-        form.addView(customFormLabel("变更前金额（提额时填，可空）"));
+        form.addView(customFormLabel(S("jf_from"))); // Q164
         final EditText inFrom = customInput("如：82000", draft.amountFrom, 12); form.addView(inFrom);
-        form.addView(customFormLabel("变更后金额 / 当前额度（可空）"));
+        form.addView(customFormLabel(S("jf_to"))); // Q164
         final EditText inTo = customInput("如：88000", draft.amountTo, 12); form.addView(inTo);
         form.addView(customFormLabel("备注（可空）"));
-        final EditText inNote = customInput("如：电话申请 / App 自助提额", draft.note, 40); form.addView(inNote);
+        final EditText inNote = customInput(S("hint_jf_note"), draft.note, 40); form.addView(inNote); // Q164
         LinearLayout acts = new LinearLayout(this); acts.setOrientation(LinearLayout.HORIZONTAL);
         LinearLayout.LayoutParams actLp2 = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT); actLp2.topMargin = dp(this, 16);
         form.addView(acts, actLp2);
@@ -23701,10 +23816,10 @@ public class MainActivity extends Activity {
         LinearLayout.LayoutParams dlp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         dlp.topMargin = dp(this, 9);
         det.setLayoutParams(dlp);
-        det.addView(tv(this, "来源：" + (n.source == null || n.source.isEmpty() ? "—" : n.source)
-            + " · 日期：" + (n.date == null || n.date.isEmpty() ? "—" : n.date), 11.5f, inkBody(), false));
+        det.addView(tv(this, S("news_source") + (n.source == null || n.source.isEmpty() ? "—" : n.source)
+            + " · " + S("news_date") + (n.date == null || n.date.isEmpty() ? "—" : n.date), 11.5f, inkBody(), false)); // Q164
         if (n.url != null && !n.url.isEmpty()) {
-            TextView link = tv(this, "查看原文 ›", 13, inkLink(), true);
+            TextView link = tv(this, S("news_view_orig"), 13, inkLink(), true); // Q164
             LinearLayout.LayoutParams llp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
             llp.topMargin = dp(this, 6);
             det.addView(link, llp);
@@ -23714,7 +23829,7 @@ public class MainActivity extends Activity {
                 catch (Exception e) { showFloatToast("打不开这个链接"); }
             });
         } else {
-            det.addView(tv(this, "暂无原文链接", 11.5f, colText2(), false));
+            det.addView(tv(this, S("news_no_link"), 11.5f, colText2(), false)); // Q164
         }
         return det;
     }
@@ -24046,6 +24161,14 @@ public class MainActivity extends Activity {
         animateGlossaryCard139(card, closedH, card.getMeasuredHeight(), onDone);
     }
 
+    // Q164：资讯分类显示名——已知分类走 S 表（如「新卡上市」），其余按冻
+    // 结译表查显示（不新增条目）；分类值本身（分组键/数据）不动。
+    String newsTagLabel164(String tag) {
+        if (tag == null) return "";
+        if ("新卡上市".equals(tag)) return S("news_cat_new");
+        return isEn() ? EN_TXT.getOrDefault(tag, tag) : tag;
+    }
+
     void renderNews() {
         if (newsListBox == null) return;
         // P-keepscroll：展开/收起一条资讯会整表重绘，先记位置、重绘后恢复，不跳顶
@@ -24055,7 +24178,7 @@ public class MainActivity extends Activity {
             newsListBox.addView(emptyState("暂时还没有资讯\n过段时间再来看看"));
             return;
         }
-        if (newsMeta != null) newsMeta.setText(L("共 " + newsItems.size() + " 条 · 公开信息整理，仅供参考", newsItems.size() + " items · Compiled from public sources, for reference only")); // Q158：计数行 chrome 补译
+        if (newsMeta != null) newsMeta.setText(String.format(S("news_meta_fmt"), newsItems.size())); // Q164：计数行收编 S 表
         // Q123（2.35，件一）：新闻按主题（tag）归组——同主题（如「新卡上市」）收成一组、
         // 组标题带条数，组内保持原有先后，不再散排。
         java.util.LinkedHashMap<String, java.util.List<NewsItem>> newsGroups123 = new java.util.LinkedHashMap<>();
@@ -24066,7 +24189,7 @@ public class MainActivity extends Activity {
             gl.add(it0);
         }
         for (java.util.Map.Entry<String, java.util.List<NewsItem>> ge123 : newsGroups123.entrySet()) {
-            TextView gh123 = tvW(this, ge123.getKey() + " · " + ge123.getValue().size() + (isEn() ? " items" : " 条"), 13.5f, colText(), 700);
+            TextView gh123 = tvW(this, newsTagLabel164(ge123.getKey()) + " · " + ge123.getValue().size() + (isEn() ? " items" : " 条"), 13.5f, colText(), 700); // Q164
             LinearLayout.LayoutParams ghp123 = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
             ghp123.topMargin = dp(this, 14);
             newsListBox.addView(gh123, ghp123);
@@ -24087,7 +24210,7 @@ public class MainActivity extends Activity {
             meta.setGravity(Gravity.CENTER_VERTICAL);
             card.addView(meta);
             String tag = n.tag == null || n.tag.isEmpty() ? "资讯" : n.tag;
-            TextView tg = tv(this, tag, 10.5f, Color.rgb(0x0A, 0x5C, 0xD6), true);
+            TextView tg = tv(this, newsTagLabel164(tag), 10.5f, Color.rgb(0x0A, 0x5C, 0xD6), true); // Q164
             tg.setBackground(roundRect(Color.rgb(0xE8, 0xF1, 0xFD), 999, this));
             tg.setPadding(dp(this, 8), dp(this, 3), dp(this, 8), dp(this, 3));
             meta.addView(tg);
@@ -24099,7 +24222,7 @@ public class MainActivity extends Activity {
             LinearLayout.LayoutParams srlp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
             srlp.leftMargin = dp(this, 6);
             meta.addView(sr, srlp);
-            TextView arrow = tv(this, open ? L("收起 ‹", "Collapse ‹") : L("展开 ›", "Expand ›"), 11, Color.rgb(0x0A, 0x5C, 0xD6), true); // Q158：chrome 补译
+            TextView arrow = tv(this, open ? S("news_collapse_arrow") : S("news_expand_arrow"), 11, Color.rgb(0x0A, 0x5C, 0xD6), true); // Q164
             arrow.setGravity(Gravity.RIGHT);
             meta.addView(arrow, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
 
@@ -24166,7 +24289,7 @@ public class MainActivity extends Activity {
                 haptic();
                 if (newsOpen.contains(n.id)) {
                     newsOpen.remove(n.id);
-                    arrow.setText("展开 ›");
+                    arrow.setText(S("news_expand_arrow")); // Q164
                     foldBusy130.add(n.id);
                     final LinearLayout detNow124 = detRef123[0];
                     if (detNow124 != null) {
@@ -24178,7 +24301,7 @@ public class MainActivity extends Activity {
                     else { renderNews(); foldBusy130.remove(n.id); }
                 } else {
                     newsOpen.add(n.id);
-                    arrow.setText("收起 ‹");
+                    arrow.setText(S("news_collapse_arrow")); // Q164
                     foldBusy130.add(n.id);
                     // Q124（件七）：就地建详情盒弹簧升起，标题/摘要同步放开行数
                     // Q130（件十）：挂新盒前摘可能残留的旧详情盒兜底，本条恒只一份详情
@@ -24506,7 +24629,7 @@ public class MainActivity extends Activity {
         LinearLayout.LayoutParams svLp2 = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         svLp2.topMargin = dp(this, 18);
         page.addView(secVer, svLp2);
-        TextView verInfo = tv(this, "应用版本 " + appVersion() + " · 数据版本 v" + Store.dataVersion + " · " + Store.all.size() + " 张卡", 12.5f, colText2(), false);
+        TextView verInfo = tv(this, String.format(S("about_verinfo_fmt"), appVersion(), String.valueOf(Store.dataVersion), Store.all.size()), 12.5f, colText2(), false); // Q164
         LinearLayout.LayoutParams viLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         viLp.topMargin = dp(this, 8);
         page.addView(verInfo, viLp);
@@ -24524,7 +24647,7 @@ public class MainActivity extends Activity {
         LinearLayout.LayoutParams smLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         smLp.topMargin = dp(this, 18);
         page.addView(secMig, smLp);
-        TextView mig = tv(this, "全部卡片 / 详情 / 我的卡片 / 学生推荐 / 筛选 / 资讯 / 情景选卡 / 自定义卡 / 拖动 / 字体与界面大小 / 高刷 / 触感 / 欢迎页 / 更新日志 / 数据 OTA 已迁移", 12.5f, colText2(), false);
+        TextView mig = tv(this, S("about_migrated"), 12.5f, colText2(), false // Q164);
         mig.setLineSpacing(0, 1.45f);
         LinearLayout.LayoutParams mgLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         mgLp.topMargin = dp(this, 8);
@@ -26225,7 +26348,7 @@ public class MainActivity extends Activity {
             {"玩卡足迹", "申请 / 开卡 / 提额等持卡事件时间线，关掉后入口不出现", "footprint_enabled"},
             {"持卡总览", "我的卡片页的额度汇总与还款日历", "owncard_enabled"},
             {"活动追踪", "开卡任务与刷卡达标登记，关掉后入口不出现", "ownact_enabled"},
-            {"外卡专区", "香港银行卡专区，独立数据不混入主卡库，关掉后入口不出现", "fxzone_enabled"},
+            {S("feat_fx_title"), S("feat_fx_desc"), "fxzone_enabled"}, // Q164
         };
         for (int i = 0; i < feats.length; i++) {
             if (i > 0) addHair(body);
