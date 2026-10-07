@@ -214,6 +214,8 @@ L26214 catch (Throwable ignored)
 L26300 catch (Throwable ignored)
 L26350 catch (Throwable ignored)
 
+## whitelisted (0)
+
 ## nolog_body (99)
 L1073 catch (Throwable ignored)
 L1085 catch (Throwable ignored)

@@ -1,14 +1,20 @@
 #!/usr/bin/env python3
-"""卡盒改版门禁检查（Step0，警告模式）。
+"""卡盒改版门禁检查（Step0 建，Step1 补 catch 基线）。
 
-三项检查（对应改版方案 Step0/Step9 的 grep 门禁，先警告、后硬化）：
+四项检查：
   1. 行数上限：MainActivity.java 只许减不许增。基线在 tools/line-baseline.txt
      （首跑若缺失则以当前行数落基线并注明）。当前 > 基线 => 报警；
      加 --strict 时退出码为 1（构建失败模式，Step9 再默认开启）。
-  2. 异常门禁：统计全部 catch 块——空吞（空体且无注释）/仅注释/有体无日志/有日志。
-     纪律：新增 catch 必须带 logErr/Log 调用或注释说明。明细写 tools/catch-audit.txt。
-  3. 静态可变状态清单：static 非 final 字段逐条导出 tools/static-state-inventory.txt
-     （Step3 AppState 收口的对照清单）。
+  2. 异常门禁：统计全部 catch 块——空吞（空体且无注释无日志）/白名单豁免
+     （空体但带 `// swallow-ok: 理由` 标记）/仅注释/有体无日志/有日志。
+     空吞基线 CATCH_EMPTY_BASELINE（2026-10-08 实测 212 写死）只许减不许增：
+     超基线即记 problem，--strict 退出 1；确需空吞须在 catch 体内加白名单
+     标记放行（不计入空吞）。空吞数下降时人工同步调低基线值。
+     纪律：新增 catch 必须带 logErr/Log 调用、注释说明或白名单标记。
+     明细写 tools/catch-audit.txt。
+  3. 静态可变状态清单：static 非 final 字段逐条导出
+     tools/static-state-inventory.txt（同行多声明逐字段拆条；
+     Step3 AppState 收口的对照清单）。
 
 用法：bash tools/check-arch.sh [--strict]
 """
@@ -22,6 +28,12 @@ BASELINE_FILE = os.path.join(ROOT, "tools", "line-baseline.txt")
 CATCH_AUDIT = os.path.join(ROOT, "tools", "catch-audit.txt")
 STATIC_INV = os.path.join(ROOT, "tools", "static-state-inventory.txt")
 STRICT = "--strict" in sys.argv
+
+# Step1（2026-10-08）空吞 catch 基线：当日实测写死，只许减不许增。
+# 空吞数下降时人工把本值同步调低；上升即 problem（--strict 失败）。
+# 确需空吞的 catch 在体内写 `// swallow-ok: 理由` 即归白名单豁免，不计空吞。
+CATCH_EMPTY_BASELINE = 212
+SWALLOW_OK_MARKER = "swallow-ok"
 
 
 def strip_code(text):
@@ -89,7 +101,7 @@ def main():
     # ---------- 2. catch 审计 ----------
     clean = strip_code(src)
     catch_re = re.compile(r"catch\s*\(\s*([\w.$]+(?:\s*\|\s*[\w.$]+)*)\s+(\w+)\s*\)")
-    cats = {"with_log": [], "comment_only": [], "nolog_body": [], "empty": []}
+    cats = {"with_log": [], "whitelisted": [], "comment_only": [], "nolog_body": [], "empty": []}
     pos = 0
     while True:
         m = catch_re.search(clean, pos)
@@ -113,9 +125,12 @@ def main():
         body_raw = src[b + 1:j]
         has_log = bool(re.search(r"Log\.|logErr\s*\(|printStackTrace", body_raw))
         has_comment = ("//" in body_raw) or ("/*" in body_raw)
+        has_whitelist = SWALLOW_OK_MARKER in body_raw
         entry = f"L{line_no} catch ({m.group(1)} {m.group(2)})"
         if has_log:
             cats["with_log"].append(entry)
+        elif body_clean == "" and has_whitelist:
+            cats["whitelisted"].append(entry)
         elif body_clean == "" and has_comment:
             cats["comment_only"].append(entry)
         elif body_clean == "":
@@ -124,12 +139,24 @@ def main():
             cats["nolog_body"].append(entry)
         pos = j + 1 if j > b else m.end()
     total = sum(len(v) for v in cats.values())
-    print(f"[异常] catch 共 {total}：有日志 {len(cats['with_log'])} · 仅注释 {len(cats['comment_only'])}"
-          f" · 有体无日志 {len(cats['nolog_body'])} · 空吞 {len(cats['empty'])}")
-    print("       纪律：新增 catch 必须带 logErr/Log 或注释说明；关键路径（数据/OTA/解码/玻璃/展柜）必须带日志。")
+    print(f"[异常] catch 共 {total}：有日志 {len(cats['with_log'])} · 白名单豁免 {len(cats['whitelisted'])}"
+          f" · 仅注释 {len(cats['comment_only'])} · 有体无日志 {len(cats['nolog_body'])} · 空吞 {len(cats['empty'])}")
+    print("       纪律：新增 catch 必须带 logErr/Log、注释说明或 `// swallow-ok: 理由` 白名单标记；关键路径（数据/OTA/解码/玻璃/展柜）必须带日志。")
+    empty_n = len(cats["empty"])
+    if empty_n > CATCH_EMPTY_BASELINE:
+        problems.append(f"空吞 catch {empty_n} 超过基线 {CATCH_EMPTY_BASELINE}（+{empty_n - CATCH_EMPTY_BASELINE}）"
+                        f"——基线只许减不许增；确需空吞须在 catch 体内加 `// {SWALLOW_OK_MARKER}: 理由` 白名单标记")
+        print(f"[异常] ⚠ 空吞 {empty_n} 超基线 {CATCH_EMPTY_BASELINE}（+{empty_n - CATCH_EMPTY_BASELINE}）：")
+        for e in cats["empty"][:20]:
+            print("       " + e)
+        if empty_n > 20:
+            print(f"       ……余 {empty_n - 20} 条见 tools/catch-audit.txt")
+    else:
+        tip = "；空吞已低于基线，请人工调低 CATCH_EMPTY_BASELINE" if empty_n < CATCH_EMPTY_BASELINE else ""
+        print(f"[异常] 空吞基线 OK：{empty_n}（基线 {CATCH_EMPTY_BASELINE}，余量 {CATCH_EMPTY_BASELINE - empty_n}）{tip}")
     with open(CATCH_AUDIT, "w", encoding="utf-8") as f:
         f.write(f"# catch 审计明细（check-arch 生成）total={total}\n")
-        for k in ("empty", "nolog_body", "comment_only", "with_log"):
+        for k in ("empty", "whitelisted", "nolog_body", "comment_only", "with_log"):
             f.write(f"\n## {k} ({len(cats[k])})\n")
             for e in cats[k]:
                 f.write(e + "\n")
@@ -152,7 +179,23 @@ def main():
             continue  # 方法声明（名后跟括号）
         if ender == "{" and "=" not in decl:
             continue  # 方法/静态块的 '{' 收尾，无 '=' 不是字段
-        fields.append(f"L{i + 1}: static {decl};")
+        # 同行多声明拆条（如 `Typeface a=null, b=null;` 逐字段一条；
+        # 逗号只在括号/泛型/数组字面量之外才是分隔符）
+        parts, depth, cur = [], 0, ""
+        for ch in m.group(2):
+            if ch in "(<[{":
+                depth += 1
+            elif ch in ")>]}":
+                depth -= 1
+            if ch == "," and depth == 0:
+                parts.append(cur); cur = ""
+            else:
+                cur += ch
+        parts.append(cur)
+        for part in parts:
+            part = part.strip()
+            if part:
+                fields.append(f"L{i + 1}: static {m.group(1)} {part};")
     with open(STATIC_INV, "w", encoding="utf-8") as f:
         f.write("# MainActivity 静态可变字段清单（check-arch 生成；Step3 收口 AppState 对照）\n")
         for x in fields:
@@ -168,7 +211,7 @@ def main():
             return 1
         print("（警告模式：未拦截；Step9 起 --strict 转构建失败）")
     else:
-        print("门禁结论：通过（警告模式）")
+        print("门禁结论：通过（STRICT 模式）" if STRICT else "门禁结论：通过（警告模式）")
     return 0
 
 
