@@ -20658,13 +20658,35 @@ public class MainActivity extends Activity {
         // 点过任一色点即落 showcase_bg、此后逐字按存档，浅色默认仍 0 档不变。
         return darkEff() ? SHOWCASE_BGS.length - 1 : 0;
     }
-    boolean showcaseDarkBg() {
-        // Q152（展柜③）：深浅判据改按当前实际底色亮度（自定义色板色同样适用）；
-        // 预设 6 档下与旧 idx>=4 规则逐档等价（深档仅末两档）。
-        int c152 = showcaseBgColor152();
-        double lum152 = (0.299 * Color.red(c152) + 0.587 * Color.green(c152) + 0.114 * Color.blue(c152)) / 255.0;
-        return lum152 < 0.5;
+    // Q164（2.79 批2，承 DeepSeek 补审②裁量）：相对亮度（sRGB 线性化后
+    // 0.2126/0.7152/0.0722 加权）——深浅派生唯一判据。
+    static double scRelLum164(int c164) {
+        double r164 = Color.red(c164) / 255.0, g164 = Color.green(c164) / 255.0, b164 = Color.blue(c164) / 255.0;
+        r164 = r164 <= 0.04045 ? r164 / 12.92 : Math.pow((r164 + 0.055) / 1.055, 2.4);
+        g164 = g164 <= 0.04045 ? g164 / 12.92 : Math.pow((g164 + 0.055) / 1.055, 2.4);
+        b164 = b164 <= 0.04045 ? b164 / 12.92 : Math.pow((b164 + 0.055) / 1.055, 2.4);
+        return 0.2126 * r164 + 0.7152 * g164 + 0.0722 * b164;
     }
+    boolean scDarkMemo164 = true, scDarkMemoSet164 = false;
+    boolean showcaseDarkBg() {
+        // Q152（展柜③）→Q164 改判：判据＝scRelLum164 生效色相对亮度＋±0.05
+        // 回差带（Y>0.55 浅底、Y<0.45 深底、中间带保持上一档），免滑色带
+        // 过灰区（#808080 附近）时字色闪变；预设 6 档判读与旧规逐档等价。
+        double y164 = scRelLum164(showcaseBgColor152());
+        if (y164 > 0.55) { scDarkMemo164 = false; scDarkMemoSet164 = true; }
+        else if (y164 < 0.45) { scDarkMemo164 = true; scDarkMemoSet164 = true; }
+        else if (!scDarkMemoSet164) { scDarkMemo164 = y164 < 0.5; scDarkMemoSet164 = true; }
+        return scDarkMemo164;
+    }
+    // Q164 派生清单（展柜顶栏＋三面板，全部由 showcaseBgColor152 生效色一口
+    // 派生，清单外元素不许各自现推）：底＝showcaseBarBg151/showcasePanel-
+    // Bg154 的 argb(220,生效色)；描边＝两 Bg 内反相发丝线；主字 showcase-
+    // OnBg、次字 showcaseOnBg2、禁用/三级字 showcaseOnBg3；选中片＝强调
+    // 色实心＋白字（updateShowcaseChips/syncSelectionUi161）、未选片＝
+    // showcaseBarBtnBg162＋主字；输入光标/选区＝色码框（建框处按强调色设
+    // highlight 与光标）；分割线 showcaseDivider164；阴影沿全 App 柔影口
+    // 径（不随展柜底派生，玻璃收官件冻结区）；盘面五色点与组织/品牌色
+    // 为豁免名单——恒原色、不参与派生、不许 tint。
     // ==== Q161（2.76）模式层：色板恢复后口径（承 DeepSeek 回函，先审后写） ====
     // showcase_bg_mode：0=自适应（跟随深色模式：深→末档、浅→0 档）、1=强制
     // 深色（恒末档）、2=手选（无独立档钮）：custom_on=true 走 showcase_bg_
@@ -20742,7 +20764,7 @@ public class MainActivity extends Activity {
         GradientDrawable pv161 = new GradientDrawable(); pv161.setShape(GradientDrawable.OVAL);
         if (t161.trim().isEmpty()) { pv161.setColor(showcaseBgColor152()); if (scHexErr161 != null) scHexErr161.setText(""); }
         else if (okHex163) { pv161.setColor(p161); if (scHexErr161 != null) scHexErr161.setText(""); if (apply161) { setShowcaseCustom161(p161); applyShowcaseBg152(); } }
-        else { pv161.setColor(showcaseBgColor152()); if (scHexErr161 != null) scHexErr161.setText("颜色代码无效"); } // Q163（03:38）：短句直说无效，假例子格式串退役
+        else { pv161.setColor(showcaseBgColor152()); if (scHexErr161 != null) scHexErr161.setText(S("sc_hex_invalid")); } // Q163（03:38）：短句直说无效，假例子格式串退役
         scHexPreview161.setBackground(pv161);
         // Q163（2.78，用户 03:24 点名）：应用钮亮灭跟合法性走——空或不合法
         // 置灰禁用（alpha 与全 App 置灰同语言），输对合法码才亮可点。
@@ -20784,6 +20806,9 @@ public class MainActivity extends Activity {
     }
     int showcaseOnBg() { return showcaseDarkBg() ? Color.WHITE : Color.rgb(0x1C, 0x1C, 0x1E); }
     int showcaseOnBg2() { return showcaseDarkBg() ? Color.argb(170, 255, 255, 255) : Color.rgb(0x8E, 0x8E, 0x93); }
+    // Q164：三级/禁用字与分割线（派生清单成员，见 showcaseDarkBg 上方清单）
+    int showcaseOnBg3() { return showcaseDarkBg() ? Color.argb(97, 255, 255, 255) : Color.rgb(0xC7, 0xC7, 0xCC); }
+    int showcaseDivider164() { return showcaseDarkBg() ? Color.argb(60, 255, 255, 255) : Color.argb(36, 0, 0, 0); }
 
     View buildShowcaseFace(final ShowcaseItem it, final int wPx) {
         return buildShowcaseFace(it, wPx, false);
@@ -20857,7 +20882,11 @@ public class MainActivity extends Activity {
         @Override protected void onDraw(Canvas cv) {
             float w = getWidth(), h = getHeight();
             if (w <= 0 || h <= 0) return;
-            float cx = w / 2f, cy = h / 2f, r = Math.min(w, h) / 2f - dp(MainActivity.this, 1);
+            // Q164（2.79 批2，承补审③裁量）：圆心取内容区（扣 padding）现
+            // 算、全程 float，不再 getWidth()/2 手算（旧式在带 padding 或
+            // 取整时圆心漂移，即用户所指「小白点位置偏」一半根子）。
+            android.graphics.RectF box164 = new android.graphics.RectF(getPaddingLeft(), getPaddingTop(), w - getPaddingRight(), h - getPaddingBottom());
+            float cx = box164.centerX(), cy = box164.centerY(), r = Math.min(box164.width(), box164.height()) / 2f - dp(MainActivity.this, 1);
             Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);
             p.setStyle(Paint.Style.STROKE);
             p.setStrokeWidth(dp(MainActivity.this, 1.4f));
@@ -20873,17 +20902,20 @@ public class MainActivity extends Activity {
                 p.setColor(cols152[i]);
                 cv.drawCircle(cx + (float) (ringR * Math.cos(a)), cy + (float) (ringR * Math.sin(a)), dotR, p);
             }
-            // Q163（2.78，用户 03:39 提议）：右下拇指孔改参考色——实时填当前
-            // 生效色（任一路改色 onDraw 现读 showcaseBgColor152 即跟变），描
-            // 边仍走墨色与盘面区分；色变刷新挂 syncSelectionUi161 既有口。
+            // Q163（2.78，用户 03:39 提议）：参考色点实时填当前生效色（任一
+            // 路改色 onDraw 现读 showcaseBgColor152 即跟变），色变刷新挂
+            // syncSelectionUi161 既有口。Q164 改位：自右下拇指孔位改到盘心
+            // 与外圈严格同心（用户 04:04 点名「位置偏离」）；填充半径扣描
+            // 边半宽、描边走墨色与盘面区分，五色点环位（0.55r）不相交。
+            float sw164 = dp(MainActivity.this, 1.1f);
+            float hr164 = Math.max(1.5f, dotR * 0.8f - sw164 / 2f);
             p.setStyle(Paint.Style.FILL);
             p.setColor(showcaseBgColor152());
-            float hx163 = cx + r * 0.18f, hy163 = cy + r * 0.30f, hr163 = dotR * 0.8f;
-            cv.drawCircle(hx163, hy163, hr163, p);
+            cv.drawCircle(cx, cy, hr164, p);
             p.setStyle(Paint.Style.STROKE);
-            p.setStrokeWidth(dp(MainActivity.this, 1.1f));
+            p.setStrokeWidth(sw164);
             p.setColor(ink152);
-            cv.drawCircle(hx163, hy163, hr163, p);
+            cv.drawCircle(cx, cy, hr164, p);
         }
     }
 
@@ -21044,7 +21076,7 @@ public class MainActivity extends Activity {
     }
 
     void buildShowcasePalettePanel152(LinearLayout box152) {
-        TextView cap152 = tv(this, "展柜底色", 13, showcaseOnBg(), true);
+        TextView cap152 = tv(this, S("sc_bg_title"), 13, showcaseOnBg(), true);
         box152.addView(cap152);
         // 2.74：段选只留自适应/强制深色两档（手选预设 mode=2 无独立档钮）。
         // Q163：下方初绘仅占位，选中态以函数尾 syncSelectionUi161 纯派生为准。
@@ -21054,7 +21086,7 @@ public class MainActivity extends Activity {
         LinearLayout.LayoutParams modeLp158 = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         modeLp158.topMargin = dp(this, 10);
         box152.addView(modeRow158, modeLp158);
-        final String[] modeLabs158 = {"自适应", "强制深色"};
+        final String[] modeLabs158 = {S("sc_mode_auto"), S("sc_mode_dark")};
         for (int mi158 = 0; mi158 < modeLabs158.length; mi158++) {
             final int mm158 = mi158;
             TextView chip158 = tv(this, modeLabs158[mi158], 12, showcaseOnBg(), true);
@@ -21108,7 +21140,7 @@ public class MainActivity extends Activity {
             if (scPresetDots161 == null || scPresetDots161.length != SHOWCASE_BGS.length) scPresetDots161 = new View[SHOWCASE_BGS.length]; // Q161
             scPresetDots161[i] = dot152;
         }
-        TextView def152 = tv(this, "默认", 12, showcaseOnBg(), true);
+        TextView def152 = tv(this, S("font_builtin"), 12, showcaseOnBg(), true);
         def152.setGravity(Gravity.CENTER);
         def152.setPadding(dp(this, 10), dp(this, 5), dp(this, 10), dp(this, 5));
         def152.setBackground(roundRect(showcaseDarkBg() ? Color.argb(70, 255, 255, 255) : Color.argb(220, 255, 255, 255), 999, this));
@@ -21150,12 +21182,15 @@ public class MainActivity extends Activity {
         codeLp161.leftMargin = dp(this, 8);
         hexRow161.addView(scHexCode161, codeLp161);
         scHexInput161 = new EditText(this);
-        scHexInput161.setHint("输入颜色代码，如 #1A2B3C"); // Q163（03:38）：格式交代只许占位提示（灰字、输字即消失），报错位只说「颜色代码无效」
+        scHexInput161.setHint(S("sc_hex_hint")); // Q163（03:38）：格式交代只许占位提示（灰字、输字即消失），报错位只说「颜色代码无效」；Q164：占位进 S 表
         scHexInput161.setTextSize(13);
         scHexInput161.setSingleLine(true);
         scHexInput161.setTextColor(showcaseOnBg());
-        scHexInput161.setHintTextColor(showcaseOnBg2());
-        scHexInput161.setBackground(roundRect(showcaseDarkBg() ? Color.argb(50, 255, 255, 255) : Color.argb(160, 255, 255, 255), 10, this));
+        scHexInput161.setHintTextColor(showcaseOnBg3());
+        { int acc164 = accentColor(); scHexInput161.setHighlightColor(Color.argb(70, Color.red(acc164), Color.green(acc164), Color.blue(acc164))); // Q164：选区随强调色（光标本体走系统随文字色）
+          GradientDrawable cur164 = new GradientDrawable(); cur164.setShape(GradientDrawable.RECTANGLE); cur164.setSize(dp(this, 2), dp(this, 20)); cur164.setColor(accentColor());
+          GradientDrawable inBg164 = roundRect(showcaseDarkBg() ? Color.argb(50, 255, 255, 255) : Color.argb(160, 255, 255, 255), 10, this); inBg164.setStroke(Math.max(1, dp(this, 1) / 2), showcaseDivider164()); scHexInput161.setBackground(inBg164);
+          if (android.os.Build.VERSION.SDK_INT >= 29) { try { scHexInput161.setTextCursorDrawable(cur164); } catch (Throwable ignored) {} } }
         scHexInput161.setPadding(dp(this, 10), dp(this, 6), dp(this, 10), dp(this, 6));
         // Q163（2.78，用户 03:24 点名）：输入框只收颜色代码字符（# 与 0-9A-Fa-f，
         // 粘贴同走一道过滤、非法字当场滤除），长度封顶 7＝#RRGGBB 口径（含 3
@@ -21165,7 +21200,14 @@ public class MainActivity extends Activity {
         LinearLayout.LayoutParams inLp161 = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
         inLp161.leftMargin = dp(this, 12);
         hexRow161.addView(scHexInput161, inLp161);
-        scHexGo161 = tv(this, "应用", 12.5f, Color.WHITE, true);
+        // Q164（2.79 批2，承补审④裁量）：占位「如 #1A2B3C」曾被当前色码挤截
+        // 成「如 #」——保应用钮与输入框优先：色码只读标签单行限宽让位、
+        // 输入框设最小宽，占位全文在常规屏宽下完整可见。
+        scHexCode161.setSingleLine(true);
+        scHexCode161.setEllipsize(android.text.TextUtils.TruncateAt.END);
+        scHexCode161.setMaxWidth(dp(this, 64));
+        scHexInput161.setMinimumWidth(dp(this, 132));
+        scHexGo161 = tv(this, S("sc_apply"), 12.5f, Color.WHITE, true);
         scHexGo161.setGravity(Gravity.CENTER);
         scHexGo161.setPadding(dp(this, 12), dp(this, 7), dp(this, 12), dp(this, 7));
         scHexGo161.setBackground(roundRect(accentColor(), 999, this));
@@ -21192,7 +21234,7 @@ public class MainActivity extends Activity {
         row2Lp154.topMargin = dp(this, 10);
         box152.addView(row2_154, row2Lp154);
         // 恢复默认（Q151 S4 语义守恒：清存位回默认排布；自竖栏胶囊迁入本面板）
-        TextView rst152 = tv(this, "恢复默认排布", 12, showcaseOnBg(), true);
+        TextView rst152 = tv(this, S("sc_reset_layout"), 12, showcaseOnBg(), true);
         rst152.setGravity(Gravity.CENTER);
         rst152.setPadding(dp(this, 10), dp(this, 5), dp(this, 10), dp(this, 5));
         rst152.setBackground(roundRect(showcaseDarkBg() ? Color.argb(70, 255, 255, 255) : Color.argb(220, 255, 255, 255), 999, this));
@@ -21216,7 +21258,7 @@ public class MainActivity extends Activity {
         row152.setOrientation(LinearLayout.HORIZONTAL);
         row152.setGravity(Gravity.CENTER_VERTICAL);
         box152.addView(row152);
-        TextView cap152 = tv(this, stack163 ? "堆叠密度" : "平放密度", 13, showcaseOnBg(), true);
+        TextView cap152 = tv(this, stack163 ? S("sc_density_stack") : S("sc_density_flat"), 13, showcaseOnBg(), true);
         row152.addView(cap152);
         row152.addView(new View(this), new LinearLayout.LayoutParams(0, 1, 1f));
         final TextView val152 = tv(this, "", 12.5f, showcaseOnBg2(), false);
@@ -21228,7 +21270,7 @@ public class MainActivity extends Activity {
         LinearLayout.LayoutParams srowLp152 = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         srowLp152.topMargin = dp(this, 8);
         box152.addView(srow152, srowLp152);
-        TextView lo152 = tv(this, "疏", 12, showcaseOnBg2(), false);
+        TextView lo152 = tv(this, S("sc_lo"), 12, showcaseOnBg2(), false);
         srow152.addView(lo152);
         final ShowcaseDensitySlider151 slider152 = new ShowcaseDensitySlider151(this);
         slider152.horizontal152 = true; // Q152：面板内改横置（同一自绘类横竖两用）
@@ -21255,17 +21297,17 @@ public class MainActivity extends Activity {
         slider152.setLayoutParams(slLp152);
         srow152.addView(slider152);
         showcaseSlider151 = slider152;
-        TextView hi152 = tv(this, "密", 12, showcaseOnBg2(), false);
+        TextView hi152 = tv(this, S("sc_hi"), 12, showcaseOnBg2(), false);
         srow152.addView(hi152);
     }
 
     void buildShowcaseGroupPanel152(LinearLayout box152) {
         boolean grp152 = prefs != null && prefs.getBoolean("showcase_bank_group", false);
-        box152.addView(showcaseGroupOption152("按银行分组", "卡按银行聚成组排布", grp152, () -> {
+        box152.addView(showcaseGroupOption152(S("sc_group_bank"), S("sc_group_bank_d"), grp152, () -> {
             if (prefs != null) prefs.edit().putBoolean("showcase_bank_group", true).apply();
             updateShowcaseChips(); buildShowcaseBody(true); closeShowcasePanel152();
         }));
-        box152.addView(showcaseGroupOption152("自由排布", "全部卡连续排布，不分银行", !grp152, () -> {
+        box152.addView(showcaseGroupOption152(S("sc_group_free"), S("sc_group_free_d"), !grp152, () -> {
             if (prefs != null) prefs.edit().putBoolean("showcase_bank_group", false).apply();
             updateShowcaseChips(); buildShowcaseBody(true); closeShowcasePanel152();
         }));
@@ -21368,6 +21410,12 @@ public class MainActivity extends Activity {
         barScroll163.setHorizontalScrollBarEnabled(false);
         barScroll163.setFillViewport(true);
         barScroll163.setOverScrollMode(View.OVER_SCROLL_NEVER);
+        // Q164（2.79 批2，承补审①裁量）：滑条右缘渐隐示「还有」＋首末留
+        // 白，横滑时禁父层拦截（防整页抖）——与片行通则同一件。
+        barScroll163.setHorizontalFadingEdgeEnabled(true);
+        barScroll163.setFadingEdgeLength(dp(this, 28));
+        barScroll163.setClipToPadding(false);
+        barScroll163.setOnTouchListener((v164, e164) -> { if (e164.getActionMasked() == MotionEvent.ACTION_DOWN && v164.getParent() != null) v164.getParent().requestDisallowInterceptTouchEvent(true); return false; });
         LinearLayout barRow163 = new LinearLayout(this);
         barRow163.setOrientation(LinearLayout.HORIZONTAL);
         barRow163.setGravity(Gravity.CENTER_VERTICAL);
@@ -21405,7 +21453,7 @@ public class MainActivity extends Activity {
         barRow163.addView(showcaseDensityBtnTv152);
         showcaseDensityBtn152 = showcaseDensityBtnTv152;
         // 分组钮（点开分组面板二选；选中态兼示当前开关）
-        showcaseGroupChip = tv(this, "分组", 12.5f, showcaseOnBg(), true);
+        showcaseGroupChip = tv(this, S("sc_group"), 12.5f, showcaseOnBg(), true);
         showcaseGroupChip.setGravity(Gravity.CENTER);
         showcaseGroupChip.setPadding(dp(this, 11), dp(this, 7), dp(this, 11), dp(this, 7));
         LinearLayout.LayoutParams grpLp152 = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
@@ -22919,7 +22967,7 @@ public class MainActivity extends Activity {
         int strip = expanded ? Math.round(faceH * 0.88f) : dp(this, showcaseStackStripDp163()); // Q163（2.78）：收起露条走堆叠密度键（40–72dp、默认 52＝旧值）；展开态 0.88 仍由 showcase_stack_open 独占、不吃此键
         for (java.util.Map.Entry<String, java.util.List<ShowcaseItem>> e : groups.entrySet()) {
             if (grp) {
-                TextView gl = tv(this, e.getKey() + " · " + e.getValue().size() + " 张", 13, showcaseOnBg2(), true);
+                TextView gl = tv(this, String.format(S("fx_zone_count_fmt"), e.getKey(), e.getValue().size()), 13, showcaseOnBg2(), true);
                 LinearLayout.LayoutParams glp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
                 glp.topMargin = dp(this, 16); glp.bottomMargin = dp(this, 8);
                 gl.setLayoutParams(glp);
@@ -23268,7 +23316,7 @@ public class MainActivity extends Activity {
             int y122 = pageTopPad() + dp(MainActivity.this, 66);
             for (java.util.Map.Entry<String, java.util.List<Integer>> e122 : groups122.entrySet()) {
                 if (grp) {
-                    TextView gl122 = tv(MainActivity.this, e122.getKey() + " · " + e122.getValue().size() + " 张", 12.5f, showcaseOnBg2(), true);
+                    TextView gl122 = tv(MainActivity.this, String.format(S("fx_zone_count_fmt"), e122.getKey(), e122.getValue().size()), 12.5f, showcaseOnBg2(), true);
                     FrameLayout.LayoutParams glp122 = new FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, labelH122);
                     glp122.leftMargin = m122; glp122.topMargin = y122;
                     gl122.setLayoutParams(glp122);
