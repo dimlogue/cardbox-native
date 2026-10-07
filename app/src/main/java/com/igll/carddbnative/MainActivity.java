@@ -12106,7 +12106,7 @@ public class MainActivity extends Activity {
         panel.addView(filterSectionTitle("\u53d1\u5361\u884c"));
         addBankGrid(panel, distinctBanks());
 
-        panel.addView(filterSectionTitle("\u6392\u5e8f"));
+        panel.addView(filterSectionTitle(S("filter_sort")));
         String[][] sorts = {{"score-desc", "\u8bc4\u5206\u7531\u9ad8\u5230\u4f4e"}, {"score-asc", "\u8bc4\u5206\u7531\u4f4e\u5230\u9ad8"}, {"name", "\u540d\u79f0"}, {"bank", "\u94f6\u884c"}};
         List<View> sortChips = new ArrayList<>();
         for (final String[] so : sorts) {
