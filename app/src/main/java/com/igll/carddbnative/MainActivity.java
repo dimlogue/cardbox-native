@@ -9389,7 +9389,7 @@ public class MainActivity extends Activity {
             // 改用用户提供的官方样图去底透明 PNG 直接贴（assets/badges/，制图期已
             // 剔银联黑投影/倒影、白底转透明），不再自绘；万事达/Amex/JCB 沿现行
             // 画法不动。统一拟合（min 单位＋居中）沿 Q148：任何框形不溢不亏。
-            // 设置预览与卡面无图占位共用此一处。2.73（用户回执 VISA 好、万/银靠右）：万事达/银联改右对齐（DeepSeek 定值：万右缘 238、银右缘 236 视觉补偿），VISA 居中不动。
+            // 设置预览与卡面无图占位共用此一处。2.73（用户回执 VISA 好、万/银靠右）：万事达/银联改右对齐（DeepSeek 定值：万右缘 236、银右缘 236，两标同内收口径），VISA 居中不动。
             int save148 = cv.save();
             try {
                 float u = Math.min(w / 240f, h / 120f);
@@ -9425,10 +9425,10 @@ public class MainActivity extends Activity {
             p.setFilterBitmap(false);
         }
         // 万事达/万事网联：红 #EB001B / 橙 #F79E1B 双等圆交叠、交叠区独立填 #FF5F00（不用半透叠色冒充）
-        // 2.71：用户图证三自绘标（万事达/Amex/JCB）较银联/VISA 官图视觉偏小，按 DeepSeek 审定值放大对齐（本法圆 r 40→46、Amex/JCB 色块外扩＋字号升 56）。2.72：真机回执万事达仍略小（双圆视觉面积吃亏），单独再放大 1.18 倍（r 46→54.28，双圆总宽 143.5→169.4 单位），Amex/JCB 不动。2.73：按 DeepSeek 定值 r 46→58（直径 116、总宽 181.0）并改右对齐（右缘 238、左缘 57.0），Amex/JCB 不动。
+        // 2.71：用户图证三自绘标（万事达/Amex/JCB）较银联/VISA 官图视觉偏小，按 DeepSeek 审定值放大对齐（本法圆 r 40→46、Amex/JCB 色块外扩＋字号升 56）。2.72：真机回执万事达仍略小（双圆视觉面积吃亏），单独再放大 1.18 倍（r 46→54.28，双圆总宽 143.5→169.4 单位），Amex/JCB 不动。2.73：按 DeepSeek 定值 r 46→58（直径 116、总宽 181.0）并改右对齐（右缘 238→236、左缘约 55，与银联同内收口径，出包前复审修正），Amex/JCB 不动。
         void badgeMastercard(Canvas cv, Paint p, int w, int h, float ux, float uy) {
             float r = 58f * uy, cy = 60 * uy;
-            float cx = (238f - 2.12f * 58f) * ux, cx2 = cx + 1.12f * r;
+            float cx = (236f - 2.12f * 58f) * ux, cx2 = cx + 1.12f * r;
             p.setStyle(Paint.Style.FILL);
             p.setColor(Color.rgb(0xEB, 0x00, 0x1B));
             cv.drawCircle(cx, cy, r, p);
@@ -9535,7 +9535,7 @@ public class MainActivity extends Activity {
             lp153.gravity = Gravity.BOTTOM | Gravity.RIGHT;
             // Q157（2.68，用户 17:46/17:48）：再下、再右贴近边框——距值逐落点
             // 由调用方按图框圆角给定（badgeCornerInset157，清单见 Q157）：直角
-            // 0dp 真贴边、圆角取刚好不被裁的最小内收；详情图廊样板点冻结 2dp。
+            // 0dp 真贴边、圆角取刚好不被裁的最小内收；详情图廊样板点 2.73 复审拆冻同归此口径。
             lp153.rightMargin = dp(this, rightMarginDp);
             lp153.bottomMargin = dp(this, bottomMarginDp);
             host.addView(badge153, lp153);
@@ -13612,10 +13612,10 @@ public class MainActivity extends Activity {
             // 一律不加。标是框内姊妹视图不随位图横摆，落位恒视觉右下。子版本
             // 无独立组织字段（Q152 数据实查），全廊用本卡组织。
             bindGalleryBitmap152(iv, slidePath152, slideW152, true, () -> {
-                // Q157 样板落点（用户 17:48 点名此点 VISA 贴标「做的挺好的」）：
-                // 尺寸与贴边冻结——基盒虽改 34×17，scale 1.25→1.765 使有效尺寸
-                // 恒 60×30dp、右/下距恒 2dp 不变；随新展示盒右下贴边（宿主同框）。
-                addOrgBadgeBottomRight153(imgFrame, normOrgKey152(c.org), false, 1.765f, 2);
+                // Q157 样板落点（用户 17:48 点名此点 VISA 贴标「做的挺好的」）；尺寸冻结
+                // （基盒 34×17、scale 1.765、有效 60×30dp）；2.73 复审修正：右/下距原冻结 2dp
+                // 不随宿主圆角涨、万事达 45° 弧中高档被裁，拆冻改回 badgeCornerInset157(cardR) 同源。
+                addOrgBadgeBottomRight153(imgFrame, normOrgKey152(c.org), false, 1.765f, badgeCornerInset157(cardR));
                 if (placeholderCustomEnabled) imgFrame.setOnLongClickListener(v -> { haptic(); openPlaceholderColorPicker(c); return true; });
             });
             if (slideName != null && !slideName.isEmpty()) {
