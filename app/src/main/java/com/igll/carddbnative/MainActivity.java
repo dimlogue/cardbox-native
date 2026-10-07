@@ -1303,6 +1303,32 @@ public class MainActivity extends Activity {
         STR.put("about_migrated", new String[]{"全部卡片 / 详情 / 我的卡片 / 学生推荐 / 筛选 / 资讯 / 情景选卡 / 自定义卡 / 拖动 / 字体与界面大小 / 高刷 / 触感 / 欢迎页 / 更新日志 / 数据 OTA 已迁移","All Cards / Details / My Cards / Students / Filter / News / Scenario Picker / Custom Cards / Drag / Fonts & UI Size / High Refresh / Haptics / Welcome / Changelog / Data OTA — all migrated"});
         STR.put("search_go_ext_fmt", new String[]{"去扩展卡库搜「%s」 ›","Search the extended library for \"%s\" ›"});
         STR.put("feat_autofx_en", new String[]{"自动购汇","Auto FX"});
+        STR.put("filter_type", new String[]{"卡片类型","Card Type"});
+        STR.put("filter_status", new String[]{"状态","Status"});
+        STR.put("filter_display", new String[]{"显示方式","Display"});
+        STR.put("filter_cols", new String[]{"列数","Columns"});
+        STR.put("filter_sort", new String[]{"排序","Sort"});
+        STR.put("filter_feats", new String[]{"特点（可多选，须同时满足）","Features (multi-select, all must match)"});
+        STR.put("cols_1", new String[]{"单列","1 Column"});
+        STR.put("cols_2", new String[]{"双列","2 Columns"});
+        STR.put("cols_3", new String[]{"三列","3 Columns"});
+        STR.put("cols_4", new String[]{"四列","4 Columns"});
+        STR.put("disp_all", new String[]{"显示全部","Show All"});
+        STR.put("disp_bankfold", new String[]{"按银行折叠","Group by Bank"});
+        STR.put("dim_sort_fmt", new String[]{"按%s评分","By %s"});
+        STR.put("feat_combo_none_fmt", new String[]{"「%s」没有卡同时满足，不能一起选","No card matches %s all at once"});
+        STR.put("org_none", new String[]{"无卡组织","No Network"});
+        STR.put("gap_no_ftf", new String[]{"还没有无货币转换费的卡，出境刷卡每笔会被收 1%~1.5% 转换费","No FX-fee-free card yet — every overseas swipe costs 1%–1.5%"});
+        STR.put("gap_no_jcb", new String[]{"没有 JCB，去日本线下会弱一点","No JCB card — offline coverage in Japan will be weaker"});
+        STR.put("gap_no_3ds", new String[]{"没有支持 3DS 的卡，部分境外网站付款可能过不了验证","No 3DS card — some overseas checkouts may fail verification"});
+        STR.put("gap_prefix", new String[]{"短板：","Gap: "});
+        STR.put("mine_missing_fmt", new String[]{"还差 %s","Missing %s"});
+        STR.put("sw_download", new String[]{"下载","Download"});
+        STR.put("news_cat_new", new String[]{"新卡上市","New Cards"});
+        STR.put("news_source", new String[]{"来源：","Source: "});
+        STR.put("news_date", new String[]{"日期：","Date: "});
+        STR.put("news_collapse", new String[]{"收起","Collapse"});
+        STR.put("news_expand", new String[]{"展开","Expand"});
     }
     // Q106（2.20）英文全量扫：纯展示串英文表（精确整串匹配、仅 EN 模式在 tvW 出口生效；
     // tv/toast/chip 同走此出口）。红线：与数据匹配的逻辑串一律不入表——评分维度名与短标签
@@ -6545,10 +6571,14 @@ public class MainActivity extends Activity {
         SharedPreferences.Editor e = prefs.edit();
         if (sortMode == null) e.remove("sort_mode"); else e.putString("sort_mode", sortMode);
         if (scoreDimsSel.isEmpty()) e.remove("score_dims_sel"); else e.putStringSet("score_dims_sel", new HashSet<>(scoreDimsSel));
-        e.putInt("cols", cols);
         e.putBoolean("group_bank", groupBank);
         e.putStringSet("bank_open", new HashSet<>(bankOpen));
         e.apply();
+        // Q164（2.79 批2，用户 04:13 实证）：cols 单独同步 commit——旧版随
+        // 整包 apply() 异步落盘，单列卡多卡死进程时写盘未达、冷启读回默
+        // 认双列（「没点自己变回双列」真根子）；列数是用户刚点过的显式
+        // 选择，必须点完即落盘。其余键维持 apply 不变。
+        try { prefs.edit().putInt("cols", cols).commit(); } catch (Throwable ignored) {}
     }
 
     static final String[][] FEATS = {
@@ -10475,6 +10505,12 @@ public class MainActivity extends Activity {
 
     TextView chip(String s, int bg, int fg, float sp) {
         TextView t = tv(this, s, sp, fg, true);
+        // Q164（2.79 批2，承 DeepSeek 补审①裁量）：片行通则厂内收口——片
+        // 内文字一律单行＋末尾省略、片宽设上限（屏宽 62%），译文变长只
+        // 许省略不许挤竖/撑破行；容器层横滑在 chipScrollRow164 一处。
+        t.setSingleLine(true);
+        t.setEllipsize(android.text.TextUtils.TruncateAt.END);
+        t.setMaxWidth((int) (getResources().getDisplayMetrics().widthPixels * 0.62f));
         pinFixedText125(t); // Q125：胶囊钉角色行高（字体件）
         t.setBackground(roundRect(bg, 7f, this)); // Q129：小徽标胶囊走胶囊类收口
         t.setPadding(dp(this, 6), dp(this, 3), dp(this, 6), dp(this, 3));
@@ -10482,6 +10518,23 @@ public class MainActivity extends Activity {
         lp.rightMargin = dp(this, 5);
         t.setLayoutParams(lp);
         return t;
+    }
+
+    // Q164（2.79 批2）：片行横滑容器一处收口——装得下静态摊开、超宽才
+    // 滚动；右缘渐隐示「还有」、首末留白不贴边、横滑禁父层拦截防整页
+    // 抖。与展柜顶栏滑条（openShowcase 内）同一口径，不另起第二套。
+    HorizontalScrollView chipScrollRow164(LinearLayout row164) {
+        HorizontalScrollView hsv164 = new HorizontalScrollView(this);
+        hsv164.setHorizontalScrollBarEnabled(false);
+        hsv164.setFillViewport(true);
+        hsv164.setOverScrollMode(View.OVER_SCROLL_NEVER);
+        hsv164.setHorizontalFadingEdgeEnabled(true);
+        hsv164.setFadingEdgeLength(dp(this, 28));
+        hsv164.setClipToPadding(false);
+        row164.setPadding(dp(this, 2), row164.getPaddingTop(), dp(this, 18), row164.getPaddingBottom()); // 只管首末横向留白，纵向内边距归各行自有口径
+        hsv164.addView(row164, new ViewGroup.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        hsv164.setOnTouchListener((v164, e164) -> { if (e164.getActionMasked() == MotionEvent.ACTION_DOWN && v164.getParent() != null) v164.getParent().requestDisallowInterceptTouchEvent(true); return false; });
+        return hsv164;
     }
 
     class CardAdapter extends BaseAdapter {
@@ -11968,7 +12021,7 @@ public class MainActivity extends Activity {
         final int keepY = filterScroll != null ? filterScroll.getScrollY() : 0;
         panel.removeAllViews();
 
-        panel.addView(filterSectionTitle("\u5361\u7247\u7c7b\u578b"));
+        panel.addView(filterSectionTitle(S("filter_type")));
         List<View> typeChips = new ArrayList<>();
         typeChips.add(filterChip("\u501f\u8bb0\u5361", "debit".equals(filterType), () -> { filterType = "debit".equals(filterType) ? null : "debit"; rebuildFilterPanel(panel); refreshHome(); }));
         typeChips.add(filterChip("\u4fe1\u7528\u5361", "credit".equals(filterType), () -> { filterType = "credit".equals(filterType) ? null : "credit"; rebuildFilterPanel(panel); refreshHome(); }));
@@ -11985,7 +12038,7 @@ public class MainActivity extends Activity {
         }
         addChipFlow(panel, orgChips);
 
-        panel.addView(filterSectionTitle("\u72b6\u6001"));
+        panel.addView(filterSectionTitle(S("filter_status")));
         List<View> stChips = new ArrayList<>();
         // Q13: 在发/已停发互斥——已点亮一项时另一项置灰不可点（再点已选项取消后恢复），不许两项同亮自相矛盾
         stChips.add(filterChip("\u5728\u53d1", "\u5728\u53d1".equals(filterStatus), () -> { filterStatus = "\u5728\u53d1".equals(filterStatus) ? null : "\u5728\u53d1"; rebuildFilterPanel(panel); refreshHome(); }, filterStatus != null && !"\u5728\u53d1".equals(filterStatus)));
@@ -12000,10 +12053,10 @@ public class MainActivity extends Activity {
         scoreStatusChips.add(filterChip("未评分", "unrated".equals(filterScoreStatus), () -> { filterScoreStatus = "unrated".equals(filterScoreStatus) ? null : "unrated"; rebuildFilterPanel(panel); refreshHome(); }));
         addChipFlow(panel, scoreStatusChips);
 
-        panel.addView(filterSectionTitle("\u7279\u70b9\uff08\u53ef\u591a\u9009\uff0c\u987b\u540c\u65f6\u6ee1\u8db3\uff09"));
+        panel.addView(filterSectionTitle(S("filter_feats")));
         List<View> featChips = new ArrayList<>();
         for (final String[] f : FEATS) {
-            featChips.add(filterChip(f[1], filterFeats.contains(f[0]), () -> {
+            featChips.add(filterChip(isEn() ? featLabelEn(f[0]) : f[1], filterFeats.contains(f[0]), () -> {
                 if (filterFeats.contains(f[0])) {
                     filterFeats.remove(f[0]);
                 } else {
@@ -12017,8 +12070,8 @@ public class MainActivity extends Activity {
                     }
                     if (!any) {
                         StringBuilder names = new StringBuilder();
-                        for (String k : test) { if (names.length() > 0) names.append("\u300d+\u300c"); names.append(featLabel(k)); }
-                        showFloatToast("\u300c" + names + "\u300d\u6ca1\u6709\u5361\u540c\u65f6\u6ee1\u8db3\uff0c\u4e0d\u80fd\u4e00\u8d77\u9009");
+                        for (String k : test) { if (names.length() > 0) names.append(isEn() ? " + " : "\u300d+\u300c"); names.append(isEn() ? featLabelEn(k) : featLabel(k)); }
+                        showFloatToast(isEn() ? String.format(S("feat_combo_none_fmt"), names.toString()) : "\u300c" + names + "\u300d\u6ca1\u6709\u5361\u540c\u65f6\u6ee1\u8db3\uff0c\u4e0d\u80fd\u4e00\u8d77\u9009");
                         return;
                     }
                     filterFeats.add(f[0]);
@@ -12078,25 +12131,25 @@ public class MainActivity extends Activity {
             addChipFlow(panel, dimSortChips);
         }
 
-        panel.addView(filterSectionTitle("\u663e\u793a\u65b9\u5f0f"));
+        panel.addView(filterSectionTitle(S("filter_display")));
         List<View> dispChips = new ArrayList<>();
-        dispChips.add(filterChip("\u663e\u793a\u5168\u90e8", !groupBank, () -> {
+        dispChips.add(filterChip(S("disp_all"), !groupBank, () -> {
             groupBank = false; persistViewPrefs();
             rebuildFilterPanel(panel); refreshHome();
         }));
-        dispChips.add(filterChip("\u6309\u94f6\u884c\u6298\u53e0", groupBank, () -> {
+        dispChips.add(filterChip(S("disp_bankfold"), groupBank, () -> {
             groupBank = true; persistViewPrefs();
             rebuildFilterPanel(panel); refreshHome();
         }));
         addChipFlow(panel, dispChips);
 
-        panel.addView(filterSectionTitle("\u5217\u6570"));
+        panel.addView(filterSectionTitle(S("filter_cols")));
         String[][] colOpts = {{"1", "\u5355\u5217"}, {"2", "\u53cc\u5217"}, {"3", "\u4e09\u5217"}, {"4", "\u56db\u5217"}};
         List<View> colChips = new ArrayList<>();
         for (final String[] co : colOpts) {
             final int nCols = Integer.parseInt(co[0]);
             // Q13 A 案：按银行折叠时列数整组置灰禁用（当前所选以哑光蓝灰保留可见），切回显示全部即恢复可点
-            colChips.add(filterChip(co[1], cols == nCols, () -> {
+            colChips.add(filterChip(S("cols_" + nCols), cols == nCols, () -> {
                 // Q154（件十三）：列数切换走统一 FLIP 入口；分组模式结构不同构
                 // 直切（列数 chip 本就置灰禁用，此为双保险）。
                 final int oldCols154 = cols;
@@ -12107,11 +12160,22 @@ public class MainActivity extends Activity {
         }
         addChipFlow(panel, colChips);
         if (groupBank) {
-            TextView colsHint = tv(this, "\u6309\u94f6\u884c\u6298\u53e0\u65f6\u5217\u6570\u6682\u4e0d\u53ef\u8c03\uff0c\u5c55\u5f00\u94f6\u884c\u540e\u4ecd\u6309\u5f53\u524d\u5217\u6570\u663e\u793a", 11.5f, darkEff() ? colText2() : Color.rgb(0x8E, 0x8E, 0x93), false); // Q148：深色走语义次字，浅色原值逐位不变
+            TextView colsHint = tv(this, S("cols_bankfold_hint"), 11.5f, darkEff() ? colText2() : Color.rgb(0x8E, 0x8E, 0x93), false); // Q148：深色走语义次字，浅色原值逐位不变
             LinearLayout.LayoutParams chp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
             chp.topMargin = dp(this, 6);
             colsHint.setLayoutParams(chp);
             panel.addView(colsHint);
+        }
+
+        // Q164（2.79 批2，用户 04:11 点名）：全部卡片 >30 张且单列时，
+        // 单列大图全量解码会卡顿——列数行下给一条双语提示（根治在性能批
+        // 的解码缓存，本批先立警告，条件随面板重建现算）。
+        if (cols == 1 && Store.all != null && Store.all.size() > 30) {
+            TextView lagWarn164 = tv(this, "\u26a0 " + S("cols_single_lag_warn"), 11.5f, Color.rgb(0xB2, 0x6A, 0x00), false);
+            LinearLayout.LayoutParams lwp164 = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            lwp164.topMargin = dp(this, 6);
+            lagWarn164.setLayoutParams(lwp164);
+            panel.addView(lagWarn164);
         }
 
         if (filterScroll != null) filterScroll.post(() -> filterScroll.scrollTo(0, keepY));
@@ -21419,6 +21483,7 @@ public class MainActivity extends Activity {
         LinearLayout barRow163 = new LinearLayout(this);
         barRow163.setOrientation(LinearLayout.HORIZONTAL);
         barRow163.setGravity(Gravity.CENTER_VERTICAL);
+        barRow163.setPadding(dp(this, 2), 0, dp(this, 18), 0); // Q164：首末留白（与渐隐同件，末件不贴边装作被切）
         barScroll163.addView(barRow163, new ViewGroup.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT));
         head.addView(barScroll163, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
         // 堆叠/平放段选组（一枚药丸容器＋两枚段钮，选中实心蓝）
