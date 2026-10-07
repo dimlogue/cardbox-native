@@ -1155,6 +1155,9 @@ public class MainActivity extends Activity {
         STR.put("dark_system", new String[]{"跟随系统","System"});
         STR.put("dark_light", new String[]{"浅色","Light"});
         STR.put("dark_dark", new String[]{"深色","Dark"});
+        STR.put("ui_style", new String[]{"界面风格","UI Style"}); // Q165：风格包段选（扁平/墨曜）
+        STR.put("style_flat", new String[]{"扁平","Flat"});
+        STR.put("style_moyao", new String[]{"墨曜","Moyao"});
         STR.put("card_color", new String[]{"卡面配色","Card Face Colors"}); // Q114（2.27）：英文润色（旧 "Placeholder Color" 不成话），待用户终审可否决
         STR.put("page_bg", new String[]{"页面底色","Page Background"}); // Q148（2.59）：页底柔和档（原样＝Q94 现行梯度逐位不变）
         STR.put("page_bg_orig", new String[]{"原样","Original"});
@@ -26792,6 +26795,12 @@ public class MainActivity extends Activity {
         panelSubHead(panel, S("sec_appearance"), true);
         segInner(panel, S("dark_mode"), new String[][]{{"system",S("dark_system")},{"light",S("dark_light")},{"dark",S("dark_dark")}}, darkModePref, v -> {
             darkModePref = v; prefs.edit().putString("dark_mode", v).apply(); haptic(); applyAppearanceChrome(); applyAppearanceSoft130(); // Q135（件三普查）：深色解冻同治，改走无闪换入
+        });
+        addHair(panel);
+        // Q165：界面风格切换（扁平/墨曜）——写生效风格单源 uiStyle＋同名偏好键，走无闪
+        // 换入当场生效；墨曜下深色/主题色偏好仍照常存取（切回扁平即恢复生效）。
+        segInner(panel, S("ui_style"), new String[][]{{"flat",S("style_flat")},{"moyao",S("style_moyao")}}, uiStyle, v -> {
+            uiStyle = v; prefs.edit().putString("ui_style", v).apply(); haptic(); applyAppearanceChrome(); applyAppearanceSoft130();
         });
         addHair(panel);
         segInner(panel, S("language"), new String[][]{{"system",S("lang_system")},{"zh",S("lang_zh")},{"en",S("lang_en")}}, appLangPref, v -> {
