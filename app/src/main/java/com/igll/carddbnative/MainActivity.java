@@ -9425,10 +9425,10 @@ public class MainActivity extends Activity {
             p.setFilterBitmap(false);
         }
         // 万事达/万事网联：红 #EB001B / 橙 #F79E1B 双等圆交叠、交叠区独立填 #FF5F00（不用半透叠色冒充）
-        // 2.71：用户图证三自绘标（万事达/Amex/JCB）较银联/VISA 官图视觉偏小，按 DeepSeek 审定值放大对齐（本法圆 r 40→46、Amex/JCB 色块外扩＋字号升 56）。
+        // 2.71：用户图证三自绘标（万事达/Amex/JCB）较银联/VISA 官图视觉偏小，按 DeepSeek 审定值放大对齐（本法圆 r 40→46、Amex/JCB 色块外扩＋字号升 56）。2.72：真机回执万事达仍略小（双圆视觉面积吃亏），单独再放大 1.18 倍（r 46→54.28，双圆总宽 143.5→169.4 单位），Amex/JCB 不动。
         void badgeMastercard(Canvas cv, Paint p, int w, int h, float ux, float uy) {
-            float r = 46 * uy, cy = 60 * uy;
-            float cx = (120f - 0.56f * 46f) * ux, cx2 = cx + 1.12f * r;
+            float r = 46f * 1.18f * uy, cy = 60 * uy;
+            float cx = (120f - 0.56f * 46f * 1.18f) * ux, cx2 = cx + 1.12f * r;
             p.setStyle(Paint.Style.FILL);
             p.setColor(Color.rgb(0xEB, 0x00, 0x1B));
             cv.drawCircle(cx, cy, r, p);
