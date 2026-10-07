@@ -1211,6 +1211,98 @@ public class MainActivity extends Activity {
         STR.put("launcher_classic", new String[]{"经典蓝卡","Classic"});
         STR.put("launcher_stacked", new String[]{"叠卡","Stacked"});
         STR.put("launcher_rounded", new String[]{"圆润","Rounded"});
+        // Q164（2.79，i18n 批2 类A 落串）：批1 账本 P1–P15＋外卡专区＋展柜面板的
+        // 漏译串全量收编——只许 S(key) 一口，L()/EN_TXT 冻结新增（见
+        // hidden_files/i18n-consult-2026-10-08.md 与 i18n-census-2026-10-08.md）。
+        STR.put("fx_title", new String[]{"外卡专区","Foreign Cards"});
+        STR.put("fx_intro", new String[]{"香港 · 澳门银行卡专区 · 独立数据，不混入主卡库搜索","Hong Kong & Macau bank cards · A separate data set, kept out of main library search"});
+        STR.put("fx_search_hint", new String[]{"搜卡名 / 银行，如：汇丰、Mox、渣打","Search card / bank, e.g. HSBC, Mox, BOC HK"});
+        STR.put("fx_core_only", new String[]{"只看核心核实","Core-Verified Only"});
+        STR.put("fx_count_fmt", new String[]{"共 %d 张","%d cards"});
+        STR.put("fx_count_core_suffix", new String[]{"（核心核实）"," (core-verified)"});
+        STR.put("fx_load_fail", new String[]{"外卡数据读取失败","Couldn't load the foreign card data"});
+        STR.put("fx_empty", new String[]{"没有符合的外卡，换个关键词或放宽筛选试试","No foreign cards match — try another keyword or loosen the filters"});
+        STR.put("fx_pending_fmt", new String[]{"%d 项待核","%d pending"});
+        STR.put("fx_zone_count_fmt", new String[]{"%s · %d 张","%s · %d cards"});
+        STR.put("fx_verified_ok", new String[]{"核心字段已按发卡行官网核实","Core fields verified against the issuer's official site"});
+        STR.put("fx_verified_pending", new String[]{"产品存在已确认，部分核心字段待官方文件补核，不作推荐依据","Existence confirmed; some core fields still await official documents, so this is not a basis for recommendation"});
+        STR.put("fx_verified_date_fmt", new String[]{"核实日期：%s","Verified: %s"});
+        STR.put("fx_missing_fields", new String[]{"待核字段：","Pending fields: "});
+        STR.put("fx_official_link", new String[]{"打开官方产品页 ↗","Official product page ↗"});
+        STR.put("fx_foot", new String[]{"外卡专区为独立数据集，与主卡库分开维护；评分模型未定，暂不出分。","The Foreign Cards zone is a separate data set, maintained apart from the main library. No scores for now — the scoring model isn't settled yet."});
+        STR.put("fx_org_pending", new String[]{"组织待核","Network Pending"});
+        STR.put("fx_type_credit", new String[]{"信用卡","Credit Card"});
+        STR.put("fx_type_debit", new String[]{"扣账卡","Debit Card"});
+        STR.put("verify_core", new String[]{"核心核实","Core Verified"});
+        STR.put("verify_split", new String[]{"待核 · 系列待拆","Pending · Series Split"});
+        STR.put("verify_conflict", new String[]{"待核 · 口径待消解","Pending · Sources Conflict"});
+        STR.put("verify_pending", new String[]{"待核","Pending"});
+        STR.put("fxm_org", new String[]{"卡组织","Card Network"});
+        STR.put("fxm_annual_fee", new String[]{"年费金额","Annual Fee Amount"});
+        STR.put("fxm_annual_fee_status", new String[]{"年费状态","Annual Fee Status"});
+        STR.put("fxm_supp_fee", new String[]{"附属卡年费","Supplementary Card Fee"});
+        STR.put("fxm_fx_fee_pct", new String[]{"外币手续费率","Foreign Transaction Fee"});
+        STR.put("fxm_fx_fee_scope", new String[]{"手续费适用范围","Fee Scope"});
+        STR.put("fxm_card_level", new String[]{"卡等级","Card Level"});
+        STR.put("fxm_eligibility", new String[]{"申请资格","Eligibility"});
+        STR.put("fxm_min_income", new String[]{"年薪门槛","Minimum Income"});
+        STR.put("fxm_currencies", new String[]{"支持币种","Supported Currencies"});
+        STR.put("fxm_currencies_detail", new String[]{"币种明细","Currency Details"});
+        STR.put("fxm_min_balance", new String[]{"最低结存","Minimum Balance"});
+        STR.put("fxm_age_min", new String[]{"申请年龄","Minimum Age"});
+        STR.put("fxm_overseas_atm", new String[]{"海外 ATM 费","Overseas ATM Fee"});
+        STR.put("fxm_residency", new String[]{"居民资格","Residency"});
+        STR.put("detail_my_label", new String[]{"我的标记（这张）","My Label (This Card)"});
+        STR.put("detail_add_another", new String[]{"再加一张","Add Another"});
+        STR.put("detail_remove_all_fmt", new String[]{"移除已有（全部 %d 张）","Remove Existing (all %d)"});
+        STR.put("detail_color_btn", new String[]{"换卡面颜色 ›","Change Face Color ›"});
+        STR.put("detail_color_btn_off", new String[]{"换卡面颜色（先在设置开启自选） ›","Change Face Color (turn on custom colors in Settings first) ›"});
+        STR.put("detail_color_sub_suffix", new String[]{" · 只改无图占位面，真卡图不受影响"," · Placeholder faces only; real card art is untouched"});
+        STR.put("tile_credit_suffix", new String[]{" · 信用卡"," · Credit"});
+        STR.put("loading", new String[]{"加载中","Loading"});
+        STR.put("home_debit_credit_fmt", new String[]{"借记 %d · 信用 %d","Debit %d · Credit %d"});
+        STR.put("fmt_cards_n", new String[]{"%d 张","%d cards"});
+        STR.put("fmt_items_n", new String[]{"%d 项","%d items"});
+        STR.put("fmt_entries_n", new String[]{"%d 条","%d entries"});
+        STR.put("cols_bankfold_hint", new String[]{"按银行折叠时列数暂不可调，展开银行后仍按当前列数显示","Column count is locked while cards are folded by bank; expanded groups keep the current count"});
+        STR.put("cols_single_lag_warn", new String[]{"卡片较多：单列大图滑动可能卡顿，可点列数切换为多列","Many cards: single-column large images may scroll with lag — tap the column switch for more columns"});
+        STR.put("stu_fit", new String[]{"适合","Good for"});
+        STR.put("act_done_suffix", new String[]{" · 已完成"," · Done"});
+        STR.put("custom_del_msg_fmt", new String[]{"「%s」删了就没了，备注也会一起清掉。","\"%s\" will be deleted for good, together with its note."});
+        STR.put("ext_fetching_fmt", new String[]{"正在拉取扩展索引… 已缓存 %d 条","Fetching the extended index… %d cached"});
+        STR.put("ext_local_only_fmt", new String[]{"本地核心库 %d 张照常可搜","Local core library: %d cards, searchable as usual"});
+        STR.put("ext_no_cache_fmt", new String[]{"扩展索引暂无缓存 · 本地核心库 %d 张仍可搜","No extended index cached yet · %d local cards still searchable"});
+        STR.put("ext_meta_fmt", new String[]{"扩展卡库 %d 条 · 本地核心库 %d 张","Extended library %d entries · Local core %d cards"});
+        STR.put("sc_bg_title", new String[]{"展柜底色","Showcase Background"});
+        STR.put("sc_mode_auto", new String[]{"自适应","Adaptive"});
+        STR.put("sc_mode_dark", new String[]{"强制深色","Force Dark"});
+        STR.put("sc_hex_hint", new String[]{"输入颜色代码，如 #1A2B3C","Enter a color code, e.g. #1A2B3C"});
+        STR.put("sc_apply", new String[]{"应用","Apply"});
+        STR.put("sc_hex_invalid", new String[]{"颜色代码无效","Invalid color code"});
+        STR.put("sc_reset_layout", new String[]{"恢复默认排布","Reset Layout"});
+        STR.put("sc_density_stack", new String[]{"堆叠密度","Stack Density"});
+        STR.put("sc_density_flat", new String[]{"平放密度","Flat Density"});
+        STR.put("sc_group", new String[]{"分组","Group"});
+        STR.put("sc_group_bank", new String[]{"按银行分组","Group by Bank"});
+        STR.put("sc_group_bank_d", new String[]{"卡按银行聚成组排布","Cards clustered by bank"});
+        STR.put("sc_group_free", new String[]{"自由排布","Free Layout"});
+        STR.put("sc_group_free_d", new String[]{"全部卡连续排布，不分银行","All cards in one flow, no grouping"});
+        STR.put("sc_lo", new String[]{"疏","Lo"});
+        STR.put("sc_hi", new String[]{"密","Hi"});
+        STR.put("sim_remind_fmt", new String[]{"提前 %d 天 · 每天 %s 提醒（先在本页标急展示，系统通知后续接）","%d day(s) ahead · daily at %s (flagged on this page for now; system notifications later)"});
+        STR.put("sim_pending_fmt", new String[]{"待保号 · %d 张","To Keep Alive · %d"});
+        STR.put("fmt_days_before", new String[]{"%d天前","%d d before"});
+        STR.put("urgent_prefix", new String[]{"急 · ","Urgent · "});
+        STR.put("sub_count_fmt", new String[]{"%d 项订阅","%d subscriptions"});
+        STR.put("sub_monthly_fmt", new String[]{"按周期折算约 ¥%s / 月 · 临期在本页标急（系统通知后续接）","About ¥%s/mo by cycle · Due soon is flagged here (system notifications later)"});
+        STR.put("sub_due_label", new String[]{"临期 ","Due "});
+        STR.put("sub_sort_fmt", new String[]{"按到期排序 · %d 项","By due date · %d"});
+        STR.put("journey_total_fmt", new String[]{"共 %d 条 · 成功 %d · 拒绝 %d","%d entries · %d approved · %d rejected"});
+        STR.put("journey_timeline_fmt", new String[]{"时间线 · %d 条（日期新到旧）","Timeline · %d (newest first)"});
+        STR.put("about_verinfo_fmt", new String[]{"应用版本 %s · 数据版本 v%s · %d 张卡","App %s · Data v%s · %d cards"});
+        STR.put("about_migrated", new String[]{"全部卡片 / 详情 / 我的卡片 / 学生推荐 / 筛选 / 资讯 / 情景选卡 / 自定义卡 / 拖动 / 字体与界面大小 / 高刷 / 触感 / 欢迎页 / 更新日志 / 数据 OTA 已迁移","All Cards / Details / My Cards / Students / Filter / News / Scenario Picker / Custom Cards / Drag / Fonts & UI Size / High Refresh / Haptics / Welcome / Changelog / Data OTA — all migrated"});
+        STR.put("search_go_ext_fmt", new String[]{"去扩展卡库搜「%s」 ›","Search the extended library for \"%s\" ›"});
+        STR.put("feat_autofx_en", new String[]{"自动购汇","Auto FX"});
     }
     // Q106（2.20）英文全量扫：纯展示串英文表（精确整串匹配、仅 EN 模式在 tvW 出口生效；
     // tv/toast/chip 同走此出口）。红线：与数据匹配的逻辑串一律不入表——评分维度名与短标签
@@ -4714,10 +4806,10 @@ public class MainActivity extends Activity {
             if ("unionpay".equals(org)) return "UnionPay";
             if ("amex".equals(org)) return "Amex";
             if ("jcb".equals(org)) return "JCB";
-            return "组织待核";
+            return "组织待核"; // 仅供 fxMatch 检索匹配（语言中立）；展示走 fxOrgLabel164
         }
-        String typeLabel() { return "credit".equals(type) ? "信用卡" : "扣账卡"; }
-        String verifyLabel() {
+        String typeLabel() { return "credit".equals(type) ? "信用卡" : "扣账卡"; } // 仅数据口径；展示走 fxTypeLabel164
+        String verifyLabel() { // 仅数据口径；展示走 fxVerifyLabel164
             if (coreVerified()) return "核心核实";
             if ("variant_split_required".equals(verifyStatus)) return "待核 · 系列待拆";
             if ("official_conflict_hold".equals(verifyStatus)) return "待核 · 口径待消解";
@@ -4762,24 +4854,34 @@ public class MainActivity extends Activity {
         }
     }
 
-    // 待核字段键 → 展示名（只译已知键，未知原样透出不编造）
-    static String fxMissingLabel(String k) {
-        if ("org".equals(k)) return "卡组织";
-        if ("annual_fee_hkd".equals(k)) return "年费金额";
-        if ("annual_fee_status".equals(k)) return "年费状态";
-        if ("supplementary_annual_fee_hkd".equals(k)) return "附属卡年费";
-        if ("foreign_transaction_fee_pct".equals(k)) return "外币手续费率";
-        if ("fx_fee_scope".equals(k)) return "手续费适用范围";
-        if ("card_level".equals(k)) return "卡等级";
-        if ("eligibility".equals(k)) return "申请资格";
-        if ("min_income_hkd".equals(k)) return "年薪门槛";
-        if ("supported_currency_codes".equals(k)) return "支持币种";
-        if ("supported_currency_codes_detail".equals(k)) return "币种明细"; // Q133（2.45，件五）：银联借记种子新键
-        if ("min_balance_hkd".equals(k)) return "最低结存";
-        if ("age_min".equals(k)) return "申请年龄";
-        if ("overseas_atm_fee".equals(k)) return "海外 ATM 费";
-        if ("residency_status".equals(k)) return "居民资格";
+    // 待核字段键 → 展示名（只译已知键，未知原样透出不编造）；Q164 批2：走 S 表双语
+    String fxMissingLabel(String k) {
+        if ("org".equals(k)) return S("fxm_org");
+        if ("annual_fee_hkd".equals(k)) return S("fxm_annual_fee");
+        if ("annual_fee_status".equals(k)) return S("fxm_annual_fee_status");
+        if ("supplementary_annual_fee_hkd".equals(k)) return S("fxm_supp_fee");
+        if ("foreign_transaction_fee_pct".equals(k)) return S("fxm_fx_fee_pct");
+        if ("fx_fee_scope".equals(k)) return S("fxm_fx_fee_scope");
+        if ("card_level".equals(k)) return S("fxm_card_level");
+        if ("eligibility".equals(k)) return S("fxm_eligibility");
+        if ("min_income_hkd".equals(k)) return S("fxm_min_income");
+        if ("supported_currency_codes".equals(k)) return S("fxm_currencies");
+        if ("supported_currency_codes_detail".equals(k)) return S("fxm_currencies_detail"); // Q133（2.45，件五）：银联借记种子新键
+        if ("min_balance_hkd".equals(k)) return S("fxm_min_balance");
+        if ("age_min".equals(k)) return S("fxm_age_min");
+        if ("overseas_atm_fee".equals(k)) return S("fxm_overseas_atm");
+        if ("residency_status".equals(k)) return S("fxm_residency");
         return k;
+    }
+    // Q164（2.79 批2）：FxCard 展示标签实例助手——静态数据类的 label 法只供
+    // 检索匹配，界面展示一律走此三口（S 表双语、随语言切换重建即变）。
+    String fxOrgLabel164(FxCard f) { return "组织待核".equals(f.orgLabel()) ? S("fx_org_pending") : f.orgLabel(); }
+    String fxTypeLabel164(FxCard f) { return "credit".equals(f.type) ? S("fx_type_credit") : S("fx_type_debit"); }
+    String fxVerifyLabel164(FxCard f) {
+        if (f.coreVerified()) return S("verify_core");
+        if ("variant_split_required".equals(f.verifyStatus)) return S("verify_split");
+        if ("official_conflict_hold".equals(f.verifyStatus)) return S("verify_conflict");
+        return S("verify_pending");
     }
 
     boolean fxZoneOpen = false, fxDetailOpen = false;
@@ -4865,10 +4967,10 @@ public class MainActivity extends Activity {
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
         root.setBackground(softPageBg());
-        root.addView(pageBackHead("外卡专区", () -> { haptic(); closeFxZone(); }),
+        root.addView(pageBackHead(S("fx_title"), () -> { haptic(); closeFxZone(); }),
             new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
 
-        TextView intro = tv(this, "香港 · 澳门银行卡专区 · 独立数据，不混入主卡库搜索", 11.5f, colText2(), false); // Q152：分区后头部不再把专区等同香港
+        TextView intro = tv(this, S("fx_intro"), 11.5f, colText2(), false); // Q152：分区后头部不再把专区等同香港
         intro.setPadding(dp(this, 16), dp(this, 2), dp(this, 16), 0);
         root.addView(intro);
 
@@ -4886,7 +4988,7 @@ public class MainActivity extends Activity {
         searchRow.addView(sicon, new LinearLayout.LayoutParams(dp(this, 18), dp(this, 18)));
         final EditText fxBox = new EditText(this);
         applyUiFont(fxBox, 400);
-        fxBox.setHint("搜卡名 / 银行，如：汇丰、Mox、渣打");
+        fxBox.setHint(S("fx_search_hint"));
         fxBox.setTextSize(14);
         fxBox.setSingleLine(true);
         fxBox.setBackground(null);
@@ -4911,7 +5013,7 @@ public class MainActivity extends Activity {
         chipRow.setGravity(Gravity.CENTER_VERTICAL);
         chipRow.setPadding(dp(this, 16), dp(this, 10), dp(this, 16), dp(this, 2));
         root.addView(chipRow);
-        final TextView coreChip = chip("只看核心核实",
+        final TextView coreChip = chip(S("fx_core_only"),
             fxCoreOnly ? accentColor() : (darkEff() ? Color.rgb(0x2E, 0x2E, 0x33) : Color.rgb(0xEF, 0xF1, 0xF6)),
             fxCoreOnly ? Color.WHITE : colText(), 11.5f);
         coreChip.setOnClickListener(v -> {
@@ -4981,16 +5083,16 @@ public class MainActivity extends Activity {
             if (!fxMatch(f, fxQuery)) continue;
             shown.add(f);
         }
-        if (fxCountTv != null) fxCountTv.setText("共 " + shown.size() + " 张" + (fxCoreOnly ? "（核心核实）" : ""));
+        if (fxCountTv != null) fxCountTv.setText(String.format(S("fx_count_fmt"), shown.size()) + (fxCoreOnly ? S("fx_count_core_suffix") : ""));
         if (all.isEmpty()) {
-            TextView e = tv(this, "外卡数据读取失败", 13, colText2(), false);
+            TextView e = tv(this, S("fx_load_fail"), 13, colText2(), false);
             e.setGravity(Gravity.CENTER);
             e.setPadding(0, dp(this, 40), 0, 0);
             fxListBox.addView(e);
             return;
         }
         if (shown.isEmpty()) {
-            TextView e = tv(this, "没有符合的外卡，换个关键词或放宽筛选试试", 13, colText2(), false);
+            TextView e = tv(this, S("fx_empty"), 13, colText2(), false);
             e.setGravity(Gravity.CENTER);
             e.setPadding(0, dp(this, 40), 0, 0);
             fxListBox.addView(e);
@@ -5016,7 +5118,7 @@ public class MainActivity extends Activity {
                 // Q153（件十二）：区标题升级为底色带分隔——16.5sp/800＋色带垫底
                 // ＋上下拉开间距，与卡面行拉开层级（旧 15sp 一行纯文字被用户判
                 // 「没有区分出很明显」）。EN 词条同步（地区名/计数）。
-                TextView zh152 = tvW(this, fxRegionLabel153(zone152) + " · " + zones152.get(zone152).size() + (isEn() ? " cards" : " 张"), 16.5f, colText(), 800);
+                TextView zh152 = tvW(this, String.format(S("fx_zone_count_fmt"), fxRegionLabel153(zone152), zones152.get(zone152).size()), 16.5f, colText(), 800);
                 zh152.setBackground(roundRect(darkEff() ? Color.rgb(0x2A, 0x2A, 0x30) : Color.rgb(0xE9, 0xEC, 0xF2), 8, this));
                 zh152.setPadding(dp(this, 10), dp(this, 6), dp(this, 10), dp(this, 6));
                 LinearLayout.LayoutParams zhLp152 = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
@@ -5072,10 +5174,10 @@ public class MainActivity extends Activity {
             nm.setMaxLines(2);
             tx.addView(nm);
             tx.addView(tv(this, f.bank, 11, colText2(), false));
-            String meta = f.orgLabel() + " · " + f.typeLabel();
+            String meta = fxOrgLabel164(f) + " · " + fxTypeLabel164(f);
             if (f.level != null && !f.level.isEmpty()) meta += " · " + f.level;
             tx.addView(tv(this, meta, 11, colText2(), false));
-            TextView vc = chip(f.verifyLabel(),
+            TextView vc = chip(fxVerifyLabel164(f),
                 f.coreVerified() ? accentColor() : (darkEff() ? Color.rgb(0x2E, 0x2E, 0x33) : Color.rgb(0xEF, 0xF1, 0xF6)),
                 f.coreVerified() ? Color.WHITE : colText2(), 10.5f);
             top.addView(vc);
@@ -5094,7 +5196,7 @@ public class MainActivity extends Activity {
                 metaRow.addView(st, slp2);
             }
             if (!f.missing.isEmpty()) {
-                TextView mt = tv(this, f.missing.size() + " 项待核", 11, colText3(), false);
+                TextView mt = tv(this, String.format(S("fx_pending_fmt"), f.missing.size()), 11, colText3(), false);
                 LinearLayout.LayoutParams mtlp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
                 mtlp.leftMargin = dp(this, 8);
                 metaRow.addView(mt, mtlp);
@@ -5331,8 +5433,8 @@ public class MainActivity extends Activity {
         LinearLayout.LayoutParams cr1lp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         cr1lp.topMargin = dp(this, 10);
         body.addView(cr1, cr1lp);
-        cr1.addView(chip(f.orgLabel(), chipBg, colText(), 11.5f));
-        addChipGap(cr1); cr1.addView(chip(f.typeLabel(), chipBg, colText(), 11.5f));
+        cr1.addView(chip(fxOrgLabel164(f), chipBg, colText(), 11.5f));
+        addChipGap(cr1); cr1.addView(chip(fxTypeLabel164(f), chipBg, colText(), 11.5f));
         if (f.level != null && !f.level.isEmpty()) { addChipGap(cr1); cr1.addView(chip(f.level, chipBg, colText(), 11.5f)); }
         if (f.status != null && !f.status.isEmpty()) { addChipGap(cr1); cr1.addView(chip(f.status, chipBg, colText(), 11.5f)); }
         LinearLayout cr2 = new LinearLayout(this);
@@ -5343,21 +5445,21 @@ public class MainActivity extends Activity {
         cr2.addView(chip(f.bank, chipBg, colText(), 11.5f));
         if (f.tier != null && !f.tier.isEmpty()) { addChipGap(cr2); cr2.addView(chip(f.tier, chipBg, colText(), 11.5f)); }
         addChipGap(cr2);
-        cr2.addView(chip(f.verifyLabel(), f.coreVerified() ? accentColor() : chipBg, f.coreVerified() ? Color.WHITE : colText2(), 11.5f));
+        cr2.addView(chip(fxVerifyLabel164(f), f.coreVerified() ? accentColor() : chipBg, f.coreVerified() ? Color.WHITE : colText2(), 11.5f));
 
         // 核实状态卡
         body.addView(detailSectionTitle(S("sec_verify")));
         LinearLayout vBox = detailInfoCard();
         body.addView(vBox, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
-        vBox.addView(tv(this, f.coreVerified() ? "核心字段已按发卡行官网核实" : "产品存在已确认，部分核心字段待官方文件补核，不作推荐依据", 12.5f, colText(), false));
+        vBox.addView(tv(this, f.coreVerified() ? S("fx_verified_ok") : S("fx_verified_pending"), 12.5f, colText(), false));
         if (f.verifiedAt != null && !f.verifiedAt.isEmpty()) {
-            TextView vt = tv(this, "核实日期：" + f.verifiedAt, 12, colText2(), false);
+            TextView vt = tv(this, String.format(S("fx_verified_date_fmt"), f.verifiedAt), 12, colText2(), false);
             LinearLayout.LayoutParams vtlp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
             vtlp.topMargin = dp(this, 6);
             vBox.addView(vt, vtlp);
         }
         if (!f.missing.isEmpty()) {
-            StringBuilder sb = new StringBuilder("待核字段：");
+            StringBuilder sb = new StringBuilder(S("fx_missing_fields"));
             for (int i = 0; i < f.missing.size(); i++) {
                 if (i > 0) sb.append("、");
                 sb.append(fxMissingLabel(f.missing.get(i)));
@@ -5416,7 +5518,7 @@ public class MainActivity extends Activity {
 
         // 官方链接
         if (f.url != null && !f.url.isEmpty()) {
-            TextView link = tv(this, "打开官方产品页 ↗", 13.5f, accentColor(), true);
+            TextView link = tv(this, S("fx_official_link"), 13.5f, accentColor(), true);
             link.setBackground(rippleBg(colSurface(), 16));
             link.setPadding(dp(this, 14), dp(this, 13), dp(this, 14), dp(this, 13));
             LinearLayout.LayoutParams llp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
@@ -5429,7 +5531,7 @@ public class MainActivity extends Activity {
             });
         }
 
-        TextView foot = tv(this, "外卡专区为独立数据集，与主卡库分开维护；评分模型未定，暂不出分。", 11, colText3(), false);
+        TextView foot = tv(this, S("fx_foot"), 11, colText3(), false);
         LinearLayout.LayoutParams flp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         flp.topMargin = dp(this, 14);
         body.addView(foot, flp);
