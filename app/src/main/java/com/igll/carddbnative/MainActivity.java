@@ -1484,7 +1484,7 @@ public class MainActivity extends Activity {
         EN_TXT.put("你好", "Hello"); EN_TXT.put("卡盒已经准备好了，慢慢挑你的卡。", "CardBox is ready. Take your time picking your cards.");
         EN_TXT.put("开始使用", "Get Started"); EN_TXT.put("轻触任意处进入", "Tap anywhere to enter");
         EN_TXT.put("堆叠试玩", "Try Stacked"); EN_TXT.put("平放试玩", "Try Flat");
-        EN_TXT.put("↑ 回到顶部", "↑ Back to Top"); EN_TXT.put("打不开这个链接", "Couldn't open that link");
+        EN_TXT.put("↑ 回到顶部", "↑ Back to Top"); EN_TXT.put("打不开这个链接", "Couldn't open that link"); EN_TXT.put("回到顶部", "Back to Top");
         EN_TXT.put("发短信", "Send SMS"); EN_TXT.put("已顺延到 ", "Rolled forward to ");
         EN_TXT.put("数据更新", "Data Update");
         EN_TXT.put("填上金额后这里会折算每月约花多少 · 只存本机、不做记账流水", "Add amounts and this will estimate your monthly spend. On-device only — not a ledger.");
@@ -6039,6 +6039,10 @@ public class MainActivity extends Activity {
     View helloView = null;
     boolean helloFlat = false;
     ScrollView changelogScroll = null;
+    View changelogPill160 = null;         // Q160：日志悬浮胶囊本体（回顶/收起）
+    View changelogPillTopSeg160 = null;   // Q160：胶囊回顶段（在顶部置灰禁点）
+    boolean changelogPillShown160 = false;
+    final Runnable changelogPillShowTask160 = () -> changelogPillVis160(true);
     // Q88：关于改整页（原 P-about 贴底弹窗退役，玻璃残影随弹窗一并消）
     boolean aboutPageOpen = false;
     ScrollView aboutScroll = null;
@@ -24397,54 +24401,90 @@ public class MainActivity extends Activity {
         setVisibleTab152(tab, "changelog-close"); // Q152：可见页唯一入口
     }
 
-    // Q50：更新日志底部动作行——对照混合版 styles.css .cl-actions（display:flex;gap:10px;justify-content:center）
-    // 与 .cl-top（padding:9px 20px;border-radius:999px;background:#eef4fb;color:#0a5cd6;font-weight:700;font-size:.85rem）
-    // 两钮居中并排药丸、紧贴日志框下沿成一组，不再整宽灰钮平摊；两处（独立页/设置页内嵌）共用此助手保证口径一致。
-    // Q130（件二）：底带并入全站胶囊语言——colSurface 底带＋顶部发丝线承托，药丸改 accentSoftBg 底＋accentColor 字，
-    // 不再是飘在渐变页底上的一对浅蓝钮。功能与文案一字未动。
-    View changelogActions(final Runnable onTop, final Runnable onFold) {
-        // Q158（件六，用户 18:04 图证）：底栏改全 App 玻璃栏——旧 dockBarBg 染色
-        // 带在白页底上读作一条白底硬带、两钮平色塑料。改与悬浮钮同构：dockBarBg
-        // 染色垫底（只圆上两角、半径 dockR129）＋live 玻璃层（glassLayer 同悬浮钮
-        // 实现，身后日志内容真糊）＋玻璃钮（glassFabBg 玻璃面＋细线字色），与其
-        // 他页底栏/悬浮件同一套语言；独立页与设置内嵌两处共用、同步升级。
-        FrameLayout wrap = new FrameLayout(this);
-        GradientDrawable band151 = dockBarBg();
-        float bandR151 = dp(this, dockR129());
-        band151.setCornerRadii(new float[]{bandR151, bandR151, bandR151, bandR151, 0, 0, 0, 0});
-        wrap.setBackground(band151);
-        wrap.addView(glassLayer(wrap, dockR129(), true), new FrameLayout.LayoutParams(
+    // Q160（2.75，用户 01:47/01:49 图证）：日志底部整幅玻璃带＋两颗大白钮收编为一颗底部
+    // 悬浮小玻璃胶囊（回顶/收起两段，与 buildTopFab 同构：glassFabBg＋live 玻璃层＋提亮层
+    // ＋roundClip 一杆）；滑动中整颗淡出下沉、停滑 650ms 淡回，不挡视野（用户硬要求），
+    // 已在顶部只置灰回顶段、收起段常亮。旧 changelogActions 与带高回填机制整删。
+    View buildChangelogPill160(final Runnable onTop, final Runnable onFold) {
+        FrameLayout pill = new FrameLayout(this);
+        pill.setBackground(glassFabBg());
+        pill.addView(glassLayer(pill, fabClipR146(), true), new FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
-        LinearLayout actions = new LinearLayout(this);
-        actions.setOrientation(LinearLayout.HORIZONTAL);
-        actions.setGravity(Gravity.CENTER);
-        actions.setPadding(dp(this, 12), dp(this, 8), dp(this, 12), dp(this, 10));
-        wrap.addView(actions, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
-        TextView top = tvW(this, "↑ 回到顶部", 13.5f, colText(), 700);
-        top.setGravity(Gravity.CENTER);
-        top.setBackground(glassFabBg()); // Q158：玻璃钮面（悬浮钮同款玻璃染色，圆角经 fabClipR146 一杆）
-        top.setPadding(dp(this, 20), dp(this, 9), dp(this, 20), dp(this, 9));
-        top.setOnTouchListener((v, ev) -> {
-            if (ev.getAction() == android.view.MotionEvent.ACTION_DOWN) pressBounce(v, true);
-            else if (ev.getAction() == android.view.MotionEvent.ACTION_UP || ev.getAction() == android.view.MotionEvent.ACTION_CANCEL) pressBounce(v, false);
+        pill.addView(fabFrostWash(), new FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        applyGlassFabShadow(pill);
+        LinearLayout segs = new LinearLayout(this);
+        segs.setOrientation(LinearLayout.HORIZONTAL);
+        segs.setGravity(Gravity.CENTER);
+        pill.addView(segs, new FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        changelogPillTopSeg160 = changelogPillSeg160("回到顶部", true, onTop);
+        changelogPillTopSeg160.setAlpha(0.38f);
+        changelogPillTopSeg160.setEnabled(false); // 开页必在顶部：回顶段先置灰，onChangelogScroll160 随位更新
+        segs.addView(changelogPillTopSeg160, new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        View div160 = new View(this);
+        div160.setBackgroundColor(darkEff() ? Color.argb(51, 255, 255, 255) : Color.argb(34, 0, 0, 0));
+        segs.addView(div160, new LinearLayout.LayoutParams(dp(this, 1), dp(this, 16)));
+        segs.addView(changelogPillSeg160("收起日志", false, onFold), new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        roundClip(pill, fabClipR146(), this);
+        pill.setAlpha(0f); pill.setTranslationY(dp(this, 6)); pill.setScaleX(0.96f); pill.setScaleY(0.96f);
+        pill.post(() -> changelogPillVis160(true)); // 开场淡入（与悬浮钮同曲线）
+        return pill;
+    }
+
+    LinearLayout changelogPillSeg160(String label, boolean arrow, final Runnable act) {
+        LinearLayout seg = new LinearLayout(this);
+        seg.setOrientation(LinearLayout.HORIZONTAL);
+        seg.setGravity(Gravity.CENTER);
+        seg.setMinimumWidth(dp(this, 88));
+        seg.setPadding(dp(this, 12), 0, dp(this, 12), 0);
+        seg.setContentDescription(label);
+        if (arrow) {
+            TopIconView ic160 = new TopIconView(this);
+            LinearLayout.LayoutParams ilp160 = new LinearLayout.LayoutParams(dp(this, 14), dp(this, 14));
+            ilp160.rightMargin = dp(this, 6);
+            seg.addView(ic160, ilp160);
+        }
+        seg.addView(tvW(this, label, 13f, colText(), 700));
+        seg.setOnTouchListener((v, ev) -> {
+            if (ev.getAction() == MotionEvent.ACTION_DOWN) pressBounce(v, true);
+            else if (ev.getAction() == MotionEvent.ACTION_UP || ev.getAction() == MotionEvent.ACTION_CANCEL) pressBounce(v, false);
             return false;
         });
-        top.setOnClickListener(v -> { haptic(); if (onTop != null) onTop.run(); });
-        actions.addView(top, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT));
-        TextView fold = tvW(this, "收起日志", 13.5f, colText(), 700);
-        fold.setGravity(Gravity.CENTER);
-        fold.setBackground(glassFabBg()); // Q158：同上玻璃钮
-        fold.setPadding(dp(this, 20), dp(this, 9), dp(this, 20), dp(this, 9));
-        fold.setOnTouchListener((v, ev) -> {
-            if (ev.getAction() == android.view.MotionEvent.ACTION_DOWN) pressBounce(v, true);
-            else if (ev.getAction() == android.view.MotionEvent.ACTION_UP || ev.getAction() == android.view.MotionEvent.ACTION_CANCEL) pressBounce(v, false);
-            return false;
-        });
-        fold.setOnClickListener(v -> { haptic(); if (onFold != null) onFold.run(); });
-        LinearLayout.LayoutParams flp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        flp.leftMargin = dp(this, 10);
-        actions.addView(fold, flp);
-        return wrap;
+        seg.setOnClickListener(v -> { haptic(); if (act != null) act.run(); });
+        return seg;
+    }
+
+    // Q160：胶囊显隐——滚动即隐（淡出＋下沉 6dp＋缩 0.96），停稳 650ms 淡回；已在顶部
+    // 回顶段置灰禁点、收起段常亮。与全局回顶钮同停稳口径，但驻留语义不同，故独立一份。
+    void changelogPillVis160(boolean show) {
+        final View pill = changelogPill160;
+        if (pill == null || !pill.isAttachedToWindow() || changelogPillShown160 == show) return;
+        changelogPillShown160 = show;
+        pill.animate().cancel();
+        if (show) {
+            pill.setVisibility(View.VISIBLE);
+            pill.animate().alpha(1f).translationY(0f).scaleX(1f).scaleY(1f)
+                .setDuration(ANIM_DUR_FADE).setInterpolator(ANIM_ENTER).start();
+        } else {
+            pill.animate().alpha(0f).translationY(dp(this, 6)).scaleX(0.96f).scaleY(0.96f)
+                .setDuration(ANIM_DUR_FADE).setInterpolator(ANIM_EXIT)
+                .withEndAction(() -> { if (!changelogPillShown160 && pill == changelogPill160) pill.setVisibility(View.GONE); }).start();
+        }
+    }
+
+    void onChangelogScroll160(int y) {
+        if (changelogPillTopSeg160 != null) {
+            boolean atTop = y <= dp(this, 2);
+            float want160 = atTop ? 0.38f : 1f;
+            if (changelogPillTopSeg160.getAlpha() != want160) changelogPillTopSeg160.setAlpha(want160);
+            if (changelogPillTopSeg160.isEnabled() == atTop) changelogPillTopSeg160.setEnabled(!atTop);
+        }
+        changelogPillVis160(false);
+        mainHandler.removeCallbacks(changelogPillShowTask160);
+        mainHandler.postDelayed(changelogPillShowTask160, 650);
     }
 
     View buildChangelogPage() {
@@ -24468,9 +24508,9 @@ public class MainActivity extends Activity {
         changelogScroll = new ScrollView(this);
         LinearLayout page = new LinearLayout(this);
         page.setOrientation(LinearLayout.VERTICAL);
-        page.setPadding(dp(this, 16), dp(this, 6), dp(this, 16), dp(this, 16));
+        page.setPadding(dp(this, 16), dp(this, 6), dp(this, 16), dp(this, 88) + navBarH()); // Q160：尾垫让开悬浮胶囊（高 40＋底距 24＋余量），末条日志不被压
         changelogScroll.addView(page);
-        if (Build.VERSION.SDK_INT >= 23) changelogScroll.setOnScrollChangeListener((v, sx, sy, ox, oy) -> updateTopFabVisibility(sy));
+        if (Build.VERSION.SDK_INT >= 23) changelogScroll.setOnScrollChangeListener((v, sx, sy, ox, oy) -> onChangelogScroll160(sy)); // Q160：驱动悬浮胶囊显隐（原 updateTopFabVisibility 在覆盖层页 topFab 已摘、为 no-op）
         // Q49：更新日志长列表可拖拽黑条（按住拖快速拉动全文）
         // Q130（件二）：persistent 改 false 与全 App 统一——右缘不再常显一根原始条，滚动/拖动时
         // 才出既有玻璃胶囊条＋百分比气泡（DragBarView 本体即用户选定方案，只抓拇指不劫手势）。
@@ -24522,24 +24562,15 @@ public class MainActivity extends Activity {
             }
         }
 
-        final View actions = changelogActions( // Q158：底栏改 FrameLayout 玻璃栏（见 changelogActions）
+        changelogPill160 = buildChangelogPill160( // Q160：悬浮小胶囊浮在滚动内容上（z 序在 col 之上）
             () -> { if (changelogScroll != null) changelogScroll.smoothScrollTo(0, 0); },
             () -> closeChangelog());
-        // 独立页 dock 已藏，底部避让手势条一次算清，两钮完整可见不半埋
-        actions.setPadding(actions.getPaddingLeft(), actions.getPaddingTop(), actions.getPaddingRight(), actions.getPaddingBottom() + navBarH());
-        // Q131：带以 BOTTOM 锚死窗口底边（见函数头注释）；带高落位后回填为滚动区
-        // 底边距，滚动视口止于带上沿、拖条止点随之同旧位，几何与 2.42 一致。
-        FrameLayout.LayoutParams alp131 = new FrameLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        alp131.gravity = Gravity.BOTTOM;
-        root.addView(actions, alp131);
-        actions.post(() -> {
-            int bh131 = actions.getHeight();
-            if (bh131 > 0 && logWrap.getLayoutParams() instanceof LinearLayout.LayoutParams) {
-                LinearLayout.LayoutParams llp131 = (LinearLayout.LayoutParams) logWrap.getLayoutParams();
-                if (llp131.bottomMargin != bh131) { llp131.bottomMargin = bh131; logWrap.setLayoutParams(llp131); }
-            }
-        });
+        changelogPillShown160 = false;
+        FrameLayout.LayoutParams plp160 = new FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.WRAP_CONTENT, dp(this, 40));
+        plp160.gravity = Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL;
+        plp160.bottomMargin = dp(this, 24) + navBarH();
+        root.addView(changelogPill160, plp160);
         return root;
     }
 
