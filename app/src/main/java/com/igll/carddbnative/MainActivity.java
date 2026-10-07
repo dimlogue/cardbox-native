@@ -5591,6 +5591,7 @@ public class MainActivity extends Activity {
     EditText scHexInput161 = null;
     View scHexPreview161 = null;
     TextView scHexCode161 = null, scHexErr161 = null;
+    TextView scHexGo161 = null; // Q163：应用钮提为字段，亮灭由 syncHexPreview161 同口刷
     View showcaseShield152 = null; // 2.74：面板在场时的全屏透明盾（防点穿，show/hideShowcaseShield152 管）
     View showcaseBackBtn152 = null, showcasePaletteBtn152 = null, showcaseSegBox152 = null,
          showcaseDensityBtn152 = null;
@@ -20627,6 +20628,9 @@ public class MainActivity extends Activity {
         else if (p161 >= 0) { pv161.setColor(p161); if (scHexErr161 != null) scHexErr161.setText(""); if (apply161) { setShowcaseCustom161(p161); applyShowcaseBg152(); } }
         else { pv161.setColor(showcaseBgColor152()); if (scHexErr161 != null) scHexErr161.setText("颜色格式应为 #RRGGBB"); }
         scHexPreview161.setBackground(pv161);
+        // Q163（2.78，用户 03:24 点名）：应用钮亮灭跟合法性走——空或不合法
+        // 置灰禁用（alpha 与全 App 置灰同语言），输对合法码才亮可点。
+        if (scHexGo161 != null) { boolean ok163 = p161 >= 0; scHexGo161.setEnabled(ok163); scHexGo161.setAlpha(ok163 ? 1f : 0.4f); }
     }
 
     // Q161：面板选中态统一刷新口（回函第 5 条）——两档 chip、预设圈、色板环、
@@ -20642,12 +20646,16 @@ public class MainActivity extends Activity {
         int m161 = showcaseBgMode158();
         boolean cust161 = m161 == SC_BG_SELF158 && showcaseCustomOn161();
         int eff161 = showcaseBgColor152();
-        // Q162（2.77，用户 02:58 点名）：亮灯分两口，不许再存第二份判定——
-        // chip＝意图灯：自适应亮⇔mode=自适应；强制深亮⇔mode=强制深，或手选
-        // 恰命中预设末点（强制深与末点本就是同一个色、同一件事，互亮）；两灯
-        // 恒互斥。色点圈＝纯生效色灯：生效色命中哪颗亮哪颗，不问来路（自适
-        // 应逢系统深色时生效色即 #101014、末点同亮；输码恰落预设色同理）。
-        boolean chipSel161[] = { m161 == SC_BG_AUTO158, m161 == SC_BG_DARK158 || (m161 == SC_BG_SELF158 && !cust161 && showcaseBgIdx() == SHOWCASE_BGS.length - 1) };
+        // Q162（2.77）→Q163（2.78 热修，用户 03:21 真机截图点名）：2.77 把强
+        // 制深 chip 做成「意图灯」（mode=强制深 或手选非自定义命中末点才亮），
+        // 输码/色板恰定 #101014 时末点亮圈、强制深钮不亮，用户不认——他的规
+        // 矩只有一句：生效色就是末项色（#101014）时强制深钮与末点必须同时
+        // 亮，不分来路（点钮/点预设末点/点色板格/输码/自适应恰逢，五路全
+        // 算）。故强制深 chip 改与色点圈同一口纯派生：eff 命中末项即亮，删
+        // mode/手选/非自定义一切附加条件（DeepSeek 小咨询确认可落码）。自适
+        // 应 chip 维持 mode 派生不动——自适应逢深色时两钮同亮（一个报模式、
+        // 一个报生效色，同事实两维度，接受）。
+        boolean chipSel161[] = { m161 == SC_BG_AUTO158, eff161 == SHOWCASE_BGS[SHOWCASE_BGS.length - 1] };
         if (scModeChips161 != null) for (int i161 = 0; i161 < scModeChips161.length; i161++) { TextView ch161 = scModeChips161[i161]; if (ch161 == null) continue; boolean sel161 = i161 < chipSel161.length && chipSel161[i161]; ch161.setBackground(roundRect(sel161 ? (showcaseDarkBg() ? Color.argb(120, 255, 255, 255) : Color.argb(40, 0, 0, 0)) : (showcaseDarkBg() ? Color.argb(40, 255, 255, 255) : Color.argb(230, 255, 255, 255)), 999, this)); }
         if (scPresetDots161 != null) for (int i161 = 0; i161 < scPresetDots161.length; i161++) { View d161 = scPresetDots161[i161]; if (d161 == null) continue; boolean sel161 = SHOWCASE_BGS[i161] == eff161; GradientDrawable dg161 = new GradientDrawable(); dg161.setShape(GradientDrawable.OVAL); dg161.setColor(SHOWCASE_BGS[i161]); dg161.setStroke(dp(this, sel161 ? 2 : 1), showcaseDotStroke122(sel161)); d161.setBackground(dg161); }
         if (scPalView161 != null) scPalView161.invalidate(); // 环在 onDraw 按生效色现算
@@ -20713,9 +20721,9 @@ public class MainActivity extends Activity {
             else showcaseCanvasChip.setBackground(null);
             showcaseCanvasChip.setTextColor(canvas ? Color.WHITE : showcaseOnBg());
         }
-        // Q161（裁决 c）：密度只管平放——堆叠模式下密度钮置灰，点击只轻提示
-        // 走展开/收起，绝不进面板（不许隔空调整；零新键、零新参数）。
-        if (showcaseDensityBtnTv152 != null) showcaseDensityBtnTv152.setAlpha(canvas ? 1f : 0.4f);
+        // Q161（裁决 c）→Q163（2.78，用户 03:25 改判）：堆叠密度正式恢复——
+        // 密度钮两模式恒可点（堆叠调收起露条 40–72dp、平放调卡尺寸），2.76
+        // 的置灰＋toast 拦截整段撤销（用户原话：堆叠紧凑程度也算密度）。
         boolean grp = prefs != null && prefs.getBoolean("showcase_bank_group", false);
         if (showcaseGroupChip != null) {
             showcaseGroupChip.setBackground(roundRect(grp ? accentColor() : showcaseBarBtnBg162(), 999, this));
@@ -20912,8 +20920,8 @@ public class MainActivity extends Activity {
     void buildShowcasePalettePanel152(LinearLayout box152) {
         TextView cap152 = tv(this, "展柜底色", 13, showcaseOnBg(), true);
         box152.addView(cap152);
-        // 2.74：段选只留自适应/强制深色两档；手选预设（mode=2）无档钮，两钮
-        // 皆不高亮、选中圈落在常用色点上（见下预设行）。
+        // 2.74：段选只留自适应/强制深色两档（手选预设 mode=2 无独立档钮）。
+        // Q163：下方初绘仅占位，选中态以函数尾 syncSelectionUi161 纯派生为准。
         LinearLayout modeRow158 = new LinearLayout(this);
         modeRow158.setOrientation(LinearLayout.HORIZONTAL);
         modeRow158.setGravity(Gravity.CENTER_VERTICAL);
@@ -20943,8 +20951,9 @@ public class MainActivity extends Activity {
             if (scModeChips161 == null || scModeChips161.length != 2) scModeChips161 = new TextView[2]; // Q161：句柄交 syncSelectionUi161
             scModeChips161[mi158] = chip158;
         }
-        // 常用色排（6 档预设）：点选即写 showcase_bg＋手选位、即时生效；选中
-        // 圈只在手选态（mode=2）亮，自适应/强制深色下不亮（生效色非手选）。
+        // 常用色排（6 档预设）：点选即写 showcase_bg＋手选位、即时生效。初
+        // 绘圈仅占位——Q162 起选中圈＝纯生效色派生（命中即亮、不问模式），
+        // 由函数尾 syncSelectionUi161 收口（Q163 注）。
         LinearLayout row152 = new LinearLayout(this);
         row152.setOrientation(LinearLayout.HORIZONTAL);
         row152.setGravity(Gravity.CENTER_VERTICAL);
@@ -21022,17 +21031,21 @@ public class MainActivity extends Activity {
         scHexInput161.setHintTextColor(showcaseOnBg2());
         scHexInput161.setBackground(roundRect(showcaseDarkBg() ? Color.argb(50, 255, 255, 255) : Color.argb(160, 255, 255, 255), 10, this));
         scHexInput161.setPadding(dp(this, 10), dp(this, 6), dp(this, 10), dp(this, 6));
+        // Q163（2.78，用户 03:24 点名）：输入框只收颜色代码字符（# 与 0-9A-Fa-f，
+        // 粘贴同走一道过滤、非法字当场滤除），长度封顶 7＝#RRGGBB 口径（含 3
+        // 位简码）；不自动补 #（删得掉、裸码由解析口判定）。
+        scHexInput161.setFilters(new android.text.InputFilter[]{ new android.text.InputFilter.LengthFilter(7), (src163, s163, e163, dst163, ds163, de163) -> { StringBuilder kept163 = null; for (int i163 = s163; i163 < e163; i163++) { char c163 = src163.charAt(i163); boolean okc163 = c163 == '#' || (c163 >= '0' && c163 <= '9') || (c163 >= 'A' && c163 <= 'F') || (c163 >= 'a' && c163 <= 'f'); if (!okc163) { if (kept163 == null) { kept163 = new StringBuilder(); kept163.append(src163, s163, i163); } } else if (kept163 != null) kept163.append(c163); } return kept163 == null ? null : kept163.toString(); } });
         if (showcaseBgMode158() == SC_BG_SELF158 && showcaseCustomOn161()) scHexInput161.setText(String.format("#%06X", 0xFFFFFF & prefs.getInt("showcase_bg_custom", 0))); // 自定义色在场回填（watcher 未挂前直设）
         LinearLayout.LayoutParams inLp161 = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
         inLp161.leftMargin = dp(this, 12);
         hexRow161.addView(scHexInput161, inLp161);
-        TextView hexGo161 = tv(this, "应用", 12.5f, Color.WHITE, true);
-        hexGo161.setGravity(Gravity.CENTER);
-        hexGo161.setPadding(dp(this, 12), dp(this, 7), dp(this, 12), dp(this, 7));
-        hexGo161.setBackground(roundRect(accentColor(), 999, this));
+        scHexGo161 = tv(this, "应用", 12.5f, Color.WHITE, true);
+        scHexGo161.setGravity(Gravity.CENTER);
+        scHexGo161.setPadding(dp(this, 12), dp(this, 7), dp(this, 12), dp(this, 7));
+        scHexGo161.setBackground(roundRect(accentColor(), 999, this));
         LinearLayout.LayoutParams goLp161 = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         goLp161.leftMargin = dp(this, 8);
-        hexRow161.addView(hexGo161, goLp161);
+        hexRow161.addView(scHexGo161, goLp161);
         scHexErr161 = tv(this, "", 11.5f, Color.rgb(0xD6, 0x3A, 0x30), false);
         LinearLayout.LayoutParams errLp161 = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         errLp161.topMargin = dp(this, 6);
@@ -21042,7 +21055,7 @@ public class MainActivity extends Activity {
             public void onTextChanged(CharSequence s, int a, int b, int c) {}
             public void afterTextChanged(Editable e161) { syncHexPreview161(false); }
         });
-        hexGo161.setOnClickListener(v -> { haptic(); syncHexPreview161(true); });
+        scHexGo161.setOnClickListener(v -> { haptic(); syncHexPreview161(true); });
         // Q154（件十③）：原单行＝6 色点＋默认＋弹性空＋恢复默认排布，面板窄时
         // 「恢复默认排布」必被挤出右界裁成半截（用户图证）。改两行：行一色点＋
         // 默认，行二右对齐单放恢复钮——两钮恒全显、不再互挤。
@@ -21059,14 +21072,25 @@ public class MainActivity extends Activity {
         rst152.setBackground(roundRect(showcaseDarkBg() ? Color.argb(70, 255, 255, 255) : Color.argb(220, 255, 255, 255), 999, this));
         rst152.setOnClickListener(v -> { haptic(); resetShowcaseDefault151(); });
         row2_154.addView(rst152); // Q154（件十③）：落第二行（见上）
+        // Q163（2.78 热修）：构建（含点钮/点点后的就地重建）初绘只是占位——先
+        // 刷一次代码预览/应用钮亮灭初态，再走既有选中态刷新口按生效色整批重
+        // 判 chip/色点/色板环/当前色代码（一处派生、五路同源），初绘规则与
+        // 此不一致时以本口为准，不许再各判各的。
+        syncHexPreview161(false);
+        syncSelectionUi161();
     }
 
     void buildShowcaseDensityPanel152(LinearLayout box152) {
+        // Q163（2.78，用户 03:25 改判）：同一面板随模式换靶——堆叠调收起露条
+        // （showcase_stack_strip 40–72dp)、平放调卡尺寸（showcase_density %，
+        // 行为不动）；滑杆复用同类、堆叠在 sink/commit 处做 0.6–1.3↔40–72dp
+        // 线性映射（DeepSeek 补充咨询裁决），标题与数值标签随靶标明。
+        final boolean stack163 = prefs == null || !"canvas".equals(prefs.getString("showcase_mode", "stack"));
         LinearLayout row152 = new LinearLayout(this);
         row152.setOrientation(LinearLayout.HORIZONTAL);
         row152.setGravity(Gravity.CENTER_VERTICAL);
         box152.addView(row152);
-        TextView cap152 = tv(this, "平放密度", 13, showcaseOnBg(), true);
+        TextView cap152 = tv(this, stack163 ? "堆叠密度" : "平放密度", 13, showcaseOnBg(), true);
         row152.addView(cap152);
         row152.addView(new View(this), new LinearLayout.LayoutParams(0, 1, 1f));
         final TextView val152 = tv(this, "", 12.5f, showcaseOnBg2(), false);
@@ -21082,15 +21106,23 @@ public class MainActivity extends Activity {
         srow152.addView(lo152);
         final ShowcaseDensitySlider151 slider152 = new ShowcaseDensitySlider151(this);
         slider152.horizontal152 = true; // Q152：面板内改横置（同一自绘类横竖两用）
-        float dens152 = prefs == null ? 1f : prefs.getFloat("showcase_density", 1f);
-        slider152.setDensity151(Math.max(0.6f, Math.min(1.3f, dens152)));
-        val152.setText(Math.round(slider152.density151 * 100) + "%");
+        if (stack163) {
+            float strip0163 = showcaseStackStripDp163();
+            slider152.setDensity151(0.6f + (strip0163 - 40f) / 32f * 0.7f);
+            val152.setText(Math.round(strip0163) + "dp");
+        } else {
+            float dens152 = prefs == null ? 1f : prefs.getFloat("showcase_density", 1f);
+            slider152.setDensity151(Math.max(0.6f, Math.min(1.3f, dens152)));
+            val152.setText(Math.round(slider152.density151 * 100) + "%");
+        }
         slider152.densitySink151 = nd152 -> {
-            applyShowcaseDensity149(nd152); // Q149 就地改尺寸口径守恒：拖动中只改各卡 LP，不重建不闪
-            val152.setText(Math.round(nd152 * 100) + "%");
+            if (stack163) { float stripDp163 = 40f + (nd152 - 0.6f) / 0.7f * 32f; applyShowcaseStackStrip163(stripDp163); val152.setText(Math.round(stripDp163) + "dp"); }
+            else { applyShowcaseDensity149(nd152); val152.setText(Math.round(nd152 * 100) + "%"); } // Q149 就地改尺寸口径守恒：拖动中只改各卡 LP，不重建不闪
         };
         slider152.densityCommit151 = fd152 -> {
-            if (prefs != null) prefs.edit().putFloat("showcase_density", fd152).apply();
+            if (prefs == null) return;
+            if (stack163) prefs.edit().putFloat("showcase_stack_strip", 40f + (fd152 - 0.6f) / 0.7f * 32f).apply();
+            else prefs.edit().putFloat("showcase_density", fd152).apply();
         };
         LinearLayout.LayoutParams slLp152 = new LinearLayout.LayoutParams(0, dp(this, 30), 1f);
         slLp152.leftMargin = dp(this, 10); slLp152.rightMargin = dp(this, 10);
@@ -21230,7 +21262,7 @@ public class MainActivity extends Activity {
         showcaseDensityBtnTv152.setGravity(Gravity.CENTER);
         showcaseDensityBtnTv152.setPadding(dp(this, 11), dp(this, 7), dp(this, 11), dp(this, 7));
         showcaseDensityBtnTv152.setBackground(roundRect(showcaseBarBtnBg162(), 999, this));
-        showcaseDensityBtnTv152.setOnClickListener(v -> { haptic(); if (prefs == null || !"canvas".equals(prefs.getString("showcase_mode", "stack"))) { showFloatToast("堆叠疏密请用展开/收起"); return; } toggleShowcasePanel152("density"); }); // Q161：堆叠拦截（裁决 c）
+        showcaseDensityBtnTv152.setOnClickListener(v -> { haptic(); toggleShowcasePanel152("density"); }); // Q163（2.78）：两模式同开密度面板——堆叠调露条紧凑、平放调卡尺寸（03:25 改判，拦截已撤）
         head.addView(showcaseDensityBtnTv152);
         showcaseDensityBtn152 = showcaseDensityBtnTv152;
         // 分组钮（点开分组面板二选；选中态兼示当前开关）
@@ -22744,7 +22776,7 @@ public class MainActivity extends Activity {
         int screenW = getResources().getDisplayMetrics().widthPixels;
         int faceW = screenW - dp(this, 32); // Q152：竖栏退役，堆叠卡恢复整幅宽（原 Q151 让栏宽收回）
         int faceH = Math.round(faceW / 1.586f);
-        int strip = expanded ? Math.round(faceH * 0.88f) : dp(this, 52);
+        int strip = expanded ? Math.round(faceH * 0.88f) : dp(this, showcaseStackStripDp163()); // Q163（2.78）：收起露条走堆叠密度键（40–72dp、默认 52＝旧值）；展开态 0.88 仍由 showcase_stack_open 独占、不吃此键
         for (java.util.Map.Entry<String, java.util.List<ShowcaseItem>> e : groups.entrySet()) {
             if (grp) {
                 TextView gl = tv(this, e.getKey() + " · " + e.getValue().size() + " 张", 13, showcaseOnBg2(), true);
@@ -22774,6 +22806,35 @@ public class MainActivity extends Activity {
                 });
             }
         }
+    }
+
+    // Q163（2.78，用户 03:25 改判）：堆叠露条高（dp）——收起态整摞的紧凑程
+    // 度，范围 40–72、默认 52（＝改判前现状、视觉零跳变）；展开态不吃此键。
+    float showcaseStackStripDp163() { float v163 = prefs == null ? 52f : prefs.getFloat("showcase_stack_strip", 52f); return Math.max(40f, Math.min(72f, v163)); }
+
+    // Q163：堆叠密度拖动就地生效——遍历每摞改摞高与每卡 topMargin，不重建、
+    // 保滚动位（调什么当场看得见，与平放 applyShowcaseDensity149 同语言）；
+    // 摞变矮后滚动位由 post 一帧钳回防越界（DeepSeek 补充咨询坑点）。
+    void applyShowcaseStackStrip163(float stripDp163) {
+        if (showcaseBody == null || showcaseBody.getChildCount() == 0 || !(showcaseBody.getChildAt(0) instanceof ScrollView)) return;
+        final ScrollView sv163 = (ScrollView) showcaseBody.getChildAt(0);
+        if (sv163.getChildCount() == 0 || !(sv163.getChildAt(0) instanceof LinearLayout)) return;
+        final LinearLayout col163 = (LinearLayout) sv163.getChildAt(0);
+        int stripPx163 = dp(this, stripDp163);
+        for (int g163 = 0; g163 < col163.getChildCount(); g163++) {
+            View grp163 = col163.getChildAt(g163);
+            if (!(grp163 instanceof FrameLayout)) continue; // 只认摞容器（开关行/组题为他型）
+            FrameLayout stack163 = (FrameLayout) grp163;
+            if (stack163.getChildCount() == 0) continue;
+            int faceH163 = stack163.getChildAt(0).getLayoutParams().height;
+            for (int i163 = 0; i163 < stack163.getChildCount(); i163++) {
+                View face163 = stack163.getChildAt(i163);
+                if (face163.getLayoutParams() instanceof FrameLayout.LayoutParams) { FrameLayout.LayoutParams flp163 = (FrameLayout.LayoutParams) face163.getLayoutParams(); if (flp163.topMargin != i163 * stripPx163) { flp163.topMargin = i163 * stripPx163; face163.setLayoutParams(flp163); } }
+            }
+            if (stack163.getLayoutParams() instanceof LinearLayout.LayoutParams) { LinearLayout.LayoutParams slp163 = (LinearLayout.LayoutParams) stack163.getLayoutParams(); int nh163 = faceH163 + (stack163.getChildCount() - 1) * stripPx163; if (slp163.height != nh163) { slp163.height = nh163; stack163.setLayoutParams(slp163); } }
+        }
+        col163.requestLayout();
+        sv163.post(() -> { int max163 = Math.max(0, col163.getHeight() - sv163.getHeight()); if (sv163.getScrollY() > max163) sv163.scrollTo(0, max163); });
     }
 
     // Q143（2.54，丁组）展柜平放满屏命中层：world 是被平移/缩放的变换层，系统命中测试
@@ -24736,7 +24797,7 @@ public class MainActivity extends Activity {
         segs.setOrientation(LinearLayout.HORIZONTAL);
         segs.setGravity(Gravity.CENTER);
         pill.addView(segs, new FrameLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+            ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.MATCH_PARENT)); // Q163（2.78，用户 03:28 点名）：段行改随内容 hug——原 MATCH_PARENT 宽下玻璃层（live 位图期望宽）会把胶囊票成整屏宽
         changelogPillTopSeg160 = changelogPillSeg160("回到顶部", true, onTop);
         changelogPillTopSeg160.setAlpha(0.38f);
         changelogPillTopSeg160.setEnabled(false); // 开页必在顶部：回顶段先置灰，onChangelogScroll160 随位更新
@@ -24885,8 +24946,12 @@ public class MainActivity extends Activity {
             () -> { if (changelogScroll != null) changelogScroll.smoothScrollTo(0, 0); },
             () -> closeChangelog());
         changelogPillShown160 = false;
+        // Q163（2.78）：容器宽按段行实测内容钉死（位图未落前测、落下亦不许再
+        // 撑宽）——胶囊 hug 两钮居中悬浮，左右留白明显；淡出升降逻辑不动。
+        changelogPill160.measure(View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED),
+            View.MeasureSpec.makeMeasureSpec(dp(this, 40), View.MeasureSpec.EXACTLY));
         FrameLayout.LayoutParams plp160 = new FrameLayout.LayoutParams(
-            ViewGroup.LayoutParams.WRAP_CONTENT, dp(this, 40));
+            changelogPill160.getMeasuredWidth(), dp(this, 40));
         plp160.gravity = Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL;
         plp160.bottomMargin = dp(this, 24) + navBarH();
         root.addView(changelogPill160, plp160);
