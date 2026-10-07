@@ -5511,6 +5511,7 @@ public class MainActivity extends Activity {
     // 换底色时统一重套（restyleShowcaseHead152/updateShowcaseChips 一把收口）。
     FrameLayout showcasePanel152 = null;
     String showcasePanelKind152 = null; // palette/density/group，null=未开
+    View showcaseShield152 = null; // 2.74：面板在场时的全屏透明盾（防点穿，show/hideShowcaseShield152 管）
     View showcaseBackBtn152 = null, showcasePaletteBtn152 = null, showcaseSegBox152 = null,
          showcaseDensityBtn152 = null;
     BackChevronView showcaseBackIcon152 = null;
@@ -20429,40 +20430,32 @@ public class MainActivity extends Activity {
         double lum152 = (0.299 * Color.red(c152) + 0.587 * Color.green(c152) + 0.114 * Color.blue(c152)) / 255.0;
         return lum152 < 0.5;
     }
-    // ==== Q158（件八：展柜背景三档模式，用户 18:12 出门前实报）====
-    // 旧病根：showcaseBgColor152 里自定义色无条件压过预设档，深色模式下仍是
-    // 手选浅底（图证）。新优先级：模式 showcase_bg_mode（缺省 auto）——
-    // auto＝跟随深色模式（深→末档深色、浅→0 档）；dark＝恒末档；self＝手选值
-    // （自定义色优先、否则 showcase_bg 预设）。深/浅档色只取 SHOWCASE_BGS 现成档。
+    // ==== Q158（件八）模式层 · 2.74 删自选色后形态 ====
+    // showcase_bg_mode：0=自适应（跟随深色模式：深→末档、浅→0 档）、1=强制
+    // 深色（恒末档）、2=手选预设档（showcase_bg 下标，无独立档钮，点常用色即
+    // 落此位即时生效）。点阵调色格与自选任意色已删：showcase_bg_custom /
+    // showcase_bg_custom_on 永不再读；老偏好用过调色格（custom_on=true）的
+    // mode=2 在 showcaseBgMode158() 读时钳回自适应，且任一 setShowcaseBg-
+    // Mode158 写盘时顺手清掉两枚残 key，此后自然失效。
     static final int SC_BG_AUTO158 = 0, SC_BG_DARK158 = 1, SC_BG_SELF158 = 2;
     int showcaseBgMode158() {
-        return prefs != null ? prefs.getInt("showcase_bg_mode", SC_BG_AUTO158) : SC_BG_AUTO158;
+        if (prefs == null) return SC_BG_AUTO158;
+        int m158 = prefs.getInt("showcase_bg_mode", SC_BG_AUTO158);
+        if (m158 < 0 || m158 > 2) return SC_BG_AUTO158;
+        if (m158 == SC_BG_SELF158 && prefs.getBoolean("showcase_bg_custom_on", false)) return SC_BG_AUTO158; // 老调色格残值落回自适应
+        return m158;
     }
     void setShowcaseBgMode158(int m158) {
-        if (prefs != null) prefs.edit().putInt("showcase_bg_mode", m158).apply();
+        if (prefs != null) prefs.edit().putInt("showcase_bg_mode", m158)
+            .remove("showcase_bg_custom").remove("showcase_bg_custom_on").apply(); // 2.74：写模式顺手清自选色残 key
     }
-    boolean showcaseEffDark158() { // 强制深色时墨色/面走深支（与底色同源）
-        return showcaseBgMode158() == SC_BG_DARK158 || darkEff();
-    }
-    int showcaseManualColor158() { // 手选值（自定义优先、否则预设档），撤销回滚靶
-        if (prefs != null && prefs.getBoolean("showcase_bg_custom_on", false))
-            return prefs.getInt("showcase_bg_custom", SHOWCASE_BGS[0]);
-        return SHOWCASE_BGS[showcaseBgIdx()];
-    }
-    boolean showcaseManualDiffers158() { // 当前生效色与手选值不同（被自适应顶掉过）
-        return showcaseBgColor152() != showcaseManualColor158();
-    }
-    // 撤销暂存（本次进程内）：自适应顶掉手选色时记旧值，面板「撤销」回滚
-    transient boolean scUndoPending158 = false;
-    transient int scUndoColor158 = 0;
-    transient boolean scUndoCustomOn158 = false;
 
-    // Q152（展柜③）：当前展柜底色——Q158 起先过模式层（见上），self 才走手选值。
+    // Q152（展柜③）：当前展柜底色——先过模式层（见上），手选才走预设档。
     int showcaseBgColor152() {
         int m158 = showcaseBgMode158();
         if (m158 == SC_BG_DARK158) return SHOWCASE_BGS[SHOWCASE_BGS.length - 1];
         if (m158 == SC_BG_AUTO158) return darkEff() ? SHOWCASE_BGS[SHOWCASE_BGS.length - 1] : SHOWCASE_BGS[0];
-        return showcaseManualColor158();
+        return SHOWCASE_BGS[showcaseBgIdx()];
     }
     int showcaseOnBg() { return showcaseDarkBg() ? Color.WHITE : Color.rgb(0x1C, 0x1C, 0x1E); }
     int showcaseOnBg2() { return showcaseDarkBg() ? Color.argb(170, 255, 255, 255) : Color.rgb(0x8E, 0x8E, 0x93); }
@@ -20557,65 +20550,8 @@ public class MainActivity extends Activity {
         }
     }
 
-    // Q152（展柜③·渐变点阵色板）：照相机选色板语言自绘——横轴色相、纵轴上浅
-    // 下深的点阵，点/拖即选色（colorSink152 回主类落盘并换底）；选中点描白环。
-    // 纯 Canvas 绘制，不引图片、不拿原生控件凑数。
-    class ShowcasePaletteView152 extends View {
-        java.util.function.Consumer<Integer> colorSink152;
-        float selFx152 = -1f, selFy152 = -1f;
-        ShowcasePaletteView152(Context c) { super(c); setClickable(true); }
-        int colorAt152(float fx, float fy) {
-            float hue = Math.max(0f, Math.min(1f, fx)) * 360f;
-            float sat = 0.15f + 0.85f * Math.max(0f, Math.min(1f, fy));
-            float val = 1.0f - 0.45f * Math.max(0f, Math.min(1f, fy));
-            return Color.HSVToColor(new float[]{ hue, sat, val });
-        }
-        @Override protected void onDraw(Canvas cv) {
-            int w = getWidth(), h = getHeight();
-            if (w <= 0 || h <= 0) return;
-            int cols152 = 28, rows152 = 11;
-            float cellW = w / (float) cols152, cellH = h / (float) rows152;
-            float dotR = Math.min(cellW, cellH) * 0.36f;
-            Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);
-            p.setStyle(Paint.Style.FILL);
-            for (int y = 0; y < rows152; y++) {
-                for (int x = 0; x < cols152; x++) {
-                    p.setColor(colorAt152((x + 0.5f) / cols152, (y + 0.5f) / rows152));
-                    cv.drawCircle((x + 0.5f) * cellW, (y + 0.5f) * cellH, dotR, p);
-                }
-            }
-            if (selFx152 >= 0f) {
-                p.setStyle(Paint.Style.STROKE);
-                p.setStrokeWidth(dp(MainActivity.this, 2));
-                p.setColor(Color.WHITE);
-                cv.drawCircle(selFx152 * w, selFy152 * h, dotR + dp(MainActivity.this, 2.5f), p);
-                p.setStrokeWidth(dp(MainActivity.this, 1));
-                p.setColor(Color.argb(160, 0, 0, 0));
-                cv.drawCircle(selFx152 * w, selFy152 * h, dotR + dp(MainActivity.this, 4f), p);
-            }
-        }
-        @Override public boolean onTouchEvent(MotionEvent ev) {
-            int w = getWidth(), h = getHeight();
-            if (w <= 0 || h <= 0) return true;
-            switch (ev.getActionMasked()) {
-                case MotionEvent.ACTION_DOWN:
-                case MotionEvent.ACTION_MOVE: {
-                    selFx152 = Math.max(0f, Math.min(1f, ev.getX() / (float) w));
-                    selFy152 = Math.max(0f, Math.min(1f, ev.getY() / (float) h));
-                    invalidate();
-                    if (colorSink152 != null) colorSink152.accept(colorAt152(selFx152, selFy152));
-                    return true;
-                }
-                case MotionEvent.ACTION_UP:
-                case MotionEvent.ACTION_CANCEL:
-                    return true;
-            }
-            return true;
-        }
-    }
-
     // Q152（展柜③）：换底统一出口——设 overlay 底色＋头部整套重套对比＋面板
-    // （色板开着时）重建保态；所有选色路径（点阵/预设/默认）只许走这一处。
+    // （色板开着时）重建保态；所有选色路径（预设/默认）只许走这一处。
     void applyShowcaseBg152() {
         if (showcaseView != null) showcaseView.setBackgroundColor(showcaseBgColor152());
         restyleShowcaseHead152();
@@ -20677,6 +20613,7 @@ public class MainActivity extends Activity {
         if ("palette".equals(kind)) buildShowcasePalettePanel152(box152);
         else if ("density".equals(kind)) buildShowcaseDensityPanel152(box152);
         else buildShowcaseGroupPanel152(box152);
+        showShowcaseShield152(); // 2.74：先上盾再亮面板，淡入期间也不漏事件
         showcasePanel152.setVisibility(View.VISIBLE);
         showcasePanel152.setAlpha(0f);
         showcasePanel152.animate().alpha(1f).setDuration(ANIM_DUR_FADE).setInterpolator(ANIM_ENTER).start();
@@ -20684,21 +20621,45 @@ public class MainActivity extends Activity {
 
     void closeShowcasePanel152() {
         showcasePanelKind152 = null;
+        hideShowcaseShield152(); // 2.74：先撤盾再藏面板（同步移除，不延迟）
         if (showcasePanel152 != null) showcasePanel152.setVisibility(View.GONE);
+    }
+
+    // 2.74（防点穿，用户 01:25 实报）：面板在场时在画布（showcaseBody）之上、
+    // 头部浮条与面板之下插一层全屏透明盾，吃掉一切奔画布去的点按/长按/拖动；
+    // 点盾只关面板。头部钮在盾之上，palette/密度/分组照常互切；堆叠与平放
+    // 共用这一处，画布内不再需要收面板 hook（旧 Q154 先收再分发已删）。
+    void showShowcaseShield152() {
+        if (showcaseBody == null || showcaseShield152 != null) return;
+        if (!(showcaseBody.getParent() instanceof ViewGroup)) return;
+        ViewGroup host152 = (ViewGroup) showcaseBody.getParent();
+        View sh152 = new View(this);
+        sh152.setClickable(true);
+        sh152.setOnClickListener(v -> closeShowcasePanel152());
+        host152.addView(sh152, host152.indexOfChild(showcaseBody) + 1,
+            new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        showcaseShield152 = sh152;
+    }
+
+    void hideShowcaseShield152() {
+        if (showcaseShield152 == null) return;
+        if (showcaseShield152.getParent() instanceof ViewGroup)
+            ((ViewGroup) showcaseShield152.getParent()).removeView(showcaseShield152);
+        showcaseShield152 = null;
     }
 
     void buildShowcasePalettePanel152(LinearLayout box152) {
         TextView cap152 = tv(this, "展柜底色", 13, showcaseOnBg(), true);
         box152.addView(cap152);
-        // Q158（件八落点：展柜色板面板内，不进设置页——与件四收编同面板）：三档
-        // 段选（自适应＝缺省/强制深色/自选色）＋自适应顶掉手选色时的撤销行。
+        // 2.74：段选只留自适应/强制深色两档；手选预设（mode=2）无档钮，两钮
+        // 皆不高亮、选中圈落在常用色点上（见下预设行）。
         LinearLayout modeRow158 = new LinearLayout(this);
         modeRow158.setOrientation(LinearLayout.HORIZONTAL);
         modeRow158.setGravity(Gravity.CENTER_VERTICAL);
         LinearLayout.LayoutParams modeLp158 = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         modeLp158.topMargin = dp(this, 10);
         box152.addView(modeRow158, modeLp158);
-        final String[] modeLabs158 = {"自适应", "强制深色", "自选色"};
+        final String[] modeLabs158 = {"自适应", "强制深色"};
         for (int mi158 = 0; mi158 < modeLabs158.length; mi158++) {
             final int mm158 = mi158;
             TextView chip158 = tv(this, modeLabs158[mi158], 12, showcaseOnBg(), true);
@@ -20714,60 +20675,26 @@ public class MainActivity extends Activity {
             chip158.setOnClickListener(v -> {
                 haptic();
                 setShowcaseBgMode158(mm158);
-                if (mm158 == SC_BG_SELF158) scUndoPending158 = false; // 主动切自选＝接受手选值，撤销作废
                 applyShowcaseBg152();
-                rebuildShowcasePanel152(); // 段选态与撤销行就地刷新
+                rebuildShowcasePanel152(); // 段选态就地刷新
             });
             modeRow158.addView(chip158);
         }
-        if (scUndoPending158) { // 自适应切深提示的回滚口（回切换前手选底）
-            TextView undo158 = tv(this, "撤销（恢复切换前底色）", 12, showcaseOnBg(), true);
-            undo158.setGravity(Gravity.CENTER);
-            undo158.setPadding(dp(this, 10), dp(this, 6), dp(this, 10), dp(this, 6));
-            undo158.setBackground(roundRect(showcaseDarkBg() ? Color.argb(70, 255, 255, 255) : Color.argb(220, 255, 255, 255), 999, this));
-            LinearLayout.LayoutParams uLp158 = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-            uLp158.topMargin = dp(this, 8);
-            undo158.setLayoutParams(uLp158);
-            undo158.setOnClickListener(v -> {
-                haptic();
-                if (prefs != null) prefs.edit()
-                    .putInt("showcase_bg_custom", scUndoColor158)
-                    .putBoolean("showcase_bg_custom_on", scUndoCustomOn158)
-                    .apply();
-                setShowcaseBgMode158(SC_BG_SELF158); // 回手选值，深浅模式进出不再自动改
-                scUndoPending158 = false;
-                applyShowcaseBg152();
-                rebuildShowcasePanel152();
-                showFloatToast("已恢复切换前底色");
-            });
-            box152.addView(undo158);
-        }
-        ShowcasePaletteView152 pal152 = new ShowcasePaletteView152(this);
-        LinearLayout.LayoutParams palLp152 = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(this, 118));
-        palLp152.topMargin = dp(this, 10);
-        pal152.setLayoutParams(palLp152);
-        pal152.colorSink152 = color152 -> {
-            if (prefs != null) prefs.edit().putInt("showcase_bg_custom", color152).putBoolean("showcase_bg_custom_on", true).apply();
-            setShowcaseBgMode158(SC_BG_SELF158); // Q158：手动选色即切自选色并落盘
-            applyShowcaseBg152();
-            rebuildShowcasePanel152();
-        };
-        box152.addView(pal152);
-        // 预设色点行（现有 6 档）＋「默认」（清手动档：未选过回深浅默认口径）
+        // 常用色排（6 档预设）：点选即写 showcase_bg＋手选位、即时生效；选中
+        // 圈只在手选态（mode=2）亮，自适应/强制深色下不亮（生效色非手选）。
         LinearLayout row152 = new LinearLayout(this);
         row152.setOrientation(LinearLayout.HORIZONTAL);
         row152.setGravity(Gravity.CENTER_VERTICAL);
         LinearLayout.LayoutParams rowLp152 = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         rowLp152.topMargin = dp(this, 12);
         box152.addView(row152, rowLp152);
-        boolean customOn152 = prefs != null && prefs.getBoolean("showcase_bg_custom_on", false);
         for (int i = 0; i < SHOWCASE_BGS.length; i++) {
             final int bi152 = i;
             View dot152 = new View(this);
             GradientDrawable dg152 = new GradientDrawable();
             dg152.setShape(GradientDrawable.OVAL);
             dg152.setColor(SHOWCASE_BGS[i]);
-            boolean sel152 = !customOn152 && showcaseBgIdx() == i;
+            boolean sel152 = showcaseBgMode158() == SC_BG_SELF158 && showcaseBgIdx() == i;
             dg152.setStroke(dp(this, sel152 ? 2 : 1), showcaseDotStroke122(sel152));
             dot152.setBackground(dg152);
             LinearLayout.LayoutParams dLp152 = new LinearLayout.LayoutParams(dp(this, 24), dp(this, 24));
@@ -20775,9 +20702,8 @@ public class MainActivity extends Activity {
             dot152.setLayoutParams(dLp152);
             dot152.setOnClickListener(v -> {
                 haptic();
-                if (prefs != null) prefs.edit().putInt("showcase_bg", bi152).putBoolean("showcase_bg_custom_on", false).apply();
-                setShowcaseBgMode158(SC_BG_SELF158); // Q158：点预设档即切自选色
-                scUndoPending158 = false;
+                if (prefs != null) prefs.edit().putInt("showcase_bg", bi152).apply();
+                setShowcaseBgMode158(SC_BG_SELF158); // 点常用色即落手选位、即时生效
                 applyShowcaseBg152();
                 rebuildShowcasePanel152();
             });
@@ -20792,9 +20718,8 @@ public class MainActivity extends Activity {
         def152.setLayoutParams(defLp152);
         def152.setOnClickListener(v -> {
             haptic();
-            if (prefs != null) prefs.edit().remove("showcase_bg").putBoolean("showcase_bg_custom_on", false).apply();
-            setShowcaseBgMode158(SC_BG_AUTO158); // Q158：「默认」＝回自适应（跟随深色模式）
-            scUndoPending158 = false;
+            if (prefs != null) prefs.edit().remove("showcase_bg").apply();
+            setShowcaseBgMode158(SC_BG_AUTO158); // 「默认」＝回自适应（跟随深色模式）
             applyShowcaseBg152();
             rebuildShowcasePanel152();
         });
@@ -20896,14 +20821,6 @@ public class MainActivity extends Activity {
         if (showcaseView != null) return;
         captureCurrentPageScroll();
         hideChrome();
-        // Q158（件八）：自适应在深色模式下顶掉手选浅底时，记旧手选值供面板撤销，
-        // 并轻提示一句（仅当真的发生顶替：自适应＋深色模式＋手选值与生效色不同）。
-        boolean scAdapted158 = showcaseBgMode158() == SC_BG_AUTO158 && darkEff() && showcaseManualDiffers158();
-        if (scAdapted158) {
-            scUndoPending158 = true;
-            scUndoColor158 = showcaseManualColor158();
-            scUndoCustomOn158 = prefs != null && prefs.getBoolean("showcase_bg_custom_on", false);
-        }
         showcaseClosing = false;
         try { showcasePosJson = new org.json.JSONObject(prefs == null ? "{}" : prefs.getString("showcase_positions", "{}")); }
         catch (Throwable t) { showcasePosJson = new org.json.JSONObject(); }
@@ -21030,8 +20947,6 @@ public class MainActivity extends Activity {
         buildShowcaseBody(false);
         overlay.setAlpha(0f);
         overlay.animate().alpha(1f).setDuration(ANIM_DUR_FADE).setInterpolator(ANIM_ENTER).start();
-        if (scAdapted158) // Q158（件八）：自适应顶替手选浅底——提示一句，撤销在色板面板
-            mainHandler.postDelayed(() -> { if (showcaseView == overlay) showFloatToast("已为您开启深色模式"); }, 350);
     }
 
     void closeShowcaseNow() {
@@ -21041,6 +20956,7 @@ public class MainActivity extends Activity {
         showcaseStackChip = null; showcaseCanvasChip = null; showcaseGroupChip = null;
         showcaseZoomView = null; showcaseDensityLab = null; showcaseSlider151 = null; showcaseHead151 = null; // Q141：放大层/内容矩形随关清（旧 Q122 contentW/H 退役）
         showcasePanel152 = null; showcasePanelKind152 = null; // Q152：面板宿主随关清
+        showcaseShield152 = null; // 2.74：透明盾随 overlay 整棵丢弃，引用同清
         showcaseBackBtn152 = null; showcasePaletteBtn152 = null; showcaseSegBox152 = null; showcaseDensityBtn152 = null;
         showcaseBackIcon152 = null; showcasePaletteIcon152 = null; showcaseDensityBtnTv152 = null;
         showcaseMinX = 0; showcaseMinY = 0; showcaseMaxX = 0; showcaseMaxY = 0;
@@ -22549,11 +22465,8 @@ public class MainActivity extends Activity {
         View hitChild143;
         ShowcaseHitLayout143(Context c) { super(c); }
         @Override public boolean dispatchTouchEvent(MotionEvent ev) {
-            // Q154（件十②）：画布落点起手即收已开面板——命中层只覆画布，能落到
-            // 这里的 DOWN 必在面板之外（面板 clickable 自接命中、不漏给画布），
-            // 先收面板再分发本事件（点卡放大/拖卡/平移缩放语义一概不变）。
-            if (ev.getActionMasked() == MotionEvent.ACTION_DOWN && showcasePanel152 != null
-                    && showcasePanel152.getVisibility() == View.VISIBLE) closeShowcasePanel152();
+            // 2.74：面板在场时画布已被透明盾罩住，事件到不了本层（旧 Q154
+            // 「落点先收面板再分发」已删，连同其点穿病一并消除）。
             if (hitChild143 != null && hitChild143.getVisibility() == View.VISIBLE) {
                 MotionEvent t143 = MotionEvent.obtain(ev);
                 try {
