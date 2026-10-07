@@ -1423,6 +1423,14 @@ public class MainActivity extends Activity {
         STR.put("icon_switch_title", new String[]{"切换桌面图标","Switch App Icon"});
         STR.put("pan_show", new String[]{"显示","Show"});
         STR.put("tool_bin_sub", new String[]{"BIN 认行","BIN Lookup"});
+        STR.put("cyc_weekly", new String[]{"每周","Weekly"});
+        STR.put("cyc_monthly", new String[]{"每月","Monthly"});
+        STR.put("cyc_quarterly", new String[]{"每季","Quarterly"});
+        STR.put("cyc_yearly", new String[]{"每年","Yearly"});
+        STR.put("cyc_custom", new String[]{"自定义","Custom"});
+        STR.put("hint_sub_amt", new String[]{"如：¥15 / $4.99","e.g. ¥15 / $4.99"});
+        STR.put("hint_jf_from", new String[]{"如：82000","e.g. 82000"});
+        STR.put("hint_jf_to", new String[]{"如：88000","e.g. 88000"});
         STR.put("fx_cell_fallback", new String[]{"香港银行卡","Hong Kong Bank Cards"});
         STR.put("pan_hide", new String[]{"隐藏","Hide"});
         STR.put("pan_label", new String[]{"卡号","Card Number"});
@@ -10633,6 +10641,34 @@ public class MainActivity extends Activity {
     // Q164（2.79 批2）：片行横滑容器一处收口——装得下静态摊开、超宽才
     // 滚动；右缘渐隐示「还有」、首末留白不贴边、横滑禁父层拦截防整页
     // 抖。与展柜顶栏滑条（openShowcase 内）同一口径，不另起第二套。
+    // Q164（DeepSeek 出包审 S3 修正）：横滑守卫——按下先不拦，横向位移
+    // 主导且越过 touch slop 才禁父层拦截；竖滑意图原样放行父层滚动，
+    // 免「在片行上起手竖滑整页不动」。chipScrollRow164 与展柜顶栏共用。
+    View.OnTouchListener hScrollGuard164() {
+        final float[] down164 = new float[2];
+        final boolean[] locked164 = {false};
+        return (v164, e164) -> {
+            switch (e164.getActionMasked()) {
+                case MotionEvent.ACTION_DOWN:
+                    down164[0] = e164.getX(); down164[1] = e164.getY(); locked164[0] = false;
+                    break;
+                case MotionEvent.ACTION_MOVE:
+                    if (!locked164[0]) {
+                        float dx164 = Math.abs(e164.getX() - down164[0]);
+                        float dy164 = Math.abs(e164.getY() - down164[1]);
+                        if (dx164 > dp(this, 8) && dx164 > dy164 * 1.2f) {
+                            locked164[0] = true;
+                            if (v164.getParent() != null) v164.getParent().requestDisallowInterceptTouchEvent(true);
+                        }
+                    }
+                    break;
+                default:
+                    break;
+            }
+            return false;
+        };
+    }
+
     HorizontalScrollView chipScrollRow164(LinearLayout row164) {
         HorizontalScrollView hsv164 = new HorizontalScrollView(this);
         hsv164.setHorizontalScrollBarEnabled(false);
@@ -10643,7 +10679,7 @@ public class MainActivity extends Activity {
         hsv164.setClipToPadding(false);
         row164.setPadding(dp(this, 2), row164.getPaddingTop(), dp(this, 18), row164.getPaddingBottom()); // 只管首末横向留白，纵向内边距归各行自有口径
         hsv164.addView(row164, new ViewGroup.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT));
-        hsv164.setOnTouchListener((v164, e164) -> { if (e164.getActionMasked() == MotionEvent.ACTION_DOWN && v164.getParent() != null) v164.getParent().requestDisallowInterceptTouchEvent(true); return false; });
+        hsv164.setOnTouchListener(hScrollGuard164());
         return hsv164;
     }
 
@@ -14345,10 +14381,10 @@ public class MainActivity extends Activity {
         if (featMatch(c, "noftf")) parts.add("无货币转换费");
         String promo = c.spec("优惠政策");
         java.util.regex.Matcher mAtm = java.util.regex.Pattern.compile("[^，。；]*ATM[^，。；]*免[^，。；]*笔[^，。；]*").matcher(promo);
-        if (mAtm.find() && parts.size() < 3) parts.add(cleanPromo(mAtm.group()));
+        if (mAtm.find() && parts.size() < 3 && !isEn()) parts.add(cleanPromo(mAtm.group())); // Q164（审 S21）：数据原文片段不直出英文界面
         java.util.regex.Matcher mCash = java.util.regex.Pattern.compile("境外消费[^，。；]*返现[^，。；]*").matcher(promo);
         if (mCash.find() && java.util.regex.Pattern.compile("\\d").matcher(mCash.group()).find()
-            && !parts.toString().contains("返现") && parts.size() < 3) parts.add(cleanPromo(mCash.group()));
+            && !parts.toString().contains("返现") && parts.size() < 3 && !isEn()) parts.add(cleanPromo(mCash.group())); // Q164（审 S21）
         if (java.util.regex.Pattern.compile("AI|算力").matcher((c.name == null ? "" : c.name) + promo).find()) parts.add(S("hl_ai")); // Q164
         if (java.util.regex.Pattern.compile("哔哩哔哩|2233").matcher(c.name == null ? "" : c.name).find()) parts.add(S("hl_bili")); // Q164
         boolean hasFree = false; for (String p : parts) if (p.contains("免年费")) hasFree = true;
@@ -21612,7 +21648,7 @@ public class MainActivity extends Activity {
         barScroll163.setHorizontalFadingEdgeEnabled(true);
         barScroll163.setFadingEdgeLength(dp(this, 28));
         barScroll163.setClipToPadding(false);
-        barScroll163.setOnTouchListener((v164, e164) -> { if (e164.getActionMasked() == MotionEvent.ACTION_DOWN && v164.getParent() != null) v164.getParent().requestDisallowInterceptTouchEvent(true); return false; });
+        barScroll163.setOnTouchListener(hScrollGuard164()); // Q164：与片行同一守卫（横向主导才禁父拦截）
         LinearLayout barRow163 = new LinearLayout(this);
         barRow163.setOrientation(LinearLayout.HORIZONTAL);
         barRow163.setGravity(Gravity.CENTER_VERTICAL);
@@ -22355,8 +22391,6 @@ public class MainActivity extends Activity {
 
     // ---------- Q86 订阅与费用跟随（模块键 subfollow_，设置可关、关掉不占位） ----------
     static final String[] SUB_CYCLE_VALS = {"week", "month", "quarter", "year", "custom"};
-    static final String[] SUB_CYCLE_LABELS = {"每周", "每月", "每季", "每年", "自定义"};
-    static final String[] SUB_CYCLE_LABELS_EN = {"Weekly", "Monthly", "Quarterly", "Yearly", "Custom"}; // Q164：周期片显示映射，存值走 SUB_CYCLE_VALS
     static int subCycleDays(SubFollowItem it) {
         if (it == null) return 30;
         if ("week".equals(it.cycle)) return 7;
@@ -22365,10 +22399,10 @@ public class MainActivity extends Activity {
         if ("custom".equals(it.cycle)) return it.cycleDays > 0 ? it.cycleDays : 30;
         return 30;
     }
-    static String subCycleLabel(String v) {
-        if (v == null) return EN_MODE ? "Monthly" : "每月"; // Q164
-        for (int i = 0; i < SUB_CYCLE_VALS.length; i++) if (SUB_CYCLE_VALS[i].equals(v)) return EN_MODE ? SUB_CYCLE_LABELS_EN[i] : SUB_CYCLE_LABELS[i]; // Q164
-        return EN_MODE ? "Monthly" : "每月";
+    String subCycleLabel(String v) { // Q164（审 S13）：去 static 收编 S 表一口
+        String[] keys164 = {"cyc_weekly", "cyc_monthly", "cyc_quarterly", "cyc_yearly", "cyc_custom"};
+        if (v != null) for (int i = 0; i < SUB_CYCLE_VALS.length; i++) if (SUB_CYCLE_VALS[i].equals(v)) return S(keys164[i]);
+        return S("cyc_monthly");
     }
     boolean subfollowEnabled() { return prefs == null || prefs.getBoolean("subfollow_enabled", true); }
     java.util.List<SubFollowItem> loadSubFollows() {
@@ -22585,7 +22619,7 @@ public class MainActivity extends Activity {
         form.addView(customFormLabel("订阅名称*"));
         final EditText inName = customInput(S("hint_sub_name"), draft.name, 30); form.addView(inName); // Q164
         form.addView(customFormLabel("金额（可空）"));
-        final EditText inAmt = customInput("如：¥15 / $4.99", draft.amount, 20); form.addView(inAmt);
+        final EditText inAmt = customInput(S("hint_sub_amt"), draft.amount, 20); form.addView(inAmt); // Q164
         form.addView(customFormLabel("扣款周期"));
         LinearLayout cycRow = new LinearLayout(this); cycRow.setOrientation(LinearLayout.HORIZONTAL); form.addView(cycRow);
         final java.util.List<TextView> cycChips = new ArrayList<>();
@@ -22593,7 +22627,7 @@ public class MainActivity extends Activity {
         paintCyc[0] = () -> { for (int i = 0; i < cycChips.size(); i++) paintChoiceChip(cycChips.get(i), SUB_CYCLE_VALS[i].equals(cycleSel[0])); };
         for (int i = 0; i < SUB_CYCLE_VALS.length; i++) {
             final String cv = SUB_CYCLE_VALS[i];
-            TextView b = formOrgChip(isEn() ? SUB_CYCLE_LABELS_EN[i] : SUB_CYCLE_LABELS[i]); // Q164
+            TextView b = formOrgChip(S(new String[]{"cyc_weekly", "cyc_monthly", "cyc_quarterly", "cyc_yearly", "cyc_custom"}[i])); // Q164
             b.setOnClickListener(v -> { haptic(); cycleSel[0] = cv; paintCyc[0].run(); });
             LinearLayout.LayoutParams blp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT); if (i > 0) blp.leftMargin = dp(this, 6);
             b.setLayoutParams(blp); cycChips.add(b); cycRow.addView(b);
@@ -22989,9 +23023,9 @@ public class MainActivity extends Activity {
         form.addView(customFormLabel("日期（yyyy-MM-dd）"));
         final EditText inDate = customInput("2026-10-04", draft.date, 10); form.addView(inDate);
         form.addView(customFormLabel(S("jf_from"))); // Q164
-        final EditText inFrom = customInput("如：82000", draft.amountFrom, 12); form.addView(inFrom);
+        final EditText inFrom = customInput(S("hint_jf_from"), draft.amountFrom, 12); form.addView(inFrom); // Q164
         form.addView(customFormLabel(S("jf_to"))); // Q164
-        final EditText inTo = customInput("如：88000", draft.amountTo, 12); form.addView(inTo);
+        final EditText inTo = customInput(S("hint_jf_to"), draft.amountTo, 12); form.addView(inTo); // Q164
         form.addView(customFormLabel("备注（可空）"));
         final EditText inNote = customInput(S("hint_jf_note"), draft.note, 40); form.addView(inNote); // Q164
         LinearLayout acts = new LinearLayout(this); acts.setOrientation(LinearLayout.HORIZONTAL);
