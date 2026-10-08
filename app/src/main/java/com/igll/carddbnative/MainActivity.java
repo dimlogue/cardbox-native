@@ -6539,6 +6539,7 @@ public class MainActivity extends Activity {
     FrameLayout rootView = null;
     View floatToastView = null;
     Runnable floatToastTimer = null;
+    Runnable floatToastExitFallback = null; // Q178：退出动画强制摘除兜底（见 dismissFloatToast）
     final android.os.Handler mainHandler = new android.os.Handler(android.os.Looper.getMainLooper());
 
     // Q29 静态毛玻璃（用户 19:26 拍板，推翻 Q16 的实时追色）：全 App 玻璃面统一为静态毛玻璃——
@@ -7489,16 +7490,20 @@ public class MainActivity extends Activity {
         boolean toastBottom130 = prefs != null && "bottom".equals(prefs.getString("toast_pos", "top"));
         if (toastBottom130) {
             lp.gravity = Gravity.BOTTOM;
-            lp.bottomMargin = dp(this, 106) + navBarH();
-        } else if (detailView != null && detailView.getParent() != null) {
-            // Q125（2.37，件八后半）：详情开着时提示改挂窗顶——原底挂 106dp 正压
-            // 规格区末行（已加入/已移除＋撤销实证）；窗顶是遮罩带，不挡正文任何
-            // 一行，也不侵占尾部 16dp 安全区。详情关时落位一字不变。
+            lp.bottomMargin = dp(this, 106) + navBarH(); // Q26：导航栏避让
+        } else {
+            // Q178（2.91，用户 13:34 实拍）：「顶部」档原 else 误抄底挂值——与底档
+            // 同落 BOTTOM 106dp，顶部自 Q130 设档以来从未生效，设置页软件/数据
+            // 更新检查回执正压在其他条目行上（实拍压「退出前再次确认」行、两行
+            // 字叠印）。顶档一律窗顶 statusBarH+8dp：与 Q125（2.37）详情顶挂同值
+            // 同口（原底挂正压详情规格末行才挪顶，窗顶不压正文任何一行），详情
+            // 判据并入顶档不另设分支；底档原值一字未动，详情开关两档落位均与
+            // 旧版逐位一致，唯一变化＝非详情顶档。全 App 提示只此一处锚点，全部
+            // 回执同受益（盘点见 hidden_files 施工报告 settings-toast-fix-2026-
+            // 10-08.md）。落点经 DeepSeek 审（deepseek-float-toast-anchor-2026-
+            // 10-08.md），FlowBee 额度不足待补审。
             lp.gravity = Gravity.TOP;
             lp.topMargin = statusBarH() + dp(this, 8);
-        } else {
-            lp.gravity = Gravity.BOTTOM;
-            lp.bottomMargin = dp(this, 106) + navBarH(); // Q26：导航栏避让
         }
         // Q73/Q94：身后内容糊层垫底 + Soft 柔面盖面，一道圆角 clip 收齐本体与边缘
         // （取景口径不变，仍在本条自身位置对位）。Q94 已摘 wash 叠层与三段渐变染色——
@@ -7530,6 +7535,7 @@ public class MainActivity extends Activity {
 
     void dismissFloatToast(boolean immediate) {
         if (floatToastTimer != null) { mainHandler.removeCallbacks(floatToastTimer); floatToastTimer = null; }
+        if (floatToastExitFallback != null) { mainHandler.removeCallbacks(floatToastExitFallback); floatToastExitFallback = null; } // Q178
         final View bar = floatToastView;
         floatToastView = null;
         if (bar == null) return;
@@ -7538,10 +7544,25 @@ public class MainActivity extends Activity {
             if (bar.getParent() instanceof ViewGroup) ((ViewGroup) bar.getParent()).removeView(bar);
             return;
         }
+        // Q178（2.91）：退出移除原只靠 withEndAction 一条路——动画被打断（设置页
+        // 在提示在位时整页重建、视图重挂等）时半透层可能残留、压住后续条目。
+        // 补强制摘除兜底（与 closeMineDupConfirm168 的 Q98 式兜底同源）：兜底闭
+        // 包只捕获本件 bar、以 parent 在否为唯一判据，正常结束时 withEndAction
+        // 先摘兜底再摘视图；连发换条时旧兜底已在其 dismiss(immediate) 入口清
+        // 掉、且判 parent 天然不误摘新条。动画曲线/时长/玻璃面一字未动。
+        final Runnable exitFallback178 = () -> {
+            if (bar.getParent() instanceof ViewGroup) ((ViewGroup) bar.getParent()).removeView(bar);
+        };
+        floatToastExitFallback = exitFallback178;
+        mainHandler.postDelayed(exitFallback178, ANIM_DUR_TOAST_OUT + 130);
         bar.animate().cancel();
         bar.animate().alpha(0f).translationY(dp(this, 8)).scaleX(0.98f).scaleY(0.98f)
             .setDuration(ANIM_DUR_TOAST_OUT).setInterpolator(ANIM_EXIT)
-            .withEndAction(() -> { if (bar.getParent() instanceof ViewGroup) ((ViewGroup) bar.getParent()).removeView(bar); })
+            .withEndAction(() -> {
+                mainHandler.removeCallbacks(exitFallback178);
+                if (floatToastExitFallback == exitFallback178) floatToastExitFallback = null;
+                if (bar.getParent() instanceof ViewGroup) ((ViewGroup) bar.getParent()).removeView(bar);
+            })
             .start();
     }
 
