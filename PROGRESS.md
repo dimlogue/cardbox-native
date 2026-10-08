@@ -371,3 +371,11 @@ bash build.sh 通过，aapt 复验 versionCode=271/versionName=2.71-native；产
   - 主机侧单测：篡改密文尾字节→AEADBadTagException 如期抛出；明文无头原样透传；同明文两次加密密文不同（IV 随机）全过。
   - 门禁：MainActivity 27607→27600（净减 7，新基线已登记）；check-arch 警告＋STRICT 双模通过（空吞 208，基线随实测 212→208 同步调低；i18n 三数 37/482/1411 不动；出口 87/弹层 43 不动）；DataCipher static 只许 final 合规（新文件不占 MainActivity 行数基线，按分层纪律归 core.data）。
   - 真机验收点：①冷启速度体感与更新前无异（logcat cbx.decrypt 行 ms 级）；②首页/详情/学生/选卡/展柜/我的卡片/外卡/资讯/更新日志图与文案全量可读、与 2.83 逐屏同图；③杀进程冷重开数据正常；④老版本（2.83）覆盖升级到 2.84 后不重下图（存量落盘明文图原样可用）、OTA 检查更新一轮照常；⑤解压 2.84 的 APK，assets/data/** 全为 CBX1 密文不可直读。
+
+- [x] Q171 2.85 墨曜重构 B2 列表三页＋弹窗哑光（2026-10-08 完成，2.85-native vc285，基线 a5265c0=2.84；方案 goals/debit-card-database-rebuild/hidden_files/moyao-refactor-plan-2026-10-08.md §2/§3/§4-B2 定案，DeepSeek 裁量已回写方案、本批未重问，FlowBee 额度不足待补审。只改 MainActivity.java＋版本号＋门禁基线，玻璃骨架、DataCipher、OTA、数据仓一字未动；施工报告 hidden_files/moyao-refactor-b2-2026-10-08.md）：
+  - 列表三页：瓷砖墨曜半径 16dp＋去阴影（面经 softFaceBg 墨曜支，描边白 10%→#23282F 全站一处对齐）；学生列表卡哑光面＋去影，我的卡片汇总卡去影，分组头哑光面／字母托 surface_2／占比条金属青。
+  - 评分 pill 单源 scorePill171：空心透明底、1.2dp #2E353D、Josefin 细字、≥8.5 染青、未评分 text3；落瓷砖两点＋学生卡＋分组头计数 pill，扁平透传原色逐字同产出。
+  - specimen 工厂首消费：学生列表卡组织拉丁名＋CREDIT/DEBIT 标本微字行（orgSpecimen171 数据直出）。
+  - 弹窗哑光：glassWindowTint 墨曜支（surface_2＋#23282F、半径同构）＋boostWindowFace 墨曜守卫；遮罩 17 处收口 shadeColor171（墨曜 #CC000000）；细字游走 moyaoFineType171 共 33 处（30 开窗点＋三窗 body 重建补游走），拉丁细字／中文标题 Medium，EditText 不碰；softFormChipPaint 墨曜同源 segChipBg169（列数分段全页一口）。
+  - 如实偏差：弹窗不采样身后未落（玻璃收官批办）；评分 pill 细线星标未落（B4 候）；瓷砖内边距 16/14 未套（四列密度，真机后 B4 裁）；状态/特点 chips 与窗内主钮蓝未收（B4 长尾）。
+  - 门禁：行数 27600→27770（净增 170 基线已登记缘由）；check-arch 警告＋STRICT 双模通过（空吞 208、i18n 37/482/1411、出口 87/弹层 43 全冻）；候选包 19,159,799 字节 sha256 07a65d64…（见报告 §四）。真机验收表见报告 §五，未真机不记通过。

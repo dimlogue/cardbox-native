@@ -1,4 +1,16 @@
-27600
+27770
+# 2026-10-08 2.85 墨曜重构 B2 列表三页＋弹窗哑光（Q171，基线 2.84/vc284，方案
+# moyao-refactor-plan-2026-10-08.md §2/§3/§4-B2 定案、DeepSeek 裁量已回写
+# 方案不再重问，净增 +170 相对 2.84 基线 27600）：Q171 助手块（评分 pill
+# scorePill171/空心 pill 面、哑光卡面 moyaoCardFace171/涟漪、遮罩色
+# shadeColor171、组织标本字 orgSpecimen171、弹窗细字游走 moyaoFineType171）
+# 约 +100；各开窗处细字游走调用 +30（每窗一行、墨曜门内扁平零执行）；瓷砖
+# （半径 16/去影/评分 pill 两点）、学生列表卡（哑光面/specimen 首消费/评分
+# pill）、分组头 bankHead（哑光面/字母托/计数 pill/占比条）、汇总卡去影、
+# softFormChipPaint 墨曜同源支、glassWindowTint 哑光支＋boostWindowFace 守卫、
+# softFaceBg/softSheetBg 描边对齐 #23282F，合计约 +67；另 simkeep/
+# subfollow/footprint 三窗 body 建成后补游走 +3。加密层 DataCipher
+# 未动、玻璃骨架与进出场动画未动。此后只许减不许增。
 # 2026-10-08 2.84 加密批 E1 包内资产加密（Q170，基线 2.83/vc283，方案
 # datapack-encryption-plan-2026-10-08.md §四 E1 行定案、DeepSeek 裁量已回写
 # 方案不再重问，净减 -7 相对 2.83 基线 27607）：解密本体进新文件

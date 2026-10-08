@@ -2115,6 +2115,19 @@ public class MainActivity extends Activity {
      * 色意但看不清身后控件轮廓，边光仍在、仍是玻璃不是塑料。贴身小件（胶囊/悬浮钮/
      * 底栏）继续走 glassTintDrawable 薄透档，不跟这档一起改浓。 */
     GradientDrawable glassWindowTint(float radiusDp, boolean topOnly) {
+        // Q171（B2，方案 §3 弹窗行）：墨曜弹窗面改哑光实面——surface_2＋容器
+        // 发丝边 #23282F；半径与顶圆两支与下方玻璃路逐式同构（调用方传的
+        // sheetR129/floatR129 口径不变），扁平恒走原玻璃渐变、一字不动。
+        if (styleMoyao()) {
+            GradientDrawable mg = new GradientDrawable();
+            mg.setColor(MY_SURFACE2);
+            mg.setStroke(dp(this, 1), MY_BORDER_SUBTLE);
+            if (topOnly) {
+                float r = dp(this, radiusDp);
+                mg.setCornerRadii(new float[]{r, r, r, r, 0, 0, 0, 0});
+            } else mg.setCornerRadius(dp(this, radiusDp));
+            return mg;
+        }
         GradientDrawable g;
         if (darkEff()) {
             g = new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
@@ -2138,6 +2151,7 @@ public class MainActivity extends Activity {
      * 只许套在「糊层＋唯一面」的窗件上，玻璃三档参数本体一字不改。 */
     void boostWindowFace(GradientDrawable cg) {
         if (cg == null) return;
+        if (styleMoyao()) return; // Q171：墨曜面已在 glassWindowTint 哑光定版，提实不许覆写成渐变
         if (darkEff()) cg.setColors(new int[]{Color.argb(248, 38, 46, 62), Color.argb(242, 28, 35, 50)});
         else cg.setColors(new int[]{Color.argb(250, 253, 254, 255), Color.argb(244, 243, 248, 253)});
     }
@@ -2178,9 +2192,11 @@ public class MainActivity extends Activity {
     GradientDrawable softFaceBg(float radiusDp) {
         GradientDrawable g;
         if (styleMoyao()) {
-            // Q165：墨曜柔面走实色墨面（不留半透明，免叠任意底出青晕）；发丝描边白 10%。
+            // Q165：墨曜柔面走实色墨面（不留半透明，免叠任意底出青晕）。
+            // Q171（B2）：描边由白 10% 改容器发丝档 #23282F（方案 §2 冻结值，与
+            // panelBg169/瓷砖/分组头同一条线），全站柔面一处对齐、不许两值并存。
             g = new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM, new int[]{MY_SURFACE1, MY_SURFACE1});
-            g.setStroke(dp(this, 1), Color.argb(26, 255, 255, 255));
+            g.setStroke(dp(this, 1), MY_BORDER_SUBTLE);
         } else if (darkEff()) {
             g = new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
                 new int[]{Color.argb(240, 34, 45, 63), Color.argb(232, 25, 34, 50)});
@@ -2219,9 +2235,10 @@ public class MainActivity extends Activity {
     GradientDrawable softSheetBg() {
         GradientDrawable g;
         if (styleMoyao()) {
-            // Q165：墨曜弹层柔面实色 surface_2＋发丝描边（同 softFaceBg 口径，禁半透明青晕）。
+            // Q165：墨曜弹层柔面实色 surface_2（禁半透明青晕）。
+            // Q171（B2）：描边同 softFaceBg 一处对齐容器发丝档 #23282F（方案 §2）。
             g = new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM, new int[]{MY_SURFACE2, MY_SURFACE2});
-            g.setStroke(dp(this, 1), Color.argb(26, 255, 255, 255));
+            g.setStroke(dp(this, 1), MY_BORDER_SUBTLE);
         } else if (darkEff()) {
             g = new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
                 new int[]{Color.argb(243, 30, 39, 56), Color.argb(236, 22, 30, 45)});
@@ -5478,7 +5495,7 @@ public class MainActivity extends Activity {
         final FrameLayout overlay = new FrameLayout(this);
         overlay.setBackgroundColor(Color.TRANSPARENT);
         final View shade = new View(this);
-        shade.setBackgroundColor(Color.argb(102, 0, 0, 0)); // rgba(0,0,0,.4)，同 openDetail
+        shade.setBackgroundColor(shadeColor171()); // rgba(0,0,0,.4)，同 openDetail
         shade.setAlpha(0f);
         shade.setOnClickListener(v -> { haptic(); closeFxDetail(); }); // Q152（追加C）：关闭钮/遮罩点按补触感
         overlay.addView(shade, new FrameLayout.LayoutParams(
@@ -5559,6 +5576,7 @@ public class MainActivity extends Activity {
         attachSheetDrag150(wrap, sheetCard, sc, null,
             () -> fxSheetClosing150, d -> fxSheetTouchDown150 = d, this::closeFxDetail);
 
+        moyaoFineType171(overlay); // Q171：弹窗细字（墨曜门内，扁平零执行）
         content.addView(overlay, new FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         overlay.getViewTreeObserver().addOnPreDrawListener(new android.view.ViewTreeObserver.OnPreDrawListener() {
@@ -7534,7 +7552,7 @@ public class MainActivity extends Activity {
         if (mineDupSheet168 != null) return;
         hideChrome();
         final FrameLayout sheet = new FrameLayout(this);
-        View shade = new View(this); shade.setBackgroundColor(Color.argb(102, 0, 0, 0)); shade.setAlpha(0f);
+        View shade = new View(this); shade.setBackgroundColor(shadeColor171()); shade.setAlpha(0f);
         sheet.addView(shade, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         shade.setOnClickListener(v -> { haptic(); closeMineDupConfirm168(); }); // Q168：遮罩=取消，不添加
         LinearLayout card = new LinearLayout(this); card.setOrientation(LinearLayout.VERTICAL);
@@ -7567,6 +7585,7 @@ public class MainActivity extends Activity {
         sheet.setTag(new Object[]{wrap});
         cb.setOnClickListener(v -> { haptic(); closeMineDupConfirm168(); });
         ob.setOnClickListener(v -> confirmMineDup168(c, cls, uiRefresh));
+        moyaoFineType171(sheet); // Q171：弹窗细字（墨曜门内，扁平零执行）
         content.addView(sheet);
         mineDupSheet168 = sheet;
         animateUpdateSheetIn(sheet);
@@ -7723,7 +7742,7 @@ public class MainActivity extends Activity {
         if (rootView == null) { addMineEntry(c, "", uiRefresh); return; }
         final FrameLayout overlay = new FrameLayout(this);
         View shade = new View(this);
-        shade.setBackgroundColor(Color.argb(102, 0, 0, 0));
+        shade.setBackgroundColor(shadeColor171());
         shade.setAlpha(0f);
         shade.setOnClickListener(v -> { haptic(); closeAcctClassPicker(); }); // Q152（追加C）：关闭钮/遮罩点按补触感
         overlay.addView(shade, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
@@ -7802,6 +7821,7 @@ public class MainActivity extends Activity {
         wrap.addView(glass, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, pickerH));
         wrap.addView(cardBox, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, pickerH));
         overlay.addView(wrap, clp);
+        moyaoFineType171(overlay); // Q171：弹窗细字（墨曜门内，扁平零执行）
         rootView.addView(overlay, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         perfMark152("picker.show", pickerPerfT0_152); // Q152：选择窗上屏打点
         perfMark152("sheet.t_popupShow acctpicker", pickerPerfT0_152); // Q153（件三）：DeepSeek 字段口径
@@ -7885,7 +7905,7 @@ public class MainActivity extends Activity {
         closePlaceholderPicker();
         final FrameLayout overlay = new FrameLayout(this);
         View shade = new View(this);
-        shade.setBackgroundColor(Color.argb(102, 0, 0, 0));
+        shade.setBackgroundColor(shadeColor171());
         shade.setAlpha(0f);
         shade.setOnClickListener(v -> { haptic(); closePlaceholderPicker(); }); // Q152（追加C）：关闭钮/遮罩点按补触感
         overlay.addView(shade, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
@@ -8033,6 +8053,7 @@ public class MainActivity extends Activity {
         wrap.addView(glass, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, phH));
         wrap.addView(cardBox, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, phH));
         overlay.addView(wrap, clp2);
+        moyaoFineType171(overlay); // Q171：弹窗细字（墨曜门内，扁平零执行）
         rootView.addView(overlay, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         placeholderPickerView = overlay;
         hideChrome();
@@ -10287,9 +10308,13 @@ public class MainActivity extends Activity {
         // 顶图 cover 铺满不变（Q24 优先级：铺满第一、圆角第二），四角靠外框同半径裁切、无图占位同半径。
         // Q94：首页柔面圆角下限抬到 22dp（Soft 语言 20–28 档），图区裁切同半径自动跟随。
         // Q94 铺开：全站瓷砖统一柔面（原 softFace 仅首页）——柔面涟漪＋柔影，圆角下限 20dp。
-        float tileR = cardR129(Math.max(softFace ? 22f : 20f, cardRadiusDp(tileW / getResources().getDisplayMetrics().density))); // Q129：卡图类收口；Q146（2.57）：下限并入基准再过一杆——旧写法下限压在收口函数之外，滑杆偏离标准档时瓷砖恒 ≥20/22dp 与全屏脱钩（用户 02:08 双列红圈实证「圆角不对」）；并入后 t==0.5f 逐位回原值、方形档可真方。图与块同值同源 tileR（art 贴块顶边、内衬距 0）
+        // Q171（B2）：墨曜瓷砖半径冻结 16dp（方案 §2 卡圆角全列表同值，经 cardR129 与
+        // 面板同杆）；扁平恒原式（22/20 下限＋图宽派生）逐位不动，tileR 下游（art 裁切/
+        // 图半径）同值同源不变。墨曜去阴影（哑光实面＋发丝边承接，面仍 softFaceRipple
+        // →softFaceBg 墨曜实面＋#23282F 一处）。
+        float tileR = styleMoyao() ? cardR129(16f) : cardR129(Math.max(softFace ? 22f : 20f, cardRadiusDp(tileW / getResources().getDisplayMetrics().density))); // Q129：卡图类收口；Q146（2.57）：下限并入基准再过一杆——旧写法下限压在收口函数之外，滑杆偏离标准档时瓷砖恒 ≥20/22dp 与全屏脱钩（用户 02:08 双列红圈实证「圆角不对」）；并入后 t==0.5f 逐位回原值、方形档可真方。图与块同值同源 tileR（art 贴块顶边、内衬距 0）
         box.setBackground(softFaceRipple(tileR));
-        softShadow(box, 6);
+        if (!styleMoyao()) softShadow(box, 6);
         roundClip(box, tileR, this);
         int imgH = Math.max(dp(this, 40), Math.round(tileW / 1.586f));
         FrameLayout art = new FrameLayout(this);
@@ -10336,13 +10361,13 @@ public class MainActivity extends Activity {
         List<String> selDims = showScoreDims ? selectedScoreDimsOrdered() : new ArrayList<>();
         if (showScoreDims && !selDims.isEmpty()) {
             // Q67：选了维度后总分退居其次（灰胶囊），分项分在下方单独成流展示。
-            chips.addView(chip(c.hasScore ? (isEn() ? "Score " : "总分 ") + fmtScoreNum(c.score) : "总分待评分",
-                Color.rgb(0xEE, 0xF0, 0xF3), Color.rgb(0x63, 0x63, 0x66), chipSp));
+            chips.addView(scorePill171(c.hasScore ? (isEn() ? "Score " : "总分 ") + fmtScoreNum(c.score) : "总分待评分",
+                Color.rgb(0xEE, 0xF0, 0xF3), Color.rgb(0x63, 0x63, 0x66), c.hasScore, c.score, chipSp)); // Q171：评分 pill 单源（墨曜空心细字，扁平＝原 chip 逐字产出）
         } else {
             // Q143：评分小胶囊与详情同治——有分走四档语义色（白字），未评分维持中性灰不冒充低分。
-            chips.addView(chip(fmtScoreInt(c.score),
+            chips.addView(scorePill171(fmtScoreInt(c.score),
                 c.hasScore ? scoreBandColor143(c.score) : Color.rgb(0xEE, 0xF0, 0xF3),
-                c.hasScore ? Color.WHITE : Color.rgb(0x63, 0x63, 0x66), chipSp));
+                c.hasScore ? Color.WHITE : Color.rgb(0x63, 0x63, 0x66), c.hasScore, c.score, chipSp)); // Q171：评分 pill 单源（同上）
         }
         chips.addView(chip("已停发".equals(c.status) ? "已停发" : "在发",
             "已停发".equals(c.status) ? Color.rgb(0xF3, 0xE8, 0xE8) : Color.rgb(0xE6, 0xF6, 0xEC),
@@ -10690,6 +10715,7 @@ public class MainActivity extends Activity {
         final int wl115 = Math.max(dp(this, 2), Math.min(rootW - wrapW115 - dp(this, 10), pl - cmPad));
         final int wt115 = Math.max(dp(this, 2), Math.min(rootH - wrapH115 - dp(this, 10), pt - cmPad));
         wlp.leftMargin = wl115; wlp.topMargin = wt115;
+        moyaoFineType171(popWrap); // Q171：弹窗细字（墨曜门内，扁平零执行）
         rootView.addView(popWrap, wlp);
         cardMenuPop = popWrap;
         cardMenuGlass = null;
@@ -12097,7 +12123,8 @@ public class MainActivity extends Activity {
         for (Card c : cs) if (!c.isCredit()) nd++;
         LinearLayout box = new LinearLayout(this);
         box.setOrientation(LinearLayout.VERTICAL);
-        box.setBackground(rippleBg(Color.WHITE, 14));
+        // Q171（B2）：墨曜分组头哑光面（surface_1＋发丝边、16dp）；扁平原式逐字
+        box.setBackground(styleMoyao() ? moyaoCardRipple171(MY_SURFACE1, 16f) : rippleBg(Color.WHITE, 14));
         box.setClipToOutline(true);
         box.setPadding(dp(this, 12), dp(this, 10), dp(this, 12), dp(this, 10));
         LinearLayout.LayoutParams blp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
@@ -12107,9 +12134,9 @@ public class MainActivity extends Activity {
         top.setOrientation(LinearLayout.HORIZONTAL);
         top.setGravity(Gravity.CENTER_VERTICAL);
         box.addView(top);
-        TextView letter = tv(this, bank.isEmpty() ? "卡" : bank.substring(0, 1), 16, Color.rgb(0x0A, 0x5C, 0xD6), true);
+        TextView letter = tv(this, bank.isEmpty() ? "卡" : bank.substring(0, 1), 16, styleMoyao() ? MY_TEXT1 : Color.rgb(0x0A, 0x5C, 0xD6), true);
         letter.setGravity(Gravity.CENTER);
-        letter.setBackground(roundRect(Color.rgb(0xE8, 0xF1, 0xFD), 10, this));
+        letter.setBackground(styleMoyao() ? moyaoCardFace171(MY_SURFACE2, 10f) : roundRect(Color.rgb(0xE8, 0xF1, 0xFD), 10, this)); // Q171：墨曜字母托哑光面
         top.addView(letter, new LinearLayout.LayoutParams(dp(this, 38), dp(this, 38)));
         LinearLayout tx = new LinearLayout(this);
         tx.setOrientation(LinearLayout.VERTICAL);
@@ -12121,18 +12148,24 @@ public class MainActivity extends Activity {
         TextView cnt = tv(this, String.format(S("fmt_cards_n"), cs.size()), 11, Color.rgb(0x0A, 0x5C, 0xD6), true); // Q164
         cnt.setBackground(roundRect(Color.rgb(0xE8, 0xF1, 0xFD), 999, this));
         cnt.setPadding(dp(this, 8), dp(this, 3), dp(this, 8), dp(this, 3));
+        if (styleMoyao()) {
+            // Q171：计数 pill 同 scorePill 空心口径（发丝边＋细字数字），字色走 text2
+            cnt.setBackground(scorePillBg171(999f));
+            cnt.setTextColor(MY_TEXT2);
+            cnt.setTypeface(displayTf169(this, 300));
+        }
         top.addView(cnt);
         TextView arrow = tv(this, open ? " ▾" : " ▸", 14, colText2(), false);
         top.addView(arrow);
         // 占比条：按本轮最大组归一（同混合版 bbar）
         LinearLayout bar = new LinearLayout(this);
         bar.setOrientation(LinearLayout.HORIZONTAL);
-        bar.setBackground(roundRect(Color.rgb(0xE9, 0xEE, 0xF5), 999, this));
+        bar.setBackground(roundRect(styleMoyao() ? MY_SURFACE2 : Color.rgb(0xE9, 0xEE, 0xF5), 999, this)); // Q171：墨曜占比条槽走 surface_2
         LinearLayout.LayoutParams barLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(this, 4));
         barLp.topMargin = dp(this, 8);
         bar.setLayoutParams(barLp);
         View fill = new View(this);
-        fill.setBackground(roundRect(Color.rgb(0x0A, 0x5C, 0xD6), 999, this));
+        fill.setBackground(roundRect(styleMoyao() ? MY_PRIMARY : Color.rgb(0x0A, 0x5C, 0xD6), 999, this)); // Q171：墨曜填充走金属青（accentColor 墨曜同值）
         bar.addView(fill, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, (float) cs.size()));
         View rest = new View(this);
         bar.addView(rest, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, (float) Math.max(0, maxN - cs.size())));
@@ -12299,6 +12332,7 @@ public class MainActivity extends Activity {
         wrap.addView(card, new FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         sheet.addView(wrap, clp);
+        moyaoFineType171(sheet); // Q171：弹窗细字（墨曜门内，扁平零执行）
         content.addView(sheet);
         filterSheet = sheet;
         // Q123（件十三）：窗内滚动挂同件玻璃胶囊拖条（DragBarView，拖动百分比气泡同
@@ -12364,7 +12398,7 @@ public class MainActivity extends Activity {
         final int cnt166 = cnt; // 判定瞬间快照（DeepSeek 审），张数由触发方按各自口径传入
         hideChrome();
         final FrameLayout sheet = new FrameLayout(this);
-        View shade = new View(this); shade.setBackgroundColor(Color.argb(102, 0, 0, 0)); shade.setAlpha(0f);
+        View shade = new View(this); shade.setBackgroundColor(shadeColor171()); shade.setAlpha(0f);
         sheet.addView(shade, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         shade.setOnClickListener(v -> { /* Q166：遮罩只拦截不关闭，必须点「确定」 */ });
         LinearLayout card = new LinearLayout(this); card.setOrientation(LinearLayout.VERTICAL);
@@ -12391,6 +12425,7 @@ public class MainActivity extends Activity {
         sheet.setTag(new Object[]{wrap});
         pinFixedText125(ob);
         ob.setOnClickListener(v -> confirmLagWarn166());
+        moyaoFineType171(sheet); // Q171：弹窗细字（墨曜门内，扁平零执行）
         content.addView(sheet);
         lagWarnSheet166 = sheet;
         animateUpdateSheetIn(sheet);
@@ -13071,6 +13106,7 @@ public class MainActivity extends Activity {
         wizGlassWrap.addView(card, new FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         sheet.addView(wizGlassWrap, clp);
+        moyaoFineType171(sheet); // Q171：弹窗细字（墨曜门内，扁平零执行）
         content.addView(sheet);
         wizardSheet = sheet;
         // P4：首次打开走遮罩淡入+窗从下方 42dp 上浮（260ms，混合版 wizUp 口径）；步骤切换只让
@@ -13603,7 +13639,7 @@ public class MainActivity extends Activity {
         final FrameLayout overlay = new FrameLayout(this);
         overlay.setBackgroundColor(Color.TRANSPARENT);
         final View shade = new View(this);
-        shade.setBackgroundColor(Color.argb(102, 0, 0, 0)); // rgba(0,0,0,.4)
+        shade.setBackgroundColor(shadeColor171()); // rgba(0,0,0,.4)
         shade.setAlpha(0f);
         shade.setOnClickListener(v -> { haptic(); closeDetail(); }); // Q152（追加C）：关闭钮/遮罩点按补触感
         overlay.addView(shade, new FrameLayout.LayoutParams(
@@ -13734,6 +13770,7 @@ public class MainActivity extends Activity {
         // 拖拽关闭：抓手区下滑过 80dp 松手关窗（窗内滚动不受影响）
         attachDetailDrag(wrap, sheetCard);
 
+        moyaoFineType171(overlay); // Q171：弹窗细字（墨曜门内，扁平零执行）
         content.addView(overlay, new FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         overlay.getViewTreeObserver().addOnPreDrawListener(new android.view.ViewTreeObserver.OnPreDrawListener() {
@@ -14881,8 +14918,9 @@ public class MainActivity extends Activity {
         for (final Card c : stu) {
             LinearLayout cardBox = new LinearLayout(this);
             cardBox.setOrientation(LinearLayout.VERTICAL);
-            cardBox.setBackground(rippleBg(Color.WHITE, 18)); // Q94 铺开：学生卡柔面（roundRect 收口）＋圆角收向 18
-            softShadow(cardBox, 5);
+            // Q171（B2）：墨曜学生卡哑光面（surface_1＋发丝边、16dp）＋去阴影；扁平原式逐字
+            cardBox.setBackground(styleMoyao() ? moyaoCardRipple171(MY_SURFACE1, 16f) : rippleBg(Color.WHITE, 18)); // Q94 铺开：学生卡柔面（roundRect 收口）＋圆角收向 18
+            if (!styleMoyao()) softShadow(cardBox, 5);
             cardBox.setClipToOutline(true);
             cardBox.setPadding(dp(this, 12), dp(this, 10), dp(this, 12), dp(this, 12));
             LinearLayout.LayoutParams clp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
@@ -14917,10 +14955,24 @@ public class MainActivity extends Activity {
             nm.setMaxLines(2);
             tx.addView(nm);
             tx.addView(tv(this, c.bank + " · " + (c.isCredit() ? "信用卡" : "借记卡"), 11, colText2(), false));
+            if (styleMoyao()) {
+                // Q171（B2）：specimen 工厂首个消费点——组织拉丁名＋卡种标本微字（数据直出、不造文案）
+                String orgSp171 = orgSpecimen171(c.org);
+                TextView spec171 = specimenTv169((orgSp171.isEmpty() ? "" : orgSp171 + " · ") + (c.isCredit() ? "CREDIT" : "DEBIT"));
+                LinearLayout.LayoutParams spLp171 = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+                spLp171.topMargin = dp(this, 2);
+                tx.addView(spec171, spLp171);
+            }
             TextView sc = tv(this, c.score > 0 ? fmtScoreInt(c.score) : "新卡",
                 11, Color.rgb(0x0A, 0x5C, 0xD6), true);
             sc.setBackground(roundRect(Color.rgb(0xE8, 0xF1, 0xFD), 999, this));
             sc.setPadding(dp(this, 8), dp(this, 3), dp(this, 8), dp(this, 3));
+            if (styleMoyao()) {
+                // Q171：学生卡评分同走 scorePill 口径（空心＋细字＋高分染青），不另起一套
+                sc.setBackground(scorePillBg171(999f));
+                sc.setTextColor(c.score > 0 ? (c.score >= 8.5 ? MY_PRIMARY : MY_TEXT1) : MY_TEXT3);
+                sc.setTypeface(displayTf169(this, 300));
+            }
             top.addView(sc);
 
             TextView why = tv(this, "推荐理由：" + studentReason(c), 12.5f, inkBody(), false);
@@ -15445,6 +15497,7 @@ public class MainActivity extends Activity {
         add.setLayoutParams(alp);
         add.setOnClickListener(v -> { haptic(); openOwnActForm(ov); });
         col.addView(add);
+        moyaoFineType171(ov); // Q171：弹窗细字（墨曜门内，扁平零执行）
         hideChrome(); content.addView(ov); ownActsOverlay = ov;
     }
     FrameLayout ownActsOverlay = null;
@@ -15507,7 +15560,7 @@ public class MainActivity extends Activity {
         LinearLayout box = new LinearLayout(this);
         box.setOrientation(LinearLayout.VERTICAL);
         box.setBackground(rippleBg(colSurface(), 20)); // Q94 token：卡面圆角向 20dp 档
-        softShadow(box, 5); // Q94 铺开：汇总卡柔影
+        if (!styleMoyao()) softShadow(box, 5); // Q94 铺开：汇总卡柔影；Q171：墨曜去影（面经 roundRect→softFaceBg 墨曜实面＋发丝边承接）
         box.setClipToOutline(true);
         box.setPadding(dp(this, 14), dp(this, 12), dp(this, 14), dp(this, 12));
         LinearLayout.LayoutParams bp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
@@ -16909,7 +16962,7 @@ public class MainActivity extends Activity {
         hideChrome(); // Q12
         final FrameLayout sheet = new FrameLayout(this);
         View shade = new View(this);
-        shade.setBackgroundColor(Color.argb(102, 0, 0, 0)); // .dlg-backdrop rgba(0,0,0,.4)
+        shade.setBackgroundColor(shadeColor171()); // .dlg-backdrop rgba(0,0,0,.4)
         shade.setAlpha(0f);
         shade.setOnClickListener(v -> { haptic(); closeDelConfirm(); }); // Q152（追加C）：关闭钮/遮罩点按补触感
         sheet.addView(shade, new FrameLayout.LayoutParams(
@@ -16971,6 +17024,7 @@ public class MainActivity extends Activity {
         wrap.addView(glass, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         wrap.addView(card, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         sheet.addView(wrap, clp);
+        moyaoFineType171(sheet); // Q171：弹窗细字（墨曜门内，扁平零执行）
         content.addView(sheet);
         delConfirmSheet = sheet;
         sheet.setAlpha(0f);
@@ -17032,7 +17086,7 @@ public class MainActivity extends Activity {
         final FrameLayout overlay = new FrameLayout(this);
         overlay.setBackgroundColor(Color.TRANSPARENT);
         final View shade = new View(this);
-        shade.setBackgroundColor(Color.argb(102, 0, 0, 0)); // .backdrop rgba(0,0,0,.4)
+        shade.setBackgroundColor(shadeColor171()); // .backdrop rgba(0,0,0,.4)
         shade.setAlpha(0f);
         shade.setOnClickListener(v -> { haptic(); closeCustomDetail(); }); // Q152（追加C）：关闭钮/遮罩点按补触感
         overlay.addView(shade, new FrameLayout.LayoutParams(
@@ -17111,6 +17165,7 @@ public class MainActivity extends Activity {
         wrap.addView(glyphFrame, glp);
 
         attachCustomDetailDrag(wrap);
+        moyaoFineType171(overlay); // Q171：弹窗细字（墨曜门内，扁平零执行）
         content.addView(overlay, new FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         overlay.bringToFront();
@@ -18062,7 +18117,7 @@ public class MainActivity extends Activity {
         hideChrome(); // Q12
         final FrameLayout sheet = new FrameLayout(this);
         View shade = new View(this);
-        shade.setBackgroundColor(Color.argb(102, 0, 0, 0));
+        shade.setBackgroundColor(shadeColor171());
         shade.setOnClickListener(v -> { haptic(); closeBinQuery(); }); // Q152（追加C）：关闭钮/遮罩点按补触感
         sheet.addView(shade, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         LinearLayout card = new LinearLayout(this);
@@ -18139,6 +18194,7 @@ public class MainActivity extends Activity {
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         sheet.addView(binWrap, clp);
         registerImeLift(binWrap); // Q94 铺开：键盘感知抬窗
+        moyaoFineType171(sheet); // Q171：弹窗细字（墨曜门内，扁平零执行）
         content.addView(sheet);
         binSheet = sheet;
         sheet.setAlpha(0f);
@@ -18369,6 +18425,15 @@ public class MainActivity extends Activity {
     }
 
     void softFormChipPaint(TextView t, boolean on) {
+        // Q171（B2）：墨曜下分段/表单片与 B1 设置分段片同源——面走 segChipBg169、
+        // 选中字走 accentColor（墨曜＝金属青）、未选 colText2，不在列表页另起一套
+        // 蓝渐变；字重档与扁平支同位（on 700/off 400）。扁平原路逐字不动。
+        if (styleMoyao()) {
+            t.setBackground(segChipBg169(on));
+            t.setTextColor(on ? accentColor() : colText2());
+            t.setTypeface(weightTypeface(this, on ? 700 : 400));
+            return;
+        }
         if (on) {
             GradientDrawable g = new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
                 darkEff() ? new int[]{Color.rgb(0x37, 0x54, 0x82), Color.rgb(0x2B, 0x45, 0x6B)}
@@ -18417,7 +18482,7 @@ public class MainActivity extends Activity {
         hideChrome(); // Q12 混合版 openCustomForm 即 setDockVisible(false)
         final FrameLayout sheet = new FrameLayout(this);
         View shade = new View(this);
-        shade.setBackgroundColor(Color.argb(102, 0, 0, 0)); // .dlg-backdrop rgba(0,0,0,.4)
+        shade.setBackgroundColor(shadeColor171()); // .dlg-backdrop rgba(0,0,0,.4)
         shade.setOnClickListener(v -> { haptic(); closeCustomForm(); }); // Q152（追加C）：关闭钮/遮罩点按补触感
         sheet.addView(shade, new FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
@@ -18763,6 +18828,7 @@ public class MainActivity extends Activity {
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         sheet.addView(formWrap, clp);
         registerImeLift(formWrap); // Q94 铺开：键盘感知抬窗
+        moyaoFineType171(sheet); // Q171：弹窗细字（墨曜门内，扁平零执行）
         content.addView(sheet);
         customFormSheet = sheet;
         sheet.setAlpha(0f);
@@ -19067,7 +19133,7 @@ public class MainActivity extends Activity {
         hideChrome();
         final FrameLayout sheet = new FrameLayout(this);
         View shade = new View(this);
-        shade.setBackgroundColor(Color.argb(102, 0, 0, 0));
+        shade.setBackgroundColor(shadeColor171());
         shade.setAlpha(0f);
         shade.setOnClickListener(v -> { haptic(); closeExitSheet151(); }); // Q152（追加C）：关闭钮/遮罩点按补触感
         sheet.addView(shade, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
@@ -19124,6 +19190,7 @@ public class MainActivity extends Activity {
         wrap.addView(card, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         sheet.addView(wrap, clp);
         sheet.setTag(new Object[]{wrap, shade});
+        moyaoFineType171(sheet); // Q171：弹窗细字（墨曜门内，扁平零执行）
         content.addView(sheet);
         exitSheet151 = sheet;
         sheet.setAlpha(0f);
@@ -19167,6 +19234,7 @@ public class MainActivity extends Activity {
     void showUpdateTip(final int ver){
         if(updateTipSheet!=null||updateConfirmSheet!=null) return; updateTipClosing=false;
         FrameLayout sheet=buildUpdateSheet(S("upd_new_title"), String.format(S("upd_new_fmt"), ver), S("upd_know"), S("upd_go"), ()->showUpdateConfirm()); // Q164
+        moyaoFineType171(sheet); // Q171：弹窗细字（墨曜门内，扁平零执行）
         updateTipSheet=sheet; content.addView(sheet); animateUpdateSheetIn(sheet);
     }
     void showUpdateConfirm(){
@@ -19179,6 +19247,7 @@ public class MainActivity extends Activity {
         String msg123 = String.format(S("upd_new_msg_fmt"), pendingUpdateVer, sum123) // Q164
             + S("upd_warn"); // Q164
         FrameLayout sheet=buildUpdateSheet(S("upd_title"),msg123,S("cancel"),S("upd_go"),()->{ updateApplyArmed = true; applyPendingUpdate(); }); // Q164
+        moyaoFineType171(sheet); // Q171：弹窗细字（墨曜门内，扁平零执行）
         updateConfirmSheet=sheet; content.addView(sheet); animateUpdateSheetIn(sheet);
     }
     void animateUpdateSheetIn(FrameLayout sheet){
@@ -19416,6 +19485,7 @@ public class MainActivity extends Activity {
                 showFloatToast(L("没能打开系统设置，请到系统设置里允许本 App 安装应用", "The system setting could not be opened. Please allow this app to install apps in system settings."));
             }
         });
+        moyaoFineType171(sheet); // Q171：弹窗细字（墨曜门内，扁平零执行）
         content.addView(sheet);
         animateUpdateSheetIn(sheet);
     }
@@ -19473,7 +19543,7 @@ public class MainActivity extends Activity {
         hideChrome();
         final FrameLayout sheet = new FrameLayout(this);
         View shade = new View(this);
-        shade.setBackgroundColor(Color.argb(102, 0, 0, 0));
+        shade.setBackgroundColor(shadeColor171());
         shade.setOnClickListener(v -> closeAppUpdateSheet159());
         sheet.addView(shade, new FrameLayout.LayoutParams(-1, -1));
 
@@ -19571,6 +19641,7 @@ public class MainActivity extends Activity {
         appUpdateReady159 = false;
         cancel.setOnClickListener(v -> { haptic(); closeAppUpdateSheet159(); });
         ok.setOnClickListener(v -> { haptic(); startAppUpdateDownload159(); });
+        moyaoFineType171(sheet); // Q171：弹窗细字（墨曜门内，扁平零执行）
         content.addView(sheet);
         animateUpdateSheetIn(sheet);
     }
@@ -19995,7 +20066,7 @@ public class MainActivity extends Activity {
         // Q153（件三）：旧 prepareFrozenBackdrop131 窗前同步预抓退役——背板改由 glassLayerHw 挂载后的统一管线首帧后补（内容先行）。
         final FrameLayout overlay = new FrameLayout(this);
         View shade = new View(this);
-        shade.setBackgroundColor(Color.argb(102, 0, 0, 0));
+        shade.setBackgroundColor(shadeColor171());
         shade.setAlpha(0f);
         shade.setOnClickListener(v -> { haptic(); closeGlossarySheet(); }); // Q152（追加C）：关闭钮/遮罩点按补触感
         overlay.addView(shade, new FrameLayout.LayoutParams(
@@ -20041,6 +20112,7 @@ public class MainActivity extends Activity {
         wrap.addView(glass, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, sheetH));
         wrap.addView(cardBox, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, sheetH));
         overlay.addView(wrap, clp);
+        moyaoFineType171(overlay); // Q171：弹窗细字（墨曜门内，扁平零执行）
         rootView.addView(overlay, new FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         glossarySheetView = overlay;
@@ -22535,6 +22607,7 @@ public class MainActivity extends Activity {
         col.addView(pageBackHead("保号管家", () -> { haptic(); closeSimKeep(); }), new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
         simkeepBody = new FrameLayout(this);
         col.addView(simkeepBody, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
+        moyaoFineType171(overlay); // Q171：弹窗细字（墨曜门内，扁平零执行）
         content.addView(overlay, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         simkeepView = overlay;
         buildSimKeepBody();
@@ -22642,6 +22715,7 @@ public class MainActivity extends Activity {
         TextView hint = tv(this, "点「已保号」会按周期自动顺延下次日期；号码与费用只存本机。", 11, colText3(), false);
         LinearLayout.LayoutParams hLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT); hLp.topMargin = dp(this, 12);
         inner.addView(hint, hLp);
+        moyaoFineType171(simkeepBody); // Q171：本体重建后补游走（开窗首遍在 body 建成前，墨曜门内扁平零执行）
     }
     void markSimKeepDone(final SimKeepItem it) {
         String newDue = simkeepAddDays(it.nextDue, it.cycleDays <= 0 ? 30 : it.cycleDays);
@@ -22661,7 +22735,7 @@ public class MainActivity extends Activity {
         final String[] actSel = {draft.action == null || draft.action.isEmpty() ? "sms" : draft.action};
         hideChrome();
         final FrameLayout sheet = new FrameLayout(this);
-        View shade = new View(this); shade.setBackgroundColor(Color.argb(102, 0, 0, 0));
+        View shade = new View(this); shade.setBackgroundColor(shadeColor171());
         shade.setOnClickListener(v -> { haptic(); closeSimKeepForm(); }); // Q152（追加C）：关闭钮/遮罩点按补触感
         sheet.addView(shade, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         LinearLayout card = new LinearLayout(this); card.setOrientation(LinearLayout.VERTICAL);
@@ -22759,6 +22833,7 @@ public class MainActivity extends Activity {
         wrap.addView(glass, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, clp.height));
         wrap.addView(card, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         sheet.addView(wrap, clp);
+        moyaoFineType171(sheet); // Q171：弹窗细字（墨曜门内，扁平零执行）
         content.addView(sheet, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         simkeepFormSheet = sheet;
         registerImeLift(wrap); // Q94 铺开：键盘感知抬窗
@@ -22866,6 +22941,7 @@ public class MainActivity extends Activity {
         col.addView(pageBackHead("订阅跟随", () -> { haptic(); closeSubFollow(); }), new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
         subfollowBody = new FrameLayout(this);
         col.addView(subfollowBody, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
+        moyaoFineType171(overlay); // Q171：弹窗细字（墨曜门内，扁平零执行）
         content.addView(overlay, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         subfollowView = overlay;
         buildSubFollowBody();
@@ -22972,6 +23048,7 @@ public class MainActivity extends Activity {
         TextView hint = tv(this, "点「顺延」会按周期推进下次扣款日；订阅信息只存本机。", 11, colText3(), false);
         LinearLayout.LayoutParams hLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT); hLp.topMargin = dp(this, 12);
         inner.addView(hint, hLp);
+        moyaoFineType171(subfollowBody); // Q171：本体重建后补游走（同 simkeep 口径）
     }
     void markSubFollowDone(final SubFollowItem it) {
         String newDue = simkeepAddDays(it.nextDue, subCycleDays(it));
@@ -22992,7 +23069,7 @@ public class MainActivity extends Activity {
         final boolean[] autoSel = {draft.autoRenew};
         hideChrome();
         final FrameLayout sheet = new FrameLayout(this);
-        View shade = new View(this); shade.setBackgroundColor(Color.argb(102, 0, 0, 0));
+        View shade = new View(this); shade.setBackgroundColor(shadeColor171());
         shade.setOnClickListener(v -> { haptic(); closeSubFollowForm(); }); // Q152（追加C）：关闭钮/遮罩点按补触感
         sheet.addView(shade, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         LinearLayout card = new LinearLayout(this); card.setOrientation(LinearLayout.VERTICAL);
@@ -23102,6 +23179,7 @@ public class MainActivity extends Activity {
         wrap.addView(glass, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, clp.height));
         wrap.addView(card, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         sheet.addView(wrap, clp);
+        moyaoFineType171(sheet); // Q171：弹窗细字（墨曜门内，扁平零执行）
         content.addView(sheet, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         subfollowFormSheet = sheet;
         registerImeLift(wrap); // Q94 铺开：键盘感知抬窗
@@ -23206,6 +23284,7 @@ public class MainActivity extends Activity {
         col.addView(pageBackHead("玩卡足迹", () -> { haptic(); closeFootprint(); }), new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
         footprintBody = new FrameLayout(this);
         col.addView(footprintBody, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
+        moyaoFineType171(overlay); // Q171：弹窗细字（墨曜门内，扁平零执行）
         content.addView(overlay, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         footprintView = overlay;
         buildFootprintBody();
@@ -23356,6 +23435,7 @@ public class MainActivity extends Activity {
             card.addView(edit, edLp);
             card.setOnClickListener(v -> { haptic(); openFootprintForm(it); });
         }
+        moyaoFineType171(footprintBody); // Q171：本体重建后补游走（同 simkeep 口径）
     }
     void openFootprintForm(final FootItem edit) {
         closeFootprintFormNow();
@@ -23368,7 +23448,7 @@ public class MainActivity extends Activity {
         final String[] statusSel = {draft.status == null || draft.status.isEmpty() ? "pending" : draft.status};
         hideChrome();
         final FrameLayout sheet = new FrameLayout(this);
-        View shade = new View(this); shade.setBackgroundColor(Color.argb(102, 0, 0, 0));
+        View shade = new View(this); shade.setBackgroundColor(shadeColor171());
         shade.setOnClickListener(v -> { haptic(); closeFootprintForm(); }); // Q152（追加C）：关闭钮/遮罩点按补触感
         sheet.addView(shade, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         LinearLayout card = new LinearLayout(this); card.setOrientation(LinearLayout.VERTICAL);
@@ -23475,6 +23555,7 @@ public class MainActivity extends Activity {
         wrap.addView(glass, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, clp.height));
         wrap.addView(card, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         sheet.addView(wrap, clp);
+        moyaoFineType171(sheet); // Q171：弹窗细字（墨曜门内，扁平零执行）
         content.addView(sheet, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         footprintFormSheet = sheet;
         registerImeLift(wrap); // Q94 铺开：键盘感知抬窗
@@ -24040,7 +24121,7 @@ public class MainActivity extends Activity {
         hideChrome();
         final FrameLayout sheet = new FrameLayout(this);
         View shade = new View(this);
-        shade.setBackgroundColor(Color.argb(102, 0, 0, 0));
+        shade.setBackgroundColor(shadeColor171());
         shade.setOnClickListener(v -> { haptic(); closeExtendedSearch(); }); // Q152（追加C）：关闭钮/遮罩点按补触感
         sheet.addView(shade, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         LinearLayout card = new LinearLayout(this);
@@ -24110,6 +24191,7 @@ public class MainActivity extends Activity {
         wrap.addView(glass, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, clp.height));
         wrap.addView(card, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         sheet.addView(wrap, clp);
+        moyaoFineType171(sheet); // Q171：弹窗细字（墨曜门内，扁平零执行）
         content.addView(sheet);
         extSheet = sheet;
         registerImeLift(wrap); // Q94 铺开：键盘升起时整窗抬到键盘顶沿之上
@@ -25931,6 +26013,7 @@ public class MainActivity extends Activity {
         if (hostH125 > 0) wantTop125 = Math.min(wantTop125, Math.max(dp(this, 2), hostH125 - (menuH + menuPad * 2) - dp(this, 10)));
         clp.topMargin = wantTop125;
         overlay.addView(cardWrap, clp);
+        moyaoFineType171(overlay); // Q171：弹窗细字（墨曜门内，扁平零执行）
         content.addView(overlay, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         moreMenuOverlay = overlay;
         // Q122：遮罩已撤，菜单入场只剩 cardWrap 自 ⋯ 角缩放淡入（下方原行），页面不压暗。
@@ -26157,6 +26240,7 @@ public class MainActivity extends Activity {
                     }).start();
                 });
             clearDlSheet148 = sheet;
+            moyaoFineType171(sheet); // Q171：弹窗细字（墨曜门内，扁平零执行）
             content.addView(sheet);
             animateUpdateSheetIn(sheet);
         });
@@ -27073,6 +27157,7 @@ public class MainActivity extends Activity {
                 restartApp131();
             });
         iconConfirmSheet131 = sheet;
+        moyaoFineType171(sheet); // Q171：弹窗细字（墨曜门内，扁平零执行）
         content.addView(sheet);
         animateUpdateSheetIn(sheet);
     }
@@ -27535,6 +27620,91 @@ public class MainActivity extends Activity {
         LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         lp.topMargin = dp(this, 2);
         panel.addView(n, lp);
+    }
+
+    // ================= Q171（2.85）墨曜重构 B2：列表三页 + 弹窗哑光 =================
+    // 数字全部冻结自 moyao-refactor-plan-2026-10-08.md §2/§3/§4-B2（DeepSeek 已审）；
+    // 本段只许调用 Q169 基元（displayTf169/specimenTv169/segChipBg169）与 MY_* 令牌，
+    // 不许再发明字号/线宽/描边值。全部助手墨曜外不改现行值（扁平支在各调用点内嵌原式）。
+    // —— 评分 pill（§3 评分徽标行）：空心、透明底、1.2dp pill 档描边 #2E353D、
+    // 细字数字仅高分（≥8.5，与 scoreBandColor143 顶档同界）染青；未评分走 text3。
+    // 半径与 chip() 的 roundRect(bg,radiusDp) 同口径（autoR143 一杆），布局/内边距
+    // 仍由 chip() 通则承接，本口只在墨曜下覆写面/字色/字形，不动扁平产出。
+    GradientDrawable scorePillBg171(float radiusDp) {
+        GradientDrawable g = new GradientDrawable();
+        g.setColor(Color.TRANSPARENT);
+        g.setStroke(Math.max(1, Math.round(1.2f * getResources().getDisplayMetrics().density)), MY_BORDER_DEFAULT);
+        g.setCornerRadius(dp(this, autoR143(radiusDp)));
+        return g;
+    }
+    TextView scorePill171(String label, int flatBg, int flatFg, boolean scored, double score, float sp) {
+        // flatBg/flatFg 由调用点透传原 chip 色（总分档与维度退位档原色不同，不许在此归一）
+        TextView t = chip(label, flatBg, flatFg, sp);
+        if (styleMoyao()) {
+            t.setBackground(scorePillBg171(7f));
+            t.setTextColor(!scored ? MY_TEXT3 : (score >= 8.5 ? MY_PRIMARY : MY_TEXT1));
+            t.setTypeface(displayTf169(this, 300));
+        }
+        return t;
+    }
+    // —— 哑光卡面（§3 卡面容器行）：surface_1 实面＋容器发丝边；可点容器套同色涟漪
+    // （涟漪色口径与 softFaceRipple 同源 accentColor @38）。radiusDp 为基准 dp 值。
+    GradientDrawable moyaoCardFace171(int fill, float radiusDp) {
+        GradientDrawable g = new GradientDrawable();
+        g.setColor(fill);
+        g.setStroke(dp(this, 1), MY_BORDER_SUBTLE);
+        g.setCornerRadius(dp(this, radiusDp));
+        return g;
+    }
+    Drawable moyaoCardRipple171(int fill, float radiusDp) {
+        int ac = accentColor();
+        return new RippleDrawable(ColorStateList.valueOf(Color.argb(38, Color.red(ac), Color.green(ac), Color.blue(ac))),
+            moyaoCardFace171(fill, radiusDp), null);
+    }
+    // —— 弹窗遮罩（§3 弹窗行）：墨曜 #CC000000；扁平恒 rgba(0,0,0,.4) 原值。
+    int shadeColor171() { return styleMoyao() ? Color.argb(204, 0, 0, 0) : Color.argb(102, 0, 0, 0); }
+    // —— 组织标本字：org 键本身的拉丁名（数据直出、不造文案）；空组织只留卡种。
+    String orgSpecimen171(String org) {
+        if (org == null) return "";
+        switch (org) {
+            case "visa": return "VISA";
+            case "mastercard": case "mastercard-nucc": return "MASTERCARD";
+            case "amex-cn": return "AMEX";
+            case "unionpay": return "UNIONPAY";
+            case "jcb": return "JCB";
+            default: return "";
+        }
+    }
+    // —— 弹窗细字（§2 中文拉丁分工在窗内的落点）：开窗后递归窗根一次——拉丁/数字
+    // 主导的文本换 Josefin Light（displayTf169 内部守 fontMode 与非墨曜原路）；
+    // 中文标题档（≥16sp）收 Medium＋字距 0.04em（§2 中文标题口径）；EditText 不碰
+    // （输入件走 B1 styleInput169/pinInputRole125）；扁平恒不执行（首行墨曜门）。
+    void moyaoFineType171(View v) {
+        if (!styleMoyao() || v == null) return;
+        if (v instanceof TextView && !(v instanceof EditText)) {
+            TextView t = (TextView) v;
+            CharSequence cs = t.getText();
+            if (cs != null && cs.length() > 0) {
+                String s = cs.toString();
+                int lat = 0, tot = 0;
+                for (int i = 0; i < s.length(); i++) {
+                    char ch = s.charAt(i);
+                    if (Character.isWhitespace(ch)) continue;
+                    tot++;
+                    if ((ch >= 'A' && ch <= 'Z') || (ch >= 'a' && ch <= 'z') || (ch >= '0' && ch <= '9')) lat++;
+                }
+                if (tot > 0 && lat * 2 >= tot) {
+                    t.setTypeface(displayTf169(this, 300));
+                } else if (tot > 0 && t.getTextSize() >= 16f * getResources().getDisplayMetrics().scaledDensity * uiScale) {
+                    t.setTypeface(weightTypeface(this, 500));
+                    t.setLetterSpacing(0.04f);
+                }
+            }
+        }
+        if (v instanceof ViewGroup) {
+            ViewGroup g = (ViewGroup) v;
+            for (int i = 0; i < g.getChildCount(); i++) moyaoFineType171(g.getChildAt(i));
+        }
     }
 
     LinearLayout basePage(String title) {
