@@ -7833,15 +7833,20 @@
    "issue_status": "active",
    "status": "在發",
    "specs": {
-    "數據狀態": "待核：CardFi 線索未經發卡行官網核實，目前僅錄卡名／發行方／卡組織／借還類型等身份信息，全部規格待核實階段回官網確認後重寫",
-    "數據來源": "CardFi 線索（card.lengziyu.cn，未核實）"
+    "主要權益": "商業借記／採購用途：首張實體卡、標準派送免費、附加虛擬卡免費；消費、貨幣兌換與 ATM 取款按官方收費表分項收費",
+    "年費": "卡年費 US$29.95（官網 Pricing 頁）；另賬戶年費僅於連續 12 個月收款低於 US$6,000 等值時收取 US$29.95",
+    "申請資格": "須持有合資格 Payoneer 商業賬戶並通過地區與資格審核，非一般個人信用卡",
+    "發行情況": "現行在發（地區供應按官網資格條款）",
+    "數據狀態": "核心字段已回發卡行官網核實（2026-10-08）；未核項見 verification.missing_fields",
+    "數據來源": "發卡行官網（見 verification.source_refs）"
    },
-   "review": "CardFi 線索導入（未核實）：卡名、發行方、卡組織、類型為線索站所列，尚未回發卡行官網核實；規格、等級與發行狀態待核實階段確認後重寫。",
+   "review": "官網公開收費頁已列卡年費金額，前批「須登入查看」缺項解除，判 A。",
    "keywords": [
-    "Payoneer",
-    "Payoneer 卡"
+    "Payoneer Commercial Mastercard®",
+    "Payoneer Commercial Mastercard®",
+    "Payoneer"
    ],
-   "url": "https://www.payoneer.com/marketplace/get-paid-by-marketplaces/",
+   "url": "https://www.payoneer.com/pricing/",
    "funding_modes": [
     "debit"
    ],
@@ -7850,34 +7855,36 @@
    "region_code": "GL",
    "added": "2026-10-08",
    "verification": {
-    "status": "lead_unverified",
-    "missing_fields": [
-     "年費（periodic fee）具體金額未公開，須登入賬戶 fees 頁查看",
-     "須 Payoneer 賬戶且近 6 個月收款滿 $100 等資格，地區受限",
-     "為企業借記/採購卡，非個人信用卡"
-    ],
-    "conflicts": [],
+    "status": "core_verified",
+    "evidence_level_overall": "A",
     "source_refs": [
      {
-      "role": "lead",
-      "url": "https://card.lengziyu.cn/card/payoneer-card",
-      "publisher": "CardFi（線索站，未核實）",
-      "accessed_at": "2026-10-08"
-     },
-     {
-      "role": "官網產品頁/對比頁（關鍵項未清）",
-      "title": "Get paid from global marketplaces & companies | Payoneer",
-      "url": "https://www.payoneer.com/marketplace/get-paid-by-marketplaces/",
+      "role": "官方收費頁",
+      "title": "Pricing | Payoneer（2026-01-01 更新）",
+      "url": "https://www.payoneer.com/pricing/",
       "publisher": "www.payoneer.com",
       "accessed_at": "2026-10-08",
       "evidence_grade": "A",
       "facts_supported": [
-       "官網載 Commercial Mastercard 現行在發",
-       "發卡主體 Payoneer Europe Limited 或 First Century Bank, N.A.（按資格）",
-       "虛擬/實體雙形態、日限額最高 $200,000"
+       "卡年費 US$29.95、標準派送免費、附加虛擬卡免費",
+       "賬戶年費門檻條款",
+       "供應須合資格並受司法地區限制"
       ]
+     },
+     {
+      "role": "lead_original",
+      "url": "https://card.lengziyu.cn/card/payoneer-card",
+      "publisher": "CardFi（線索站，未核實）",
+      "accessed_at": "2026-10-08"
      }
-    ]
+    ],
+    "verified_at": "2026-10-08",
+    "last_checked_at": "2026-10-08",
+    "next_review_at": "2026-11-07",
+    "review_cadence_days": 30,
+    "missing_fields": [],
+    "conflicts": [],
+    "manual_questions": []
    }
   },
   {
@@ -7958,15 +7965,21 @@
    "issue_status": "active",
    "status": "在發",
    "specs": {
-    "數據狀態": "待核：CardFi 線索未經發卡行官網核實，目前僅錄卡名／發行方／卡組織／借還類型等身份信息，全部規格待核實階段回官網確認後重寫",
-    "數據來源": "CardFi 線索（card.lengziyu.cn，未核實）"
+    "主要權益": "主打網上消費：網購簽賬享較高積分回贈、指定網上商戶再高一級（每月設受惠簽賬上限）；另有機票及酒店預訂優惠與 Visa 私人禮賓服務",
+    "免年費條件": "主卡首年年費豁免、附屬卡豁免年費（官網專頁「年費優惠」安排）",
+    "外幣交易費": "1.95%（中銀信用卡 KFS 通用口徑）",
+    "免息期": "最長 56 天（中銀信用卡 KFS 通用口徑）",
+    "發行情況": "現行在發；原中銀旅遊賞 Visa Signature 卡更名而來",
+    "數據狀態": "核心字段已回發卡行官網核實（2026-10-08）；未核項見 verification.missing_fields",
+    "數據來源": "發卡行官網（見 verification.source_refs）"
    },
-   "review": "CardFi 線索導入（未核實）：卡名、發行方、卡組織、類型為線索站所列，尚未回發卡行官網核實；規格、等級與發行狀態待核實階段確認後重寫。",
+   "review": "官網設獨立產品專頁且正文已抓實，卡名、Visa 組織、更名沿革與年費優惠安排均有官網一手出處，判 A；年費金額、申請資格留缺項待覆核。",
    "keywords": [
-    "中银香港",
-    "BOC Bliss 卡"
+    "中銀Bliss卡",
+    "BOC Bliss Card",
+    "中國銀行（香港）有限公司"
    ],
-   "url": "https://www.bochk.com/en/creditcard.html",
+   "url": "https://www.bochk.com/s/a/bliss",
    "funding_modes": [
     "credit"
    ],
@@ -7975,47 +7988,62 @@
    "region_code": "HK",
    "added": "2026-10-08",
    "verification": {
-    "status": "lead_unverified",
-    "missing_fields": [
-     "獨立產品專頁正文未成功抓取",
-     "年費金額與免年費條件",
-     "申請資格（年薪／資產要求）",
-     "貨幣轉換費",
-     "免息期",
-     "主要權益明細"
-    ],
-    "conflicts": [],
+    "status": "core_verified",
+    "evidence_level_overall": "A",
     "source_refs": [
      {
-      "role": "lead",
+      "role": "官方產品專頁",
+      "title": "全新中銀Bliss Card|網購簽賬|中國銀行(香港)有限公司",
+      "url": "https://www.bochk.com/s/a/bliss",
+      "publisher": "www.bochk.com",
+      "accessed_at": "2026-10-08",
+      "evidence_grade": "A",
+      "facts_supported": [
+       "官網獨立產品專頁正名中銀Bliss Card，現行在發",
+       "頁面展示 Visa 標誌及 Visa 私人禮賓服務",
+       "專頁載年費優惠：主卡首年豁免、附屬卡豁免"
+      ]
+     },
+     {
+      "role": "官網更名通告",
+      "title": "Notice | Credit Card（2026 年通告列表）",
+      "url": "https://www.bochk.com/en/creditcard/notice.html",
+      "publisher": "www.bochk.com",
+      "accessed_at": "2026-10-08",
+      "evidence_grade": "A",
+      "facts_supported": [
+       "載中銀旅遊賞 Visa Signature 卡更名／轉換為中銀 Bliss Card 的服務提示"
+      ]
+     },
+     {
+      "role": "官方收費文件",
+      "title": "中銀信用卡主要條款及細則摘要（KFS，生效日期 2023-10-29）",
+      "url": "https://www.bochk.com/creditcard/chi/spec/prom17520/kfs_chi_202312.pdf",
+      "publisher": "www.bochk.com",
+      "accessed_at": "2026-10-08",
+      "evidence_grade": "A",
+      "facts_supported": [
+       "全行通用免息期最長 56 天、外幣交易收費 1.95%（版本日期 2023-10-29，現行數字待最新版覆核）"
+      ]
+     },
+     {
+      "role": "lead_original",
       "url": "https://card.lengziyu.cn/card/boc-hk-cardtype-267",
       "publisher": "CardFi（線索站，未核實）",
       "accessed_at": "2026-10-08"
-     },
-     {
-      "role": "官網信用卡總頁／導覽",
-      "title": "Credit Card | Bank of China (Hong Kong) Limited",
-      "url": "https://www.bochk.com/en/creditcard.html",
-      "publisher": "www.bochk.com",
-      "accessed_at": "2026-10-08",
-      "evidence_grade": "A",
-      "facts_supported": [
-       "官網現行信用卡導覽列有 BOC Bliss Card",
-       "官網通告提及旅遊Visa Signature卡更名為 Bliss 卡"
-      ]
-     },
-     {
-      "role": "官方推廣條款",
-      "title": "Banking TrendyToo Welcome Reward Promotion Terms",
-      "url": "https://www.bochk.com/dam/more/trendytoo/26q3welcome_en.pdf",
-      "publisher": "www.bochk.com",
-      "accessed_at": "2026-10-08",
-      "evidence_grade": "A",
-      "facts_supported": [
-       "合資格信用卡名單包含 BOC Bliss Card，證明現行在發"
-      ]
      }
-    ]
+    ],
+    "verified_at": "2026-10-08",
+    "last_checked_at": "2026-10-08",
+    "next_review_at": "2026-11-07",
+    "review_cadence_days": 30,
+    "missing_fields": [
+     "申請資格：專頁未見年薪／資產門檻數字，未能以官網一手資料坐實",
+     "Bliss 專屬現行年費金額：專頁只載首年／附屬卡豁免安排；KFS 級距數字版本待最新版覆核",
+     "貨幣轉換費與免息期現行數字：現按 2023 年版 KFS 通用口徑，待最新版覆核"
+    ],
+    "conflicts": [],
+    "manual_questions": []
    }
   },
   {
@@ -9328,179 +9356,6 @@
    }
   },
   {
-   "id": "fxhk-130",
-   "name": "BNU 澳門大西洋銀行 Visa 卡（Classic 級別待坐實）",
-   "name_en": "BNU Visa Card (Classic tier to be confirmed)",
-   "bank": "澳門大西洋銀行（BNU）",
-   "org": "visa",
-   "type": "credit",
-   "card_level": null,
-   "issue_status": "active",
-   "status": "在發",
-   "specs": {
-    "數據狀態": "待核：CardFi 線索未經發卡行官網核實，目前僅錄卡名／發行方／卡組織／借還類型等身份信息，全部規格待核實階段回官網確認後重寫",
-    "數據來源": "CardFi 線索（card.lengziyu.cn，未核實）"
-   },
-   "review": "CardFi 線索導入（未核實）：卡名、發行方、卡組織、類型為線索站所列，尚未回發卡行官網核實；規格、等級與發行狀態待核實階段確認後重寫。",
-   "keywords": [
-    "中银香港",
-    "Boc Hk Bnu Macau Visa Classic"
-   ],
-   "url": "https://www.bnu.com.mo/applications/credit-cards/15",
-   "funding_modes": [
-    "credit"
-   ],
-   "image": null,
-   "region": "香港",
-   "region_code": "HK",
-   "added": "2026-10-08",
-   "verification": {
-    "status": "lead_unverified",
-    "missing_fields": [
-     "BNU Visa Classic 的獨立產品頁／年費／級別確認"
-    ],
-    "conflicts": [],
-    "source_refs": [
-     {
-      "role": "lead",
-      "url": "https://card.lengziyu.cn/card/boc-hk-bnu-macau-visa-classic",
-      "publisher": "CardFi（線索站，未核實）",
-      "accessed_at": "2026-10-08"
-     },
-     {
-      "role": "official_issuer",
-      "title": "BNU Credit Card Online Application",
-      "url": "https://www.bnu.com.mo/applications/credit-cards/15",
-      "publisher": "www.bnu.com.mo",
-      "accessed_at": "2026-10-08",
-      "evidence_grade": "A",
-      "facts_supported": [
-       "BNU 自行受理信用卡申請，發行主體為 BNU"
-      ]
-     },
-     {
-      "role": "official_news",
-      "title": "BNU brings Apple Pay to Visa credit cards (BNU 官網 PDF)",
-      "url": "https://www.bnu.com.mo/storage/documents/PRs/BNU brings Apple Pay to Visa credit cards - EN.pdf",
-      "publisher": "www.bnu.com.mo",
-      "accessed_at": "2026-10-08",
-      "evidence_grade": "A",
-      "facts_supported": [
-       "BNU 發行 Visa 信用卡"
-      ]
-     }
-    ]
-   }
-  },
-  {
-   "id": "fxhk-131",
-   "name": "BNU 澳門大西洋銀行 Visa 卡（Platinum 級別待坐實）",
-   "name_en": "BNU Visa Card (Platinum tier to be confirmed)",
-   "bank": "澳門大西洋銀行（BNU）",
-   "org": "visa",
-   "type": "credit",
-   "card_level": null,
-   "issue_status": "active",
-   "status": "在發",
-   "specs": {
-    "數據狀態": "待核：CardFi 線索未經發卡行官網核實，目前僅錄卡名／發行方／卡組織／借還類型等身份信息，全部規格待核實階段回官網確認後重寫",
-    "數據來源": "CardFi 線索（card.lengziyu.cn，未核實）"
-   },
-   "review": "CardFi 線索導入（未核實）：卡名、發行方、卡組織、類型為線索站所列，尚未回發卡行官網核實；規格、等級與發行狀態待核實階段確認後重寫。",
-   "keywords": [
-    "中银香港",
-    "Boc Hk Bnu Macau Visa Platinum"
-   ],
-   "url": "https://www.bnu.com.mo/applications/credit-cards/15",
-   "funding_modes": [
-    "credit"
-   ],
-   "image": null,
-   "region": "香港",
-   "region_code": "HK",
-   "added": "2026-10-08",
-   "verification": {
-    "status": "lead_unverified",
-    "missing_fields": [
-     "BNU Visa Platinum 的獨立產品頁／年費／級別確認"
-    ],
-    "conflicts": [],
-    "source_refs": [
-     {
-      "role": "lead",
-      "url": "https://card.lengziyu.cn/card/boc-hk-bnu-macau-visa-platinum",
-      "publisher": "CardFi（線索站，未核實）",
-      "accessed_at": "2026-10-08"
-     },
-     {
-      "role": "official_issuer",
-      "title": "BNU Credit Card Online Application",
-      "url": "https://www.bnu.com.mo/applications/credit-cards/15",
-      "publisher": "www.bnu.com.mo",
-      "accessed_at": "2026-10-08",
-      "evidence_grade": "A",
-      "facts_supported": [
-       "BNU 自行受理信用卡申請"
-      ]
-     },
-     {
-      "role": "official_news",
-      "title": "BNU brings Apple Pay to Visa credit cards (BNU 官網 PDF)",
-      "url": "https://www.bnu.com.mo/storage/documents/PRs/BNU brings Apple Pay to Visa credit cards - EN.pdf",
-      "publisher": "www.bnu.com.mo",
-      "accessed_at": "2026-10-08",
-      "evidence_grade": "A",
-      "facts_supported": [
-       "BNU 發行 Visa 信用卡"
-      ]
-     }
-    ]
-   }
-  },
-  {
-   "id": "fxhk-133",
-   "name": "未能識別（線索僅有 Cardtype 89 編號）",
-   "name_en": "",
-   "bank": "中國銀行（香港）有限公司",
-   "org": "unknown_pending",
-   "type": "credit",
-   "card_level": null,
-   "issue_status": "active",
-   "status": "在發",
-   "specs": {
-    "數據狀態": "待核：CardFi 線索未經發卡行官網核實，目前僅錄卡名／發行方／卡組織／借還類型等身份信息，全部規格待核實階段回官網確認後重寫",
-    "數據來源": "CardFi 線索（card.lengziyu.cn，未核實）"
-   },
-   "review": "CardFi 線索導入（未核實）：卡名、發行方、卡組織、類型為線索站所列，尚未回發卡行官網核實；規格、等級與發行狀態待核實階段確認後重寫。",
-   "keywords": [
-    "中银香港",
-    "Boc Hk Cardtype 89"
-   ],
-   "url": "",
-   "funding_modes": [
-    "credit"
-   ],
-   "image": null,
-   "region": "香港",
-   "region_code": "HK",
-   "added": "2026-10-08",
-   "verification": {
-    "status": "lead_unverified",
-    "missing_fields": [
-     "卡名、組織、級別全部缺失，無法對應任何官網產品"
-    ],
-    "conflicts": [],
-    "source_refs": [
-     {
-      "role": "lead",
-      "url": "https://card.lengziyu.cn/card/boc-hk-cardtype-89",
-      "publisher": "CardFi（線索站，未核實）",
-      "accessed_at": "2026-10-08"
-     }
-    ]
-   }
-  },
-  {
    "id": "fxhk-137",
    "name": "中銀Go卡（銀聯雙幣白金卡）",
    "name_en": "BOC Go Card (UnionPay Dual Currency Platinum)",
@@ -9721,71 +9576,6 @@
    }
   },
   {
-   "id": "fxhk-142",
-   "name": "中銀銀聯普通卡／經典級（泛稱 UnionPay Classic，獨立在發產品未坐實）",
-   "name_en": "BOC UnionPay Classic (generic tier, standalone product not confirmed)",
-   "bank": "中國銀行（香港）有限公司",
-   "org": "unionpay",
-   "type": "credit",
-   "card_level": "Classic",
-   "issue_status": "active",
-   "status": "在發",
-   "specs": {
-    "數據狀態": "待核：CardFi 線索未經發卡行官網核實，目前僅錄卡名／發行方／卡組織／借還類型等身份信息，全部規格待核實階段回官網確認後重寫",
-    "數據來源": "CardFi 線索（card.lengziyu.cn，未核實）"
-   },
-   "review": "CardFi 線索導入（未核實）：卡名、發行方、卡組織、類型為線索站所列，尚未回發卡行官網核實；規格、等級與發行狀態待核實階段確認後重寫。",
-   "keywords": [
-    "中银香港",
-    "Boc Hk Unionpay Classic"
-   ],
-   "url": "",
-   "funding_modes": [
-    "credit"
-   ],
-   "image": null,
-   "region": "香港",
-   "region_code": "HK",
-   "added": "2026-10-08",
-   "verification": {
-    "status": "lead_unverified",
-    "missing_fields": [
-     "獨立產品頁、現行申請資格、是否仍公開發行"
-    ],
-    "conflicts": [],
-    "source_refs": [
-     {
-      "role": "lead",
-      "url": "https://card.lengziyu.cn/card/boc-hk-unionpay-classic",
-      "publisher": "CardFi（線索站，未核實）",
-      "accessed_at": "2026-10-08"
-     },
-     {
-      "role": "official_fees",
-      "title": "中銀信用卡主要條款及細則摘要",
-      "url": "https://www.bochk.com/creditcard/chi/spec/prom17520/kfs_chi_202312.pdf",
-      "publisher": "www.bochk.com",
-      "accessed_at": "2026-10-08",
-      "evidence_grade": "A",
-      "facts_supported": [
-       "普通卡年費級距、免息期"
-      ]
-     },
-     {
-      "role": "official_listing",
-      "title": "中銀信用卡核心卡列表",
-      "url": "https://www.bochk.com/tc/creditcard/details/boccreditcard.html",
-      "publisher": "www.bochk.com",
-      "accessed_at": "2026-10-08",
-      "evidence_grade": "A",
-      "facts_supported": [
-       "現行列表以品牌卡為主，無獨立銀聯普通卡頁"
-      ]
-     }
-    ]
-   }
-  },
-  {
    "id": "fxhk-143",
    "name": "中銀銀聯雙幣鑽石卡",
    "name_en": "BOC CUP Dual Currency Diamond Card",
@@ -9860,136 +9650,6 @@
     "missing_fields": [],
     "conflicts": [],
     "manual_questions": []
-   }
-  },
-  {
-   "id": "fxhk-144",
-   "name": "中銀 Visa 普通卡／經典級（泛稱 Visa Classic，獨立在發產品未坐實）",
-   "name_en": "BOC Visa Classic (generic tier, standalone product not confirmed)",
-   "bank": "中國銀行（香港）有限公司",
-   "org": "visa",
-   "type": "credit",
-   "card_level": "Classic",
-   "issue_status": "active",
-   "status": "在發",
-   "specs": {
-    "數據狀態": "待核：CardFi 線索未經發卡行官網核實，目前僅錄卡名／發行方／卡組織／借還類型等身份信息，全部規格待核實階段回官網確認後重寫",
-    "數據來源": "CardFi 線索（card.lengziyu.cn，未核實）"
-   },
-   "review": "CardFi 線索導入（未核實）：卡名、發行方、卡組織、類型為線索站所列，尚未回發卡行官網核實；規格、等級與發行狀態待核實階段確認後重寫。",
-   "keywords": [
-    "中银香港",
-    "Boc Hk Visa Classic"
-   ],
-   "url": "",
-   "funding_modes": [
-    "credit"
-   ],
-   "image": null,
-   "region": "香港",
-   "region_code": "HK",
-   "added": "2026-10-08",
-   "verification": {
-    "status": "lead_unverified",
-    "missing_fields": [
-     "獨立產品頁、現行申請資格、是否仍公開發行"
-    ],
-    "conflicts": [],
-    "source_refs": [
-     {
-      "role": "lead",
-      "url": "https://card.lengziyu.cn/card/boc-hk-visa-classic",
-      "publisher": "CardFi（線索站，未核實）",
-      "accessed_at": "2026-10-08"
-     },
-     {
-      "role": "official_fees",
-      "title": "中銀信用卡主要條款及細則摘要",
-      "url": "https://www.bochk.com/creditcard/chi/spec/prom17520/kfs_chi_202312.pdf",
-      "publisher": "www.bochk.com",
-      "accessed_at": "2026-10-08",
-      "evidence_grade": "A",
-      "facts_supported": [
-       "普通卡年費級距、外幣收費、免息期"
-      ]
-     },
-     {
-      "role": "official_listing",
-      "title": "中銀信用卡核心卡列表",
-      "url": "https://www.bochk.com/tc/creditcard/details/boccreditcard.html",
-      "publisher": "www.bochk.com",
-      "accessed_at": "2026-10-08",
-      "evidence_grade": "A",
-      "facts_supported": [
-       "現行列表無獨立 Visa 普通卡頁"
-      ]
-     }
-    ]
-   }
-  },
-  {
-   "id": "fxhk-145",
-   "name": "中銀 Visa 白金卡（泛稱 Visa Platinum，獨立主品牌產品未坐實；白金級主要以聯名卡形式發行）",
-   "name_en": "BOC Visa Platinum (generic tier, standalone product not confirmed)",
-   "bank": "中國銀行（香港）有限公司",
-   "org": "visa",
-   "type": "credit",
-   "card_level": "Platinum",
-   "issue_status": "active",
-   "status": "在發",
-   "specs": {
-    "數據狀態": "待核：CardFi 線索未經發卡行官網核實，目前僅錄卡名／發行方／卡組織／借還類型等身份信息，全部規格待核實階段回官網確認後重寫",
-    "數據來源": "CardFi 線索（card.lengziyu.cn，未核實）"
-   },
-   "review": "CardFi 線索導入（未核實）：卡名、發行方、卡組織、類型為線索站所列，尚未回發卡行官網核實；規格、等級與發行狀態待核實階段確認後重寫。",
-   "keywords": [
-    "中银香港",
-    "Boc Hk Visa Platinum"
-   ],
-   "url": "",
-   "funding_modes": [
-    "credit"
-   ],
-   "image": null,
-   "region": "香港",
-   "region_code": "HK",
-   "added": "2026-10-08",
-   "verification": {
-    "status": "lead_unverified",
-    "missing_fields": [
-     "獨立泛稱產品頁、申請資格、是否仍以主品牌公開發行"
-    ],
-    "conflicts": [],
-    "source_refs": [
-     {
-      "role": "lead",
-      "url": "https://card.lengziyu.cn/card/boc-hk-visa-platinum",
-      "publisher": "CardFi（線索站，未核實）",
-      "accessed_at": "2026-10-08"
-     },
-     {
-      "role": "official_fees",
-      "title": "中銀信用卡主要條款及細則摘要",
-      "url": "https://www.bochk.com/creditcard/chi/spec/prom17520/kfs_chi_202312.pdf",
-      "publisher": "www.bochk.com",
-      "accessed_at": "2026-10-08",
-      "evidence_grade": "A",
-      "facts_supported": [
-       "白金卡年費級距"
-      ]
-     },
-     {
-      "role": "official_product",
-      "title": "中銀香港航空Visa卡產品頁（載有 Visa 白金卡版本）",
-      "url": "https://www.bochk.com/tc/creditcard/details/cobrand/cobrand/hka.html",
-      "publisher": "www.bochk.com",
-      "accessed_at": "2026-10-08",
-      "evidence_grade": "A",
-      "facts_supported": [
-       "Visa 白金級以聯名卡版本形式存在"
-      ]
-     }
-    ]
    }
   },
   {
@@ -10681,23 +10341,30 @@
    }
   },
   {
-   "id": "fxhk-156",
-   "name": "DBS Eminent 卡（系列，含兩張）",
-   "name_en": "DBS Eminent Card (Visa Signature / Visa Platinum)",
+   "id": "fxhk-178",
+   "name": "DBS Eminent Visa Signature 卡",
+   "name_en": "DBS Eminent VISA Signature Card",
    "bank": "星展銀行（香港）有限公司",
    "org": "visa",
    "type": "credit",
-   "card_level": null,
+   "card_level": "Visa Signature",
    "issue_status": "active",
    "status": "在發",
    "specs": {
-    "數據狀態": "待核：CardFi 線索未經發卡行官網核實，目前僅錄卡名／發行方／卡組織／借還類型等身份信息，全部規格待核實階段回官網確認後重寫",
-    "數據來源": "CardFi 線索（card.lengziyu.cn，未核實）"
+    "主要權益": "登記 Eminent 回贈計劃後指定類別合資格簽賬最高 5% 回贈（每曆月首 HK$8,000 計入上限）；其他零售簽賬最高 1%（每曆月首 HK$20,000 計入上限）；電子錢包零售簽賬另設每月首 HK$5,000 受惠範圍",
+    "年費": "主卡 HK$2,000、附屬卡 HK$1,000（DBS 信用卡 KFS）",
+    "申請資格": "最低年薪 HK$360,000；未達門檻者申請改按 Eminent Visa Platinum 卡審批",
+    "外幣交易費": "1.95%",
+    "免息期": "最長 60 天",
+    "發行情況": "現行在發",
+    "數據狀態": "核心字段已回發卡行官網核實（2026-10-08）；未核項見 verification.missing_fields",
+    "數據來源": "發卡行官網（見 verification.source_refs）"
    },
-   "review": "CardFi 線索導入（未核實）：卡名、發行方、卡組織、類型為線索站所列，尚未回發卡行官網核實；規格、等級與發行狀態待核實階段確認後重寫。",
+   "review": "由 fxhk-156 系列條拆出：官網回贈上限、年薪門檻與 KFS 年費均按級分列，獨立成條，判 A。",
    "keywords": [
-    "星展香港",
-    "Dbs Hk Eminent"
+    "DBS Eminent Visa Signature 卡",
+    "DBS Eminent VISA Signature Card",
+    "星展銀行（香港）有限公司"
    ],
    "url": "https://www.dbs.com.hk/personal/promotion/eminent-5percent-cashrebate",
    "funding_modes": [
@@ -10708,52 +10375,147 @@
    "region_code": "HK",
    "added": "2026-10-08",
    "verification": {
-    "status": "lead_unverified",
-    "missing_fields": [
-     "線索未分等級，無法以一條同時準確記錄年費、年薪門檻與回贈上限"
-    ],
-    "conflicts": [],
+    "status": "core_verified",
+    "evidence_level_overall": "A",
     "source_refs": [
      {
-      "role": "lead",
-      "url": "https://card.lengziyu.cn/card/dbs-hk-eminent",
-      "publisher": "CardFi（線索站，未核實）",
-      "accessed_at": "2026-10-08"
-     },
-     {
-      "role": "推廣/產品頁",
-      "title": "DBS Eminent Card - DBS Hong Kong",
+      "role": "官方產品／推廣頁",
+      "title": "DBS Eminent Card",
       "url": "https://www.dbs.com.hk/personal/promotion/eminent-5percent-cashrebate",
       "publisher": "www.dbs.com.hk",
       "accessed_at": "2026-10-08",
       "evidence_grade": "A",
       "facts_supported": [
-       "Eminent為Visa系列、5%指定類別及1%其他簽賬、兩級每月回贈上限不同"
+       "Eminent 回贈計劃分 Visa Signature 與 Visa Platinum 兩級、回贈上限分開計算，屬兩張獨立產品"
       ]
      },
      {
-      "role": "申請資格頁",
-      "title": "Annual income requirement for principal credit card application - DBS Hong Kong",
+      "role": "官網資格頁",
+      "title": "Annual income requirement for principal credit card application",
       "url": "https://www.dbs.com.hk/personal/support/card-annual-income-requirement-for-principal-credit-card-application.html",
       "publisher": "www.dbs.com.hk",
       "accessed_at": "2026-10-08",
       "evidence_grade": "A",
       "facts_supported": [
-       "Signature年薪港幣360,000、Platinum年薪港幣150,000，未達標轉白金審批"
+       "Eminent Visa Signature 最低年薪 HK$360,000；未達門檻改按 Visa Platinum 審批",
+       "Eminent Visa Platinum 最低年薪 HK$150,000"
       ]
      },
      {
-      "role": "重要資料概要",
-      "title": "Key Facts Statement for DBS Credit Cards - DBS Hong Kong",
+      "role": "官方收費文件",
+      "title": "Key Facts Statement for DBS Credit Cards（2025 年 6 月 1 日版）",
       "url": "http://www.dbs.com.hk/personal/credit-cards/key-statement-tnc.htm",
       "publisher": "www.dbs.com.hk",
       "accessed_at": "2026-10-08",
       "evidence_grade": "A",
       "facts_supported": [
-       "Visa Signature年費港幣2,000、Visa Platinum年費港幣1,800"
+       "Visa Signature 主卡年費 HK$2,000、附屬卡 HK$1,000",
+       "VISA Platinum 主卡年費 HK$1,800、附屬卡 HK$900",
+       "非港幣交易費 1.95%、免息期最長 60 天"
       ]
+     },
+     {
+      "role": "lead_original",
+      "url": "https://card.lengziyu.cn/card/dbs-hk-eminent",
+      "publisher": "CardFi（線索站，未核實）",
+      "accessed_at": "2026-10-08"
      }
-    ]
+    ],
+    "verified_at": "2026-10-08",
+    "last_checked_at": "2026-10-08",
+    "next_review_at": "2026-11-07",
+    "review_cadence_days": 30,
+    "missing_fields": [],
+    "conflicts": [],
+    "manual_questions": []
+   }
+  },
+  {
+   "id": "fxhk-179",
+   "name": "DBS Eminent Visa Platinum 卡",
+   "name_en": "DBS Eminent VISA Platinum Card",
+   "bank": "星展銀行（香港）有限公司",
+   "org": "visa",
+   "type": "credit",
+   "card_level": "Visa Platinum",
+   "issue_status": "active",
+   "status": "在發",
+   "specs": {
+    "主要權益": "登記 Eminent 回贈計劃後指定類別合資格簽賬最高 5% 回贈（每曆月首 HK$4,000 計入上限）；其他零售簽賬最高 1%（每曆月首 HK$15,000 計入上限）；電子錢包零售簽賬另設每月首 HK$5,000 受惠範圍",
+    "年費": "主卡 HK$1,800、附屬卡 HK$900（DBS 信用卡 KFS）",
+    "申請資格": "最低年薪 HK$150,000",
+    "外幣交易費": "1.95%",
+    "免息期": "最長 60 天",
+    "發行情況": "現行在發",
+    "數據狀態": "核心字段已回發卡行官網核實（2026-10-08）；未核項見 verification.missing_fields",
+    "數據來源": "發卡行官網（見 verification.source_refs）"
+   },
+   "review": "由 fxhk-156 系列條拆出：官網回贈上限、年薪門檻與 KFS 年費均按級分列，獨立成條，判 A。",
+   "keywords": [
+    "DBS Eminent Visa Platinum 卡",
+    "DBS Eminent VISA Platinum Card",
+    "星展銀行（香港）有限公司"
+   ],
+   "url": "https://www.dbs.com.hk/personal/promotion/eminent-5percent-cashrebate",
+   "funding_modes": [
+    "credit"
+   ],
+   "image": null,
+   "region": "香港",
+   "region_code": "HK",
+   "added": "2026-10-08",
+   "verification": {
+    "status": "core_verified",
+    "evidence_level_overall": "A",
+    "source_refs": [
+     {
+      "role": "官方產品／推廣頁",
+      "title": "DBS Eminent Card",
+      "url": "https://www.dbs.com.hk/personal/promotion/eminent-5percent-cashrebate",
+      "publisher": "www.dbs.com.hk",
+      "accessed_at": "2026-10-08",
+      "evidence_grade": "A",
+      "facts_supported": [
+       "Eminent 回贈計劃分 Visa Signature 與 Visa Platinum 兩級、回贈上限分開計算"
+      ]
+     },
+     {
+      "role": "官網資格頁",
+      "title": "Annual income requirement for principal credit card application",
+      "url": "https://www.dbs.com.hk/personal/support/card-annual-income-requirement-for-principal-credit-card-application.html",
+      "publisher": "www.dbs.com.hk",
+      "accessed_at": "2026-10-08",
+      "evidence_grade": "A",
+      "facts_supported": [
+       "Eminent Visa Platinum 最低年薪 HK$150,000"
+      ]
+     },
+     {
+      "role": "官方收費文件",
+      "title": "Key Facts Statement for DBS Credit Cards（2025 年 6 月 1 日版）",
+      "url": "http://www.dbs.com.hk/personal/credit-cards/key-statement-tnc.htm",
+      "publisher": "www.dbs.com.hk",
+      "accessed_at": "2026-10-08",
+      "evidence_grade": "A",
+      "facts_supported": [
+       "VISA Platinum 主卡年費 HK$1,800、附屬卡 HK$900",
+       "非港幣交易費 1.95%、免息期最長 60 天"
+      ]
+     },
+     {
+      "role": "lead_original",
+      "url": "https://card.lengziyu.cn/card/dbs-hk-eminent",
+      "publisher": "CardFi（線索站，未核實）",
+      "accessed_at": "2026-10-08"
+     }
+    ],
+    "verified_at": "2026-10-08",
+    "last_checked_at": "2026-10-08",
+    "next_review_at": "2026-11-07",
+    "review_cadence_days": 30,
+    "missing_fields": [],
+    "conflicts": [],
+    "manual_questions": []
    }
   },
   {
@@ -11243,15 +11005,22 @@
    "issue_status": "active",
    "status": "在發",
    "specs": {
-    "數據狀態": "待核：CardFi 線索未經發卡行官網核實，目前僅錄卡名／發行方／卡組織／借還類型等身份信息，全部規格待核實階段回官網確認後重寫",
-    "數據來源": "CardFi 線索（card.lengziyu.cn，未核實）"
+    "主要權益": "百老匯院線正價戲票九折、購物保障、Membership Rewards 積分（基本計劃每 HK$1 得 1 分、積分不過期）",
+    "年費": "主卡 HK$180、附屬卡 HK$100（官網 KFS）",
+    "申請資格": "年滿 18 歲及香港居民／公民（官網產品頁；未公布最低年薪數字）",
+    "貨幣轉換費": "非港幣交易金額 2%",
+    "免息期": "最長 56 天",
+    "發行情況": "現行在發，為運通香港基本個人信用卡",
+    "數據狀態": "核心字段已回發卡行官網核實（2026-10-08）；未核項見 verification.missing_fields",
+    "數據來源": "發卡行官網（見 verification.source_refs）"
    },
-   "review": "CardFi 線索導入（未核實）：卡名、發行方、卡組織、類型為線索站所列，尚未回發卡行官網核實；規格、等級與發行狀態待核實階段確認後重寫。",
+   "review": "官網產品頁與 KFS 已坐實卡名、組織、年費、外幣費、免息期與基本資格，研究組因免年費條件與年薪門檻未載原判 C；按前兩批 A 口徑（核心坐實、非核心留缺項）升 A，缺項保留待覆核。",
    "keywords": [
-    "美国运通香港",
-    "美国运通香港 Green 信用卡"
+    "美國運通信用卡",
+    "American Express® Credit Card",
+    "美國運通國際股份有限公司"
    ],
-   "url": "https://www.americanexpress.com/hk/en/credit-cards/?inav=hk_footer_card_creditcards",
+   "url": "https://www.americanexpress.com/hk/en/credit-cards/american-express-credit-card/?linknav=hk-amex-cardshop-details-browse-AmericanExpressCreditCard",
    "funding_modes": [
     "credit"
    ],
@@ -11260,56 +11029,52 @@
    "region_code": "HK",
    "added": "2026-10-08",
    "verification": {
-    "status": "lead_unverified",
-    "missing_fields": [
-     "基本卡年費金額",
-     "免年費條件",
-     "最低年薪/申請資格",
-     "貨幣轉換費",
-     "免息期"
-    ],
-    "conflicts": [],
+    "status": "core_verified",
+    "evidence_level_overall": "A",
     "source_refs": [
      {
-      "role": "lead",
+      "role": "官方產品專頁",
+      "title": "American Express Credit Card | AMEX Hong Kong",
+      "url": "https://www.americanexpress.com/hk/en/credit-cards/american-express-credit-card/?linknav=hk-amex-cardshop-details-browse-AmericanExpressCreditCard",
+      "publisher": "www.americanexpress.com",
+      "accessed_at": "2026-10-08",
+      "evidence_grade": "A",
+      "facts_supported": [
+       "官網現行產品頁正名 American Express Credit Card，年費 HK$180",
+       "資格為年滿 18 歲及香港居民／公民",
+       "戲票九折、購物保障與積分安排"
+      ]
+     },
+     {
+      "role": "官方收費文件",
+      "title": "Key Facts Statement / Fees and Charges Schedule for American Express® Credit Card / Gold Credit Card（2024 年 6 月生效）",
+      "url": "https://icm.aexp-static.com/globalcardapp/cards/hk/content/common/term_and_conditions/en_hk/KFS/green_credit.pdf",
+      "publisher": "icm.aexp-static.com（美國運通官網文件）",
+      "accessed_at": "2026-10-08",
+      "evidence_grade": "A",
+      "facts_supported": [
+       "基本卡年費主卡 HK$180、附屬卡 HK$100",
+       "非港幣零售交易費 2%",
+       "免息期最長 56 天"
+      ]
+     },
+     {
+      "role": "lead_original",
       "url": "https://card.lengziyu.cn/card/amex-hk-green-credit",
       "publisher": "CardFi（線索站，未核實）",
       "accessed_at": "2026-10-08"
-     },
-     {
-      "role": "產品列表",
-      "title": "Credit Cards | American Express Hong Kong",
-      "url": "https://www.americanexpress.com/hk/en/credit-cards/?inav=hk_footer_card_creditcards",
-      "publisher": "www.americanexpress.com",
-      "accessed_at": "2026-10-08",
-      "evidence_grade": "A",
-      "facts_supported": [
-       "美國運通信用卡列入現行信用卡名單、戲票9折禮遇"
-      ]
-     },
-     {
-      "role": "附屬卡頁",
-      "title": "HK Supplementary Card Hub",
-      "url": "https://www.americanexpress.com/hk/en/benefits/additional-card/?sc=A0000FP3HC&cpid=100435279&intlink=hk-en-hp-ico2-all-suppcard-052021",
-      "publisher": "www.americanexpress.com",
-      "accessed_at": "2026-10-08",
-      "evidence_grade": "A",
-      "facts_supported": [
-       "信用卡在現行卡名單內、附屬卡收費脈絡"
-      ]
-     },
-     {
-      "role": "積分計劃頁",
-      "title": "有關積分計劃 | 美國運通",
-      "url": "https://www.americanexpress.com/zh-hk/rewards/membership-rewards/about-program/",
-      "publisher": "www.americanexpress.com",
-      "accessed_at": "2026-10-08",
-      "evidence_grade": "A",
-      "facts_supported": [
-       "信用卡列入「加倍加賞」積分計劃適用卡"
-      ]
      }
-    ]
+    ],
+    "verified_at": "2026-10-08",
+    "last_checked_at": "2026-10-08",
+    "next_review_at": "2026-11-07",
+    "review_cadence_days": 30,
+    "missing_fields": [
+     "免年費條件：產品頁與 KFS 均未載消費達標免年費或首年豁免安排",
+     "最低年薪／入息門檻：官網產品頁未公布數字"
+    ],
+    "conflicts": [],
+    "manual_questions": []
    }
   },
   {
@@ -11574,10 +11339,10 @@
    "verification": {
     "status": "lead_unverified",
     "missing_fields": [
-     "申請資格（收入/年齡要求）",
-     "免年費條件",
-     "卡等級",
-     "是否仍接受新申請"
+     "申請資格（最低年薪／年齡）：產品頁未載、KFS 不列申請門檻",
+     "免年費條件：產品頁與 KFS 均未載",
+     "卡等級：官網未見 Clear 的組織級別標示",
+     "是否仍接受新申請：現行可申請列表已無此卡、產品頁無申請入口，待官方正式公布"
     ],
     "conflicts": [],
     "source_refs": [
@@ -11631,7 +11396,8 @@
        "現行列表載 Prestige、PremierMiles、Cash Back、Rewards、Plus、八達通白金、HKTVmall、The Club，未列 Clear"
       ]
      }
-    ]
+    ],
+    "last_checked_at": "2026-10-08"
    }
   },
   {
@@ -12894,7 +12660,7 @@
    "verification": {
     "status": "lead_unverified",
     "missing_fields": [
-     "卡組織（線索標 Visa，官網正文未直證，待坐實）",
+     "卡組織（官網 Advantage Banking 頁與 Personal Schedule of Fees 未就此借記卡直證）",
      "卡等級"
     ],
     "conflicts": [
@@ -12920,7 +12686,8 @@
        "借記卡須持支票戶使用"
       ]
      }
-    ]
+    ],
+    "last_checked_at": "2026-10-08"
    }
   },
   {
@@ -12953,9 +12720,8 @@
    "verification": {
     "status": "lead_unverified",
     "missing_fields": [
-     "卡組織（官網正文未載，未定版）",
-     "卡等級",
-     "產品頁 Pricing 條款未打開"
+     "卡組織（美版官網產品頁正文未載）",
+     "卡等級"
     ],
     "conflicts": [
      "線索組織未定，官網正文亦未載，維持未定版"
@@ -12979,8 +12745,20 @@
        "全部消費 1.5% 返現、年費 $0",
        "經 Capital One Travel 預訂 5% 返現"
       ]
+     },
+     {
+      "role": "官方產品頁",
+      "title": "Quicksilver Cash Back Rewards Card | Capital One",
+      "url": "https://www.capitalone.com/credit-cards/quicksilver/",
+      "publisher": "www.capitalone.com",
+      "accessed_at": "2026-10-08",
+      "evidence_grade": "A",
+      "facts_supported": [
+       "無限返現、年費 US$0、免境外交易費；正文未載組織與等級"
+      ]
      }
-    ]
+    ],
+    "last_checked_at": "2026-10-08"
    }
   },
   {
@@ -13013,8 +12791,8 @@
    "verification": {
     "status": "lead_unverified",
     "missing_fields": [
-     "卡組織（官網產品頁正文未載，未定版）",
-     "卡等級"
+     "卡組織（官網產品頁正文未載）",
+     "卡等級英文原詞"
     ],
     "conflicts": [
      "線索標 Visa，官網正文未載組織，已改未定版"
@@ -13040,7 +12818,8 @@
        "無境外交易費"
       ]
      }
-    ]
+    ],
+    "last_checked_at": "2026-10-08"
    }
   },
   {
@@ -13048,21 +12827,26 @@
    "name": "Capital One Venture X",
    "name_en": "Capital One Venture X",
    "bank": "Capital One",
-   "org": "unknown_pending",
+   "org": "visa",
    "type": "credit",
-   "card_level": null,
+   "card_level": "Visa Infinite",
    "issue_status": "active",
    "status": "在發",
    "specs": {
-    "數據狀態": "待核：CardFi 線索未經發卡行官網核實，目前僅錄卡名／發行方／卡組織／借還類型等身份信息，全部規格待核實階段回官網確認後重寫",
-    "數據來源": "CardFi 線索（card.lengziyu.cn，未核實）"
+    "主要權益": "高端旅遊卡：經 Capital One Travel 預訂享高倍里程與年度旅遊抵免、週年里程、機場貴賓室權益",
+    "年費": "US$395（官網對比內容）",
+    "卡等級": "Visa Infinite（官網權益註腳明文）",
+    "發行情況": "現行在發",
+    "數據狀態": "核心字段已回發卡行官網核實（2026-10-08）；未核項見 verification.missing_fields",
+    "數據來源": "發卡行官網（見 verification.source_refs）"
    },
-   "review": "CardFi 線索導入（未核實）：卡名、發行方、卡組織、類型為線索站所列，尚未回發卡行官網核實；規格、等級與發行狀態待核實階段確認後重寫。",
+   "review": "官網產品頁註腳直證 Visa Infinite 等級與組織，前批「組織未定版」缺項解除，判 A。",
    "keywords": [
-    "Capital One",
-    "Capital One Venture X"
+    "Capital One Venture X",
+    "Capital One Venture X",
+    "Capital One"
    ],
-   "url": "https://www.capitalone.com/learn-grow/more-than-money/all-about-venture-x/",
+   "url": "https://www.capitalone.com/credit-cards/venturex/",
    "funding_modes": [
     "credit"
    ],
@@ -13071,37 +12855,35 @@
    "region_code": "US",
    "added": "2026-10-08",
    "verification": {
-    "status": "lead_unverified",
-    "missing_fields": [
-     "卡組織（官網正文未載，未定版）",
-     "卡等級英文原詞",
-     "獨立產品頁未成功打開（限流）"
-    ],
-    "conflicts": [
-     "線索組織未定，官網正文亦未載，維持未定版"
-    ],
+    "status": "core_verified",
+    "evidence_level_overall": "A",
     "source_refs": [
      {
-      "role": "lead",
-      "url": "https://card.lengziyu.cn/card/capital-one-venture-x",
-      "publisher": "CardFi（線索站，未核實）",
-      "accessed_at": "2026-10-08"
-     },
-     {
-      "role": "官網產品頁/對比頁（關鍵項未清）",
-      "title": "All About the Capital One Venture X Card | Capital One",
-      "url": "https://www.capitalone.com/learn-grow/more-than-money/all-about-venture-x/",
+      "role": "官方產品專頁",
+      "title": "Venture X Rewards | Capital One",
+      "url": "https://www.capitalone.com/credit-cards/venturex/",
       "publisher": "www.capitalone.com",
       "accessed_at": "2026-10-08",
       "evidence_grade": "A",
       "facts_supported": [
-       "官網文章與對比表確認獨立卡現行在發",
-       "年費 $395",
-       "旅行預訂 10X/5X、其餘 2X 里程",
-       "每年 $300 旅行抵免與週年里程"
+       "權益註腳明文 Visa Infinite 並連其 Guide to Benefits",
+       "年費 US$395、年度旅遊抵免與週年里程"
       ]
+     },
+     {
+      "role": "lead_original",
+      "url": "https://card.lengziyu.cn/card/capital-one-venture-x",
+      "publisher": "CardFi（線索站，未核實）",
+      "accessed_at": "2026-10-08"
      }
-    ]
+    ],
+    "verified_at": "2026-10-08",
+    "last_checked_at": "2026-10-08",
+    "next_review_at": "2026-11-07",
+    "review_cadence_days": 30,
+    "missing_fields": [],
+    "conflicts": [],
+    "manual_questions": []
    }
   },
   {
@@ -13266,8 +13048,7 @@
    "verification": {
     "status": "lead_unverified",
     "missing_fields": [
-     "卡等級",
-     "個人產品頁 Pricing 年費行未複核（詳情頁遇限流未開）"
+     "卡等級英文原詞（官網對比頁未印級別字樣）"
     ],
     "conflicts": [],
     "source_refs": [
@@ -13291,7 +13072,8 @@
        "無年費（Chase 官方新聞稿）"
       ]
      }
-    ]
+    ],
+    "last_checked_at": "2026-10-08"
    }
   },
   {
@@ -13324,9 +13106,7 @@
    "verification": {
     "status": "lead_unverified",
     "missing_fields": [
-     "卡等級",
-     "個人產品頁正文未複核（詳情頁遇限流未開）",
-     "年度酒店抵免產品頁條款"
+     "卡等級英文原詞（官網對比頁未印級別字樣）"
     ],
     "conflicts": [],
     "source_refs": [
@@ -13350,7 +13130,8 @@
        "組織屬 Visa 類別（官網 Visa 對比頁）"
       ]
      }
-    ]
+    ],
+    "last_checked_at": "2026-10-08"
    }
   },
   {
@@ -13383,9 +13164,7 @@
    "verification": {
     "status": "lead_unverified",
     "missing_fields": [
-     "卡等級英文原詞",
-     "個人產品頁正文未複核（詳情頁遇限流未開）",
-     "貴賓室/酒店抵免細則條款"
+     "卡等級英文原詞（官網對比頁未印級別字樣）"
     ],
     "conflicts": [],
     "source_refs": [
@@ -13409,7 +13188,8 @@
        "每年 $300 旅行抵免"
       ]
      }
-    ]
+    ],
+    "last_checked_at": "2026-10-08"
    }
   },
   {
@@ -14972,16 +14752,16 @@
    "status": "在發",
    "specs": {
     "主要權益": "全部消費無上限 2% 返現；搭配 Smartly® 儲蓄及合資格餘額階梯可升至最高 4%（每賬單期首 $10,000 合資格消費）；受理狀態以官網申請頁即時為準",
-    "發行情況": "現行在發",
+    "發行情況": "現行在發（2026-10-08 複核：官網現行信用卡列表仍列此卡、專屬產品頁在架；社區「暫停新申請」傳聞無官網依據，受理狀態以官網申請入口即時為準）",
     "數據狀態": "核心字段已回發卡行官網核實（2026-10-08）；未核項見 verification.missing_fields",
     "數據來源": "發卡行官網（見 verification.source_refs）"
    },
-   "review": "官網產品頁/列表頁現行在發，卡名、組織、類型已按官網定版，核心規格按官網以自有文字重寫，判 A。主會話終審補記：判 A 存疑待復核，不升核。",
+   "review": "存疑複核：官網列表與專屬頁均在架、無停申公布，社區傳聞不採信，升 A；受理狀態仍以官網申請入口即時為準。",
    "keywords": [
     "U.S. Bank Smartly™ Visa Signature® Card",
     "U.S. Bank National Association"
    ],
-   "url": "https://www.usbank.com/credit-cards.html",
+   "url": "https://www.usbank.com/credit-cards/bank-smartly-visa-signature-credit-card.html",
    "funding_modes": [
     "credit"
    ],
@@ -14990,20 +14770,30 @@
    "region_code": "US",
    "added": "2026-10-08",
    "verification": {
-    "status": "lead_unverified",
+    "status": "core_verified",
     "evidence_level_overall": "A",
     "source_refs": [
      {
       "role": "官方產品專頁",
+      "title": "U.S. Bank Smartly™ Visa Signature® Card",
+      "url": "https://www.usbank.com/credit-cards/bank-smartly-visa-signature-credit-card.html",
+      "publisher": "www.usbank.com",
+      "accessed_at": "2026-10-08",
+      "evidence_grade": "A",
+      "facts_supported": [
+       "專屬產品頁在架：無上限基礎返現加結餘階梯加成、首 12 期 0% 介紹 APR 披露",
+       "發卡行為 U.S. Bank National Association、Visa 組織"
+      ]
+     },
+     {
+      "role": "官網現行列表",
       "title": "Credit Cards | U.S. Bank",
       "url": "https://www.usbank.com/credit-cards.html",
       "publisher": "www.usbank.com",
       "accessed_at": "2026-10-08",
       "evidence_grade": "A",
       "facts_supported": [
-       "官網現行信用卡列表在列",
-       "Visa Signature 等級",
-       "返現分層結構"
+       "現行列表仍主打 Smartly Visa Signature 卡，無下架或停申公布"
       ]
      },
      {
@@ -15744,6 +15534,91 @@
     "missing_fields": [
      "卡等級官網未設字段",
      "完整權益清單見官網子頁"
+    ],
+    "conflicts": [],
+    "manual_questions": []
+   }
+  },
+  {
+   "id": "fxhk-134",
+   "name": "CPA Australia 美國運通白金信用卡",
+   "name_en": "CPA Australia American Express® Platinum Credit Card",
+   "bank": "美國運通國際股份有限公司",
+   "org": "amex",
+   "type": "credit",
+   "card_level": "Platinum",
+   "issue_status": "active",
+   "status": "在發",
+   "specs": {
+    "主要權益": "CPA Australia 會員專屬聯名白金卡，經指定網站連同 RSVP code 申請；迎新與積分優惠按申請期公佈條款",
+    "年費": "主卡 HK$1,100（包首 2 張附屬卡；第三張附屬卡起每張 HK$550）",
+    "申請資格": "最低年薪 HK$300,000（白金級申請條款）",
+    "發行情況": "運通香港聯會（Affinity）聯名卡，無一般公開產品頁；同系列另設 Gold 級別（年費永久豁免），本條只記 Platinum",
+    "數據狀態": "核心字段已回發卡行官網核實（2026-10-08）；未核項見 verification.missing_fields",
+    "數據來源": "發卡行官網（見 verification.source_refs）"
+   },
+   "review": "回運通香港官網核實屬實：原 fxhk-134 誤掛中銀香港已刪，現以同一編號於運通名下重建。官網條款與 KFS 坐實正名、年費與年薪門檻，判 A 新建。",
+   "keywords": [
+    "CPA Australia 美國運通白金信用卡",
+    "CPA Australia American Express® Platinum Credit Card",
+    "美國運通國際股份有限公司"
+   ],
+   "url": "https://www.americanexpress.com/content/dam/amex/en-hk/affinity/cpa/CPA_PM_TnC_ENG.pdf",
+   "funding_modes": [
+    "credit"
+   ],
+   "image": null,
+   "region": "香港",
+   "region_code": "HK",
+   "added": "2026-10-08",
+   "verification": {
+    "status": "core_verified",
+    "evidence_level_overall": "A",
+    "source_refs": [
+     {
+      "role": "官網條款文件",
+      "title": "CPA Australia American Express® Platinum Credit Card Welcome Offers Terms and Conditions",
+      "url": "https://www.americanexpress.com/content/dam/amex/en-hk/affinity/cpa/CPA_PM_TnC_ENG.pdf",
+      "publisher": "www.americanexpress.com（美國運通香港官網文件）",
+      "accessed_at": "2026-10-08",
+      "evidence_grade": "A",
+      "facts_supported": [
+       "正名 CPA Australia American Express Platinum Credit Card，經指定網站連同 RSVP code 申請",
+       "年費 HK$1,100（包主卡及首 2 張附屬卡；第三張附屬卡起每張 HK$550）",
+       "白金卡申請人最低年薪 HK$300,000"
+      ]
+     },
+     {
+      "role": "官方收費文件",
+      "title": "Key Facts Statement / Fees and Charges Schedule for American Express® Credit Card / Gold Credit Card（Affinity 版，2024 年 6 月生效）",
+      "url": "https://icm.aexp-static.com/globalcardapp/cards/hk/content/common/term_and_conditions/en_hk/KFS/Gold_credit_kfc.pdf",
+      "publisher": "icm.aexp-static.com（美國運通官網文件）",
+      "accessed_at": "2026-10-08",
+      "evidence_grade": "A",
+      "facts_supported": [
+       "CPA 聯名系列另設 Gold 級別，年費永久豁免",
+       "非港幣交易費 2%、免息期最長 56 天（同系列口徑）"
+      ]
+     },
+     {
+      "role": "官網法律文件索引",
+      "title": "Important Notice & Cardmember Agreement | American Express Hong Kong",
+      "url": "https://www.americanexpress.com/en-hk/company/legal/cardmember-agreement-and-fees-and-charges/",
+      "publisher": "www.americanexpress.com",
+      "accessed_at": "2026-10-08",
+      "evidence_grade": "A",
+      "facts_supported": [
+       "聯會名單載 CPA Aus 屬 Affinity Platinum／Affinity Gold 適用聯會"
+      ]
+     }
+    ],
+    "verified_at": "2026-10-08",
+    "last_checked_at": "2026-10-08",
+    "next_review_at": "2026-11-07",
+    "review_cadence_days": 30,
+    "missing_fields": [
+     "獨立公開產品頁網址：官網未見一般陳列式產品頁，現以官網迎新條款 PDF 為官方鏈接",
+     "白金級外幣交易費與免息期專屬數字：同系列 KFS 旁證為 2% 與最長 56 天，待白金專屬 KFS 覆核"
     ],
     "conflicts": [],
     "manual_questions": []

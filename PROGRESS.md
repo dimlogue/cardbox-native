@@ -453,3 +453,7 @@ bash build.sh 通过，aapt 复验 versionCode=271/versionName=2.71-native；产
   - 核实段总账：CardFi 131 张里 96 张升核实、删 14 张、停发保留 2 张、待续核 19 张。
   - 自验：总条数 200、id 零碰撞、core_verified 151（101＋51－1）。主库 cards.json 零改动。
   - 版本：build.sh VER_CODE 295→296、VER_NAME→2.96-native；AndroidManifest versionCode/Name 同步（设置页版本读 appVersion() 包信息，无写死字面量）。foreign.json 在包内走既有 CBX1 加密（build.sh verify-apk 终检覆盖）。
+- [x] Q184 2.97 外卡核实段扫尾并入（2026-10-08 完成，2.97-native vc297，基线 Q183=2.96；纯数据应用、零代码逻辑改动；CardFi 全线收官）：
+  - 并入：assets/data/foreign.json 以 hidden_files/cardfi-verify-staging/foreign-cleanup-verified.json（202 条）删 6 条后整文件覆盖（覆盖前备份 hidden_files/foreign-before-2.97-2026-10-08.json）；外卡专区 200→196 张。扫尾内容：升 A 8 张（含 fxhk-156 拆条为 fxhk-178/179、CPA 新建 fxhk-134，已在 staging 内）；删除 fxhk-130、fxhk-131、fxhk-133、fxhk-142、fxhk-144、fxhk-145（查证路径见 staging 同目录 verify-cleanup-report.md），其余条目一字不动。
+  - 自验：总条数 196、id 零碰撞、core_verified 159。主库 cards.json 零改动。
+  - 版本：build.sh VER_CODE 296→297、VER_NAME→2.97-native；AndroidManifest versionCode/Name 同步（设置页版本读 appVersion() 包信息，无写死字面量）。foreign.json 在包内走既有 CBX1 加密（build.sh verify-apk 终检覆盖）。
