@@ -1,4 +1,4 @@
-27079
+27198
 # 2026-10-08 墨曜风格包批（Q165，用户睡前亲令整套、施工前 DeepSeek 方案审，
 # 净增 +75 相对 2.79 基线 27004：风格单源（uiStyle 字段/styleMoyao 派生口/
 # ui_style 加载校验/darkEff 墨曜恒深）+14、MY_* primitive 表＋语义层 13 口墨曜
@@ -39,3 +39,13 @@
 # 2026-10-08 Step0+P0-A 落基线：原 26237 + logErr 助手 6 行（P0-A 批准的一次性增长；60 处日志均为同行插入、不增行）。
 # 历史：26237 为门禁首跑（check-arch 自动生成）时的行数。
 # 此后 MainActivity 只许减不许增（check-arch.sh 超限报警，--strict 转构建失败）。
+
+# 2026-10-08 2.80 两件批（Q166，用户 10:39/10:43 真机连点，净增 +119 相对
+# 2.79+墨曜基线 27079：第一件单列卡顿必点确定警告——玻璃警告窗工厂同款
+# showLagWarn166/confirm/close 三件套＋三状态字段＋lagMany166 同源判定口
+# ＋STR 三键＋触发点一（列数 chip 生效后 post）/触发点二（closeFilterSheet
+# 关窗拦截）/返回键同出口＋行内提示两处改走同源口，约 +86；第二件列数段控
+# 等权化——mine/学生两行 weight 均分＋singleLine＋segAutosize166 字号自适应
+# 助手，约 +33。缘由沿批准先例：均为用户真机点名件、改前 DeepSeek 双咨询
+# （single-col-warn-deepseek/columns-row 咨询存 hidden_files）、出包前主会话
+# 亲验、build＋check-arch 双模把关。flat/墨曜取色零改动。此后只许减不许增。

@@ -14678,10 +14678,15 @@ public class MainActivity extends Activity {
             final int mv = Integer.parseInt(mo[0]);
             TextView mt = tv(this, mv == 1 ? S("stu_mode_list") : S("stu_mode_" + mv), 12, colText(), mv == stuCols); // Q164
             mt.setGravity(Gravity.CENTER);
+            // Q166（2.80 第二件）：与我的卡片列数行同一套等权段控（同类同逻辑）——
+            // weight 均分＋singleLine＋字号自适应，防英文长文案挤压竖排同病。
+            mt.setSingleLine(true);
+            mt.setEllipsize(android.text.TextUtils.TruncateAt.END);
+            segAutosize166(mt, 12f);
             mt.setPadding(dp(this, 14), dp(this, 6), dp(this, 14), dp(this, 6));
             softFormChipPaint(mt, mv == stuCols);
-            LinearLayout.LayoutParams mlp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-            mlp.rightMargin = dp(this, 8);
+            LinearLayout.LayoutParams mlp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+            mlp.leftMargin = mv == 1 ? 0 : dp(this, 8);
             modeRow.addView(mt, mlp);
             mt.setOnClickListener(v -> {
                 if (studentCols152 == mv) return;
@@ -15663,9 +15668,16 @@ public class MainActivity extends Activity {
                 final int nCols127 = Integer.parseInt(co127[0]);
                 TextView ct127 = tv(this, S("cols_" + nCols127), 12, colText(), cols == nCols127); // Q164：与筛选面板列数片同 S 表一口
                 ct127.setGravity(Gravity.CENTER);
-                ct127.setPadding(dp(this, 12), dp(this, 5), dp(this, 12), dp(this, 5));
+                // Q166（2.80 第二件，用户 10:43 真机图证）：旧 WRAP 横排右对齐——
+                // 英文长文案（1 Column…）四枚总宽超行宽，末枚只剩窄缝、文字逐字
+                // 竖排压叠成右侧竖条。改等权分段（weight 均分＋singleLine＋字号
+                // 自适应），子项个数/顺序不变（下标重涂与 FLIP 入口零影响）。
+                ct127.setSingleLine(true);
+                ct127.setEllipsize(android.text.TextUtils.TruncateAt.END);
+                segAutosize166(ct127, 12f);
+                ct127.setPadding(dp(this, 6), dp(this, 5), dp(this, 6), dp(this, 5));
                 softFormChipPaint(ct127, cols == nCols127);
-                LinearLayout.LayoutParams cclp127 = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+                LinearLayout.LayoutParams cclp127 = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
                 cclp127.leftMargin = dp(this, 6);
                 colsRow127.addView(ct127, cclp127);
                 ct127.setOnClickListener(v -> {
@@ -18172,6 +18184,18 @@ public class MainActivity extends Activity {
     // Q94 选片统一漆法（试点出自自有卡编辑窗，2.13 起 paintChoiceChip/paintFormOrgChip 全站
     // 同口径）——选中＝浅雾蓝胶囊托底＋深蓝墨字（FClash 式整块托底同语言），
     // 未选＝半透柔面＋发丝描边；不再整坨高饱和蓝渐变。
+    // Q166（2.80 第二件）：等权段控 chip 字号自适应——窄屏/英文长文案/大字体
+    // 档下限字号保各档完整可读（API 26+ 系统 autosize；低版本回落 singleLine
+    // ＋尾部省略）。段控行一律 weight 等分＋本助手，不再 WRAP 横排被挤竖排。
+    void segAutosize166(TextView t, float baseSp) {
+        if (Build.VERSION.SDK_INT >= 26) {
+            try {
+                int maxSp = Math.max(9, Math.round(baseSp * uiScale * fontComp128(this)));
+                t.setAutoSizeTextTypeUniformWithConfiguration(9, maxSp, 1, android.util.TypedValue.COMPLEX_UNIT_SP);
+            } catch (Throwable e) { logErr("segAutosize166", e); }
+        }
+    }
+
     void softFormChipPaint(TextView t, boolean on) {
         if (on) {
             GradientDrawable g = new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
