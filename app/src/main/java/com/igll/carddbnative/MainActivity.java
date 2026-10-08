@@ -1285,8 +1285,8 @@ public class MainActivity extends Activity {
         STR.put("fmt_entries_n", new String[]{"%d 条","%d entries"});
         STR.put("cols_bankfold_hint", new String[]{"按银行折叠时列数暂不可调，展开银行后仍按当前列数显示","Column count is locked while cards are folded by bank; expanded groups keep the current count"});
         STR.put("cols_single_lag_warn", new String[]{"卡片较多：单列大图滑动可能卡顿，可点列数切换为多列","Many cards: single-column large images may scroll with lag — tap the column switch for more columns"});
-        STR.put("cols_lag_title166", new String[]{"单列卡顿提醒","Single-Column Lag Warning"});
-        STR.put("cols_lag_msg_fmt166", new String[]{"当前共 %1$d 张卡，单列大图滑动可能卡顿，建议切换为多列。","You have %1$d cards. Single-column large images may scroll with lag — consider switching to more columns."});
+        STR.put("cols_lag_title166", new String[]{"单列可能卡顿","Single Column May Lag"}); // Q176：由「单列卡顿提醒」改确认口吻（标题点名顾虑、正文给确定/返回两出口，两触发点同文同义）
+        STR.put("cols_lag_msg_fmt166", new String[]{"当前共 %1$d 张卡，单列大图滑动可能卡顿。点「确定」确认，返回则取消并保持不变。","You have %1$d cards. Single-column large images may scroll with lag. Tap OK to confirm, or go Back to cancel and keep the current layout."});
         STR.put("cols_lag_ok166", new String[]{"确定","OK"});
         STR.put("mine_dup_title168", new String[]{"再添加一张？","Add another one?"});
         STR.put("mine_dup_msg_fmt168", new String[]{"你的卡片里已经有一张「%s」了，是否还要再添加一张？","You already have %s in My Cards. Add another one?"});
@@ -9574,6 +9574,14 @@ public class MainActivity extends Activity {
             return false;
         });
         roundClip(fab, fabClipR146(), this); // Q152：三钮圆角裁剪同治（方形玻璃角退役）
+        // Q177（2.90，用户 13:33 真机图证）：角标按混合版口径右上外探 4dp 骑角，
+        // fab 级 clipToOutline 把整个子树裁进钮体轮廓、角标右侧被切一截。只解
+        // 本钮的子树裁切：outline 保留供 elevation 阴影塑形（DeepSeek 审：阴影
+        // 只认 outline、与 clip 开关无关）；钮内玻璃位图层自身已 clipToOutline
+        // 自裁、提亮层与钮底 GradientDrawable 自圆、图标内边距居中不出界，角
+        // 标是唯一出界子级，解开后完整露出。钮本体位置/大小/图标一字未动；
+        // 搜索/回顶钮无角标、子级不出界，不动（已查无同款隐患）。
+        fab.setClipToOutline(false);
         return fab;
     }
 
@@ -12413,6 +12421,11 @@ public class MainActivity extends Activity {
     // 话级 lagWarnAcked166 随开窗重置、与本标记互不相干，不许互相污染。
     boolean lagWarnFromMine167 = false;
     boolean lagWarnMineAcked167 = false;
+    // Q176（2.90，用户 13:12 点名改判）：触发点一待落地的列数应用体——弹窗在场
+    // 期间列数不许生效，确认（confirmLagWarn166）才执行、取消即弃；触发点二
+    // （开窗即单列点完成）恒为 null（无列数待落）。Q166 的「先生效后知会＋返回
+    // ＝确定」语义自本版作废：返回＝取消、不记 acked，见 cancelLagWarn166。
+    Runnable lagWarnPendingApply166 = null;
     // Q168（2.82 第二件，用户 11:59 改判软提示）：重复添加确认窗字段——非空即
     // 在场；关窗/确认全路径先清此字段再 restoreChrome（防覆盖判定读脏值）。
     View mineDupSheet168 = null;
@@ -12427,11 +12440,14 @@ public class MainActivity extends Activity {
 
     // Q166：警告窗——走既有玻璃窗工厂同款式（冻结玻璃垫＋boostWindowFace 面＋
     // sheetR129(22f) 全圆角＋统一进出场曲线），只留「确定」一钮；遮罩点击无
-    // 反应（DeepSeek 审：遮罩≠确定）、系统返回键按确定处理（见 onBackPressed）。
-    void showLagWarn166(boolean thenCloseFilter, int cnt, boolean fromMine) {
+    // 反应（DeepSeek 审：遮罩≠确定）。
+    // Q176（2.90）：本窗改真确认——pendingApply 为触发点一待落地的列数应用体
+    // （触发点二传 null）；系统返回键＝取消（见 onBackPressed 与 cancelLagWarn166）。
+    void showLagWarn166(boolean thenCloseFilter, int cnt, boolean fromMine, Runnable pendingApply) {
         if (lagWarnSheet166 != null) return;
         lagWarnThenClose166 = thenCloseFilter;
         lagWarnFromMine167 = fromMine;
+        lagWarnPendingApply166 = pendingApply;
         final int cnt166 = cnt; // 判定瞬间快照（DeepSeek 审），张数由触发方按各自口径传入
         hideChrome();
         final FrameLayout sheet = new FrameLayout(this);
@@ -12468,33 +12484,50 @@ public class MainActivity extends Activity {
         animateUpdateSheetIn(sheet);
     }
 
-    // Q166：「确定」唯一出口——点钮与系统返回键共用；thenClose 时连带关筛选窗
+    // Q176（2.90）：「确定」唯一落点——DeepSeek 审序：记 acked（按来源粒度，
+    // 筛选窗会话级/我的卡片进程级，Q166/Q167 口径不变）→ 摘窗 → 执行待落地
+    // 应用体（触发点一）→ thenClose 时连带关筛选窗（触发点二；关窗前 acked
+    // 已落，closeFilterSheet 内的再弹判定自然放行）。两触发点共用本出口。
     void confirmLagWarn166() {
         if (lagWarnSheet166 == null) return;
         haptic();
-        closeLagWarn166(lagWarnThenClose166);
+        final Runnable pending176 = lagWarnPendingApply166;
+        lagWarnPendingApply166 = null;
+        final boolean thenClose176 = lagWarnThenClose166;
+        dismissLagWarn166(true);
+        if (pending176 != null) pending176.run();
+        if (thenClose176) closeFilterSheet();
     }
 
-    void closeLagWarn166(boolean alsoFilter) {
+    // Q176：取消唯一出口（系统返回键）——清待应用体、不记 acked，只摘窗：列数
+    // 保持点开前的值，下次点单列仍弹；触发点二则留在筛选窗内（关窗被取消）。
+    // DeepSeek 审：不许把返回做成隐式 ack（用户口径：返回≈变相确认作废）。
+    void cancelLagWarn166() {
+        if (lagWarnSheet166 == null) return;
+        lagWarnPendingApply166 = null;
+        dismissLagWarn166(false);
+    }
+
+    // Q176：摘窗收尾——确认/取消共用，仅 acked 与否有别；动画与 chrome 恢复沿
+    // 原 closeLagWarn166 老路（该函数已并入本函数退役）。我的卡片来源没有宿主
+    // 窗关闭事件接管 chrome，窗摘除后必须自己恢复（restoreChrome 自带覆盖守
+    // 卫，警告窗不在其名单内，摘除后调用安全）。
+    void dismissLagWarn166(boolean markAcked) {
         final View sheet = lagWarnSheet166;
         if (sheet == null) return;
         lagWarnSheet166 = null;
-        // Q167：确认落点按来源分流——筛选窗来源记会话级、我的卡片来源记进程级
         final boolean fromMine167 = lagWarnFromMine167;
         lagWarnFromMine167 = false;
-        if (fromMine167) lagWarnMineAcked167 = true; else lagWarnAcked166 = true;
+        if (markAcked) { if (fromMine167) lagWarnMineAcked167 = true; else lagWarnAcked166 = true; }
         Object[] t = sheet.getTag() instanceof Object[] ? (Object[]) sheet.getTag() : null;
         final View wrap = t != null ? (View) t[0] : null;
         final boolean[] doneRan = {false};
-        // Q167：我的卡片来源没有宿主窗关闭事件接管 chrome，窗摘除后必须自己恢复
-        // （restoreChrome 自带覆盖守卫，警告窗不在其名单内，摘除后调用安全）
         Runnable done = () -> { if (doneRan[0]) return; doneRan[0] = true; if (sheet.getParent() != null) ((ViewGroup) sheet.getParent()).removeView(sheet); if (fromMine167) restoreChrome(); };
         if (wrap != null) {
             wrap.animate().translationY(dp(this, 42)).alpha(0f).setDuration(ANIM_DUR_SHEET_OUT).setInterpolator(ANIM_EXIT).withEndAction(done).start();
             sheet.animate().alpha(0f).setDuration(ANIM_DUR_SHADE_OUT).setInterpolator(ANIM_EXIT).start();
             mainHandler.postDelayed(done, ANIM_DUR_SHEET_OUT + 130); // Q98 同款兜底：endAction 不达强制收尾
         } else done.run();
-        if (alsoFilter) closeFilterSheet();
     }
     // Q123（2.35，件十二补注）：chips 选中落定脉冲弹簧（保留）；筛选窗升降
     // 已于 Q125 补改走 Q74 统一窗动画（animCardIn/Out），旧 filterSheetSpring 退场删除。
@@ -12503,11 +12536,13 @@ public class MainActivity extends Activity {
 
     void closeFilterSheet() {
         // Q166（2.80 第一件·触发点二）：本就是单列且多卡、本会话未确认过 →
-        // 关窗前先弹必点确定警告，确定后才真关（完成/遮罩/返回键同走本入口）。
+        // 关窗前先弹确认窗，确定后才真关（完成/遮罩/返回键同走本入口）。
+        // Q176（2.90）：本触发点无列数待落（pending 传 null）——确定＝保持单列
+        // 并关窗；弹窗内按返回＝只摘弹窗、留在筛选窗（取消关窗），再点完成再弹。
         // 调用方仅此三处用户出口（openFilterSheet 走 closeFilterSheetNow 不经此），
         // 程序化关窗不会误伤（DeepSeek 审边界三）。
         if (filterSheet != null && lagWarnSheet166 == null && !lagWarnAcked166 && cols == 1 && lagMany166()) {
-            showLagWarn166(true, Store.all == null ? 0 : Store.all.size(), false);
+            showLagWarn166(true, Store.all == null ? 0 : Store.all.size(), false, null);
             return;
         }
         final View sheet = filterSheet;
@@ -12677,15 +12712,28 @@ public class MainActivity extends Activity {
             colChips.add(filterChip(S("cols_" + nCols), cols == nCols, () -> {
                 // Q154（件十三）：列数切换走统一 FLIP 入口；分组模式结构不同构
                 // 直切（列数 chip 本就置灰禁用，此为双保险）。
-                // Q166（2.80 第一件·触发点一）：点单列且多卡未确认 → 先照常生效
-                //（列表切成单列、面板重建），下一帧再弹必点确定警告（DeepSeek
-                // A 案：先生效后知会，不留「选没选上」的歧义）。
+                // Q176（2.90，改判 Q166 的 A 案）：点单列且多卡未确认 → 不再生效：
+                // 应用体（含 FLIP 入口）存为待确认体先弹窗——确定才落地、返回保
+                // 持原列数且不记 acked。FLIP 快照在确认时刻现拍（彼时布局仍是点
+                // 开前状态），另以宿主子 View 数作令牌守卫（DeepSeek 审）：弹窗
+                // 期间列表被数据刷新重建则跳过动画直切，列数必落地不丢。
                 final boolean warn166 = nCols == 1 && lagMany166() && !lagWarnAcked166;
                 final int oldCols154 = cols;
-                Runnable apply154 = () -> { cols = nCols; persistViewPrefs(); rebuildFilterPanel(panel); refreshHome(); };
-                if (groupBank || homeList == null || homeScroll == null) apply154.run();
-                else beginColsFlip154(homeList, homeScroll, oldCols154, nCols, false, false, apply154);
-                if (warn166) mainHandler.post(() -> { if (filterSheet != null && lagWarnSheet166 == null) showLagWarn166(false, Store.all == null ? 0 : Store.all.size(), false); });
+                final Runnable apply154 = () -> { cols = nCols; persistViewPrefs(); rebuildFilterPanel(panel); refreshHome(); };
+                if (!warn166) {
+                    if (groupBank || homeList == null || homeScroll == null) apply154.run();
+                    else beginColsFlip154(homeList, homeScroll, oldCols154, nCols, false, false, apply154);
+                    return;
+                }
+                final ViewGroup flipHost176 = homeList;
+                final int flipKids176 = flipHost176 == null ? -1 : flipHost176.getChildCount();
+                final Runnable pending176 = () -> {
+                    if (!groupBank && flipHost176 != null && flipHost176 == homeList && homeScroll != null
+                            && flipHost176.getChildCount() == flipKids176)
+                        beginColsFlip154(homeList, homeScroll, oldCols154, nCols, false, false, apply154);
+                    else apply154.run();
+                };
+                mainHandler.post(() -> { if (filterSheet != null && lagWarnSheet166 == null) showLagWarn166(false, Store.all == null ? 0 : Store.all.size(), false, pending176); });
             }, groupBank));
         }
         addChipFlow(panel, colChips);
@@ -16008,15 +16056,27 @@ public class MainActivity extends Activity {
                         }
                         mineBuiltSig = computeMineSig();
                     };
-                    if (mineGridBox152 == null || mineScrollRef152 == null) apply127.run();
-                    else beginColsFlip154(mineGridBox152, mineScrollRef152, oldCols154, nCols127, false, false, apply127);
-                    // Q167（2.81，用户点定）：点到单列且页头卡数 >30、本进程未
-                    // 确认过 → 照常先生效（与筛选窗触发点一同口径），下一帧升同款
-                    // ⚠ 玻璃窗（showLagWarn166 的 fromMine 分支）；本页确认进程级
-                    // 一次，切走切回不重弹。升窗守卫：窗未在场且仍在本页。
-                    if (nCols127 == 1 && lagManyCount167(minePageCount167) && !lagWarnMineAcked167) {
-                        mainHandler.post(() -> { if (lagWarnSheet166 == null && "mine".equals(tab)) showLagWarn166(false, minePageCount167, true); });
+                    // Q176（2.90，改判 Q167 的先生效口径）：点到单列且页头卡数
+                    // >30、本进程未确认过 → 与筛选窗触发点一同一套：应用体存为
+                    // 待确认体先升同款玻璃窗（fromMine 分支），确定才落地、返回
+                    // 保持原列数不记 acked；本页确认仍进程级一次。FLIP 令牌守
+                    // 卫同筛选窗（宿主子 View 数，失效直切）。不需要确认时沿老
+                    // 路即时切换。升窗守卫：窗未在场且仍在本页。
+                    final boolean warn167 = nCols127 == 1 && lagManyCount167(minePageCount167) && !lagWarnMineAcked167;
+                    if (!warn167) {
+                        if (mineGridBox152 == null || mineScrollRef152 == null) apply127.run();
+                        else beginColsFlip154(mineGridBox152, mineScrollRef152, oldCols154, nCols127, false, false, apply127);
+                        return;
                     }
+                    final ViewGroup flipHost176 = mineGridBox152;
+                    final int flipKids176 = flipHost176 == null ? -1 : flipHost176.getChildCount();
+                    final Runnable pending176 = () -> {
+                        if (flipHost176 != null && flipHost176 == mineGridBox152 && mineScrollRef152 != null
+                                && flipHost176.getChildCount() == flipKids176)
+                            beginColsFlip154(mineGridBox152, mineScrollRef152, oldCols154, nCols127, false, false, apply127);
+                        else apply127.run();
+                    };
+                    mainHandler.post(() -> { if (lagWarnSheet166 == null && "mine".equals(tab)) showLagWarn166(false, minePageCount167, true, pending176); });
                 });
             }
         }
@@ -27982,7 +28042,7 @@ public class MainActivity extends Activity {
         if (glossarySheetView != null) { closeGlossarySheet(); return; } // Q122（件十三）：常识浮层压在最上，先关它再回向导/详情
         if (customDetailSheet != null) { closeCustomDetail(); return; }
         if (detailCard != null) { closeDetail(); return; }
-        if (lagWarnSheet166 != null) { confirmLagWarn166(); return; } // Q166：单列警告在筛选窗之上，返回＝确定（与点钮同一出口）
+        if (lagWarnSheet166 != null) { cancelLagWarn166(); return; } // Q176：单列确认窗在筛选窗之上，返回＝取消（不落列数、不记 acked），不许下传
         if (filterSheet != null) { closeFilterSheet(); return; }
         if (extSheet != null) { closeExtendedSearch(); return; }
         if (binSheet != null) { closeBinQuery(); return; }
