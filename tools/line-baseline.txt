@@ -1,4 +1,16 @@
-28009
+28069
+# 2026-10-08 2.90 插队修复批（Q176 单列弹窗改真确认＋Q177 筛选钮角标裁切，
+# 基线 2.89/vc289，DeepSeek 已审 single-col-confirm-deepseek-reply-2026-10-08
+# .md、FlowBee 额度不足待补审，净增 +60 相对 2.89 基线 28009）：Q176——
+# lagWarnPendingApply166 待应用体字段与段头注释 +6、showLagWarn166 加第
+# 四参注释 +3、confirmLagWarn166/cancelLagWarn166/dismissLagWarn166 三件
+# 拆分（原 closeLagWarn166 并入退役）净 +22、closeFilterSheet 触发点二注
+# 释与传参同行 +3、筛选窗列数行待确认分支 +15、我的卡片列数行待确认分
+# 支 +15、onBackPressed 返回改取消同行 +0、STR 两键改确认文案（同行替换
+# +0、附注 +1）。Q177——buildFilterFab 尾 setClipToOutline(false) 与段注
+# +9。判定口 lagManyCount167、行内提示、acked 两粒度、玻璃骨架、墨曜视
+# 觉表达式、DataCipher、OTA 一字未动。空吞 208、i18n 37/482/1409、出
+# 口 87/弹层 43 全冻。此后只许减不许增。
 # 2026-10-08 2.89 墨曜重构 B4 长尾扫尾（Q175，基线 2.88/vc288，方案
 # moyao-refactor-plan-2026-10-08.md §4-B4 与 B1–B3b 四份施工报告遗留登记
 # 销项，DeepSeek 裁量已回写方案不再重问、FlowBee 额度不足待补审，净增

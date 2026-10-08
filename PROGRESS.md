@@ -413,3 +413,13 @@ bash build.sh 通过，aapt 复验 versionCode=271/versionName=2.71-native；产
   - ⑤搜索 inline/float 两胶囊墨曜 elevation 归 0；设置 loose 行描边经普查确认已由 roundRect→softFaceBg 单源承接（墨曜 SURFACE1＋#23282F、B2 已落）零行改动销项——硬换 moyaoCardRipple171 反会脱开圆角杆（rippleBg 走 autoR143），报告注明口径差。
   - 扁平零差异自证：git diff 全量走读——全部改动为 styleMoyao() 三元（扁平支内嵌原表达式逐字）或 styleMoyao() 门内块（扁平不入）；accentSoftBg 类深档异值点一律门控三元、未裸替换；新助手仅墨曜调用。真机对表点列报告验收表（墨曜逐页看收编面、扁平抽查回归）。
   - 门禁：MainActivity 27913→28009（净增 96，基线已登记缘由）；check-arch 警告＋STRICT 双模通过（空吞 208、i18n 37/482/1409——候选随状态 chip 字面量消重 -2 已同步调低、出口 87/弹层 43 全冻）；构建 verify-apk 190 条全 CBX1 绿。真机验收点见施工报告，未真机不记通过。
+- [x] Q176 2.90 单列⚠弹窗改真确认（2026-10-08 完成，2.90-native vc290，基线 64325ed=2.89；用户 13:12 真机点名 bug——筛选窗点单列弹警告后按返回、列数已自切；DeepSeek 已审 single-col-confirm-deepseek-reply-2026-10-08.md，FlowBee 额度不足待补审。只改 MainActivity.java＋版本号＋门禁基线，玻璃骨架、墨曜视觉表达式、DataCipher、OTA、数据仓一字未动；施工报告 hidden_files/single-col-confirm-fix-2026-10-08.md）：
+  - Q166 的「先生效后知会＋返回＝确定」作废。新语义：触发点一（筛选窗列数行/我的卡片列数行点单列且张数>30）应用体（含 FLIP 入口）存为 lagWarnPendingApply166 待确认体、先弹窗，列数暂不生效；confirmLagWarn166 按 DeepSeek 审序记 acked（筛选窗会话级/我的卡片进程级，粒度不变）→摘窗（dismissLagWarn166）→跑 pending→thenClose 连带关筛选窗；新增 cancelLagWarn166 为系统返回唯一落点——清 pending、不记 acked、列数保持点开前值、下次仍弹；遮罩仍点不动；不加可见取消钮（DeepSeek 审：返回即放弃出口，避免双取消语义冗余）。
+  - 触发点二（开窗即单列点完成）：pending 传 null——确定＝保持单列并关窗（acked 已在关窗判定前落定、不再弹）；返回＝只摘弹窗留在筛选窗、列数本就未动，再点完成再弹（DeepSeek 审：不许隐式 ack，是预期闭环非死循环）。
+  - 两页共用同一 showLagWarn166（新增第四参 pendingApply）/confirm/cancel/dismiss 一套，原 closeLagWarn166 并入 dismissLagWarn166 退役、不留死代码。延迟 FLIP 安全：快照在确认时刻现拍，另存宿主容器子 View 数作令牌（筛选窗 homeList、我的卡片 mineGridBox152），弹窗期间列表被重建则跳过动画直切 apply，列数必落地。判定口 lagManyCount167、两处行内提示文案与张数口径（全库/本页）、确认后 restoreChrome 收尾一字未动。
+  - 文案改确认语气（原键复用不新增键）：cols_lag_title166「单列卡顿提醒」→「单列可能卡顿」，cols_lag_msg_fmt166→「当前共 %1$d 张卡，单列大图滑动可能卡顿。点「确定」确认，返回则取消并保持不变。」双语同步；⚠ 橙字标题样式保留（点名顾虑、正文给两出口，两触发点同文同义）。
+  - 门禁：MainActivity 28009→28069（净增 60，与 Q177 合计，基线已登记缘由）；check-arch 警告＋STRICT 双模通过（空吞 208、i18n 37/482/1409、出口 87/弹层 43 全冻）；构建 verify-apk 190 条全 CBX1 绿。真机验收点见施工报告（两页各走 确定/返回 两路＋取消后再点仍弹＋完成触发点返回留在窗内），未真机不记通过。
+- [x] Q177 2.90 悬浮筛选钮角标裁切修复（2026-10-08 完成，随 Q176 同版 2.90-native vc290；用户 13:33 真机截图点名——蓝色计数角标右侧被切一截；DeepSeek 已审同上回函第二件）：
+  - 根因：buildFilterFab 构造尾 roundClip(fab) 给钮体装 RoundRect outline 并 setClipToOutline(true)，子树整体被裁进钮体轮廓，角标右上 -4dp 外探骑角的右侧一截被切（Q130 只放宽了父级 content 的 clipChildren，未触 fab 级 outline 裁切）。
+  - 修法：roundClip 后加 fab.setClipToOutline(false)——outline 保留供 elevation 阴影塑形（阴影只认 outline、与 clip 开关无关），只解除子树裁切；钮内玻璃位图层自身已 clipToOutline 自裁、提亮层与钮底 GradientDrawable 自带圆角形、图标内边距居中不出界，角标为唯一出界子级，解开后一位/两位数（9+）完整露出。钮本体位置/大小/图标/角标尺寸一字未动。搜索钮、回顶钮经查无角标、子级均不出界，无同款隐患、不动。
+  - 门禁随 Q176 同跑双模通过；真机验收点并入 Q176 施工报告（角标完整性一条）。
