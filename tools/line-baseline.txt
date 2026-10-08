@@ -1,4 +1,15 @@
-27770
+27796
+# 2026-10-08 2.86 加密批 E2 OTA 落盘数据加密（Q172，基线 2.85/vc285，方案
+# datapack-encryption-plan-2026-10-08.md §2.4 #2/#6/#7/#8/#9 与 §四 E2 行定案、
+# DeepSeek 裁量已回写方案不再重问，净增 +26 相对 2.85 基线 27770）：五点全换
+# CBX1 同格式同 DataCipher 一口——Store.load OTA 读换 decryptedText 统一读回
+# （+2）、applyPendingUpdate 写盘加密同行替换＋落盘重读先解密再比版本（+1）、
+# sha256Bytes161 换 File 版 sha256Of161（旧法删除不留死代码）＋isDiskEncrypted161
+# 探头助手（+5）、verifyDiskImage161 大小快检 magic 双支同行替换＋sha 解密后验、
+# 解密失败分流自愈（+3）、fetchRemote 内存中转验明文再加密落盘（+4）、
+# carryForwardImages161 magic 感知迁移（密文 rename 直搬/存量明文顺手加密+9）。
+# 解密本体在 DataCipher（E2 新 decryptedText 读回口）不占本基线。界面与清除语义
+# 零变化；空吞 208、i18n 三数、出口 87/弹层 43 全冻。此后只许减不许增。
 # 2026-10-08 2.85 墨曜重构 B2 列表三页＋弹窗哑光（Q171，基线 2.84/vc284，方案
 # moyao-refactor-plan-2026-10-08.md §2/§3/§4-B2 定案、DeepSeek 裁量已回写
 # 方案不再重问，净增 +170 相对 2.84 基线 27600）：Q171 助手块（评分 pill
