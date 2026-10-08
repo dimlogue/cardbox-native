@@ -21583,11 +21583,15 @@ public class MainActivity extends Activity {
                 iv.setImageBitmap(b); if (darkEff()) iv.setAlpha(0.92f);
             }
             face.addView(iv, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
-            if (b == null) addShowcaseFaceLabel168(face, it.card.name, it.bank, placeholderDarkFor(it.card.id)); // Q168①（2.82）：无图占位终态补卡名+银行标签（与占位判定同源，真图不加）
+            if (b == null) { // Q168①（2.82）：无图占位终态补识别信息（与占位判定同源，真图不加）；Q174（2.88）合并口径：墨曜改走标本牌、扁平恒走 168 标签，识别信息只许一处出
+                if (styleMoyao()) addShowcaseSpecimenPlate174(face, it, it.card.name, it.bank);
+                else addShowcaseFaceLabel168(face, it.card.name, it.bank, placeholderDarkFor(it.card.id));
+            }
             // Q104/2.18：卡面组织小标全撤（展柜库内卡同口径）
         } else {
             face.setBackground(customGradient(it.custom.style));
-            addShowcaseFaceLabel168(face, it.custom.name, it.custom.bank, customStyleDark(it.custom.style)); // Q168①（2.82）：自定义卡恒纯渐变面，同补卡名+银行标签
+            if (styleMoyao()) addShowcaseSpecimenPlate174(face, it, it.custom.name, it.custom.bank); // Q174（2.88）：自定义卡纯色面墨曜走标本牌（与库卡占位同一口）
+            else addShowcaseFaceLabel168(face, it.custom.name, it.custom.bank, customStyleDark(it.custom.style)); // Q168①（2.82）：自定义卡恒纯渐变面，同补卡名+银行标签
             // Q104/2.18：卡面组织小标全撤（展柜自定义卡同口径）
         }
         face.setTag(it.key);
@@ -21628,6 +21632,53 @@ public class MainActivity extends Activity {
         FrameLayout.LayoutParams flp168 = new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         flp168.gravity = Gravity.TOP | Gravity.LEFT;
         face.addView(lab168, flp168);
+    }
+
+    // Q174（2.88）墨曜重构 B3b：展柜标本牌——与 Q168① 的合并口径（同类同逻辑）：
+    // 占位/纯色面的识别信息只许一处出——墨曜走本牌、扁平恒走 168 标签逐字不动；
+    // 真图面两风格均不加（Q78/Q104「面自带信息」原则不变）。牌体与 B3a 详情
+    // 标本牌同源：panelBg169 哑光面＋发丝边、内边距走 §2 冻结 16/14；行序按
+    // 方案 §3——银行名细字→卡名（16sp Medium、tvW 常规路、字距 0.04 与 B3a
+    // 中文标题同口）→SPECIMEN 微字（specimenTv169 工厂＋orgSpecimen171 拼法与
+    // B3a 一套，不许第二套；自定义卡无卡种字段，只出组织段不编造）。
+    // 编号口径方案未定——不编造序号，只出微字行（§3「青只染序列字」待编号
+    // 定案后再落，本批牌内无染青件）。落位同 168 物理约束：左上（堆叠露条
+    // 只见牌首、扒开/平放/放大整牌可见）；子视图恒非可点，不挡面既有点击/
+    // 拖拽/缩放。堆叠/平放/放大三态共用 buildShowcaseFace 一处落码，不碰
+    // 任何判定/手势/数据。本批顶栏/色点/密度/分组经审：其面色与字色全由
+    // showcaseBgColor152/showcaseDarkBg/accentColor 单源派生（墨曜下 accent
+    // 恒金属青已同源），无写死旧色可换，按任务书「不重排」原样不动。
+    void addShowcaseSpecimenPlate174(FrameLayout face, ShowcaseItem it, String name, String bank) {
+        String nm174 = name == null ? "" : name.trim();
+        String bk174 = bank == null ? "" : bank.trim();
+        if (nm174.isEmpty()) { nm174 = bk174; bk174 = ""; }
+        if (nm174.isEmpty()) return;
+        LinearLayout plate174 = new LinearLayout(this);
+        plate174.setOrientation(LinearLayout.VERTICAL);
+        plate174.setBackground(panelBg169());
+        plate174.setPadding(dp(this, 16), dp(this, 14), dp(this, 16), dp(this, 14));
+        if (!bk174.isEmpty()) {
+            TextView tb174 = tv(this, bk174, 10, colText2(), false);
+            tb174.setSingleLine(true); tb174.setEllipsize(android.text.TextUtils.TruncateAt.END);
+            plate174.addView(tb174, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        }
+        TextView tn174 = tvW(this, nm174, 16, colText(), 500);
+        tn174.setLetterSpacing(0.04f);
+        tn174.setSingleLine(true); tn174.setEllipsize(android.text.TextUtils.TruncateAt.END);
+        LinearLayout.LayoutParams nlp174 = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        if (!bk174.isEmpty()) nlp174.topMargin = dp(this, 4);
+        plate174.addView(tn174, nlp174);
+        String orgSp174 = orgSpecimen171(showcaseOrgCode(it));
+        String type174 = it.card != null ? (it.card.isCredit() ? "CREDIT" : "DEBIT") : "";
+        TextView ts174 = specimenTv169("SPECIMEN" + (orgSp174.isEmpty() ? "" : " · " + orgSp174) + (type174.isEmpty() ? "" : " · " + type174));
+        ts174.setSingleLine(true); ts174.setEllipsize(android.text.TextUtils.TruncateAt.END);
+        LinearLayout.LayoutParams slp174 = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        slp174.topMargin = dp(this, 5);
+        plate174.addView(ts174, slp174);
+        FrameLayout.LayoutParams flp174 = new FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        flp174.gravity = Gravity.TOP | Gravity.LEFT;
+        flp174.leftMargin = dp(this, 10); flp174.topMargin = dp(this, 8); flp174.rightMargin = dp(this, 10);
+        face.addView(plate174, flp174);
     }
 
     void updateShowcaseChips() {
