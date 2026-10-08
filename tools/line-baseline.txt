@@ -1,4 +1,16 @@
-27796
+27862
+# 2026-10-08 2.87 墨曜重构 B3a 详情页标本头（Q173，基线 2.86/vc286，方案
+# moyao-refactor-plan-2026-10-08.md §3/§4-B3a 定案、DeepSeek 裁量已回写方案
+# 不再重问，净增 +66 相对 2.86 基线 27796）：主卡详情头墨曜支（图廊下
+# hairline 发丝线＋标本牌 plate173：卡名 16sp Medium/tvW 常规路＋specimen
+# 微字＋scorePill171 评分 pill，约 +36）、外卡详情头同构支（发丝线＋卡名
+# 字阶＋specimen 微字，约 +16）、hairlineView173 助手与 Q173 段头注释
+# （+11）、detailSectionTitle 墨曜字阶支（+3）、两处规格行标签/值字号与
+# 分隔线墨曜支同行替换（+0）、buildDetailChips 评分片墨曜门同行（+0）、
+# orgSpecimen171 补 amex 外卡键同行（+0）、STR chip_score_total 落串（+1，
+# 在 MainActivity STR 表内）。全部改动墨曜门内，扁平表达式逐字内嵌原式；
+# 玻璃骨架、DataCipher、OTA 一字未动。空吞 208、i18n 37/482/1411、出口
+# 87/弹层 43 全冻。此后只许减不许增。
 # 2026-10-08 2.86 加密批 E2 OTA 落盘数据加密（Q172，基线 2.85/vc285，方案
 # datapack-encryption-plan-2026-10-08.md §2.4 #2/#6/#7/#8/#9 与 §四 E2 行定案、
 # DeepSeek 裁量已回写方案不再重问，净增 +26 相对 2.85 基线 27770）：五点全换
