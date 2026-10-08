@@ -6,7 +6,7 @@
 # （冻结可用、不新增） · D=数据驱动非 chrome · 残=已知残留（条目注明）。
 # 纪律：新增弹层必须先在本册登记并注明销项口径；check-arch 第 5 段
 # 以本册登记数＋渲染出口计数双基线防回归。计数只防回归、不证全覆盖。
-POPUP_POINTS=41
+POPUP_POINTS=42
 
 L5079	整页挂载 fullScreenPage（页面非弹层，册内备查）	openFxZone	content.addView(fullScreenPage);	销：EN/S（随所在页销项）
 L5441	贴屏挂载 overlay	openFxDetail	content.addView(overlay, new FrameLayout.LayoutParams(	销：S（批2 外卡详情全量落串 fx_*/verify_*/缺字段）
@@ -53,3 +53,4 @@ L26646	贴屏挂载 sheet	confirmLauncherIcon131	content.addView(sheet);	销：S
 手工	整页挂载 fullScreenPage	buildChangelogPage（更新日志）	销：EN（版本条目为数据双份，类B）
 手工	贴屏挂载 toastWrap	showFloatToast（悬浮提示条基建）	销：出口走 tv 链，调用点文案各自销项
 手工	贴屏挂载 helloView	欢迎页	销：EN（批1）
+L12248	贴屏挂载 sheet	showLagWarn166	content.addView(sheet);	销：S（cols_lag_title166/cols_lag_msg_fmt166/cols_lag_ok166，Q166/2.80 第一件：单列>30 必点确定警告，玻璃窗工厂同款式、遮罩不关、返回=确定）

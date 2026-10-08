@@ -1,5 +1,5 @@
 OUTLETS=87
-POPUPS=41
+POPUPS=42
 # i18n 批2 基线（2026-10-08，Q164，用户裁量「全弹窗审查」件）：
 #   OUTLETS = MainActivity.java 渲染出口总数（check-arch.py 第 5 段口径：
 #             setText/setHint/setTitle/Toast.makeText/drawText/
@@ -10,3 +10,4 @@ POPUPS=41
 # 在弹层册注明豁免）；自动上涨即报警。计数只防回归、不证全覆盖——出口
 # 背后的文案是否真走 STR 仍靠逐页销项与真机验收，本基线不作覆盖证明。
 # 出口数下降时同步调低本值。
+# 2026-10-08 Q166/2.80 第一件再登记：POPUPS 41→42（showLagWarn166 单列卡顿警告窗入册）；OUTLETS 87 不动。

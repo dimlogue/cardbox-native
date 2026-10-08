@@ -1277,6 +1277,9 @@ public class MainActivity extends Activity {
         STR.put("fmt_entries_n", new String[]{"%d 条","%d entries"});
         STR.put("cols_bankfold_hint", new String[]{"按银行折叠时列数暂不可调，展开银行后仍按当前列数显示","Column count is locked while cards are folded by bank; expanded groups keep the current count"});
         STR.put("cols_single_lag_warn", new String[]{"卡片较多：单列大图滑动可能卡顿，可点列数切换为多列","Many cards: single-column large images may scroll with lag — tap the column switch for more columns"});
+        STR.put("cols_lag_title166", new String[]{"单列卡顿提醒","Single-Column Lag Warning"});
+        STR.put("cols_lag_msg_fmt166", new String[]{"当前共 %1$d 张卡，单列大图滑动可能卡顿，建议切换为多列。","You have %1$d cards. Single-column large images may scroll with lag — consider switching to more columns."});
+        STR.put("cols_lag_ok166", new String[]{"确定","OK"});
         STR.put("stu_fit", new String[]{"适合","Good for"});
         STR.put("act_done_suffix", new String[]{" · 已完成"," · Done"});
         STR.put("custom_del_msg_fmt", new String[]{"「%s」删了就没了，备注也会一起清掉。","\"%s\" will be deleted for good, together with its note."});
@@ -12043,6 +12046,10 @@ public class MainActivity extends Activity {
     // ---------- 筛选面板（Phase 2a-1；P2 改悬浮卡窗：左右/底部留空、四角全圆+描边+投影、开合动画） ----------
     void openFilterSheet() {
         closeFilterSheetNow();
+        lagWarnAcked166 = false; // Q166：筛选会话重置——本窗内确认过一次不再弹，关窗重开重新计
+        if (lagWarnSheet166 != null && lagWarnSheet166.getParent() != null)
+            ((ViewGroup) lagWarnSheet166.getParent()).removeView(lagWarnSheet166);
+        lagWarnSheet166 = null;
         // P2e/P2c：右下双钮退场，不与筛选窗叠压
         hideChrome(); // Q12
         // Q153（件三）：旧 prepareFrozenBackdrop131 窗前同步预抓退役——背板改由 glassLayerHw 挂载后的统一管线首帧后补（内容先行）。
@@ -12192,12 +12199,94 @@ public class MainActivity extends Activity {
 
     LinearLayout filterPanelRef = null;
     int filterCardW = 0; // Q77：筛选窗实际宽，chips 流式排版按此算可用宽
+    // Q166（2.80 第一件，用户 10:39 真机点名）：单列>30 张必点「确定」的
+    // 警告窗状态——acked 随筛选会话（openFilterSheet 重置）、thenClose 记
+    // 本次确认后是否连带关筛选窗（触发点二）。计数与行内提示同源 lagMany166。
+    View lagWarnSheet166 = null;
+    boolean lagWarnAcked166 = false;
+    boolean lagWarnThenClose166 = false;
+
+    // Q166：卡顿判定唯一口——与行内提示（筛选窗/我的卡片两处）同一 count 同一阈值
+    boolean lagMany166() { return Store.all != null && Store.all.size() > 30; }
+
+    // Q166：警告窗——走既有玻璃窗工厂同款式（冻结玻璃垫＋boostWindowFace 面＋
+    // sheetR129(22f) 全圆角＋统一进出场曲线），只留「确定」一钮；遮罩点击无
+    // 反应（DeepSeek 审：遮罩≠确定）、系统返回键按确定处理（见 onBackPressed）。
+    void showLagWarn166(boolean thenCloseFilter) {
+        if (lagWarnSheet166 != null) return;
+        lagWarnThenClose166 = thenCloseFilter;
+        final int cnt166 = Store.all == null ? 0 : Store.all.size(); // 判定瞬间快照（DeepSeek 审）
+        hideChrome();
+        final FrameLayout sheet = new FrameLayout(this);
+        View shade = new View(this); shade.setBackgroundColor(Color.argb(102, 0, 0, 0)); shade.setAlpha(0f);
+        sheet.addView(shade, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        shade.setOnClickListener(v -> { /* Q166：遮罩只拦截不关闭，必须点「确定」 */ });
+        LinearLayout card = new LinearLayout(this); card.setOrientation(LinearLayout.VERTICAL);
+        GradientDrawable cg = glassWindowTint(sheetR129(22f), false); boostWindowFace(cg); card.setBackground(cg);
+        if (Build.VERSION.SDK_INT >= 21) { softShadow(card, 24); roundClip(card, sheetR129(22f), this); }
+        card.setOnClickListener(v -> {});
+        card.setPadding(dp(this, 18), dp(this, 18), dp(this, 18), dp(this, 14) + navBarH());
+        card.addView(tv(this, "⚠ " + S("cols_lag_title166"), 17, Color.rgb(0xB2, 0x6A, 0x00), true)); // ⚠ 与行内提示同字形
+        TextView m = tv(this, String.format(S("cols_lag_msg_fmt166"), cnt166), 13.5f, inkBody(), false);
+        LinearLayout.LayoutParams mlp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        mlp.topMargin = dp(this, 8); card.addView(m, mlp);
+        TextView ob = tv(this, S("cols_lag_ok166"), 15, Color.WHITE, true);
+        ob.setGravity(Gravity.CENTER);
+        ob.setBackground(rippleBg(Color.rgb(0x0A, 0x5C, 0xD6), 14));
+        LinearLayout.LayoutParams olp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(this, 48));
+        olp.topMargin = dp(this, 18); card.addView(ob, olp);
+        FrameLayout.LayoutParams clp = new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        clp.gravity = Gravity.BOTTOM; clp.leftMargin = dp(this, 12); clp.rightMargin = dp(this, 12); clp.bottomMargin = dp(this, 10) + navBarH();
+        FrameLayout wrap = new FrameLayout(this);
+        View glass = glassLayerHw(card, sheetR129(22f), false, "lagwarn166"); roundClip(glass, sheetR129(22f), this);
+        wrap.addView(glass, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        wrap.addView(card, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        sheet.addView(wrap, clp);
+        sheet.setTag(new Object[]{wrap});
+        pinFixedText125(ob);
+        ob.setOnClickListener(v -> confirmLagWarn166());
+        content.addView(sheet);
+        lagWarnSheet166 = sheet;
+        animateUpdateSheetIn(sheet);
+    }
+
+    // Q166：「确定」唯一出口——点钮与系统返回键共用；thenClose 时连带关筛选窗
+    void confirmLagWarn166() {
+        if (lagWarnSheet166 == null) return;
+        haptic();
+        closeLagWarn166(lagWarnThenClose166);
+    }
+
+    void closeLagWarn166(boolean alsoFilter) {
+        final View sheet = lagWarnSheet166;
+        if (sheet == null) return;
+        lagWarnSheet166 = null;
+        lagWarnAcked166 = true;
+        Object[] t = sheet.getTag() instanceof Object[] ? (Object[]) sheet.getTag() : null;
+        final View wrap = t != null ? (View) t[0] : null;
+        final boolean[] doneRan = {false};
+        Runnable done = () -> { if (doneRan[0]) return; doneRan[0] = true; if (sheet.getParent() != null) ((ViewGroup) sheet.getParent()).removeView(sheet); };
+        if (wrap != null) {
+            wrap.animate().translationY(dp(this, 42)).alpha(0f).setDuration(ANIM_DUR_SHEET_OUT).setInterpolator(ANIM_EXIT).withEndAction(done).start();
+            sheet.animate().alpha(0f).setDuration(ANIM_DUR_SHADE_OUT).setInterpolator(ANIM_EXIT).start();
+            mainHandler.postDelayed(done, ANIM_DUR_SHEET_OUT + 130); // Q98 同款兜底：endAction 不达强制收尾
+        } else done.run();
+        if (alsoFilter) closeFilterSheet();
+    }
     // Q123（2.35，件十二补注）：chips 选中落定脉冲弹簧（保留）；筛选窗升降
     // 已于 Q125 补改走 Q74 统一窗动画（animCardIn/Out），旧 filterSheetSpring 退场删除。
     final SpringDriver filterChipSpring = new SpringDriver();
     String filterChipPulseLabel123 = null; // 刚点过的 chip 标签：重建后给新 chip 一次落定弹簧
 
     void closeFilterSheet() {
+        // Q166（2.80 第一件·触发点二）：本就是单列且多卡、本会话未确认过 →
+        // 关窗前先弹必点确定警告，确定后才真关（完成/遮罩/返回键同走本入口）。
+        // 调用方仅此三处用户出口（openFilterSheet 走 closeFilterSheetNow 不经此），
+        // 程序化关窗不会误伤（DeepSeek 审边界三）。
+        if (filterSheet != null && lagWarnSheet166 == null && !lagWarnAcked166 && cols == 1 && lagMany166()) {
+            showLagWarn166(true);
+            return;
+        }
         final View sheet = filterSheet;
         if (sheet == null) return;
         filterSheet = null;
@@ -12365,10 +12454,15 @@ public class MainActivity extends Activity {
             colChips.add(filterChip(S("cols_" + nCols), cols == nCols, () -> {
                 // Q154（件十三）：列数切换走统一 FLIP 入口；分组模式结构不同构
                 // 直切（列数 chip 本就置灰禁用，此为双保险）。
+                // Q166（2.80 第一件·触发点一）：点单列且多卡未确认 → 先照常生效
+                //（列表切成单列、面板重建），下一帧再弹必点确定警告（DeepSeek
+                // A 案：先生效后知会，不留「选没选上」的歧义）。
+                final boolean warn166 = nCols == 1 && lagMany166() && !lagWarnAcked166;
                 final int oldCols154 = cols;
                 Runnable apply154 = () -> { cols = nCols; persistViewPrefs(); rebuildFilterPanel(panel); refreshHome(); };
                 if (groupBank || homeList == null || homeScroll == null) apply154.run();
                 else beginColsFlip154(homeList, homeScroll, oldCols154, nCols, false, false, apply154);
+                if (warn166) mainHandler.post(() -> { if (filterSheet != null && lagWarnSheet166 == null) showLagWarn166(false); });
             }, groupBank));
         }
         addChipFlow(panel, colChips);
@@ -12383,7 +12477,7 @@ public class MainActivity extends Activity {
         // Q164（2.79 批2，用户 04:11 点名）：全部卡片 >30 张且单列时，
         // 单列大图全量解码会卡顿——列数行下给一条双语提示（根治在性能批
         // 的解码缓存，本批先立警告，条件随面板重建现算）。
-        if (cols == 1 && Store.all != null && Store.all.size() > 30) {
+        if (cols == 1 && lagMany166()) {
             TextView lagWarn164 = tv(this, "\u26a0 " + S("cols_single_lag_warn"), 11.5f, Color.rgb(0xB2, 0x6A, 0x00), false);
             LinearLayout.LayoutParams lwp164 = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
             lwp164.topMargin = dp(this, 6);
@@ -15604,7 +15698,7 @@ public class MainActivity extends Activity {
             }
         }
         // Q164（2.79 批2）：与全部卡片同件——>30 张且单列时列数行下双语卡顿提示
-        if (!mineRows.isEmpty() && cols == 1 && Store.all != null && Store.all.size() > 30) {
+        if (!mineRows.isEmpty() && cols == 1 && lagMany166()) {
             TextView lagWarn164 = tv(this, "⚠ " + S("cols_single_lag_warn"), 11.5f, Color.rgb(0xB2, 0x6A, 0x00), false);
             LinearLayout.LayoutParams lwp164 = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
             lwp164.topMargin = dp(this, 4);
@@ -27053,6 +27147,7 @@ public class MainActivity extends Activity {
         if (glossarySheetView != null) { closeGlossarySheet(); return; } // Q122（件十三）：常识浮层压在最上，先关它再回向导/详情
         if (customDetailSheet != null) { closeCustomDetail(); return; }
         if (detailCard != null) { closeDetail(); return; }
+        if (lagWarnSheet166 != null) { confirmLagWarn166(); return; } // Q166：单列警告在筛选窗之上，返回＝确定（与点钮同一出口）
         if (filterSheet != null) { closeFilterSheet(); return; }
         if (extSheet != null) { closeExtendedSearch(); return; }
         if (binSheet != null) { closeBinQuery(); return; }
