@@ -1,4 +1,22 @@
-28090
+28196
+# 2026-10-08 2.92 英文漏译全修＋bankdict 落库＋展柜防挤/对比批（Q179，基线
+# 2.91/vc291，DeepSeek 已审 deepseek-292-reply.md（hidden_files，含主会话取
+# 舍定稿；本轮复跑回函同调）、FlowBee 额度不足待补审，净增 +106 相对 2.91
+# 基线 28090）：①STR 新键 5（news_cat_industry/benefit/exchange＋tool_
+# search_online/sub）+6；②newsTagLabel164 分类→STR 表自身反查 +5（删原
+# equals 三支同行净计）；③filterChip 先译标签再拼 ✓ 前缀 +1（治选中态断
+# 译，全窗同类收口）；④维度片/sortLabel dim 支补英文分支同行替换 +0；
+# ⑤工具宫格 extsearch 改 S() 同行 +0；⑥bankLabel 绕 tvW 修复同行 +0（拆
+# 两行 +1）；⑦bankdict 助手块（字段 3＋bankEn179/putBankDict179/
+# loadBankDict179，含段头注释）约 +52；⑧boot 与数据更新落地两触发点 +2；
+# ⑨标本微字行三处补银行拉丁段同行 +0（各 +1 变量同行）；⑩展柜顶栏四钮
+# setSingleLine＋13dp 内距 +4；⑪scUnselFace179 浅底未选面助手＋MIX 常量
+# 与段头注释 +9、showcaseBarBtnBg162/面板段选片两处/Default 钮四消费点
+# 同行 +0；⑫fitNavLabels179 底栏单行自适配助手＋调用 +27。
+# 红线守恒：DataCipher、OTA app.json、Q176 单列真确认、Q178 提示条锚点
+# 一字未动；中文模式与扁平逐字零差异（bankdict 标本行补段属既定设计补
+# 齐、单独说明）；L() 37/EN_TXT 482/候选 1409、空吞 208、出口 87/弹层
+# 43 全冻。此后只许减不许增。
 # 2026-10-08 2.91 设置页更新结果提示条压行修复（Q178，基线 2.90/vc290，
 # 用户 13:34 真机截图点名——软件更新检查结果提示压「退出前再次确认」行；
 # 施工前 DeepSeek 审 deepseek-float-toast-anchor-2026-10-08.md，FlowBee
