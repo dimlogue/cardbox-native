@@ -15672,6 +15672,10 @@ public class MainActivity extends Activity {
         // （persistViewPrefs 同口径、点选即重排并记住），只作用于库卡网格（addMineCardRows
         // 读 cols 测算），自定义色带恒整行一条不跟列数变。控件置于卡区内首行右对齐，
         // 随卡区一同折叠，不挤占上方「我的卡片 N 张」区头计数行。
+        // Q167（2.81）：页头口径卡数（库卡＋自定义，与页头「N 张」同数）——列数钮
+        // 弹窗与下方行内提示共用此数，计数判定走唯一口 lagManyCount167（亲验收口：
+        // 声明原在列数行块内、行内提示在块外够不着，两处曾各走一口，现提升共用）。
+        final int minePageCount167 = mineRows.size() + customCards.size();
         if (!mineRows.isEmpty()) {
             LinearLayout colsRow127 = new LinearLayout(this);
             colsRow127.setOrientation(LinearLayout.HORIZONTAL);
@@ -15680,9 +15684,6 @@ public class MainActivity extends Activity {
             crLp127.bottomMargin = dp(this, 2);
             zoneBox.addView(colsRow127, crLp127);
             mineColsRow152 = colsRow127; // Q152：列数钮重涂把手
-            // Q167（2.81）：页头口径卡数（库卡＋自定义，与页头「N 张」同数）——
-            // 单列警告的判定与正文张数共用，计数判定走唯一口 lagManyCount167。
-            final int minePageCount167 = mineRows.size() + customCards.size();
             String[][] colOpts127 = {{"1", "单列"}, {"2", "双列"}, {"3", "三列"}, {"4", "四列"}};
             for (final String[] co127 : colOpts127) {
                 final int nCols127 = Integer.parseInt(co127[0]);
@@ -15737,7 +15738,9 @@ public class MainActivity extends Activity {
             }
         }
         // Q164（2.79 批2）：与全部卡片同件——>30 张且单列时列数行下双语卡顿提示
-        if (!mineRows.isEmpty() && cols == 1 && lagMany166()) {
+        // Q167（2.81 亲验收口）：判定改走页头数 lagManyCount167(minePageCount167)，
+        // 与本页 ⚠ 弹窗同源（原走全库数 lagMany166、同页两口径，现已收成一套）。
+        if (!mineRows.isEmpty() && cols == 1 && lagManyCount167(minePageCount167)) {
             TextView lagWarn164 = tv(this, "⚠ " + S("cols_single_lag_warn"), 11.5f, Color.rgb(0xB2, 0x6A, 0x00), false);
             LinearLayout.LayoutParams lwp164 = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
             lwp164.topMargin = dp(this, 4);
