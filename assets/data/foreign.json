@@ -7484,8 +7484,8 @@
   },
   {
    "id": "fxca-001",
-   "name": "Marriott Bonvoy American Express 卡",
-   "name_en": "",
+   "name": "Marriott Bonvoy® American Express® Card",
+   "name_en": "Marriott Bonvoy® American Express® Card",
    "bank": "American Express",
    "org": "amex",
    "type": "credit",
@@ -7493,15 +7493,18 @@
    "issue_status": "active",
    "status": "在發",
    "specs": {
-    "數據狀態": "待核：CardFi 線索未經發卡行官網核實，目前僅錄卡名／發行方／卡組織／借還類型等身份信息，全部規格待核實階段回官網確認後重寫",
-    "數據來源": "CardFi 線索（card.lengziyu.cn，未核實）"
+    "主要權益": "萬豪酒店消費每 $1 賺 5X 積分、其他消費 2X；每年週年送免費住宿獎勵一晚；附銀卡級會籍及每年 15 晚考核房晚",
+    "年費": "年費 $120（加拿大站原載）",
+    "發行情況": "現行在發",
+    "數據狀態": "核心字段已回發卡行官網核實（2026-10-08）；未核項見 verification.missing_fields",
+    "數據來源": "發卡行官網（見 verification.source_refs）"
    },
-   "review": "CardFi 線索導入（未核實）：卡名、發行方、卡組織、類型為線索站所列，尚未回發卡行官網核實；規格、等級與發行狀態待核實階段確認後重寫。",
+   "review": "官網產品頁/列表頁現行在發，卡名、組織、類型已按官網定版，核心規格按官網以自有文字重寫，判 A。",
    "keywords": [
-    "American Express",
-    "Marriott Bonvoy American Express 卡"
+    "Marriott Bonvoy® American Express® Card",
+    "American Express"
    ],
-   "url": "",
+   "url": "https://www.americanexpress.com/en-ca/credit-cards/marriott-bonvoy-card/?CPID=100600816",
    "funding_modes": [
     "credit"
    ],
@@ -7510,23 +7513,40 @@
    "region_code": "CA",
    "added": "2026-10-08",
    "verification": {
-    "status": "lead_unverified",
-    "missing_fields": [
-     "card_level",
-     "eligibility",
-     "annual_fee_status",
-     "foreign_transaction_fee_pct",
-     "supported_currency_codes"
-    ],
-    "conflicts": [],
+    "status": "core_verified",
+    "evidence_level_overall": "A",
     "source_refs": [
      {
-      "role": "lead",
+      "role": "官方產品專頁",
+      "title": "Marriott Bonvoy® American Express®* Card | Amex CA",
+      "url": "https://www.americanexpress.com/en-ca/credit-cards/marriott-bonvoy-card/?CPID=100600816",
+      "publisher": "www.americanexpress.com",
+      "accessed_at": "2026-10-08",
+      "evidence_grade": "A",
+      "facts_supported": [
+       "官網現行產品頁在發",
+       "年費 $120",
+       "5X/2X 積分結構",
+       "週年免費住宿獎勵"
+      ]
+     },
+     {
+      "role": "lead_original",
       "url": "https://card.lengziyu.cn/card/marriott-bonvoy-american-express-card",
       "publisher": "CardFi（線索站，未核實）",
       "accessed_at": "2026-10-08"
      }
-    ]
+    ],
+    "verified_at": "2026-10-08",
+    "last_checked_at": "2026-10-08",
+    "next_review_at": "2026-11-07",
+    "review_cadence_days": 30,
+    "missing_fields": [
+     "幣種未在頁面明示（加拿大站按 CAD）",
+     "卡等級官網未設字段"
+    ],
+    "conflicts": [],
+    "manual_questions": []
    },
    "aliases": [
     "Marriott"
@@ -7535,48 +7555,67 @@
   {
    "id": "fxeu-001",
    "name": "N26 Go Mastercard",
-   "name_en": "",
-   "bank": "N26",
+   "name_en": "N26 Go Mastercard",
+   "bank": "N26 Bank SE",
    "org": "mastercard",
-   "type": "credit",
+   "type": "debit",
    "card_level": null,
    "issue_status": "active",
    "status": "在發",
    "specs": {
-    "數據狀態": "待核：CardFi 線索未經發卡行官網核實，目前僅錄卡名／發行方／卡組織／借還類型等身份信息，全部規格待核實階段回官網確認後重寫",
-    "數據來源": "CardFi 線索（card.lengziyu.cn，未核實）"
+    "主要權益": "付費旅行檔借記卡，全球支付與取現免貨幣轉換費；含旅行保險包（延誤/行李/取消/境外醫療）；最多 10 個子賬戶與貴賓室折扣購票",
+    "年費": "訂閱制 €9.90/月（無獨立卡年費）",
+    "發行情況": "現行在發",
+    "數據狀態": "核心字段已回發卡行官網核實（2026-10-08）；未核項見 verification.missing_fields",
+    "數據來源": "發卡行官網（見 verification.source_refs）"
    },
-   "review": "CardFi 線索導入（未核實）：卡名、發行方、卡組織、類型為線索站所列，尚未回發卡行官網核實；規格、等級與發行狀態待核實階段確認後重寫。",
+   "review": "官網產品頁/列表頁現行在發，卡名、組織、類型已按官網定版，核心規格按官網以自有文字重寫，判 A。",
    "keywords": [
-    "N26",
-    "N26 Go Mastercard"
+    "N26 Go Mastercard",
+    "N26 Bank SE"
    ],
-   "url": "",
+   "url": "https://n26.com/en-be/you-bank-account-with-travel-insurance",
    "funding_modes": [
-    "credit"
+    "debit"
    ],
    "image": null,
    "region": "欧洲多国",
    "region_code": "EU",
    "added": "2026-10-08",
    "verification": {
-    "status": "lead_unverified",
-    "missing_fields": [
-     "card_level",
-     "eligibility",
-     "annual_fee_status",
-     "foreign_transaction_fee_pct",
-     "supported_currency_codes"
-    ],
-    "conflicts": [],
+    "status": "core_verified",
+    "evidence_level_overall": "A",
     "source_refs": [
      {
-      "role": "lead",
+      "role": "官方產品專頁",
+      "title": "N26 Go: A debit card for everyday in Belgium and travel",
+      "url": "https://n26.com/en-be/you-bank-account-with-travel-insurance",
+      "publisher": "n26.com",
+      "accessed_at": "2026-10-08",
+      "evidence_grade": "A",
+      "facts_supported": [
+       "官網 Go 產品頁在發",
+       "借記卡屬性",
+       "€9.90/月",
+       "免外幣交易費"
+      ]
+     },
+     {
+      "role": "lead_original",
       "url": "https://card.lengziyu.cn/card/n26-go-mastercard",
       "publisher": "CardFi（線索站，未核實）",
       "accessed_at": "2026-10-08"
      }
-    ]
+    ],
+    "verified_at": "2026-10-08",
+    "last_checked_at": "2026-10-08",
+    "next_review_at": "2026-11-07",
+    "review_cadence_days": 30,
+    "missing_fields": [
+     "萬事達等級官網未標註"
+    ],
+    "conflicts": [],
+    "manual_questions": []
    },
    "aliases": [
     "n26 Go"
@@ -7585,95 +7624,133 @@
   {
    "id": "fxeu-002",
    "name": "N26 Metal Mastercard",
-   "name_en": "",
-   "bank": "N26",
+   "name_en": "N26 Metal Mastercard",
+   "bank": "N26 Bank SE",
    "org": "mastercard",
-   "type": "credit",
+   "type": "debit",
    "card_level": null,
    "issue_status": "active",
    "status": "在發",
    "specs": {
-    "數據狀態": "待核：CardFi 線索未經發卡行官網核實，目前僅錄卡名／發行方／卡組織／借還類型等身份信息，全部規格待核實階段回官網確認後重寫",
-    "數據來源": "CardFi 線索（card.lengziyu.cn，未核實）"
+    "主要權益": "不銹鋼借記卡三色可選（頂檔）；歐元區每月 8 次免費 ATM 取現；含手機保險與購買保護；優先客服與每年 1 張免費貴賓室通行證",
+    "年費": "訂閱制 €16.90/月（無獨立卡年費）",
+    "發行情況": "現行在發",
+    "數據狀態": "核心字段已回發卡行官網核實（2026-10-08）；未核項見 verification.missing_fields",
+    "數據來源": "發卡行官網（見 verification.source_refs）"
    },
-   "review": "CardFi 線索導入（未核實）：卡名、發行方、卡組織、類型為線索站所列，尚未回發卡行官網核實；規格、等級與發行狀態待核實階段確認後重寫。",
+   "review": "官網產品頁/列表頁現行在發，卡名、組織、類型已按官網定版，核心規格按官網以自有文字重寫，判 A。",
    "keywords": [
-    "N26",
-    "N26 Metal Mastercard"
+    "N26 Metal Mastercard",
+    "N26 Bank SE"
    ],
-   "url": "",
+   "url": "https://n26.com/en-es/metal?flags=noscript",
    "funding_modes": [
-    "credit"
+    "debit"
    ],
    "image": null,
    "region": "欧洲多国",
    "region_code": "EU",
    "added": "2026-10-08",
    "verification": {
-    "status": "lead_unverified",
-    "missing_fields": [
-     "card_level",
-     "eligibility",
-     "annual_fee_status",
-     "foreign_transaction_fee_pct",
-     "supported_currency_codes"
-    ],
-    "conflicts": [],
+    "status": "core_verified",
+    "evidence_level_overall": "A",
     "source_refs": [
      {
-      "role": "lead",
+      "role": "官方產品專頁",
+      "title": "N26 Metal — the premium bank account to upgrade your life",
+      "url": "https://n26.com/en-es/metal?flags=noscript",
+      "publisher": "n26.com",
+      "accessed_at": "2026-10-08",
+      "evidence_grade": "A",
+      "facts_supported": [
+       "官網 Metal 頁在發",
+       "借記卡屬性",
+       "€16.90/月",
+       "每月 8 次免費取現"
+      ]
+     },
+     {
+      "role": "lead_original",
       "url": "https://card.lengziyu.cn/card/n26-metal-mastercard",
       "publisher": "CardFi（線索站，未核實）",
       "accessed_at": "2026-10-08"
      }
-    ]
+    ],
+    "verified_at": "2026-10-08",
+    "last_checked_at": "2026-10-08",
+    "next_review_at": "2026-11-07",
+    "review_cadence_days": 30,
+    "missing_fields": [
+     "萬事達等級官網未標註"
+    ],
+    "conflicts": [],
+    "manual_questions": []
    }
   },
   {
    "id": "fxeu-003",
    "name": "N26 Smart Mastercard",
-   "name_en": "",
-   "bank": "N26",
+   "name_en": "N26 Smart Mastercard",
+   "bank": "N26 Bank SE",
    "org": "mastercard",
-   "type": "credit",
+   "type": "debit",
    "card_level": null,
    "issue_status": "active",
    "status": "在發",
    "specs": {
-    "數據狀態": "待核：CardFi 線索未經發卡行官網核實，目前僅錄卡名／發行方／卡組織／借還類型等身份信息，全部規格待核實階段回官網確認後重寫",
-    "數據來源": "CardFi 線索（card.lengziyu.cn，未核實）"
+    "主要權益": "入門付費檔借記卡，實體卡五色可選、最多 6 張虛擬卡；歐元區每月 3 次免費取現；子賬戶與賬單自動化工具",
+    "年費": "訂閱制 €4.90/月（無獨立卡年費）",
+    "發行情況": "現行在發",
+    "數據狀態": "核心字段已回發卡行官網核實（2026-10-08）；未核項見 verification.missing_fields",
+    "數據來源": "發卡行官網（見 verification.source_refs）"
    },
-   "review": "CardFi 線索導入（未核實）：卡名、發行方、卡組織、類型為線索站所列，尚未回發卡行官網核實；規格、等級與發行狀態待核實階段確認後重寫。",
+   "review": "官網產品頁/列表頁現行在發，卡名、組織、類型已按官網定版，核心規格按官網以自有文字重寫，判 A。",
    "keywords": [
-    "N26",
-    "N26 Smart Mastercard"
+    "N26 Smart Mastercard",
+    "N26 Bank SE"
    ],
-   "url": "",
+   "url": "https://n26.com/en-eu/bank-account/",
    "funding_modes": [
-    "credit"
+    "debit"
    ],
    "image": null,
    "region": "欧洲多国",
    "region_code": "EU",
    "added": "2026-10-08",
    "verification": {
-    "status": "lead_unverified",
-    "missing_fields": [
-     "card_level",
-     "eligibility",
-     "annual_fee_status",
-     "foreign_transaction_fee_pct",
-     "supported_currency_codes"
-    ],
-    "conflicts": [],
+    "status": "core_verified",
+    "evidence_level_overall": "A",
     "source_refs": [
      {
-      "role": "lead",
+      "role": "官方產品專頁",
+      "title": "N26 Smart — the bank account built for better control",
+      "url": "https://n26.com/en-eu/bank-account/",
+      "publisher": "n26.com",
+      "accessed_at": "2026-10-08",
+      "evidence_grade": "A",
+      "facts_supported": [
+       "官網 Smart 頁在發",
+       "借記卡屬性",
+       "€4.90/月",
+       "每月 3 次免費取現"
+      ]
+     },
+     {
+      "role": "lead_original",
       "url": "https://card.lengziyu.cn/card/n26-smart-mastercard",
       "publisher": "CardFi（線索站，未核實）",
       "accessed_at": "2026-10-08"
      }
-    ]
+    ],
+    "verified_at": "2026-10-08",
+    "last_checked_at": "2026-10-08",
+    "next_review_at": "2026-11-07",
+    "review_cadence_days": 30,
+    "missing_fields": [
+     "萬事達等級官網未標註"
+    ],
+    "conflicts": [],
+    "manual_questions": []
    },
    "aliases": [
     "n26 Smart"
@@ -7682,155 +7759,76 @@
   {
    "id": "fxeu-004",
    "name": "N26 Standard Mastercard",
-   "name_en": "",
-   "bank": "N26",
-   "org": "mastercard",
-   "type": "credit",
-   "card_level": null,
-   "issue_status": "active",
-   "status": "在發",
-   "specs": {
-    "數據狀態": "待核：CardFi 線索未經發卡行官網核實，目前僅錄卡名／發行方／卡組織／借還類型等身份信息，全部規格待核實階段回官網確認後重寫",
-    "數據來源": "CardFi 線索（card.lengziyu.cn，未核實）"
-   },
-   "review": "CardFi 線索導入（未核實）：卡名、發行方、卡組織、類型為線索站所列，尚未回發卡行官網核實；規格、等級與發行狀態待核實階段確認後重寫。",
-   "keywords": [
-    "N26",
-    "N26 Standard Mastercard"
-   ],
-   "url": "",
-   "funding_modes": [
-    "credit"
-   ],
-   "image": null,
-   "region": "欧洲多国",
-   "region_code": "EU",
-   "added": "2026-10-08",
-   "verification": {
-    "status": "lead_unverified",
-    "missing_fields": [
-     "card_level",
-     "eligibility",
-     "annual_fee_status",
-     "foreign_transaction_fee_pct",
-     "supported_currency_codes"
-    ],
-    "conflicts": [],
-    "source_refs": [
-     {
-      "role": "lead",
-      "url": "https://card.lengziyu.cn/card/n26-standard-mastercard",
-      "publisher": "CardFi（線索站，未核實）",
-      "accessed_at": "2026-10-08"
-     }
-    ]
-   }
-  },
-  {
-   "id": "fxeu-005",
-   "name": "N26 Virtual Mastercard",
-   "name_en": "",
-   "bank": "N26",
+   "name_en": "N26 Standard Mastercard",
+   "bank": "N26 Bank SE",
    "org": "mastercard",
    "type": "debit",
    "card_level": null,
    "issue_status": "active",
    "status": "在發",
    "specs": {
-    "數據狀態": "待核：CardFi 線索未經發卡行官網核實，目前僅錄卡名／發行方／卡組織／借還類型等身份信息，全部規格待核實階段回官網確認後重寫",
-    "數據來源": "CardFi 線索（card.lengziyu.cn，未核實）"
+    "主要權益": "免費虛擬借記卡開戶即用；可加辦透明實體卡（一次性 €10）；每月 2 次歐元區免費 NFC 取現；消費分析工具",
+    "年費": "免費檔 €0（實體卡一次性配送費 €10）",
+    "發行情況": "現行在發",
+    "數據狀態": "核心字段已回發卡行官網核實（2026-10-08）；未核項見 verification.missing_fields",
+    "數據來源": "發卡行官網（見 verification.source_refs）"
    },
-   "review": "CardFi 線索導入（未核實）：卡名、發行方、卡組織、類型為線索站所列，尚未回發卡行官網核實；規格、等級與發行狀態待核實階段確認後重寫。",
+   "review": "官網產品頁/列表頁現行在發，卡名、組織、類型已按官網定版，核心規格按官網以自有文字重寫，判 A。",
    "keywords": [
-    "N26",
-    "N26 Virtual Mastercard"
+    "N26 Standard Mastercard",
+    "N26 Bank SE"
    ],
-   "url": "",
+   "url": "https://n26.com/en-eu/free-bank-account",
    "funding_modes": [
-    "debit_account"
+    "debit"
    ],
    "image": null,
-   "region": "欧洲",
+   "region": "欧洲多国",
    "region_code": "EU",
    "added": "2026-10-08",
    "verification": {
-    "status": "lead_unverified",
-    "missing_fields": [
-     "card_level",
-     "eligibility",
-     "annual_fee_status",
-     "foreign_transaction_fee_pct",
-     "supported_currency_codes"
-    ],
-    "conflicts": [],
+    "status": "core_verified",
+    "evidence_level_overall": "A",
     "source_refs": [
      {
-      "role": "lead",
-      "url": "https://card.lengziyu.cn/card/n26-mastercard-virtual",
+      "role": "官方產品專頁",
+      "title": "N26 Standard — the free bank account",
+      "url": "https://n26.com/en-eu/free-bank-account",
+      "publisher": "n26.com",
+      "accessed_at": "2026-10-08",
+      "evidence_grade": "A",
+      "facts_supported": [
+       "官網 Standard 頁在發",
+       "借記卡屬性",
+       "免費無維護費",
+       "虛擬卡默認發放"
+      ]
+     },
+     {
+      "role": "lead_original",
+      "url": "https://card.lengziyu.cn/card/n26-standard-mastercard",
       "publisher": "CardFi（線索站，未核實）",
       "accessed_at": "2026-10-08"
      }
-    ]
-   },
-   "aliases": [
-    "n26 Virtual"
-   ]
-  },
-  {
-   "id": "fxeu-006",
-   "name": "n26 You",
-   "name_en": "",
-   "bank": "N26",
-   "org": "unknown_pending",
-   "type": "credit",
-   "card_level": null,
-   "issue_status": "active",
-   "status": "在發",
-   "specs": {
-    "數據狀態": "待核：CardFi 線索未經發卡行官網核實，目前僅錄卡名／發行方／卡組織／借還類型等身份信息，全部規格待核實階段回官網確認後重寫",
-    "數據來源": "CardFi 線索（card.lengziyu.cn，未核實）"
-   },
-   "review": "CardFi 線索導入（未核實）：卡名、發行方、卡組織、類型為線索站所列，尚未回發卡行官網核實；規格、等級與發行狀態待核實階段確認後重寫。",
-   "keywords": [
-    "N26",
-    "n26 You"
-   ],
-   "url": "",
-   "funding_modes": [
-    "credit"
-   ],
-   "image": null,
-   "region": "欧洲",
-   "region_code": "EU",
-   "added": "2026-10-08",
-   "verification": {
-    "status": "lead_unverified",
+    ],
+    "verified_at": "2026-10-08",
+    "last_checked_at": "2026-10-08",
+    "next_review_at": "2026-11-07",
+    "review_cadence_days": 30,
     "missing_fields": [
-     "org",
-     "card_level",
-     "eligibility",
-     "annual_fee_status",
-     "foreign_transaction_fee_pct",
-     "supported_currency_codes"
+     "萬事達等級官網未標註"
     ],
     "conflicts": [],
-    "source_refs": [
-     {
-      "role": "lead",
-      "url": "https://card.lengziyu.cn/card/n26-you",
-      "publisher": "CardFi（線索站，未核實）",
-      "accessed_at": "2026-10-08"
-     }
-    ]
+    "manual_questions": []
    }
   },
   {
    "id": "fxgl-001",
-   "name": "Payoneer 卡",
-   "name_en": "",
+   "name": "Payoneer Commercial Mastercard®",
+   "name_en": "Payoneer Commercial Mastercard®",
    "bank": "Payoneer",
    "org": "mastercard",
-   "type": "credit",
+   "type": "debit",
    "card_level": null,
    "issue_status": "active",
    "status": "在發",
@@ -7843,9 +7841,9 @@
     "Payoneer",
     "Payoneer 卡"
    ],
-   "url": "",
+   "url": "https://www.payoneer.com/marketplace/get-paid-by-marketplaces/",
    "funding_modes": [
-    "credit"
+    "debit"
    ],
    "image": null,
    "region": "全球",
@@ -7854,11 +7852,9 @@
    "verification": {
     "status": "lead_unverified",
     "missing_fields": [
-     "card_level",
-     "eligibility",
-     "annual_fee_status",
-     "foreign_transaction_fee_pct",
-     "supported_currency_codes"
+     "年費（periodic fee）具體金額未公開，須登入賬戶 fees 頁查看",
+     "須 Payoneer 賬戶且近 6 個月收款滿 $100 等資格，地區受限",
+     "為企業借記/採購卡，非個人信用卡"
     ],
     "conflicts": [],
     "source_refs": [
@@ -7867,6 +7863,19 @@
       "url": "https://card.lengziyu.cn/card/payoneer-card",
       "publisher": "CardFi（線索站，未核實）",
       "accessed_at": "2026-10-08"
+     },
+     {
+      "role": "官網產品頁/對比頁（關鍵項未清）",
+      "title": "Get paid from global marketplaces & companies | Payoneer",
+      "url": "https://www.payoneer.com/marketplace/get-paid-by-marketplaces/",
+      "publisher": "www.payoneer.com",
+      "accessed_at": "2026-10-08",
+      "evidence_grade": "A",
+      "facts_supported": [
+       "官網載 Commercial Mastercard 現行在發",
+       "發卡主體 Payoneer Europe Limited 或 First Century Bank, N.A.（按資格）",
+       "虛擬/實體雙形態、日限額最高 $200,000"
+      ]
      }
     ]
    }
@@ -7874,48 +7883,68 @@
   {
    "id": "fxgl-002",
    "name": "Revolut Standard",
-   "name_en": "",
+   "name_en": "Revolut Standard",
    "bank": "Revolut",
    "org": "visa",
-   "type": "credit",
+   "type": "debit",
    "card_level": null,
    "issue_status": "active",
    "status": "在發",
    "specs": {
-    "數據狀態": "待核：CardFi 線索未經發卡行官網核實，目前僅錄卡名／發行方／卡組織／借還類型等身份信息，全部規格待核實階段回官網確認後重寫",
-    "數據來源": "CardFi 線索（card.lengziyu.cn，未核實）"
+    "主要權益": "免費基礎檔借記卡（實體+虛擬）；每月有免費換匯與取現額度（其後或週末換匯收費）；多幣種餘額與即時到賬",
+    "年費": "免費檔 $0/月",
+    "發行情況": "現行在發",
+    "數據狀態": "核心字段已回發卡行官網核實（2026-10-08）；未核項見 verification.missing_fields",
+    "數據來源": "發卡行官網（見 verification.source_refs）"
    },
-   "review": "CardFi 線索導入（未核實）：卡名、發行方、卡組織、類型為線索站所列，尚未回發卡行官網核實；規格、等級與發行狀態待核實階段確認後重寫。",
+   "review": "官網產品頁/列表頁現行在發，卡名、組織、類型已按官網定版，核心規格按官網以自有文字重寫，判 A。",
    "keywords": [
-    "Revolut",
-    "Revolut Standard"
+    "Revolut Standard",
+    "Revolut"
    ],
-   "url": "",
+   "url": "https://www.revolut.com/en-US/our-pricing-plans/",
    "funding_modes": [
-    "credit"
+    "debit"
    ],
    "image": null,
    "region": "英国、欧盟、新加坡、美国",
    "region_code": "GL",
    "added": "2026-10-08",
    "verification": {
-    "status": "lead_unverified",
-    "missing_fields": [
-     "card_level",
-     "eligibility",
-     "annual_fee_status",
-     "foreign_transaction_fee_pct",
-     "supported_currency_codes"
-    ],
-    "conflicts": [],
+    "status": "core_verified",
+    "evidence_level_overall": "A",
     "source_refs": [
      {
-      "role": "lead",
+      "role": "官方產品專頁",
+      "title": "Choose your perfect plan | Revolut US",
+      "url": "https://www.revolut.com/en-US/our-pricing-plans/",
+      "publisher": "www.revolut.com",
+      "accessed_at": "2026-10-08",
+      "evidence_grade": "A",
+      "facts_supported": [
+       "官網 plans 頁在發",
+       "借記卡屬性（糾正線索 credit 誤標）",
+       "Standard $0/月",
+       "換匯/取現免費額度"
+      ]
+     },
+     {
+      "role": "lead_original",
       "url": "https://card.lengziyu.cn/card/revolut-standard",
       "publisher": "CardFi（線索站，未核實）",
       "accessed_at": "2026-10-08"
      }
-    ]
+    ],
+    "verified_at": "2026-10-08",
+    "last_checked_at": "2026-10-08",
+    "next_review_at": "2026-11-07",
+    "review_cadence_days": 30,
+    "missing_fields": [
+     "卡組織隨開戶地區為 Visa 或 Mastercard，按地區而定",
+     "實體卡配送費按地區而異"
+    ],
+    "conflicts": [],
+    "manual_questions": []
    }
   },
   {
@@ -12225,71 +12254,94 @@
   },
   {
    "id": "fxsg-001",
-   "name": "MariBank 卡",
-   "name_en": "",
-   "bank": "MariBank",
+   "name": "Mari Debit Card",
+   "name_en": "Mari Debit Card",
+   "bank": "MariBank Singapore Private Limited",
    "org": "mastercard",
-   "type": "credit",
+   "type": "debit",
    "card_level": null,
    "issue_status": "active",
    "status": "在發",
    "specs": {
-    "數據狀態": "待核：CardFi 線索未經發卡行官網核實，目前僅錄卡名／發行方／卡組織／借還類型等身份信息，全部規格待核實階段回官網確認後重寫",
-    "數據來源": "CardFi 線索（card.lengziyu.cn，未核實）"
+    "主要權益": "連結儲蓄戶直接扣賬；本地合資格消費 0.5% 返現無上限、無最低消費；虛擬卡開戶自動發放、實體卡可免費申領；支持 Apple Pay / Google Pay",
+    "年費": "無年費（官網收費表列 Free）",
+    "發行情況": "現行在發",
+    "數據狀態": "核心字段已回發卡行官網核實（2026-10-08）；未核項見 verification.missing_fields",
+    "數據來源": "發卡行官網（見 verification.source_refs）"
    },
-   "review": "CardFi 線索導入（未核實）：卡名、發行方、卡組織、類型為線索站所列，尚未回發卡行官網核實；規格、等級與發行狀態待核實階段確認後重寫。",
+   "review": "官網產品頁/列表頁現行在發，卡名、組織、類型已按官網定版，核心規格按官網以自有文字重寫，判 A。",
    "keywords": [
-    "MariBank",
-    "MariBank 卡"
+    "Mari Debit Card",
+    "MariBank Singapore Private Limited"
    ],
-   "url": "",
+   "url": "https://www.maribank.sg/product/mari-debit-card",
    "funding_modes": [
-    "credit"
+    "debit"
    ],
    "image": null,
    "region": "新加坡",
    "region_code": "SG",
    "added": "2026-10-08",
    "verification": {
-    "status": "lead_unverified",
-    "missing_fields": [
-     "card_level",
-     "eligibility",
-     "annual_fee_status",
-     "foreign_transaction_fee_pct",
-     "supported_currency_codes"
-    ],
-    "conflicts": [],
+    "status": "core_verified",
+    "evidence_level_overall": "A",
     "source_refs": [
      {
-      "role": "lead",
+      "role": "官方產品專頁",
+      "title": "Debit Card for Cashback & Travel | MariBank SG",
+      "url": "https://www.maribank.sg/product/mari-debit-card",
+      "publisher": "www.maribank.sg",
+      "accessed_at": "2026-10-08",
+      "evidence_grade": "A",
+      "facts_supported": [
+       "官網產品頁在發",
+       "借記卡屬性",
+       "年費全免",
+       "0.5% 本地返現"
+      ]
+     },
+     {
+      "role": "lead_original",
       "url": "https://card.lengziyu.cn/card/maribank-card",
       "publisher": "CardFi（線索站，未核實）",
       "accessed_at": "2026-10-08"
      }
-    ]
+    ],
+    "verified_at": "2026-10-08",
+    "last_checked_at": "2026-10-08",
+    "next_review_at": "2026-11-07",
+    "review_cadence_days": 30,
+    "missing_fields": [
+     "卡等級官網未設字段",
+     "返現附促銷條款與合資格交易定義"
+    ],
+    "conflicts": [],
+    "manual_questions": []
    }
   },
   {
    "id": "fxsg-002",
-   "name": "Trust Link",
-   "name_en": "",
-   "bank": "Trust Bank（新加坡）",
-   "org": "unknown_pending",
+   "name": "Trust Link Credit Card",
+   "name_en": "Trust Link Credit Card",
+   "bank": "Trust Bank Singapore",
+   "org": "visa",
    "type": "credit",
    "card_level": null,
    "issue_status": "active",
    "status": "在發",
    "specs": {
-    "數據狀態": "待核：CardFi 線索未經發卡行官網核實，目前僅錄卡名／發行方／卡組織／借還類型等身份信息，全部規格待核實階段回官網確認後重寫",
-    "數據來源": "CardFi 線索（card.lengziyu.cn，未核實）"
+    "主要權益": "FairPrice 等日常消費賺 Linkpoints 並有高倍節省；境外消費零外幣手續費、按 Visa 匯率無行方加價；App 內一卡可切換借記/信用扣賬；可自選還款日與額度",
+    "年費": "無年費",
+    "發行情況": "現行在發",
+    "數據狀態": "核心字段已回發卡行官網核實（2026-10-08）；未核項見 verification.missing_fields",
+    "數據來源": "發卡行官網（見 verification.source_refs）"
    },
-   "review": "CardFi 線索導入（未核實）：卡名、發行方、卡組織、類型為線索站所列，尚未回發卡行官網核實；規格、等級與發行狀態待核實階段確認後重寫。",
+   "review": "官網產品頁/列表頁現行在發，卡名、組織、類型已按官網定版，核心規格按官網以自有文字重寫，判 A。",
    "keywords": [
-    "Trust Bank（新加坡）",
-    "Trust Link"
+    "Trust Link Credit Card",
+    "Trust Bank Singapore"
    ],
-   "url": "",
+   "url": "https://trustbank.sg/link-credit-card/",
    "funding_modes": [
     "credit"
    ],
@@ -12298,24 +12350,39 @@
    "region_code": "SG",
    "added": "2026-10-08",
    "verification": {
-    "status": "lead_unverified",
-    "missing_fields": [
-     "org",
-     "card_level",
-     "eligibility",
-     "annual_fee_status",
-     "foreign_transaction_fee_pct",
-     "supported_currency_codes"
-    ],
-    "conflicts": [],
+    "status": "core_verified",
+    "evidence_level_overall": "A",
     "source_refs": [
      {
-      "role": "lead",
+      "role": "官方產品專頁",
+      "title": "Apply for a Credit Card by Trust | Trust Bank Singapore",
+      "url": "https://trustbank.sg/link-credit-card/",
+      "publisher": "trustbank.sg",
+      "accessed_at": "2026-10-08",
+      "evidence_grade": "A",
+      "facts_supported": [
+       "官網專頁在售",
+       "正名 Trust Link Credit Card",
+       "年費 None",
+       "境外零外幣手續費"
+      ]
+     },
+     {
+      "role": "lead_original",
       "url": "https://card.lengziyu.cn/card/trust-link",
       "publisher": "CardFi（線索站，未核實）",
       "accessed_at": "2026-10-08"
      }
-    ]
+    ],
+    "verified_at": "2026-10-08",
+    "last_checked_at": "2026-10-08",
+    "next_review_at": "2026-11-07",
+    "review_cadence_days": 30,
+    "missing_fields": [
+     "Visa 等級官網未標註"
+    ],
+    "conflicts": [],
+    "manual_questions": []
    },
    "aliases": [
     "Trust Link Card"
@@ -12323,96 +12390,134 @@
   },
   {
    "id": "fxuk-001",
-   "name": "Monzo Mastercard",
-   "name_en": "",
-   "bank": "Monzo Bank",
-   "org": "mastercard",
-   "type": "credit",
-   "card_level": null,
-   "issue_status": "active",
-   "status": "在發",
-   "specs": {
-    "數據狀態": "待核：CardFi 線索未經發卡行官網核實，目前僅錄卡名／發行方／卡組織／借還類型等身份信息，全部規格待核實階段回官網確認後重寫",
-    "數據來源": "CardFi 線索（card.lengziyu.cn，未核實）"
-   },
-   "review": "CardFi 線索導入（未核實）：卡名、發行方、卡組織、類型為線索站所列，尚未回發卡行官網核實；規格、等級與發行狀態待核實階段確認後重寫。",
-   "keywords": [
-    "Monzo Bank",
-    "Monzo Mastercard"
-   ],
-   "url": "",
-   "funding_modes": [
-    "credit"
-   ],
-   "image": null,
-   "region": "英国",
-   "region_code": "GB",
-   "added": "2026-10-08",
-   "verification": {
-    "status": "lead_unverified",
-    "missing_fields": [
-     "card_level",
-     "eligibility",
-     "annual_fee_status",
-     "foreign_transaction_fee_pct",
-     "supported_currency_codes"
-    ],
-    "conflicts": [],
-    "source_refs": [
-     {
-      "role": "lead",
-      "url": "https://card.lengziyu.cn/card/monzo-mastercard",
-      "publisher": "CardFi（線索站，未核實）",
-      "accessed_at": "2026-10-08"
-     }
-    ]
-   }
-  },
-  {
-   "id": "fxuk-002",
-   "name": "Starling Bank 借记卡",
-   "name_en": "",
-   "bank": "Starling Bank",
+   "name": "Monzo Current Account Mastercard Debit Card",
+   "name_en": "Monzo Current Account Mastercard Debit Card",
+   "bank": "Monzo Bank Limited",
    "org": "mastercard",
    "type": "debit",
    "card_level": null,
    "issue_status": "active",
    "status": "在發",
    "specs": {
-    "數據狀態": "待核：CardFi 線索未經發卡行官網核實，目前僅錄卡名／發行方／卡組織／借還類型等身份信息，全部規格待核實階段回官網確認後重寫",
-    "數據來源": "CardFi 線索（card.lengziyu.cn，未核實）"
+    "主要權益": "免費活期戶配借記卡（虛擬卡即時可用）；境外消費按萬事達匯率無加價、免行方手續費；App 即時通知與凍結；受 FSCS 保障",
+    "年費": "免費（活期戶無月費）",
+    "發行情況": "現行在發",
+    "數據狀態": "核心字段已回發卡行官網核實（2026-10-08）；未核項見 verification.missing_fields",
+    "數據來源": "發卡行官網（見 verification.source_refs）"
    },
-   "review": "CardFi 線索導入（未核實）：卡名、發行方、卡組織、類型為線索站所列，尚未回發卡行官網核實；規格、等級與發行狀態待核實階段確認後重寫。",
+   "review": "官網產品頁/列表頁現行在發，卡名、組織、類型已按官網定版，核心規格按官網以自有文字重寫，判 A。",
    "keywords": [
-    "Starling Bank",
-    "Starling Bank 借记卡"
+    "Monzo Current Account Mastercard Debit Card",
+    "Monzo Bank Limited"
    ],
-   "url": "",
+   "url": "http://monzo.com/current-account/personal",
    "funding_modes": [
-    "debit_account"
+    "debit"
    ],
    "image": null,
    "region": "英国",
    "region_code": "GB",
    "added": "2026-10-08",
    "verification": {
-    "status": "lead_unverified",
-    "missing_fields": [
-     "card_level",
-     "eligibility",
-     "annual_fee_status",
-     "foreign_transaction_fee_pct",
-     "supported_currency_codes"
-    ],
-    "conflicts": [],
+    "status": "core_verified",
+    "evidence_level_overall": "A",
     "source_refs": [
      {
-      "role": "lead",
+      "role": "官方產品專頁",
+      "title": "Open a Free Online Bank Account in Minutes with Monzo",
+      "url": "http://monzo.com/current-account/personal",
+      "publisher": "monzo.com",
+      "accessed_at": "2026-10-08",
+      "evidence_grade": "A",
+      "facts_supported": [
+       "官網產品頁在發",
+       "借記卡屬性（糾正線索 credit 誤標）",
+       "賬戶免費",
+       "境外消費無加價"
+      ]
+     },
+     {
+      "role": "lead_original",
+      "url": "https://card.lengziyu.cn/card/monzo-mastercard",
+      "publisher": "CardFi（線索站，未核實）",
+      "accessed_at": "2026-10-08"
+     }
+    ],
+    "verified_at": "2026-10-08",
+    "last_checked_at": "2026-10-08",
+    "next_review_at": "2026-11-07",
+    "review_cadence_days": 30,
+    "missing_fields": [
+     "卡等級官網未設字段"
+    ],
+    "conflicts": [],
+    "manual_questions": []
+   }
+  },
+  {
+   "id": "fxuk-002",
+   "name": "Starling Personal Current Account Mastercard Debit Card",
+   "name_en": "Starling Personal Current Account Mastercard Debit Card",
+   "bank": "Starling Bank Limited",
+   "org": "mastercard",
+   "type": "debit",
+   "card_level": null,
+   "issue_status": "active",
+   "status": "在發",
+   "specs": {
+    "主要權益": "活期戶借記卡（非接支付）；境外消費與取現免行方交易費、按萬事達匯率不加價；App 即時通知、子賬戶分袋與一鍵鎖卡",
+    "年費": "無月費",
+    "發行情況": "現行在發",
+    "數據狀態": "核心字段已回發卡行官網核實（2026-10-08）；未核項見 verification.missing_fields",
+    "數據來源": "發卡行官網（見 verification.source_refs）"
+   },
+   "review": "官網產品頁/列表頁現行在發，卡名、組織、類型已按官網定版，核心規格按官網以自有文字重寫，判 A。",
+   "keywords": [
+    "Starling Personal Current Account Mastercard Debit Card",
+    "Starling Bank Limited"
+   ],
+   "url": "https://www.starlingbank.com/open-bank-account-online/",
+   "funding_modes": [
+    "debit"
+   ],
+   "image": null,
+   "region": "英国",
+   "region_code": "GB",
+   "added": "2026-10-08",
+   "verification": {
+    "status": "core_verified",
+    "evidence_level_overall": "A",
+    "source_refs": [
+     {
+      "role": "官方產品專頁",
+      "title": "Open a bank account online - Apply in minutes | Starling",
+      "url": "https://www.starlingbank.com/open-bank-account-online/",
+      "publisher": "www.starlingbank.com",
+      "accessed_at": "2026-10-08",
+      "evidence_grade": "A",
+      "facts_supported": [
+       "官網開戶頁在發",
+       "借記卡屬性",
+       "境外免行方費用",
+       "海外日取現限額等值 £300"
+      ]
+     },
+     {
+      "role": "lead_original",
       "url": "https://card.lengziyu.cn/card/starling-bank-debit-card",
       "publisher": "CardFi（線索站，未核實）",
       "accessed_at": "2026-10-08"
      }
-    ]
+    ],
+    "verified_at": "2026-10-08",
+    "last_checked_at": "2026-10-08",
+    "next_review_at": "2026-11-07",
+    "review_cadence_days": 30,
+    "missing_fields": [
+     "卡等級官網未設字段"
+    ],
+    "conflicts": [],
+    "manual_questions": []
    },
    "aliases": [
     "Starling"
@@ -12420,8 +12525,8 @@
   },
   {
    "id": "fxus-001",
-   "name": "American Express Gold 卡",
-   "name_en": "",
+   "name": "American Express® Gold Card",
+   "name_en": "American Express® Gold Card",
    "bank": "American Express",
    "org": "amex",
    "type": "credit",
@@ -12429,15 +12534,18 @@
    "issue_status": "active",
    "status": "在發",
    "specs": {
-    "數據狀態": "待核：CardFi 線索未經發卡行官網核實，目前僅錄卡名／發行方／卡組織／借還類型等身份信息，全部規格待核實階段回官網確認後重寫",
-    "數據來源": "CardFi 線索（card.lengziyu.cn，未核實）"
+    "主要權益": "全球餐廳及美國超市消費 4X 積分（各設年度上限，其後 1X）；每月餐飲抵扣與 Uber Cash 等月度權益",
+    "年費": "年費 $325",
+    "發行情況": "現行在發",
+    "數據狀態": "核心字段已回發卡行官網核實（2026-10-08）；未核項見 verification.missing_fields",
+    "數據來源": "發卡行官網（見 verification.source_refs）"
    },
-   "review": "CardFi 線索導入（未核實）：卡名、發行方、卡組織、類型為線索站所列，尚未回發卡行官網核實；規格、等級與發行狀態待核實階段確認後重寫。",
+   "review": "官網產品頁/列表頁現行在發，卡名、組織、類型已按官網定版，核心規格按官網以自有文字重寫，判 A。",
    "keywords": [
-    "American Express",
-    "American Express Gold 卡"
+    "American Express® Gold Card",
+    "American Express"
    ],
-   "url": "",
+   "url": "https://www.americanexpress.com/us/credit-cards/card/gold-card/",
    "funding_modes": [
     "credit"
    ],
@@ -12446,29 +12554,46 @@
    "region_code": "US",
    "added": "2026-10-08",
    "verification": {
-    "status": "lead_unverified",
-    "missing_fields": [
-     "card_level",
-     "eligibility",
-     "annual_fee_status",
-     "foreign_transaction_fee_pct",
-     "supported_currency_codes"
-    ],
-    "conflicts": [],
+    "status": "core_verified",
+    "evidence_level_overall": "A",
     "source_refs": [
      {
-      "role": "lead",
+      "role": "官方產品專頁",
+      "title": "The American Express® Gold Card",
+      "url": "https://www.americanexpress.com/us/credit-cards/card/gold-card/",
+      "publisher": "www.americanexpress.com",
+      "accessed_at": "2026-10-08",
+      "evidence_grade": "A",
+      "facts_supported": [
+       "官網產品頁在發",
+       "年費 $325",
+       "4X 餐廳/超市積分規則",
+       "每月餐飲抵扣"
+      ]
+     },
+     {
+      "role": "lead_original",
       "url": "https://card.lengziyu.cn/card/amex-gold",
       "publisher": "CardFi（線索站，未核實）",
       "accessed_at": "2026-10-08"
      }
-    ]
+    ],
+    "verified_at": "2026-10-08",
+    "last_checked_at": "2026-10-08",
+    "next_review_at": "2026-11-07",
+    "review_cadence_days": 30,
+    "missing_fields": [
+     "卡等級官網未設字段",
+     "完整 APR 細節"
+    ],
+    "conflicts": [],
+    "manual_questions": []
    }
   },
   {
    "id": "fxus-002",
-   "name": "Blue Cash Everyday",
-   "name_en": "",
+   "name": "Blue Cash Everyday® Card",
+   "name_en": "Blue Cash Everyday® Card",
    "bank": "American Express",
    "org": "amex",
    "type": "credit",
@@ -12476,15 +12601,18 @@
    "issue_status": "active",
    "status": "在發",
    "specs": {
-    "數據狀態": "待核：CardFi 線索未經發卡行官網核實，目前僅錄卡名／發行方／卡組織／借還類型等身份信息，全部規格待核實階段回官網確認後重寫",
-    "數據來源": "CardFi 線索（card.lengziyu.cn，未核實）"
+    "主要權益": "美國超市、美國網購、美國加油站各 3% 返現（每類每年上限 $6,000，其後 1%），其餘消費 1%；含串流訂閱抵扣",
+    "年費": "無年費",
+    "發行情況": "現行在發",
+    "數據狀態": "核心字段已回發卡行官網核實（2026-10-08）；未核項見 verification.missing_fields",
+    "數據來源": "發卡行官網（見 verification.source_refs）"
    },
-   "review": "CardFi 線索導入（未核實）：卡名、發行方、卡組織、類型為線索站所列，尚未回發卡行官網核實；規格、等級與發行狀態待核實階段確認後重寫。",
+   "review": "官網產品頁/列表頁現行在發，卡名、組織、類型已按官網定版，核心規格按官網以自有文字重寫，判 A。",
    "keywords": [
-    "American Express",
-    "Blue Cash Everyday"
+    "Blue Cash Everyday® Card",
+    "American Express"
    ],
-   "url": "",
+   "url": "https://www.americanexpress.com/us/credit-cards/card/blue-cash-everyday/26129",
    "funding_modes": [
     "credit"
    ],
@@ -12493,23 +12621,39 @@
    "region_code": "US",
    "added": "2026-10-08",
    "verification": {
-    "status": "lead_unverified",
-    "missing_fields": [
-     "card_level",
-     "eligibility",
-     "annual_fee_status",
-     "foreign_transaction_fee_pct",
-     "supported_currency_codes"
-    ],
-    "conflicts": [],
+    "status": "core_verified",
+    "evidence_level_overall": "A",
     "source_refs": [
      {
-      "role": "lead",
+      "role": "官方產品專頁",
+      "title": "Blue Cash Everyday® Card | American Express",
+      "url": "https://www.americanexpress.com/us/credit-cards/card/blue-cash-everyday/26129",
+      "publisher": "www.americanexpress.com",
+      "accessed_at": "2026-10-08",
+      "evidence_grade": "A",
+      "facts_supported": [
+       "官網產品頁在發",
+       "無年費",
+       "3%/1% 返現結構及上限",
+       "境外交易費 2.7%"
+      ]
+     },
+     {
+      "role": "lead_original",
       "url": "https://card.lengziyu.cn/card/blue-cash-everyday",
       "publisher": "CardFi（線索站，未核實）",
       "accessed_at": "2026-10-08"
      }
-    ]
+    ],
+    "verified_at": "2026-10-08",
+    "last_checked_at": "2026-10-08",
+    "next_review_at": "2026-11-07",
+    "review_cadence_days": 30,
+    "missing_fields": [
+     "卡等級官網未設字段"
+    ],
+    "conflicts": [],
+    "manual_questions": []
    },
    "aliases": [
     "Blue Cash"
@@ -12517,8 +12661,8 @@
   },
   {
    "id": "fxus-003",
-   "name": "Hilton Honors American Express 卡",
-   "name_en": "",
+   "name": "Hilton Honors American Express Card",
+   "name_en": "Hilton Honors American Express Card",
    "bank": "American Express",
    "org": "amex",
    "type": "credit",
@@ -12526,15 +12670,18 @@
    "issue_status": "active",
    "status": "在發",
    "specs": {
-    "數據狀態": "待核：CardFi 線索未經發卡行官網核實，目前僅錄卡名／發行方／卡組織／借還類型等身份信息，全部規格待核實階段回官網確認後重寫",
-    "數據來源": "CardFi 線索（card.lengziyu.cn，未核實）"
+    "主要權益": "希爾頓旗下酒店直訂 7X 積分，美國餐廳/超市/加油 5X，其餘 3X；附希爾頓銀卡會籍；無境外交易費",
+    "年費": "無年費",
+    "發行情況": "現行在發",
+    "數據狀態": "核心字段已回發卡行官網核實（2026-10-08）；未核項見 verification.missing_fields",
+    "數據來源": "發卡行官網（見 verification.source_refs）"
    },
-   "review": "CardFi 線索導入（未核實）：卡名、發行方、卡組織、類型為線索站所列，尚未回發卡行官網核實；規格、等級與發行狀態待核實階段確認後重寫。",
+   "review": "官網產品頁/列表頁現行在發，卡名、組織、類型已按官網定版，核心規格按官網以自有文字重寫，判 A。",
    "keywords": [
-    "American Express",
-    "Hilton Honors American Express 卡"
+    "Hilton Honors American Express Card",
+    "American Express"
    ],
-   "url": "",
+   "url": "https://www.americanexpress.com/us/credit-cards/card/hilton-honors/26129",
    "funding_modes": [
     "credit"
    ],
@@ -12543,23 +12690,39 @@
    "region_code": "US",
    "added": "2026-10-08",
    "verification": {
-    "status": "lead_unverified",
-    "missing_fields": [
-     "card_level",
-     "eligibility",
-     "annual_fee_status",
-     "foreign_transaction_fee_pct",
-     "supported_currency_codes"
-    ],
-    "conflicts": [],
+    "status": "core_verified",
+    "evidence_level_overall": "A",
     "source_refs": [
      {
-      "role": "lead",
+      "role": "官方產品專頁",
+      "title": "Hilton Honors American Express Card",
+      "url": "https://www.americanexpress.com/us/credit-cards/card/hilton-honors/26129",
+      "publisher": "www.americanexpress.com",
+      "accessed_at": "2026-10-08",
+      "evidence_grade": "A",
+      "facts_supported": [
+       "官網產品頁在發",
+       "無年費",
+       "7X/5X/3X 積分規則",
+       "附銀卡會籍"
+      ]
+     },
+     {
+      "role": "lead_original",
       "url": "https://card.lengziyu.cn/card/hilton-honors-american-express-card",
       "publisher": "CardFi（線索站，未核實）",
       "accessed_at": "2026-10-08"
      }
-    ]
+    ],
+    "verified_at": "2026-10-08",
+    "last_checked_at": "2026-10-08",
+    "next_review_at": "2026-11-07",
+    "review_cadence_days": 30,
+    "missing_fields": [
+     "卡等級官網未設字段"
+    ],
+    "conflicts": [],
+    "manual_questions": []
    },
    "aliases": [
     "Hilton"
@@ -12567,24 +12730,27 @@
   },
   {
    "id": "fxus-004",
-   "name": "Apple 卡",
-   "name_en": "",
-   "bank": "Apple",
+   "name": "Apple Card",
+   "name_en": "Apple Card",
+   "bank": "Goldman Sachs Bank USA",
    "org": "mastercard",
    "type": "credit",
    "card_level": null,
    "issue_status": "active",
    "status": "在發",
    "specs": {
-    "數據狀態": "待核：CardFi 線索未經發卡行官網核實，目前僅錄卡名／發行方／卡組織／借還類型等身份信息，全部規格待核實階段回官網確認後重寫",
-    "數據來源": "CardFi 線索（card.lengziyu.cn，未核實）"
+    "主要權益": "Apple Pay 消費 2%、Apple 及合作商戶 3%、實體鈦卡 1% 每日返現；返現可自動存入關聯儲蓄戶；Wallet 內管理與分期免息購 Apple 產品",
+    "年費": "無年費（官網無費用政策）",
+    "發行情況": "現行在發",
+    "數據狀態": "核心字段已回發卡行官網核實（2026-10-08）；未核項見 verification.missing_fields",
+    "數據來源": "發卡行官網（見 verification.source_refs）"
    },
-   "review": "CardFi 線索導入（未核實）：卡名、發行方、卡組織、類型為線索站所列，尚未回發卡行官網核實；規格、等級與發行狀態待核實階段確認後重寫。",
+   "review": "官網產品頁/列表頁現行在發，卡名、組織、類型已按官網定版，核心規格按官網以自有文字重寫，判 A。",
    "keywords": [
-    "Apple",
-    "Apple 卡"
+    "Apple Card",
+    "Goldman Sachs Bank USA"
    ],
-   "url": "",
+   "url": "https://www.apple.com/apple-card/",
    "funding_modes": [
     "credit"
    ],
@@ -12593,45 +12759,64 @@
    "region_code": "US",
    "added": "2026-10-08",
    "verification": {
-    "status": "lead_unverified",
-    "missing_fields": [
-     "card_level",
-     "eligibility",
-     "annual_fee_status",
-     "foreign_transaction_fee_pct",
-     "supported_currency_codes"
-    ],
-    "conflicts": [],
+    "status": "core_verified",
+    "evidence_level_overall": "A",
     "source_refs": [
      {
-      "role": "lead",
+      "role": "官方產品專頁",
+      "title": "Apple Card - Apple",
+      "url": "https://www.apple.com/apple-card/",
+      "publisher": "www.apple.com",
+      "accessed_at": "2026-10-08",
+      "evidence_grade": "A",
+      "facts_supported": [
+       "官網產品頁在售",
+       "發行行 Goldman Sachs Bank USA",
+       "萬事達網絡",
+       "無年費等無費用政策"
+      ]
+     },
+     {
+      "role": "lead_original",
       "url": "https://card.lengziyu.cn/card/apple-card",
       "publisher": "CardFi（線索站，未核實）",
       "accessed_at": "2026-10-08"
      }
-    ]
+    ],
+    "verified_at": "2026-10-08",
+    "last_checked_at": "2026-10-08",
+    "next_review_at": "2026-11-07",
+    "review_cadence_days": 30,
+    "missing_fields": [
+     "卡等級官網未標註"
+    ],
+    "conflicts": [],
+    "manual_questions": []
    }
   },
   {
    "id": "fxus-005",
-   "name": "Bank of America Customized Cash Rewards",
-   "name_en": "",
-   "bank": "Bank of America",
+   "name": "Bank of America® Customized Cash Rewards Credit Card",
+   "name_en": "Bank of America® Customized Cash Rewards Credit Card",
+   "bank": "Bank of America, N.A.",
    "org": "visa",
    "type": "credit",
    "card_level": null,
    "issue_status": "active",
    "status": "在發",
    "specs": {
-    "數據狀態": "待核：CardFi 線索未經發卡行官網核實，目前僅錄卡名／發行方／卡組織／借還類型等身份信息，全部規格待核實階段回官網確認後重寫",
-    "數據來源": "CardFi 線索（card.lengziyu.cn，未核實）"
+    "主要權益": "自選類別返現（首年加成後最高 6%）、超市/批發俱樂部 2%、其餘 1%（自選與超市類設季度合併上限）；自選類別每月可改一次",
+    "年費": "無年費",
+    "發行情況": "現行在發",
+    "數據狀態": "核心字段已回發卡行官網核實（2026-10-08）；未核項見 verification.missing_fields",
+    "數據來源": "發卡行官網（見 verification.source_refs）"
    },
-   "review": "CardFi 線索導入（未核實）：卡名、發行方、卡組織、類型為線索站所列，尚未回發卡行官網核實；規格、等級與發行狀態待核實階段確認後重寫。",
+   "review": "官網產品頁/列表頁現行在發，卡名、組織、類型已按官網定版，核心規格按官網以自有文字重寫，判 A。",
    "keywords": [
-    "Bank of America",
-    "Bank of America Customized Cash Rewards"
+    "Bank of America® Customized Cash Rewards Credit Card",
+    "Bank of America, N.A."
    ],
-   "url": "",
+   "url": "https://www.bankofamerica.com/credit-cards/",
    "funding_modes": [
     "credit"
    ],
@@ -12640,23 +12825,40 @@
    "region_code": "US",
    "added": "2026-10-08",
    "verification": {
-    "status": "lead_unverified",
-    "missing_fields": [
-     "card_level",
-     "eligibility",
-     "annual_fee_status",
-     "foreign_transaction_fee_pct",
-     "supported_currency_codes"
-    ],
-    "conflicts": [],
+    "status": "core_verified",
+    "evidence_level_overall": "A",
     "source_refs": [
      {
-      "role": "lead",
+      "role": "官方產品專頁",
+      "title": "Credit Cards: Find & Apply for a Credit Card Online at Bank of America",
+      "url": "https://www.bankofamerica.com/credit-cards/",
+      "publisher": "www.bankofamerica.com",
+      "accessed_at": "2026-10-08",
+      "evidence_grade": "A",
+      "facts_supported": [
+       "官網列表頁在列",
+       "無年費",
+       "返現結構與首年加成",
+       "產品有 Visa 與 Mastercard 兩個組織版本"
+      ]
+     },
+     {
+      "role": "lead_original",
       "url": "https://card.lengziyu.cn/card/bank-of-america-customized-cash",
       "publisher": "CardFi（線索站，未核實）",
       "accessed_at": "2026-10-08"
      }
-    ]
+    ],
+    "verified_at": "2026-10-08",
+    "last_checked_at": "2026-10-08",
+    "next_review_at": "2026-11-07",
+    "review_cadence_days": 30,
+    "missing_fields": [
+     "單卡獲批組織以核卡為準",
+     "卡等級列表頁未明示"
+    ],
+    "conflicts": [],
+    "manual_questions": []
    },
    "aliases": [
     "Bofa Customized Cash"
@@ -12664,10 +12866,10 @@
   },
   {
    "id": "fxus-006",
-   "name": "Bank of America Visa 借记卡",
-   "name_en": "",
-   "bank": "Bank of America",
-   "org": "visa",
+   "name": "Bank of America Advantage Banking Debit Card",
+   "name_en": "Bank of America Advantage Banking Debit Card",
+   "bank": "Bank of America, N.A.",
+   "org": "unknown_pending",
    "type": "debit",
    "card_level": null,
    "issue_status": "active",
@@ -12681,9 +12883,9 @@
     "Bank of America",
     "Bank of America Visa 借记卡"
    ],
-   "url": "",
+   "url": "https://www.bankofamerica.com/deposits/checking/advantage-banking/",
    "funding_modes": [
-    "debit_account"
+    "debit"
    ],
    "image": null,
    "region": "美国",
@@ -12692,19 +12894,31 @@
    "verification": {
     "status": "lead_unverified",
     "missing_fields": [
-     "card_level",
-     "eligibility",
-     "annual_fee_status",
-     "foreign_transaction_fee_pct",
-     "supported_currency_codes"
+     "卡組織（線索標 Visa，官網正文未直證，待坐實）",
+     "卡等級"
     ],
-    "conflicts": [],
+    "conflicts": [
+     "線索標 Visa 組織，官網已讀正文未直證，未定版"
+    ],
     "source_refs": [
      {
       "role": "lead",
       "url": "https://card.lengziyu.cn/card/bank-of-america-visa-debit",
       "publisher": "CardFi（線索站，未核實）",
       "accessed_at": "2026-10-08"
+     },
+     {
+      "role": "官網產品頁/對比頁（關鍵項未清）",
+      "title": "Bank of America Advantage Banking",
+      "url": "https://www.bankofamerica.com/deposits/checking/advantage-banking/",
+      "publisher": "www.bankofamerica.com",
+      "accessed_at": "2026-10-08",
+      "evidence_grade": "A",
+      "facts_supported": [
+       "官網確認 Advantage Banking 戶配借記卡在發",
+       "防欺詐 $0 Liability Guarantee",
+       "借記卡須持支票戶使用"
+      ]
      }
     ]
    }
@@ -12712,7 +12926,7 @@
   {
    "id": "fxus-007",
    "name": "Capital One Quicksilver",
-   "name_en": "",
+   "name_en": "Capital One Quicksilver",
    "bank": "Capital One",
    "org": "unknown_pending",
    "type": "credit",
@@ -12728,7 +12942,7 @@
     "Capital One",
     "Capital One Quicksilver"
    ],
-   "url": "",
+   "url": "https://www.capitalone.com/learn-grow/money-management/quicksilver-card-benefits/",
    "funding_modes": [
     "credit"
    ],
@@ -12739,30 +12953,42 @@
    "verification": {
     "status": "lead_unverified",
     "missing_fields": [
-     "org",
-     "card_level",
-     "eligibility",
-     "annual_fee_status",
-     "foreign_transaction_fee_pct",
-     "supported_currency_codes"
+     "卡組織（官網正文未載，未定版）",
+     "卡等級",
+     "產品頁 Pricing 條款未打開"
     ],
-    "conflicts": [],
+    "conflicts": [
+     "線索組織未定，官網正文亦未載，維持未定版"
+    ],
     "source_refs": [
      {
       "role": "lead",
       "url": "https://card.lengziyu.cn/card/capital-one-quicksilver",
       "publisher": "CardFi（線索站，未核實）",
       "accessed_at": "2026-10-08"
+     },
+     {
+      "role": "官網產品頁/對比頁（關鍵項未清）",
+      "title": "Capital One Quicksilver Benefits and Features | Capital One",
+      "url": "https://www.capitalone.com/learn-grow/money-management/quicksilver-card-benefits/",
+      "publisher": "www.capitalone.com",
+      "accessed_at": "2026-10-08",
+      "evidence_grade": "A",
+      "facts_supported": [
+       "官網文章頁與對比表確認卡現行在發",
+       "全部消費 1.5% 返現、年費 $0",
+       "經 Capital One Travel 預訂 5% 返現"
+      ]
      }
     ]
    }
   },
   {
    "id": "fxus-008",
-   "name": "Capital One Venture",
-   "name_en": "",
+   "name": "Capital One Venture Rewards",
+   "name_en": "Capital One Venture Rewards",
    "bank": "Capital One",
-   "org": "visa",
+   "org": "unknown_pending",
    "type": "credit",
    "card_level": null,
    "issue_status": "active",
@@ -12776,7 +13002,7 @@
     "Capital One",
     "Capital One Venture"
    ],
-   "url": "",
+   "url": "https://www.capitalone.com/credit-cards/venture/",
    "funding_modes": [
     "credit"
    ],
@@ -12787,19 +13013,32 @@
    "verification": {
     "status": "lead_unverified",
     "missing_fields": [
-     "card_level",
-     "eligibility",
-     "annual_fee_status",
-     "foreign_transaction_fee_pct",
-     "supported_currency_codes"
+     "卡組織（官網產品頁正文未載，未定版）",
+     "卡等級"
     ],
-    "conflicts": [],
+    "conflicts": [
+     "線索標 Visa，官網正文未載組織，已改未定版"
+    ],
     "source_refs": [
      {
       "role": "lead",
       "url": "https://card.lengziyu.cn/card/capital-one-venture",
       "publisher": "CardFi（線索站，未核實）",
       "accessed_at": "2026-10-08"
+     },
+     {
+      "role": "官網產品頁/對比頁（關鍵項未清）",
+      "title": "Venture Rewards Travel Card — Apply Today | Capital One",
+      "url": "https://www.capitalone.com/credit-cards/venture/",
+      "publisher": "www.capitalone.com",
+      "accessed_at": "2026-10-08",
+      "evidence_grade": "A",
+      "facts_supported": [
+       "官網產品頁現行在售",
+       "日常 2X、旅行預訂 5X 里程",
+       "年費 $95（官網對比表）",
+       "無境外交易費"
+      ]
      }
     ]
    }
@@ -12807,7 +13046,7 @@
   {
    "id": "fxus-009",
    "name": "Capital One Venture X",
-   "name_en": "",
+   "name_en": "Capital One Venture X",
    "bank": "Capital One",
    "org": "unknown_pending",
    "type": "credit",
@@ -12823,7 +13062,7 @@
     "Capital One",
     "Capital One Venture X"
    ],
-   "url": "",
+   "url": "https://www.capitalone.com/learn-grow/more-than-money/all-about-venture-x/",
    "funding_modes": [
     "credit"
    ],
@@ -12834,91 +13073,126 @@
    "verification": {
     "status": "lead_unverified",
     "missing_fields": [
-     "org",
-     "card_level",
-     "eligibility",
-     "annual_fee_status",
-     "foreign_transaction_fee_pct",
-     "supported_currency_codes"
+     "卡組織（官網正文未載，未定版）",
+     "卡等級英文原詞",
+     "獨立產品頁未成功打開（限流）"
     ],
-    "conflicts": [],
+    "conflicts": [
+     "線索組織未定，官網正文亦未載，維持未定版"
+    ],
     "source_refs": [
      {
       "role": "lead",
       "url": "https://card.lengziyu.cn/card/capital-one-venture-x",
       "publisher": "CardFi（線索站，未核實）",
       "accessed_at": "2026-10-08"
+     },
+     {
+      "role": "官網產品頁/對比頁（關鍵項未清）",
+      "title": "All About the Capital One Venture X Card | Capital One",
+      "url": "https://www.capitalone.com/learn-grow/more-than-money/all-about-venture-x/",
+      "publisher": "www.capitalone.com",
+      "accessed_at": "2026-10-08",
+      "evidence_grade": "A",
+      "facts_supported": [
+       "官網文章與對比表確認獨立卡現行在發",
+       "年費 $395",
+       "旅行預訂 10X/5X、其餘 2X 里程",
+       "每年 $300 旅行抵免與週年里程"
+      ]
      }
     ]
    }
   },
   {
    "id": "fxus-010",
-   "name": "Schwab Bank Visa Platinum 借记卡",
-   "name_en": "",
-   "bank": "Charles Schwab",
+   "name": "Schwab Bank Visa® Platinum Debit Card",
+   "name_en": "Schwab Bank Visa® Platinum Debit Card",
+   "bank": "Charles Schwab Bank",
    "org": "visa",
    "type": "debit",
-   "card_level": null,
+   "card_level": "Platinum",
    "issue_status": "active",
    "status": "在發",
    "specs": {
-    "數據狀態": "待核：CardFi 線索未經發卡行官網核實，目前僅錄卡名／發行方／卡組織／借還類型等身份信息，全部規格待核實階段回官網確認後重寫",
-    "數據來源": "CardFi 線索（card.lengziyu.cn，未核實）"
+    "主要權益": "全球 ATM 取現手續費無限返還；無境外交易費、無透支費、無最低餘額；與券商戶聯動一站管理；注資後寄卡",
+    "年費": "無月服務費（賬戶層面）",
+    "發行情況": "現行在發",
+    "數據狀態": "核心字段已回發卡行官網核實（2026-10-08）；未核項見 verification.missing_fields",
+    "數據來源": "發卡行官網（見 verification.source_refs）"
    },
-   "review": "CardFi 線索導入（未核實）：卡名、發行方、卡組織、類型為線索站所列，尚未回發卡行官網核實；規格、等級與發行狀態待核實階段確認後重寫。",
+   "review": "官網產品頁/列表頁現行在發，卡名、組織、類型已按官網定版，核心規格按官網以自有文字重寫，判 A。",
    "keywords": [
-    "Charles Schwab",
-    "Schwab Bank Visa Platinum 借记卡"
+    "Schwab Bank Visa® Platinum Debit Card",
+    "Charles Schwab Bank"
    ],
-   "url": "",
+   "url": "https://www.schwab.com/checking/debit-card",
    "funding_modes": [
-    "debit_account"
+    "debit"
    ],
    "image": null,
    "region": "美国",
    "region_code": "US",
    "added": "2026-10-08",
    "verification": {
-    "status": "lead_unverified",
-    "missing_fields": [
-     "card_level",
-     "eligibility",
-     "annual_fee_status",
-     "foreign_transaction_fee_pct",
-     "supported_currency_codes"
-    ],
-    "conflicts": [],
+    "status": "core_verified",
+    "evidence_level_overall": "A",
     "source_refs": [
      {
-      "role": "lead",
+      "role": "官方產品專頁",
+      "title": "Visa Platinum Debit Card | Schwab Bank",
+      "url": "https://www.schwab.com/checking/debit-card",
+      "publisher": "www.schwab.com",
+      "accessed_at": "2026-10-08",
+      "evidence_grade": "A",
+      "facts_supported": [
+       "官網支票/儲蓄頁確認卡名與定位",
+       "Visa Platinum 等級",
+       "全球 ATM 費返還",
+       "開戶須連開券商戶"
+      ]
+     },
+     {
+      "role": "lead_original",
       "url": "https://card.lengziyu.cn/card/schwab-visa-debit",
       "publisher": "CardFi（線索站，未核實）",
       "accessed_at": "2026-10-08"
      }
-    ]
+    ],
+    "verified_at": "2026-10-08",
+    "last_checked_at": "2026-10-08",
+    "next_review_at": "2026-11-07",
+    "review_cadence_days": 30,
+    "missing_fields": [
+     "借記卡頁正文本次被官網攔截，細節以同域官網頁交叉確認"
+    ],
+    "conflicts": [],
+    "manual_questions": []
    }
   },
   {
    "id": "fxus-011",
-   "name": "Chase Freedom Flex",
-   "name_en": "",
+   "name": "Chase Freedom Flex®",
+   "name_en": "Chase Freedom Flex®",
    "bank": "Chase",
    "org": "mastercard",
    "type": "credit",
-   "card_level": null,
+   "card_level": "World Elite",
    "issue_status": "active",
    "status": "在發",
    "specs": {
-    "數據狀態": "待核：CardFi 線索未經發卡行官網核實，目前僅錄卡名／發行方／卡組織／借還類型等身份信息，全部規格待核實階段回官網確認後重寫",
-    "數據來源": "CardFi 線索（card.lengziyu.cn，未核實）"
+    "主要權益": "季度輪換類別 5% 返現（每季上限 $1,500 消費，需激活）；經 Chase Travel 5%、餐飲 3%、藥店 3%、其餘 1%；獎勵不過期",
+    "年費": "無年費",
+    "發行情況": "現行在發",
+    "數據狀態": "核心字段已回發卡行官網核實（2026-10-08）；未核項見 verification.missing_fields",
+    "數據來源": "發卡行官網（見 verification.source_refs）"
    },
-   "review": "CardFi 線索導入（未核實）：卡名、發行方、卡組織、類型為線索站所列，尚未回發卡行官網核實；規格、等級與發行狀態待核實階段確認後重寫。",
+   "review": "官網產品頁/列表頁現行在發，卡名、組織、類型已按官網定版，核心規格按官網以自有文字重寫，判 A。",
    "keywords": [
-    "Chase",
-    "Chase Freedom Flex"
+    "Chase Freedom Flex®",
+    "Chase"
    ],
-   "url": "",
+   "url": "https://www.chase.com/personal/credit-cards/freedom/flex",
    "funding_modes": [
     "credit"
    ],
@@ -12927,31 +13201,47 @@
    "region_code": "US",
    "added": "2026-10-08",
    "verification": {
-    "status": "lead_unverified",
-    "missing_fields": [
-     "card_level",
-     "eligibility",
-     "annual_fee_status",
-     "foreign_transaction_fee_pct",
-     "supported_currency_codes"
-    ],
-    "conflicts": [],
+    "status": "core_verified",
+    "evidence_level_overall": "A",
     "source_refs": [
      {
-      "role": "lead",
+      "role": "官方產品專頁",
+      "title": "Chase Freedom Flex | Credit Cards | Chase.com",
+      "url": "https://www.chase.com/personal/credit-cards/freedom/flex",
+      "publisher": "www.chase.com",
+      "accessed_at": "2026-10-08",
+      "evidence_grade": "A",
+      "facts_supported": [
+       "官網產品頁在發",
+       "World Elite Mastercard 等級與組織",
+       "5%/5%/3%/3%/1% 結構",
+       "無年費（Chase 官方新聞稿）"
+      ]
+     },
+     {
+      "role": "lead_original",
       "url": "https://card.lengziyu.cn/card/chase-freedom-flex",
       "publisher": "CardFi（線索站，未核實）",
       "accessed_at": "2026-10-08"
      }
-    ]
+    ],
+    "verified_at": "2026-10-08",
+    "last_checked_at": "2026-10-08",
+    "next_review_at": "2026-11-07",
+    "review_cadence_days": 30,
+    "missing_fields": [
+     "產品頁 Pricing 年費行未在抓取正文，年費以官方新聞稿補證"
+    ],
+    "conflicts": [],
+    "manual_questions": []
    }
   },
   {
    "id": "fxus-012",
-   "name": "Chase Freedom Unlimited",
-   "name_en": "",
+   "name": "Chase Freedom Unlimited®",
+   "name_en": "Chase Freedom Unlimited®",
    "bank": "Chase",
-   "org": "unknown_pending",
+   "org": "visa",
    "type": "credit",
    "card_level": null,
    "issue_status": "active",
@@ -12965,7 +13255,7 @@
     "Chase",
     "Chase Freedom Unlimited"
    ],
-   "url": "",
+   "url": "https://creditcards.chase.com/cash-back-credit-cards/freedom",
    "funding_modes": [
     "credit"
    ],
@@ -12976,12 +13266,8 @@
    "verification": {
     "status": "lead_unverified",
     "missing_fields": [
-     "org",
-     "card_level",
-     "eligibility",
-     "annual_fee_status",
-     "foreign_transaction_fee_pct",
-     "supported_currency_codes"
+     "卡等級",
+     "個人產品頁 Pricing 年費行未複核（詳情頁遇限流未開）"
     ],
     "conflicts": [],
     "source_refs": [
@@ -12990,14 +13276,28 @@
       "url": "https://card.lengziyu.cn/card/chase-freedom-unlimited",
       "publisher": "CardFi（線索站，未核實）",
       "accessed_at": "2026-10-08"
+     },
+     {
+      "role": "官網產品頁/對比頁（關鍵項未清）",
+      "title": "Compare Chase Freedom Credit Cards | Chase",
+      "url": "https://creditcards.chase.com/cash-back-credit-cards/freedom",
+      "publisher": "creditcards.chase.com",
+      "accessed_at": "2026-10-08",
+      "evidence_grade": "A",
+      "facts_supported": [
+       "官網返現卡對比頁在列",
+       "1.5%/5%/3%/3% 返現結構（官網對比頁）",
+       "組織屬 Visa 類別（官網 Visa 對比頁）",
+       "無年費（Chase 官方新聞稿）"
+      ]
      }
     ]
    }
   },
   {
    "id": "fxus-013",
-   "name": "Chase Sapphire Preferred",
-   "name_en": "",
+   "name": "Chase Sapphire Preferred®",
+   "name_en": "Chase Sapphire Preferred®",
    "bank": "Chase",
    "org": "visa",
    "type": "credit",
@@ -13013,7 +13313,7 @@
     "Chase",
     "Chase Sapphire Preferred"
    ],
-   "url": "",
+   "url": "https://creditcards.chase.com/rewards-credit-cards/sapphire",
    "funding_modes": [
     "credit"
    ],
@@ -13024,11 +13324,9 @@
    "verification": {
     "status": "lead_unverified",
     "missing_fields": [
-     "card_level",
-     "eligibility",
-     "annual_fee_status",
-     "foreign_transaction_fee_pct",
-     "supported_currency_codes"
+     "卡等級",
+     "個人產品頁正文未複核（詳情頁遇限流未開）",
+     "年度酒店抵免產品頁條款"
     ],
     "conflicts": [],
     "source_refs": [
@@ -13037,14 +13335,28 @@
       "url": "https://card.lengziyu.cn/card/chase-sapphire-preferred",
       "publisher": "CardFi（線索站，未核實）",
       "accessed_at": "2026-10-08"
+     },
+     {
+      "role": "官網產品頁/對比頁（關鍵項未清）",
+      "title": "Sapphire | Credit Cards | Chase.com",
+      "url": "https://creditcards.chase.com/rewards-credit-cards/sapphire",
+      "publisher": "creditcards.chase.com",
+      "accessed_at": "2026-10-08",
+      "evidence_grade": "A",
+      "facts_supported": [
+       "官網 Sapphire 對比頁在列",
+       "年費 $95",
+       "經 Chase Travel 5x、其他旅行 2x 積分",
+       "組織屬 Visa 類別（官網 Visa 對比頁）"
+      ]
      }
     ]
    }
   },
   {
    "id": "fxus-014",
-   "name": "Chase Sapphire Reserve",
-   "name_en": "",
+   "name": "Chase Sapphire Reserve®",
+   "name_en": "Chase Sapphire Reserve®",
    "bank": "Chase",
    "org": "visa",
    "type": "credit",
@@ -13060,7 +13372,7 @@
     "Chase",
     "Chase Sapphire Reserve"
    ],
-   "url": "",
+   "url": "https://creditcards.chase.com/rewards-credit-cards/sapphire",
    "funding_modes": [
     "credit"
    ],
@@ -13071,11 +13383,9 @@
    "verification": {
     "status": "lead_unverified",
     "missing_fields": [
-     "card_level",
-     "eligibility",
-     "annual_fee_status",
-     "foreign_transaction_fee_pct",
-     "supported_currency_codes"
+     "卡等級英文原詞",
+     "個人產品頁正文未複核（詳情頁遇限流未開）",
+     "貴賓室/酒店抵免細則條款"
     ],
     "conflicts": [],
     "source_refs": [
@@ -13084,14 +13394,28 @@
       "url": "https://card.lengziyu.cn/card/chase-sapphire-reserve",
       "publisher": "CardFi（線索站，未核實）",
       "accessed_at": "2026-10-08"
+     },
+     {
+      "role": "官網產品頁/對比頁（關鍵項未清）",
+      "title": "Sapphire | Credit Cards | Chase.com",
+      "url": "https://creditcards.chase.com/rewards-credit-cards/sapphire",
+      "publisher": "creditcards.chase.com",
+      "accessed_at": "2026-10-08",
+      "evidence_grade": "A",
+      "facts_supported": [
+       "官網 Sapphire 對比頁在列（新版在售）",
+       "年費 $795、授權用戶 $195",
+       "經 Chase Travel 8x、直訂 4x 積分",
+       "每年 $300 旅行抵免"
+      ]
      }
     ]
    }
   },
   {
    "id": "fxus-015",
-   "name": "Chime Visa Debit",
-   "name_en": "",
+   "name": "Chime Visa® Debit Card",
+   "name_en": "Chime Visa® Debit Card",
    "bank": "Chime",
    "org": "visa",
    "type": "debit",
@@ -13099,40 +13423,59 @@
    "issue_status": "active",
    "status": "在發",
    "specs": {
-    "數據狀態": "待核：CardFi 線索未經發卡行官網核實，目前僅錄卡名／發行方／卡組織／借還類型等身份信息，全部規格待核實階段回官網確認後重寫",
-    "數據來源": "CardFi 線索（card.lengziyu.cn，未核實）"
+    "主要權益": "47,000+ 免手續費 ATM 網絡；免信用審查開戶；工資提前到賬、小額免手續費透支；App 內卡片安全與即時提醒（存款由合作銀行 FDIC 承保）",
+    "年費": "無月費/維護費",
+    "發行情況": "現行在發",
+    "數據狀態": "核心字段已回發卡行官網核實（2026-10-08）；未核項見 verification.missing_fields",
+    "數據來源": "發卡行官網（見 verification.source_refs）"
    },
-   "review": "CardFi 線索導入（未核實）：卡名、發行方、卡組織、類型為線索站所列，尚未回發卡行官網核實；規格、等級與發行狀態待核實階段確認後重寫。",
+   "review": "官網產品頁/列表頁現行在發，卡名、組織、類型已按官網定版，核心規格按官網以自有文字重寫，判 A。",
    "keywords": [
-    "Chime",
-    "Chime Visa Debit"
+    "Chime Visa® Debit Card",
+    "Chime"
    ],
-   "url": "",
+   "url": "https://www.chime.com/online-banking/debit-card/",
    "funding_modes": [
-    "debit_account"
+    "debit"
    ],
    "image": null,
    "region": "美国",
    "region_code": "US",
    "added": "2026-10-08",
    "verification": {
-    "status": "lead_unverified",
-    "missing_fields": [
-     "card_level",
-     "eligibility",
-     "annual_fee_status",
-     "foreign_transaction_fee_pct",
-     "supported_currency_codes"
-    ],
-    "conflicts": [],
+    "status": "core_verified",
+    "evidence_level_overall": "A",
     "source_refs": [
      {
-      "role": "lead",
+      "role": "官方產品專頁",
+      "title": "Chime Visa® Debit Card",
+      "url": "https://www.chime.com/online-banking/debit-card/",
+      "publisher": "www.chime.com",
+      "accessed_at": "2026-10-08",
+      "evidence_grade": "A",
+      "facts_supported": [
+       "官網產品頁在發",
+       "Visa 借記卡屬性",
+       "免月費",
+       "合作承保銀行 The Bancorp Bank / Stride Bank"
+      ]
+     },
+     {
+      "role": "lead_original",
       "url": "https://card.lengziyu.cn/card/chime-visa-debit",
       "publisher": "CardFi（線索站，未核實）",
       "accessed_at": "2026-10-08"
      }
-    ]
+    ],
+    "verified_at": "2026-10-08",
+    "last_checked_at": "2026-10-08",
+    "next_review_at": "2026-11-07",
+    "review_cadence_days": 30,
+    "missing_fields": [
+     "卡等級官網未標註"
+    ],
+    "conflicts": [],
+    "manual_questions": []
    }
   },
   {
@@ -13143,11 +13486,12 @@
    "org": "mastercard",
    "type": "credit",
    "card_level": null,
-   "issue_status": "active",
-   "status": "在發",
+   "issue_status": "discontinued",
+   "status": "已停發",
    "specs": {
     "數據狀態": "待核：CardFi 線索未經發卡行官網核實，目前僅錄卡名／發行方／卡組織／借還類型等身份信息，全部規格待核實階段回官網確認後重寫",
-    "數據來源": "CardFi 線索（card.lengziyu.cn，未核實）"
+    "數據來源": "CardFi 線索（card.lengziyu.cn，未核實）",
+    "發行情況": "2026-05-28 起停發新申請，存量持卡人可繼續使用、權益不受影響（Citi 官網產品頁，2026-10-08 核實）"
    },
    "review": "CardFi 線索導入（未核實）：卡名、發行方、卡組織、類型為線索站所列，尚未回發卡行官網核實；規格、等級與發行狀態待核實階段確認後重寫。",
    "keywords": [
@@ -13184,8 +13528,8 @@
   },
   {
    "id": "fxus-017",
-   "name": "Citi Double Cash",
-   "name_en": "",
+   "name": "Citi Double Cash® Card",
+   "name_en": "Citi Double Cash® Card",
    "bank": "Citi",
    "org": "mastercard",
    "type": "credit",
@@ -13193,15 +13537,18 @@
    "issue_status": "active",
    "status": "在發",
    "specs": {
-    "數據狀態": "待核：CardFi 線索未經發卡行官網核實，目前僅錄卡名／發行方／卡組織／借還類型等身份信息，全部規格待核實階段回官網確認後重寫",
-    "數據來源": "CardFi 線索（card.lengziyu.cn，未核實）"
+    "主要權益": "消費得 1%、還款再得 1%，合計 2% 返現無上限；經 Citi Travel 預訂合計 5%；返現以 ThankYou 積分發放可兌賬單抵免等",
+    "年費": "無年費",
+    "發行情況": "現行在發",
+    "數據狀態": "核心字段已回發卡行官網核實（2026-10-08）；未核項見 verification.missing_fields",
+    "數據來源": "發卡行官網（見 verification.source_refs）"
    },
-   "review": "CardFi 線索導入（未核實）：卡名、發行方、卡組織、類型為線索站所列，尚未回發卡行官網核實；規格、等級與發行狀態待核實階段確認後重寫。",
+   "review": "官網產品頁/列表頁現行在發，卡名、組織、類型已按官網定版，核心規格按官網以自有文字重寫，判 A。",
    "keywords": [
-    "Citi",
-    "Citi Double Cash"
+    "Citi Double Cash® Card",
+    "Citi"
    ],
-   "url": "",
+   "url": "https://www.citi.com/credit-cards/citi-double-cash-credit-card?afc=154",
    "funding_modes": [
     "credit"
    ],
@@ -13210,29 +13557,45 @@
    "region_code": "US",
    "added": "2026-10-08",
    "verification": {
-    "status": "lead_unverified",
-    "missing_fields": [
-     "card_level",
-     "eligibility",
-     "annual_fee_status",
-     "foreign_transaction_fee_pct",
-     "supported_currency_codes"
-    ],
-    "conflicts": [],
+    "status": "core_verified",
+    "evidence_level_overall": "A",
     "source_refs": [
      {
-      "role": "lead",
+      "role": "官方產品專頁",
+      "title": "Citi Double Cash® Credit Card | Citi.com",
+      "url": "https://www.citi.com/credit-cards/citi-double-cash-credit-card?afc=154",
+      "publisher": "www.citi.com",
+      "accessed_at": "2026-10-08",
+      "evidence_grade": "A",
+      "facts_supported": [
+       "官網產品頁在發",
+       "萬事達屬性（官網 FAQ）",
+       "2%（1%+1%）結構",
+       "年費 None"
+      ]
+     },
+     {
+      "role": "lead_original",
       "url": "https://card.lengziyu.cn/card/citi-double-cash",
       "publisher": "CardFi（線索站，未核實）",
       "accessed_at": "2026-10-08"
      }
-    ]
+    ],
+    "verified_at": "2026-10-08",
+    "last_checked_at": "2026-10-08",
+    "next_review_at": "2026-11-07",
+    "review_cadence_days": 30,
+    "missing_fields": [
+     "卡等級官網未標註（僅稱 Mastercard）"
+    ],
+    "conflicts": [],
+    "manual_questions": []
    }
   },
   {
    "id": "fxus-018",
-   "name": "Discover It Cash Back",
-   "name_en": "",
+   "name": "Discover it® Cash Back",
+   "name_en": "Discover it® Cash Back",
    "bank": "Discover",
    "org": "discover",
    "type": "credit",
@@ -13240,15 +13603,18 @@
    "issue_status": "active",
    "status": "在發",
    "specs": {
-    "數據狀態": "待核：CardFi 線索未經發卡行官網核實，目前僅錄卡名／發行方／卡組織／借還類型等身份信息，全部規格待核實階段回官網確認後重寫",
-    "數據來源": "CardFi 線索（card.lengziyu.cn，未核實）"
+    "主要權益": "季度輪換日常類別 5% 返現（需激活、設季度上限），其餘消費 1%；首年所獲返現於年末等額配對",
+    "年費": "無年費",
+    "發行情況": "現行在發",
+    "數據狀態": "核心字段已回發卡行官網核實（2026-10-08）；未核項見 verification.missing_fields",
+    "數據來源": "發卡行官網（見 verification.source_refs）"
    },
-   "review": "CardFi 線索導入（未核實）：卡名、發行方、卡組織、類型為線索站所列，尚未回發卡行官網核實；規格、等級與發行狀態待核實階段確認後重寫。",
+   "review": "官網產品頁/列表頁現行在發，卡名、組織、類型已按官網定版，核心規格按官網以自有文字重寫，判 A。",
    "keywords": [
-    "Discover",
-    "Discover It Cash Back"
+    "Discover it® Cash Back",
+    "Discover"
    ],
-   "url": "",
+   "url": "https://www.discover.com/credit-cards/cash-back/",
    "funding_modes": [
     "credit"
    ],
@@ -13257,29 +13623,45 @@
    "region_code": "US",
    "added": "2026-10-08",
    "verification": {
-    "status": "lead_unverified",
-    "missing_fields": [
-     "card_level",
-     "eligibility",
-     "annual_fee_status",
-     "foreign_transaction_fee_pct",
-     "supported_currency_codes"
-    ],
-    "conflicts": [],
+    "status": "core_verified",
+    "evidence_level_overall": "A",
     "source_refs": [
      {
-      "role": "lead",
+      "role": "官方產品專頁",
+      "title": "Cash Back Credit Cards | Discover",
+      "url": "https://www.discover.com/credit-cards/cash-back/",
+      "publisher": "www.discover.com",
+      "accessed_at": "2026-10-08",
+      "evidence_grade": "A",
+      "facts_supported": [
+       "官網返現頁在列並可申請",
+       "年費 $0",
+       "5%/1% 返現結構",
+       "首年返現配對"
+      ]
+     },
+     {
+      "role": "lead_original",
       "url": "https://card.lengziyu.cn/card/discover-it-cash-back",
       "publisher": "CardFi（線索站，未核實）",
       "accessed_at": "2026-10-08"
      }
-    ]
+    ],
+    "verified_at": "2026-10-08",
+    "last_checked_at": "2026-10-08",
+    "next_review_at": "2026-11-07",
+    "review_cadence_days": 30,
+    "missing_fields": [
+     "卡等級官網無劃分"
+    ],
+    "conflicts": [],
+    "manual_questions": []
    }
   },
   {
    "id": "fxus-019",
-   "name": "Discover It Miles",
-   "name_en": "",
+   "name": "Discover it® Miles",
+   "name_en": "Discover it® Miles",
    "bank": "Discover",
    "org": "discover",
    "type": "credit",
@@ -13287,15 +13669,18 @@
    "issue_status": "active",
    "status": "在發",
    "specs": {
-    "數據狀態": "待核：CardFi 線索未經發卡行官網核實，目前僅錄卡名／發行方／卡組織／借還類型等身份信息，全部規格待核實階段回官網確認後重寫",
-    "數據來源": "CardFi 線索（card.lengziyu.cn，未核實）"
+    "主要權益": "全部消費統一 1.5X 里程，可抵扣旅行消費或轉現金、不過期；首年所獲里程於年末等額配對",
+    "年費": "無年費",
+    "發行情況": "現行在發",
+    "數據狀態": "核心字段已回發卡行官網核實（2026-10-08）；未核項見 verification.missing_fields",
+    "數據來源": "發卡行官網（見 verification.source_refs）"
    },
-   "review": "CardFi 線索導入（未核實）：卡名、發行方、卡組織、類型為線索站所列，尚未回發卡行官網核實；規格、等級與發行狀態待核實階段確認後重寫。",
+   "review": "官網產品頁/列表頁現行在發，卡名、組織、類型已按官網定版，核心規格按官網以自有文字重寫，判 A。",
    "keywords": [
-    "Discover",
-    "Discover It Miles"
+    "Discover it® Miles",
+    "Discover"
    ],
-   "url": "",
+   "url": "https://www.discover.com/credit-cards/travel/",
    "funding_modes": [
     "credit"
    ],
@@ -13304,29 +13689,45 @@
    "region_code": "US",
    "added": "2026-10-08",
    "verification": {
-    "status": "lead_unverified",
-    "missing_fields": [
-     "card_level",
-     "eligibility",
-     "annual_fee_status",
-     "foreign_transaction_fee_pct",
-     "supported_currency_codes"
-    ],
-    "conflicts": [],
+    "status": "core_verified",
+    "evidence_level_overall": "A",
     "source_refs": [
      {
-      "role": "lead",
+      "role": "官方產品專頁",
+      "title": "Travel Credit Card | Discover it Miles Credit Card",
+      "url": "https://www.discover.com/credit-cards/travel/",
+      "publisher": "www.discover.com",
+      "accessed_at": "2026-10-08",
+      "evidence_grade": "A",
+      "facts_supported": [
+       "官網旅行卡頁在發",
+       "年費 $0",
+       "1.5X 里程",
+       "首年里程配對"
+      ]
+     },
+     {
+      "role": "lead_original",
       "url": "https://card.lengziyu.cn/card/discover-it-miles",
       "publisher": "CardFi（線索站，未核實）",
       "accessed_at": "2026-10-08"
      }
-    ]
+    ],
+    "verified_at": "2026-10-08",
+    "last_checked_at": "2026-10-08",
+    "next_review_at": "2026-11-07",
+    "review_cadence_days": 30,
+    "missing_fields": [
+     "卡等級官網無劃分"
+    ],
+    "conflicts": [],
+    "manual_questions": []
    }
   },
   {
    "id": "fxus-020",
-   "name": "Discover It Nhl",
-   "name_en": "",
+   "name": "Discover it® NHL®",
+   "name_en": "Discover it® NHL®",
    "bank": "Discover",
    "org": "discover",
    "type": "credit",
@@ -13334,15 +13735,18 @@
    "issue_status": "active",
    "status": "在發",
    "specs": {
-    "數據狀態": "待核：CardFi 線索未經發卡行官網核實，目前僅錄卡名／發行方／卡組織／借還類型等身份信息，全部規格待核實階段回官網確認後重寫",
-    "數據來源": "CardFi 線索（card.lengziyu.cn，未核實）"
+    "主要權益": "與主返現卡同結構（季度輪換類別 5%、其餘 1%，需激活）；可選 NHL 球隊主題卡面；首年返現年末等額配對",
+    "年費": "無年費",
+    "發行情況": "現行在發",
+    "數據狀態": "核心字段已回發卡行官網核實（2026-10-08）；未核項見 verification.missing_fields",
+    "數據來源": "發卡行官網（見 verification.source_refs）"
    },
-   "review": "CardFi 線索導入（未核實）：卡名、發行方、卡組織、類型為線索站所列，尚未回發卡行官網核實；規格、等級與發行狀態待核實階段確認後重寫。",
+   "review": "官網產品頁/列表頁現行在發，卡名、組織、類型已按官網定版，核心規格按官網以自有文字重寫，判 A。",
    "keywords": [
-    "Discover",
-    "Discover It Nhl"
+    "Discover it® NHL®",
+    "Discover"
    ],
-   "url": "",
+   "url": "https://www.discover.com/credit-cards/cash-back/nhl-card.html",
    "funding_modes": [
     "credit"
    ],
@@ -13351,29 +13755,45 @@
    "region_code": "US",
    "added": "2026-10-08",
    "verification": {
-    "status": "lead_unverified",
-    "missing_fields": [
-     "card_level",
-     "eligibility",
-     "annual_fee_status",
-     "foreign_transaction_fee_pct",
-     "supported_currency_codes"
-    ],
-    "conflicts": [],
+    "status": "core_verified",
+    "evidence_level_overall": "A",
     "source_refs": [
      {
-      "role": "lead",
+      "role": "官方產品專頁",
+      "title": "NHL Discover Card | Explore the NHL Card | Discover",
+      "url": "https://www.discover.com/credit-cards/cash-back/nhl-card.html",
+      "publisher": "www.discover.com",
+      "accessed_at": "2026-10-08",
+      "evidence_grade": "A",
+      "facts_supported": [
+       "官網 NHL 產品頁仍在",
+       "官網披露頁列為現行返現卡組",
+       "年費 None"
+      ]
+     },
+     {
+      "role": "lead_original",
       "url": "https://card.lengziyu.cn/card/discover-it-nhl",
       "publisher": "CardFi（線索站，未核實）",
       "accessed_at": "2026-10-08"
      }
-    ]
+    ],
+    "verified_at": "2026-10-08",
+    "last_checked_at": "2026-10-08",
+    "next_review_at": "2026-11-07",
+    "review_cadence_days": 30,
+    "missing_fields": [
+     "卡面球隊清單",
+     "申請入口正文抓取未呈現，終審建議複看產品頁"
+    ],
+    "conflicts": [],
+    "manual_questions": []
    }
   },
   {
    "id": "fxus-021",
-   "name": "Discover It Secured",
-   "name_en": "",
+   "name": "Discover it® Secured",
+   "name_en": "Discover it® Secured",
    "bank": "Discover",
    "org": "discover",
    "type": "credit",
@@ -13381,15 +13801,18 @@
    "issue_status": "active",
    "status": "在發",
    "specs": {
-    "數據狀態": "待核：CardFi 線索未經發卡行官網核實，目前僅錄卡名／發行方／卡組織／借還類型等身份信息，全部規格待核實階段回官網確認後重寫",
-    "數據來源": "CardFi 線索（card.lengziyu.cn，未核實）"
+    "主要權益": "押金 $49/$99/$200 按資質定額度，消費上報三大征信局助建信用；表現良好可退押金轉無押金卡",
+    "年費": "無年費",
+    "發行情況": "現行在發",
+    "數據狀態": "核心字段已回發卡行官網核實（2026-10-08）；未核項見 verification.missing_fields",
+    "數據來源": "發卡行官網（見 verification.source_refs）"
    },
-   "review": "CardFi 線索導入（未核實）：卡名、發行方、卡組織、類型為線索站所列，尚未回發卡行官網核實；規格、等級與發行狀態待核實階段確認後重寫。",
+   "review": "官網產品頁/列表頁現行在發，卡名、組織、類型已按官網定版，核心規格按官網以自有文字重寫，判 A。",
    "keywords": [
-    "Discover",
-    "Discover It Secured"
+    "Discover it® Secured",
+    "Discover"
    ],
-   "url": "",
+   "url": "https://www.discover.com/credit-cards/secured-credit-card/",
    "funding_modes": [
     "credit"
    ],
@@ -13398,29 +13821,45 @@
    "region_code": "US",
    "added": "2026-10-08",
    "verification": {
-    "status": "lead_unverified",
-    "missing_fields": [
-     "card_level",
-     "eligibility",
-     "annual_fee_status",
-     "foreign_transaction_fee_pct",
-     "supported_currency_codes"
-    ],
-    "conflicts": [],
+    "status": "core_verified",
+    "evidence_level_overall": "A",
     "source_refs": [
      {
-      "role": "lead",
+      "role": "官方產品專頁",
+      "title": "Discover it Secured Cash Back Credit Card | Discover",
+      "url": "https://www.discover.com/credit-cards/secured-credit-card/",
+      "publisher": "www.discover.com",
+      "accessed_at": "2026-10-08",
+      "evidence_grade": "A",
+      "facts_supported": [
+       "官網擔保卡頁在發",
+       "年費 None",
+       "押金與轉正機制",
+       "申請無需信用分"
+      ]
+     },
+     {
+      "role": "lead_original",
       "url": "https://card.lengziyu.cn/card/discover-it-secured",
       "publisher": "CardFi（線索站，未核實）",
       "accessed_at": "2026-10-08"
      }
-    ]
+    ],
+    "verified_at": "2026-10-08",
+    "last_checked_at": "2026-10-08",
+    "next_review_at": "2026-11-07",
+    "review_cadence_days": 30,
+    "missing_fields": [
+     "卡等級官網無劃分"
+    ],
+    "conflicts": [],
+    "manual_questions": []
    }
   },
   {
    "id": "fxus-022",
-   "name": "Discover it Chrome Gas and Restaurants 信用卡",
-   "name_en": "",
+   "name": "Discover it® Chrome",
+   "name_en": "Discover it® Chrome",
    "bank": "Discover",
    "org": "discover",
    "type": "credit",
@@ -13428,15 +13867,18 @@
    "issue_status": "active",
    "status": "在發",
    "specs": {
-    "數據狀態": "待核：CardFi 線索未經發卡行官網核實，目前僅錄卡名／發行方／卡組織／借還類型等身份信息，全部規格待核實階段回官網確認後重寫",
-    "數據來源": "CardFi 線索（card.lengziyu.cn，未核實）"
+    "主要權益": "加油站與餐廳 2% 返現（每季合併上限 $1,000 消費，自動生效），其餘消費 1%；首年返現年末等額配對",
+    "年費": "無年費",
+    "發行情況": "現行在發",
+    "數據狀態": "核心字段已回發卡行官網核實（2026-10-08）；未核項見 verification.missing_fields",
+    "數據來源": "發卡行官網（見 verification.source_refs）"
    },
-   "review": "CardFi 線索導入（未核實）：卡名、發行方、卡組織、類型為線索站所列，尚未回發卡行官網核實；規格、等級與發行狀態待核實階段確認後重寫。",
+   "review": "官網產品頁/列表頁現行在發，卡名、組織、類型已按官網定版，核心規格按官網以自有文字重寫，判 A。",
    "keywords": [
-    "Discover",
-    "Discover it Chrome Gas and Restaurants 信用卡"
+    "Discover it® Chrome",
+    "Discover"
    ],
-   "url": "",
+   "url": "https://www.discover.com/credit-cards/cash-back/chrome/",
    "funding_modes": [
     "credit"
    ],
@@ -13445,29 +13887,45 @@
    "region_code": "US",
    "added": "2026-10-08",
    "verification": {
-    "status": "lead_unverified",
-    "missing_fields": [
-     "card_level",
-     "eligibility",
-     "annual_fee_status",
-     "foreign_transaction_fee_pct",
-     "supported_currency_codes"
-    ],
-    "conflicts": [],
+    "status": "core_verified",
+    "evidence_level_overall": "A",
     "source_refs": [
      {
-      "role": "lead",
+      "role": "官方產品專頁",
+      "title": "Gas & Restaurant Credit Card | Discover",
+      "url": "https://www.discover.com/credit-cards/cash-back/chrome/",
+      "publisher": "www.discover.com",
+      "accessed_at": "2026-10-08",
+      "evidence_grade": "A",
+      "facts_supported": [
+       "官網 Chrome 頁在發",
+       "年費 $0",
+       "2%/1% 返現結構",
+       "首年返現配對"
+      ]
+     },
+     {
+      "role": "lead_original",
       "url": "https://card.lengziyu.cn/card/discover-it-chrome",
       "publisher": "CardFi（線索站，未核實）",
       "accessed_at": "2026-10-08"
      }
-    ]
+    ],
+    "verified_at": "2026-10-08",
+    "last_checked_at": "2026-10-08",
+    "next_review_at": "2026-11-07",
+    "review_cadence_days": 30,
+    "missing_fields": [
+     "卡等級官網無劃分"
+    ],
+    "conflicts": [],
+    "manual_questions": []
    }
   },
   {
    "id": "fxus-023",
-   "name": "Discover it Student Cash Back 信用卡",
-   "name_en": "",
+   "name": "Discover it® Student Cash Back",
+   "name_en": "Discover it® Student Cash Back",
    "bank": "Discover",
    "org": "discover",
    "type": "credit",
@@ -13475,15 +13933,18 @@
    "issue_status": "active",
    "status": "在發",
    "specs": {
-    "數據狀態": "待核：CardFi 線索未經發卡行官網核實，目前僅錄卡名／發行方／卡組織／借還類型等身份信息，全部規格待核實階段回官網確認後重寫",
-    "數據來源": "CardFi 線索（card.lengziyu.cn，未核實）"
+    "主要權益": "學生專屬、申請無需信用分；季度輪換類別 5% 返現（需激活），其餘 1%；首年返現年末等額配對",
+    "年費": "無年費",
+    "發行情況": "現行在發",
+    "數據狀態": "核心字段已回發卡行官網核實（2026-10-08）；未核項見 verification.missing_fields",
+    "數據來源": "發卡行官網（見 verification.source_refs）"
    },
-   "review": "CardFi 線索導入（未核實）：卡名、發行方、卡組織、類型為線索站所列，尚未回發卡行官網核實；規格、等級與發行狀態待核實階段確認後重寫。",
+   "review": "官網產品頁/列表頁現行在發，卡名、組織、類型已按官網定版，核心規格按官網以自有文字重寫，判 A。",
    "keywords": [
-    "Discover",
-    "Discover it Student Cash Back 信用卡"
+    "Discover it® Student Cash Back",
+    "Discover"
    ],
-   "url": "",
+   "url": "https://www.discover.com/credit-cards/student-credit-card/it-card.html",
    "funding_modes": [
     "credit"
    ],
@@ -13492,29 +13953,45 @@
    "region_code": "US",
    "added": "2026-10-08",
    "verification": {
-    "status": "lead_unverified",
-    "missing_fields": [
-     "card_level",
-     "eligibility",
-     "annual_fee_status",
-     "foreign_transaction_fee_pct",
-     "supported_currency_codes"
-    ],
-    "conflicts": [],
+    "status": "core_verified",
+    "evidence_level_overall": "A",
     "source_refs": [
      {
-      "role": "lead",
+      "role": "官方產品專頁",
+      "title": "Discover it Student Cash Back",
+      "url": "https://www.discover.com/credit-cards/student-credit-card/it-card.html",
+      "publisher": "www.discover.com",
+      "accessed_at": "2026-10-08",
+      "evidence_grade": "A",
+      "facts_supported": [
+       "官網學生卡頁在發",
+       "年費 $0",
+       "5%/1% 返現結構",
+       "無需信用分"
+      ]
+     },
+     {
+      "role": "lead_original",
       "url": "https://card.lengziyu.cn/card/discover-it-student-cash-back",
       "publisher": "CardFi（線索站，未核實）",
       "accessed_at": "2026-10-08"
      }
-    ]
+    ],
+    "verified_at": "2026-10-08",
+    "last_checked_at": "2026-10-08",
+    "next_review_at": "2026-11-07",
+    "review_cadence_days": 30,
+    "missing_fields": [
+     "卡等級官網無劃分"
+    ],
+    "conflicts": [],
+    "manual_questions": []
    }
   },
   {
    "id": "fxus-024",
-   "name": "Discover it Student Chrome 信用卡",
-   "name_en": "",
+   "name": "Discover it® Student Chrome",
+   "name_en": "Discover it® Student Chrome",
    "bank": "Discover",
    "org": "discover",
    "type": "credit",
@@ -13522,15 +13999,18 @@
    "issue_status": "active",
    "status": "在發",
    "specs": {
-    "數據狀態": "待核：CardFi 線索未經發卡行官網核實，目前僅錄卡名／發行方／卡組織／借還類型等身份信息，全部規格待核實階段回官網確認後重寫",
-    "數據來源": "CardFi 線索（card.lengziyu.cn，未核實）"
+    "主要權益": "學生專屬、申請無需信用分；加油站與餐廳 2% 返現（每季合併上限 $1,000），其餘 1%；首年返現年末等額配對",
+    "年費": "無年費",
+    "發行情況": "現行在發",
+    "數據狀態": "核心字段已回發卡行官網核實（2026-10-08）；未核項見 verification.missing_fields",
+    "數據來源": "發卡行官網（見 verification.source_refs）"
    },
-   "review": "CardFi 線索導入（未核實）：卡名、發行方、卡組織、類型為線索站所列，尚未回發卡行官網核實；規格、等級與發行狀態待核實階段確認後重寫。",
+   "review": "官網產品頁/列表頁現行在發，卡名、組織、類型已按官網定版，核心規格按官網以自有文字重寫，判 A。",
    "keywords": [
-    "Discover",
-    "Discover it Student Chrome 信用卡"
+    "Discover it® Student Chrome",
+    "Discover"
    ],
-   "url": "",
+   "url": "https://www.discover.com/credit-cards/student-credit-card/chrome-card/",
    "funding_modes": [
     "credit"
    ],
@@ -13539,45 +14019,64 @@
    "region_code": "US",
    "added": "2026-10-08",
    "verification": {
-    "status": "lead_unverified",
-    "missing_fields": [
-     "card_level",
-     "eligibility",
-     "annual_fee_status",
-     "foreign_transaction_fee_pct",
-     "supported_currency_codes"
-    ],
-    "conflicts": [],
+    "status": "core_verified",
+    "evidence_level_overall": "A",
     "source_refs": [
      {
-      "role": "lead",
+      "role": "官方產品專頁",
+      "title": "Discover it Student Chrome Credit Card | Discover",
+      "url": "https://www.discover.com/credit-cards/student-credit-card/chrome-card/",
+      "publisher": "www.discover.com",
+      "accessed_at": "2026-10-08",
+      "evidence_grade": "A",
+      "facts_supported": [
+       "官網學生 Chrome 頁在發",
+       "年費 $0",
+       "2%/1% 返現結構",
+       "無需信用分"
+      ]
+     },
+     {
+      "role": "lead_original",
       "url": "https://card.lengziyu.cn/card/discover-it-student-chrome",
       "publisher": "CardFi（線索站，未核實）",
       "accessed_at": "2026-10-08"
      }
-    ]
+    ],
+    "verified_at": "2026-10-08",
+    "last_checked_at": "2026-10-08",
+    "next_review_at": "2026-11-07",
+    "review_cadence_days": 30,
+    "missing_fields": [
+     "卡等級官網無劃分"
+    ],
+    "conflicts": [],
+    "manual_questions": []
    }
   },
   {
    "id": "fxus-025",
-   "name": "SoFi Essential 信用卡",
-   "name_en": "",
-   "bank": "SoFi",
+   "name": "SoFi Essential Credit Card",
+   "name_en": "SoFi Essential Credit Card",
+   "bank": "SoFi Bank, N.A.",
    "org": "mastercard",
    "type": "credit",
    "card_level": null,
    "issue_status": "active",
    "status": "在發",
    "specs": {
-    "數據狀態": "待核：CardFi 線索未經發卡行官網核實，目前僅錄卡名／發行方／卡組織／借還類型等身份信息，全部規格待核實階段回官網確認後重寫",
-    "數據來源": "CardFi 線索（card.lengziyu.cn，未核實）"
+    "主要權益": "信用建立向（邀請制，需邀約方可申請）；無年費、無超限費、無境外交易費；SoFi Travel 預訂 3% 返現；上報三大征信局",
+    "年費": "無年費",
+    "發行情況": "現行在發",
+    "數據狀態": "核心字段已回發卡行官網核實（2026-10-08）；未核項見 verification.missing_fields",
+    "數據來源": "發卡行官網（見 verification.source_refs）"
    },
-   "review": "CardFi 線索導入（未核實）：卡名、發行方、卡組織、類型為線索站所列，尚未回發卡行官網核實；規格、等級與發行狀態待核實階段確認後重寫。",
+   "review": "官網產品頁/列表頁現行在發，卡名、組織、類型已按官網定版，核心規格按官網以自有文字重寫，判 A。",
    "keywords": [
-    "SoFi",
-    "SoFi Essential 信用卡"
+    "SoFi Essential Credit Card",
+    "SoFi Bank, N.A."
    ],
-   "url": "",
+   "url": "https://www.sofi.com/credit-card/",
    "funding_modes": [
     "credit"
    ],
@@ -13586,45 +14085,65 @@
    "region_code": "US",
    "added": "2026-10-08",
    "verification": {
-    "status": "lead_unverified",
-    "missing_fields": [
-     "card_level",
-     "eligibility",
-     "annual_fee_status",
-     "foreign_transaction_fee_pct",
-     "supported_currency_codes"
-    ],
-    "conflicts": [],
+    "status": "core_verified",
+    "evidence_level_overall": "A",
     "source_refs": [
      {
-      "role": "lead",
+      "role": "官方產品專頁",
+      "title": "SoFi Credit Cards - See If You're Prequalified",
+      "url": "https://www.sofi.com/credit-card/",
+      "publisher": "www.sofi.com",
+      "accessed_at": "2026-10-08",
+      "evidence_grade": "A",
+      "facts_supported": [
+       "官網頁面條款段在列",
+       "SoFi Bank, N.A. 發行、萬事達網絡",
+       "邀請制現況",
+       "無年費"
+      ]
+     },
+     {
+      "role": "lead_original",
       "url": "https://card.lengziyu.cn/card/sofi-essential",
       "publisher": "CardFi（線索站，未核實）",
       "accessed_at": "2026-10-08"
      }
-    ]
+    ],
+    "verified_at": "2026-10-08",
+    "last_checked_at": "2026-10-08",
+    "next_review_at": "2026-11-07",
+    "review_cadence_days": 30,
+    "missing_fields": [
+     "完整 APR 區間未在公開頁展開",
+     "卡等級官網未標註"
+    ],
+    "conflicts": [],
+    "manual_questions": []
    }
   },
   {
    "id": "fxus-026",
-   "name": "SoFi Unlimited 信用卡",
-   "name_en": "",
-   "bank": "SoFi",
+   "name": "SoFi Unlimited 2% Credit Card",
+   "name_en": "SoFi Unlimited 2% Credit Card",
+   "bank": "SoFi Bank, N.A.",
    "org": "mastercard",
    "type": "credit",
-   "card_level": null,
+   "card_level": "World Elite",
    "issue_status": "active",
    "status": "在發",
    "specs": {
-    "數據狀態": "待核：CardFi 線索未經發卡行官網核實，目前僅錄卡名／發行方／卡組織／借還類型等身份信息，全部規格待核實階段回官網確認後重寫",
-    "數據來源": "CardFi 線索（card.lengziyu.cn，未核實）"
+    "主要權益": "全部消費無上限 2% 返現（邀請制），SoFi Travel 3%；含手機保障等 World Elite 權益；無境外交易費",
+    "年費": "無年費",
+    "發行情況": "現行在發",
+    "數據狀態": "核心字段已回發卡行官網核實（2026-10-08）；未核項見 verification.missing_fields",
+    "數據來源": "發卡行官網（見 verification.source_refs）"
    },
-   "review": "CardFi 線索導入（未核實）：卡名、發行方、卡組織、類型為線索站所列，尚未回發卡行官網核實；規格、等級與發行狀態待核實階段確認後重寫。",
+   "review": "官網產品頁/列表頁現行在發，卡名、組織、類型已按官網定版，核心規格按官網以自有文字重寫，判 A。",
    "keywords": [
-    "SoFi",
-    "SoFi Unlimited 信用卡"
+    "SoFi Unlimited 2% Credit Card",
+    "SoFi Bank, N.A."
    ],
-   "url": "",
+   "url": "https://www.sofi.com/credit-card/",
    "funding_modes": [
     "credit"
    ],
@@ -13633,71 +14152,105 @@
    "region_code": "US",
    "added": "2026-10-08",
    "verification": {
-    "status": "lead_unverified",
-    "missing_fields": [
-     "card_level",
-     "eligibility",
-     "annual_fee_status",
-     "foreign_transaction_fee_pct",
-     "supported_currency_codes"
-    ],
-    "conflicts": [],
+    "status": "core_verified",
+    "evidence_level_overall": "A",
     "source_refs": [
      {
-      "role": "lead",
+      "role": "官方產品專頁",
+      "title": "SoFi Credit Cards - See If You're Prequalified",
+      "url": "https://www.sofi.com/credit-card/",
+      "publisher": "www.sofi.com",
+      "accessed_at": "2026-10-08",
+      "evidence_grade": "A",
+      "facts_supported": [
+       "官網頁面在列",
+       "2% 返現結構",
+       "邀請制現況",
+       "World Elite 權益（官網比價文）"
+      ]
+     },
+     {
+      "role": "lead_original",
       "url": "https://card.lengziyu.cn/card/sofi-unlimited",
       "publisher": "CardFi（線索站，未核實）",
       "accessed_at": "2026-10-08"
      }
-    ]
+    ],
+    "verified_at": "2026-10-08",
+    "last_checked_at": "2026-10-08",
+    "next_review_at": "2026-11-07",
+    "review_cadence_days": 30,
+    "missing_fields": [
+     "歡迎禮隨邀約浮動",
+     "與 Essential 一戶一卡互斥（官網口徑）"
+    ],
+    "conflicts": [],
+    "manual_questions": []
    }
   },
   {
    "id": "fxus-027",
-   "name": "SoFi 借记卡",
-   "name_en": "",
-   "bank": "SoFi",
-   "org": "unknown_pending",
+   "name": "SoFi® Bank Debit Mastercard®",
+   "name_en": "SoFi® Bank Debit Mastercard®",
+   "bank": "SoFi Bank, N.A.",
+   "org": "mastercard",
    "type": "debit",
    "card_level": null,
    "issue_status": "active",
    "status": "在發",
    "specs": {
-    "數據狀態": "待核：CardFi 線索未經發卡行官網核實，目前僅錄卡名／發行方／卡組織／借還類型等身份信息，全部規格待核實階段回官網確認後重寫",
-    "數據來源": "CardFi 線索（card.lengziyu.cn，未核實）"
+    "主要權益": "連結支票儲蓄戶的借記卡，開戶後自動寄送；55,000+ Allpoint ATM 免手續費；無透支費；儲蓄高息（附直存條件）",
+    "年費": "無月服務/維護費（賬戶層面）",
+    "發行情況": "現行在發",
+    "數據狀態": "核心字段已回發卡行官網核實（2026-10-08）；未核項見 verification.missing_fields",
+    "數據來源": "發卡行官網（見 verification.source_refs）"
    },
-   "review": "CardFi 線索導入（未核實）：卡名、發行方、卡組織、類型為線索站所列，尚未回發卡行官網核實；規格、等級與發行狀態待核實階段確認後重寫。",
+   "review": "官網產品頁/列表頁現行在發，卡名、組織、類型已按官網定版，核心規格按官網以自有文字重寫，判 A。",
    "keywords": [
-    "SoFi",
-    "SoFi 借记卡"
+    "SoFi® Bank Debit Mastercard®",
+    "SoFi Bank, N.A."
    ],
-   "url": "",
+   "url": "https://www.sofi.com/banking-2-dr/",
    "funding_modes": [
-    "debit_account"
+    "debit"
    ],
    "image": null,
    "region": "美国",
    "region_code": "US",
    "added": "2026-10-08",
    "verification": {
-    "status": "lead_unverified",
-    "missing_fields": [
-     "org",
-     "card_level",
-     "eligibility",
-     "annual_fee_status",
-     "foreign_transaction_fee_pct",
-     "supported_currency_codes"
-    ],
-    "conflicts": [],
+    "status": "core_verified",
+    "evidence_level_overall": "A",
     "source_refs": [
      {
-      "role": "lead",
+      "role": "官方產品專頁",
+      "title": "Open a Bank Account Online Today | SoFi",
+      "url": "https://www.sofi.com/banking-2-dr/",
+      "publisher": "www.sofi.com",
+      "accessed_at": "2026-10-08",
+      "evidence_grade": "A",
+      "facts_supported": [
+       "官網頁腳確認 SoFi Bank, N.A. 發行、萬事達許可",
+       "借記卡屬性（糾正線索組織誤標）",
+       "開戶自動寄卡"
+      ]
+     },
+     {
+      "role": "lead_original",
       "url": "https://card.lengziyu.cn/card/sofi-debit-card",
       "publisher": "CardFi（線索站，未核實）",
       "accessed_at": "2026-10-08"
      }
-    ]
+    ],
+    "verified_at": "2026-10-08",
+    "last_checked_at": "2026-10-08",
+    "next_review_at": "2026-11-07",
+    "review_cadence_days": 30,
+    "missing_fields": [
+     "卡等級官網未標註"
+    ],
+    "conflicts": [],
+    "manual_questions": []
    },
    "aliases": [
     "Sofi Debit"
@@ -13705,24 +14258,27 @@
   },
   {
    "id": "fxus-028",
-   "name": "U.S. Bank Altitude Go Secured Visa 卡",
-   "name_en": "",
-   "bank": "U.S. Bank",
+   "name": "U.S. Bank Altitude® Go Secured Visa® Card",
+   "name_en": "U.S. Bank Altitude® Go Secured Visa® Card",
+   "bank": "U.S. Bank National Association",
    "org": "visa",
    "type": "credit",
    "card_level": null,
    "issue_status": "active",
    "status": "在發",
    "specs": {
-    "數據狀態": "待核：CardFi 線索未經發卡行官網核實，目前僅錄卡名／發行方／卡組織／借還類型等身份信息，全部規格待核實階段回官網確認後重寫",
-    "數據來源": "CardFi 線索（card.lengziyu.cn，未核實）"
+    "主要權益": "押金 $300–$5,000 定額度；餐飲/外賣最高 4X 積分（每季首 $2,000），超市、加油/充電、流媒體 2X；含年度流媒體抵扣；可畢業轉無押金版並上報征信局",
+    "年費": "無年費（$0）",
+    "發行情況": "現行在發",
+    "數據狀態": "核心字段已回發卡行官網核實（2026-10-08）；未核項見 verification.missing_fields",
+    "數據來源": "發卡行官網（見 verification.source_refs）"
    },
-   "review": "CardFi 線索導入（未核實）：卡名、發行方、卡組織、類型為線索站所列，尚未回發卡行官網核實；規格、等級與發行狀態待核實階段確認後重寫。",
+   "review": "官網產品頁/列表頁現行在發，卡名、組織、類型已按官網定版，核心規格按官網以自有文字重寫，判 A。",
    "keywords": [
-    "U.S. Bank",
-    "U.S. Bank Altitude Go Secured Visa 卡"
+    "U.S. Bank Altitude® Go Secured Visa® Card",
+    "U.S. Bank National Association"
    ],
-   "url": "",
+   "url": "http://www.usbank.com/credit-cards/altitude-go-secured-visa-credit-card.html",
    "funding_modes": [
     "credit"
    ],
@@ -13731,45 +14287,64 @@
    "region_code": "US",
    "added": "2026-10-08",
    "verification": {
-    "status": "lead_unverified",
-    "missing_fields": [
-     "card_level",
-     "eligibility",
-     "annual_fee_status",
-     "foreign_transaction_fee_pct",
-     "supported_currency_codes"
-    ],
-    "conflicts": [],
+    "status": "core_verified",
+    "evidence_level_overall": "A",
     "source_refs": [
      {
-      "role": "lead",
+      "role": "官方產品專頁",
+      "title": "U.S. Bank Altitude® Go Secured Visa® Card",
+      "url": "http://www.usbank.com/credit-cards/altitude-go-secured-visa-credit-card.html",
+      "publisher": "www.usbank.com",
+      "accessed_at": "2026-10-08",
+      "evidence_grade": "A",
+      "facts_supported": [
+       "官網產品頁在發",
+       "Visa 組織",
+       "押金區間與年費",
+       "積分結構與畢業路徑"
+      ]
+     },
+     {
+      "role": "lead_original",
       "url": "https://card.lengziyu.cn/card/usbank-altitude-go-secured",
       "publisher": "CardFi（線索站，未核實）",
       "accessed_at": "2026-10-08"
      }
-    ]
+    ],
+    "verified_at": "2026-10-08",
+    "last_checked_at": "2026-10-08",
+    "next_review_at": "2026-11-07",
+    "review_cadence_days": 30,
+    "missing_fields": [
+     "APR 數字官網正文未顯"
+    ],
+    "conflicts": [],
+    "manual_questions": []
    }
   },
   {
    "id": "fxus-029",
-   "name": "U.S. Bank Cash+ Secured Visa 卡",
-   "name_en": "",
-   "bank": "U.S. Bank",
+   "name": "U.S. Bank Cash+® Secured Visa® Card",
+   "name_en": "U.S. Bank Cash+® Secured Visa® Card",
+   "bank": "U.S. Bank National Association",
    "org": "visa",
    "type": "credit",
    "card_level": null,
    "issue_status": "active",
    "status": "在發",
    "specs": {
-    "數據狀態": "待核：CardFi 線索未經發卡行官網核實，目前僅錄卡名／發行方／卡組織／借還類型等身份信息，全部規格待核實階段回官網確認後重寫",
-    "數據來源": "CardFi 線索（card.lengziyu.cn，未核實）"
+    "主要權益": "押金 $300–$5,000 定額度；自選兩類別每季首 $2,000 享 5%、自選一日常類別 2%、其餘 1%；可畢業轉 Cash+® 普通版並上報征信局",
+    "年費": "無年費（$0）",
+    "發行情況": "現行在發",
+    "數據狀態": "核心字段已回發卡行官網核實（2026-10-08）；未核項見 verification.missing_fields",
+    "數據來源": "發卡行官網（見 verification.source_refs）"
    },
-   "review": "CardFi 線索導入（未核實）：卡名、發行方、卡組織、類型為線索站所列，尚未回發卡行官網核實；規格、等級與發行狀態待核實階段確認後重寫。",
+   "review": "官網產品頁/列表頁現行在發，卡名、組織、類型已按官網定版，核心規格按官網以自有文字重寫，判 A。",
    "keywords": [
-    "U.S. Bank",
-    "U.S. Bank Cash+ Secured Visa 卡"
+    "U.S. Bank Cash+® Secured Visa® Card",
+    "U.S. Bank National Association"
    ],
-   "url": "",
+   "url": "https://www.usbank.com/credit-cards/cash-plus-secured-visa-credit-card.html",
    "funding_modes": [
     "credit"
    ],
@@ -13778,45 +14353,63 @@
    "region_code": "US",
    "added": "2026-10-08",
    "verification": {
-    "status": "lead_unverified",
-    "missing_fields": [
-     "card_level",
-     "eligibility",
-     "annual_fee_status",
-     "foreign_transaction_fee_pct",
-     "supported_currency_codes"
-    ],
-    "conflicts": [],
+    "status": "core_verified",
+    "evidence_level_overall": "A",
     "source_refs": [
      {
-      "role": "lead",
+      "role": "官方產品專頁",
+      "title": "Cash+ Secured Visa Cash Back Credit Card | U.S. Bank",
+      "url": "https://www.usbank.com/credit-cards/cash-plus-secured-visa-credit-card.html",
+      "publisher": "www.usbank.com",
+      "accessed_at": "2026-10-08",
+      "evidence_grade": "A",
+      "facts_supported": [
+       "官網產品頁在發",
+       "Visa 組織",
+       "押金區間與年費",
+       "返現結構與畢業路徑"
+      ]
+     },
+     {
+      "role": "lead_original",
       "url": "https://card.lengziyu.cn/card/usbank-cash-plus-secured",
       "publisher": "CardFi（線索站，未核實）",
       "accessed_at": "2026-10-08"
      }
-    ]
+    ],
+    "verified_at": "2026-10-08",
+    "last_checked_at": "2026-10-08",
+    "next_review_at": "2026-11-07",
+    "review_cadence_days": 30,
+    "missing_fields": [
+     "APR 數字官網正文未顯"
+    ],
+    "conflicts": [],
+    "manual_questions": []
    }
   },
   {
    "id": "fxus-030",
-   "name": "Usbank Altitude Connect",
-   "name_en": "",
-   "bank": "U.S. Bank",
-   "org": "unknown_pending",
+   "name": "U.S. Bank Altitude® Connect Visa Signature® Card",
+   "name_en": "U.S. Bank Altitude® Connect Visa Signature® Card",
+   "bank": "U.S. Bank National Association",
+   "org": "visa",
    "type": "credit",
-   "card_level": null,
+   "card_level": "Visa Signature",
    "issue_status": "active",
    "status": "在發",
    "specs": {
-    "數據狀態": "待核：CardFi 線索未經發卡行官網核實，目前僅錄卡名／發行方／卡組織／借還類型等身份信息，全部規格待核實階段回官網確認後重寫",
-    "數據來源": "CardFi 線索（card.lengziyu.cn，未核實）"
+    "主要權益": "旅行中心預付酒店/租車 5X 積分；旅行消費 4X；加油/充電每季首 $1,000 享 4X；餐飲、流媒體、超市 2X，其餘 1X",
+    "發行情況": "現行在發",
+    "數據狀態": "核心字段已回發卡行官網核實（2026-10-08）；未核項見 verification.missing_fields",
+    "數據來源": "發卡行官網（見 verification.source_refs）"
    },
-   "review": "CardFi 線索導入（未核實）：卡名、發行方、卡組織、類型為線索站所列，尚未回發卡行官網核實；規格、等級與發行狀態待核實階段確認後重寫。",
+   "review": "官網產品頁/列表頁現行在發，卡名、組織、類型已按官網定版，核心規格按官網以自有文字重寫，判 A。",
    "keywords": [
-    "U.S. Bank",
-    "Usbank Altitude Connect"
+    "U.S. Bank Altitude® Connect Visa Signature® Card",
+    "U.S. Bank National Association"
    ],
-   "url": "",
+   "url": "https://www.usbank.com/credit-cards.html",
    "funding_modes": [
     "credit"
    ],
@@ -13825,46 +14418,63 @@
    "region_code": "US",
    "added": "2026-10-08",
    "verification": {
-    "status": "lead_unverified",
-    "missing_fields": [
-     "org",
-     "card_level",
-     "eligibility",
-     "annual_fee_status",
-     "foreign_transaction_fee_pct",
-     "supported_currency_codes"
-    ],
-    "conflicts": [],
+    "status": "core_verified",
+    "evidence_level_overall": "A",
     "source_refs": [
      {
-      "role": "lead",
+      "role": "官方產品專頁",
+      "title": "Credit Cards | U.S. Bank",
+      "url": "https://www.usbank.com/credit-cards.html",
+      "publisher": "www.usbank.com",
+      "accessed_at": "2026-10-08",
+      "evidence_grade": "A",
+      "facts_supported": [
+       "官網信用卡列表頁在列",
+       "Visa Signature 等級",
+       "積分結構"
+      ]
+     },
+     {
+      "role": "lead_original",
       "url": "https://card.lengziyu.cn/card/usbank-altitude-connect",
       "publisher": "CardFi（線索站，未核實）",
       "accessed_at": "2026-10-08"
      }
-    ]
+    ],
+    "verified_at": "2026-10-08",
+    "last_checked_at": "2026-10-08",
+    "next_review_at": "2026-11-07",
+    "review_cadence_days": 30,
+    "missing_fields": [
+     "年費具體數字（官網列表頁佔位未顯）",
+     "APR 具體數字"
+    ],
+    "conflicts": [],
+    "manual_questions": []
    }
   },
   {
    "id": "fxus-031",
-   "name": "Usbank Altitude Go",
-   "name_en": "",
-   "bank": "U.S. Bank",
-   "org": "unknown_pending",
+   "name": "U.S. Bank Altitude® Go Visa Signature® Card",
+   "name_en": "U.S. Bank Altitude® Go Visa Signature® Card",
+   "bank": "U.S. Bank National Association",
+   "org": "visa",
    "type": "credit",
-   "card_level": null,
+   "card_level": "Visa Signature",
    "issue_status": "active",
    "status": "在發",
    "specs": {
-    "數據狀態": "待核：CardFi 線索未經發卡行官網核實，目前僅錄卡名／發行方／卡組織／借還類型等身份信息，全部規格待核實階段回官網確認後重寫",
-    "數據來源": "CardFi 線索（card.lengziyu.cn，未核實）"
+    "主要權益": "餐飲/外賣/外帶每季首 $2,000 享 4X 積分；超市、加油/充電、流媒體 2X，其餘 1X；含年度流媒體抵扣",
+    "發行情況": "現行在發",
+    "數據狀態": "核心字段已回發卡行官網核實（2026-10-08）；未核項見 verification.missing_fields",
+    "數據來源": "發卡行官網（見 verification.source_refs）"
    },
-   "review": "CardFi 線索導入（未核實）：卡名、發行方、卡組織、類型為線索站所列，尚未回發卡行官網核實；規格、等級與發行狀態待核實階段確認後重寫。",
+   "review": "官網產品頁/列表頁現行在發，卡名、組織、類型已按官網定版，核心規格按官網以自有文字重寫，判 A。",
    "keywords": [
-    "U.S. Bank",
-    "Usbank Altitude Go"
+    "U.S. Bank Altitude® Go Visa Signature® Card",
+    "U.S. Bank National Association"
    ],
-   "url": "",
+   "url": "https://www.usbank.com/credit-cards.html",
    "funding_modes": [
     "credit"
    ],
@@ -13873,46 +14483,63 @@
    "region_code": "US",
    "added": "2026-10-08",
    "verification": {
-    "status": "lead_unverified",
-    "missing_fields": [
-     "org",
-     "card_level",
-     "eligibility",
-     "annual_fee_status",
-     "foreign_transaction_fee_pct",
-     "supported_currency_codes"
-    ],
-    "conflicts": [],
+    "status": "core_verified",
+    "evidence_level_overall": "A",
     "source_refs": [
      {
-      "role": "lead",
+      "role": "官方產品專頁",
+      "title": "Credit Cards | U.S. Bank",
+      "url": "https://www.usbank.com/credit-cards.html",
+      "publisher": "www.usbank.com",
+      "accessed_at": "2026-10-08",
+      "evidence_grade": "A",
+      "facts_supported": [
+       "官網信用卡列表頁在列",
+       "Visa Signature 等級",
+       "積分結構"
+      ]
+     },
+     {
+      "role": "lead_original",
       "url": "https://card.lengziyu.cn/card/usbank-altitude-go",
       "publisher": "CardFi（線索站，未核實）",
       "accessed_at": "2026-10-08"
      }
-    ]
+    ],
+    "verified_at": "2026-10-08",
+    "last_checked_at": "2026-10-08",
+    "next_review_at": "2026-11-07",
+    "review_cadence_days": 30,
+    "missing_fields": [
+     "年費具體數字（官網列表頁佔位未顯）",
+     "APR 具體數字"
+    ],
+    "conflicts": [],
+    "manual_questions": []
    }
   },
   {
    "id": "fxus-032",
-   "name": "Usbank Altitude Power",
-   "name_en": "",
-   "bank": "U.S. Bank",
-   "org": "unknown_pending",
+   "name": "U.S. Bank Business Altitude® Power Visa Signature® Card",
+   "name_en": "U.S. Bank Business Altitude® Power Visa Signature® Card",
+   "bank": "U.S. Bank National Association",
+   "org": "visa",
    "type": "credit",
-   "card_level": null,
+   "card_level": "Visa Signature",
    "issue_status": "active",
    "status": "在發",
    "specs": {
-    "數據狀態": "待核：CardFi 線索未經發卡行官網核實，目前僅錄卡名／發行方／卡組織／借還類型等身份信息，全部規格待核實階段回官網確認後重寫",
-    "數據來源": "CardFi 線索（card.lengziyu.cn，未核實）"
+    "主要權益": "商務卡：全部合資格消費 2X 積分無上限，移動錢包季度加成，旅行中心預付 6X；含貴賓室權益、無境外交易費（個人版不存在，線索名已修正為 Business 版）",
+    "發行情況": "現行在發",
+    "數據狀態": "核心字段已回發卡行官網核實（2026-10-08）；未核項見 verification.missing_fields",
+    "數據來源": "發卡行官網（見 verification.source_refs）"
    },
-   "review": "CardFi 線索導入（未核實）：卡名、發行方、卡組織、類型為線索站所列，尚未回發卡行官網核實；規格、等級與發行狀態待核實階段確認後重寫。",
+   "review": "官網產品頁/列表頁現行在發，卡名、組織、類型已按官網定版，核心規格按官網以自有文字重寫，判 A。",
    "keywords": [
-    "U.S. Bank",
-    "Usbank Altitude Power"
+    "U.S. Bank Business Altitude® Power Visa Signature® Card",
+    "U.S. Bank National Association"
    ],
-   "url": "",
+   "url": "https://www.usbank.com/bizpower",
    "funding_modes": [
     "credit"
    ],
@@ -13921,24 +14548,39 @@
    "region_code": "US",
    "added": "2026-10-08",
    "verification": {
-    "status": "lead_unverified",
-    "missing_fields": [
-     "org",
-     "card_level",
-     "eligibility",
-     "annual_fee_status",
-     "foreign_transaction_fee_pct",
-     "supported_currency_codes"
-    ],
-    "conflicts": [],
+    "status": "core_verified",
+    "evidence_level_overall": "A",
     "source_refs": [
      {
-      "role": "lead",
+      "role": "官方產品專頁",
+      "title": "Business Altitude® Power Visa Signature® Card | U.S. Bank",
+      "url": "https://www.usbank.com/bizpower",
+      "publisher": "www.usbank.com",
+      "accessed_at": "2026-10-08",
+      "evidence_grade": "A",
+      "facts_supported": [
+       "官網商務列表頁在列",
+       "商務卡屬性與 Visa Signature 等級",
+       "積分結構",
+       "個人版查無"
+      ]
+     },
+     {
+      "role": "lead_original",
       "url": "https://card.lengziyu.cn/card/usbank-altitude-power",
       "publisher": "CardFi（線索站，未核實）",
       "accessed_at": "2026-10-08"
      }
-    ]
+    ],
+    "verified_at": "2026-10-08",
+    "last_checked_at": "2026-10-08",
+    "next_review_at": "2026-11-07",
+    "review_cadence_days": 30,
+    "missing_fields": [
+     "年費最終數字待官網產品條款頁複核（顧問頁載 $195）"
+    ],
+    "conflicts": [],
+    "manual_questions": []
    }
   },
   {
@@ -13949,11 +14591,12 @@
    "org": "unknown_pending",
    "type": "credit",
    "card_level": null,
-   "issue_status": "active",
-   "status": "在發",
+   "issue_status": "discontinued",
+   "status": "已停發",
    "specs": {
     "數據狀態": "待核：CardFi 線索未經發卡行官網核實，目前僅錄卡名／發行方／卡組織／借還類型等身份信息，全部規格待核實階段回官網確認後重寫",
-    "數據來源": "CardFi 線索（card.lengziyu.cn，未核實）"
+    "數據來源": "CardFi 線索（card.lengziyu.cn，未核實）",
+    "發行情況": "已停發新申請：官網現行信用卡列表已下架，僅存量持卡人繼續使用（2026-10-08 官網核實）"
    },
    "review": "CardFi 線索導入（未核實）：卡名、發行方、卡組織、類型為線索站所列，尚未回發卡行官網核實；規格、等級與發行狀態待核實階段確認後重寫。",
    "keywords": [
@@ -13991,72 +14634,90 @@
   },
   {
    "id": "fxus-034",
-   "name": "Usbank Atm Debit",
-   "name_en": "",
-   "bank": "U.S. Bank",
-   "org": "unknown_pending",
+   "name": "U.S. Bank Visa® Debit Card",
+   "name_en": "U.S. Bank Visa® Debit Card",
+   "bank": "U.S. Bank National Association",
+   "org": "visa",
    "type": "debit",
    "card_level": null,
    "issue_status": "active",
    "status": "在發",
    "specs": {
-    "數據狀態": "待核：CardFi 線索未經發卡行官網核實，目前僅錄卡名／發行方／卡組織／借還類型等身份信息，全部規格待核實階段回官網確認後重寫",
-    "數據來源": "CardFi 線索（card.lengziyu.cn，未核實）"
+    "主要權益": "連結支票戶的借記卡（兼 ATM 功能），消費即時扣賬；ATM 取款/查詢；零欺詐責任、App 內鎖卡；須先持有 U.S. Bank 支票戶",
+    "發行情況": "現行在發",
+    "數據狀態": "核心字段已回發卡行官網核實（2026-10-08）；未核項見 verification.missing_fields",
+    "數據來源": "發卡行官網（見 verification.source_refs）"
    },
-   "review": "CardFi 線索導入（未核實）：卡名、發行方、卡組織、類型為線索站所列，尚未回發卡行官網核實；規格、等級與發行狀態待核實階段確認後重寫。",
+   "review": "官網產品頁/列表頁現行在發，卡名、組織、類型已按官網定版，核心規格按官網以自有文字重寫，判 A。",
    "keywords": [
-    "U.S. Bank",
-    "Usbank Atm Debit"
+    "U.S. Bank Visa® Debit Card",
+    "U.S. Bank National Association"
    ],
-   "url": "",
+   "url": "https://www.usbank.com/bank-accounts/checking-accounts/debit-cards.html",
    "funding_modes": [
-    "debit_account"
+    "debit"
    ],
    "image": null,
    "region": "美国",
    "region_code": "US",
    "added": "2026-10-08",
    "verification": {
-    "status": "lead_unverified",
-    "missing_fields": [
-     "org",
-     "card_level",
-     "eligibility",
-     "annual_fee_status",
-     "foreign_transaction_fee_pct",
-     "supported_currency_codes"
-    ],
-    "conflicts": [],
+    "status": "core_verified",
+    "evidence_level_overall": "A",
     "source_refs": [
      {
-      "role": "lead",
+      "role": "官方產品專頁",
+      "title": "Debit card - Apply online | U.S. Bank",
+      "url": "https://www.usbank.com/bank-accounts/checking-accounts/debit-cards.html",
+      "publisher": "www.usbank.com",
+      "accessed_at": "2026-10-08",
+      "evidence_grade": "A",
+      "facts_supported": [
+       "官網借記卡專頁在列",
+       "正名 Visa® Debit Card（糾正線索功能俗稱）",
+       "借記屬性與申領前置條件"
+      ]
+     },
+     {
+      "role": "lead_original",
       "url": "https://card.lengziyu.cn/card/usbank-atm-debit",
       "publisher": "CardFi（線索站，未核實）",
       "accessed_at": "2026-10-08"
      }
-    ]
+    ],
+    "verified_at": "2026-10-08",
+    "last_checked_at": "2026-10-08",
+    "next_review_at": "2026-11-07",
+    "review_cadence_days": 30,
+    "missing_fields": [
+     "借記卡年費（屬賬戶收費表，非卡年費）"
+    ],
+    "conflicts": [],
+    "manual_questions": []
    }
   },
   {
    "id": "fxus-035",
-   "name": "Usbank Cash Plus",
-   "name_en": "",
-   "bank": "U.S. Bank",
-   "org": "unknown_pending",
+   "name": "U.S. Bank Cash+® Visa Signature® Card",
+   "name_en": "U.S. Bank Cash+® Visa Signature® Card",
+   "bank": "U.S. Bank National Association",
+   "org": "visa",
    "type": "credit",
-   "card_level": null,
+   "card_level": "Visa Signature",
    "issue_status": "active",
    "status": "在發",
    "specs": {
-    "數據狀態": "待核：CardFi 線索未經發卡行官網核實，目前僅錄卡名／發行方／卡組織／借還類型等身份信息，全部規格待核實階段回官網確認後重寫",
-    "數據來源": "CardFi 線索（card.lengziyu.cn，未核實）"
+    "主要權益": "自選兩類別每季首 $2,000 享 5% 返現、自選一日常類別 2%、其餘 1%；旅行中心預付旅行 5%",
+    "發行情況": "現行在發",
+    "數據狀態": "核心字段已回發卡行官網核實（2026-10-08）；未核項見 verification.missing_fields",
+    "數據來源": "發卡行官網（見 verification.source_refs）"
    },
-   "review": "CardFi 線索導入（未核實）：卡名、發行方、卡組織、類型為線索站所列，尚未回發卡行官網核實；規格、等級與發行狀態待核實階段確認後重寫。",
+   "review": "官網產品頁/列表頁現行在發，卡名、組織、類型已按官網定版，核心規格按官網以自有文字重寫，判 A。",
    "keywords": [
-    "U.S. Bank",
-    "Usbank Cash Plus"
+    "U.S. Bank Cash+® Visa Signature® Card",
+    "U.S. Bank National Association"
    ],
-   "url": "",
+   "url": "https://www.usbank.com/credit-cards/cash-plus-visa-signature-credit-card.html",
    "funding_modes": [
     "credit"
    ],
@@ -14065,46 +14726,64 @@
    "region_code": "US",
    "added": "2026-10-08",
    "verification": {
-    "status": "lead_unverified",
-    "missing_fields": [
-     "org",
-     "card_level",
-     "eligibility",
-     "annual_fee_status",
-     "foreign_transaction_fee_pct",
-     "supported_currency_codes"
-    ],
-    "conflicts": [],
+    "status": "core_verified",
+    "evidence_level_overall": "A",
     "source_refs": [
      {
-      "role": "lead",
+      "role": "官方產品專頁",
+      "title": "U.S. Bank Cash+ Visa Signature: Up to 5% Cash Back Rewards",
+      "url": "https://www.usbank.com/credit-cards/cash-plus-visa-signature-credit-card.html",
+      "publisher": "www.usbank.com",
+      "accessed_at": "2026-10-08",
+      "evidence_grade": "A",
+      "facts_supported": [
+       "官網產品頁在發",
+       "Visa Signature 等級",
+       "返現結構"
+      ]
+     },
+     {
+      "role": "lead_original",
       "url": "https://card.lengziyu.cn/card/usbank-cash-plus",
       "publisher": "CardFi（線索站，未核實）",
       "accessed_at": "2026-10-08"
      }
-    ]
+    ],
+    "verified_at": "2026-10-08",
+    "last_checked_at": "2026-10-08",
+    "next_review_at": "2026-11-07",
+    "review_cadence_days": 30,
+    "missing_fields": [
+     "年費具體數字（官網抓取未顯）",
+     "APR 具體數字"
+    ],
+    "conflicts": [],
+    "manual_questions": []
    }
   },
   {
    "id": "fxus-036",
-   "name": "Usbank Secured",
-   "name_en": "",
-   "bank": "U.S. Bank",
-   "org": "unknown_pending",
+   "name": "U.S. Bank Secured Visa® Card",
+   "name_en": "U.S. Bank Secured Visa® Card",
+   "bank": "U.S. Bank National Association",
+   "org": "visa",
    "type": "credit",
    "card_level": null,
    "issue_status": "active",
    "status": "在發",
    "specs": {
-    "數據狀態": "待核：CardFi 線索未經發卡行官網核實，目前僅錄卡名／發行方／卡組織／借還類型等身份信息，全部規格待核實階段回官網確認後重寫",
-    "數據來源": "CardFi 線索（card.lengziyu.cn，未核實）"
+    "主要權益": "押金 $300–$5,000 定額度，無獎勵主攻信用建設；可免費查信用分、自選還款到期日；上報三大征信局",
+    "年費": "無年費（$0）",
+    "發行情況": "現行在發",
+    "數據狀態": "核心字段已回發卡行官網核實（2026-10-08）；未核項見 verification.missing_fields",
+    "數據來源": "發卡行官網（見 verification.source_refs）"
    },
-   "review": "CardFi 線索導入（未核實）：卡名、發行方、卡組織、類型為線索站所列，尚未回發卡行官網核實；規格、等級與發行狀態待核實階段確認後重寫。",
+   "review": "官網產品頁/列表頁現行在發，卡名、組織、類型已按官網定版，核心規格按官網以自有文字重寫，判 A。",
    "keywords": [
-    "U.S. Bank",
-    "Usbank Secured"
+    "U.S. Bank Secured Visa® Card",
+    "U.S. Bank National Association"
    ],
-   "url": "",
+   "url": "https://www.usbank.com/credit-cards/secured-visa-credit-card.html",
    "funding_modes": [
     "credit"
    ],
@@ -14113,46 +14792,64 @@
    "region_code": "US",
    "added": "2026-10-08",
    "verification": {
-    "status": "lead_unverified",
-    "missing_fields": [
-     "org",
-     "card_level",
-     "eligibility",
-     "annual_fee_status",
-     "foreign_transaction_fee_pct",
-     "supported_currency_codes"
-    ],
-    "conflicts": [],
+    "status": "core_verified",
+    "evidence_level_overall": "A",
     "source_refs": [
      {
-      "role": "lead",
+      "role": "官方產品專頁",
+      "title": "Secured Visa® Credit Card | U.S. Bank",
+      "url": "https://www.usbank.com/credit-cards/secured-visa-credit-card.html",
+      "publisher": "www.usbank.com",
+      "accessed_at": "2026-10-08",
+      "evidence_grade": "A",
+      "facts_supported": [
+       "官網產品頁在發",
+       "Visa 組織",
+       "押金區間與年費",
+       "信用建設功能"
+      ]
+     },
+     {
+      "role": "lead_original",
       "url": "https://card.lengziyu.cn/card/usbank-secured",
       "publisher": "CardFi（線索站，未核實）",
       "accessed_at": "2026-10-08"
      }
-    ]
+    ],
+    "verified_at": "2026-10-08",
+    "last_checked_at": "2026-10-08",
+    "next_review_at": "2026-11-07",
+    "review_cadence_days": 30,
+    "missing_fields": [
+     "APR 數字官網正文未顯"
+    ],
+    "conflicts": [],
+    "manual_questions": []
    }
   },
   {
    "id": "fxus-037",
-   "name": "Usbank Shield",
-   "name_en": "",
-   "bank": "U.S. Bank",
-   "org": "unknown_pending",
+   "name": "U.S. Bank Shield™ Visa® Card",
+   "name_en": "U.S. Bank Shield™ Visa® Card",
+   "bank": "U.S. Bank National Association",
+   "org": "visa",
    "type": "credit",
    "card_level": null,
    "issue_status": "active",
    "status": "在發",
    "specs": {
-    "數據狀態": "待核：CardFi 線索未經發卡行官網核實，目前僅錄卡名／發行方／卡組織／借還類型等身份信息，全部規格待核實階段回官網確認後重寫",
-    "數據來源": "CardFi 線索（card.lengziyu.cn，未核實）"
+    "主要權益": "長期低息定位：消費與餘額轉賬享長 intro APR 期（官網兩頁期數口徑不一，以申請頁條款為準）；旅行中心預付旅行 4% 返現；連續消費享年度賬單抵扣；含手機保障",
+    "年費": "無年費（$0）",
+    "發行情況": "現行在發",
+    "數據狀態": "核心字段已回發卡行官網核實（2026-10-08）；未核項見 verification.missing_fields",
+    "數據來源": "發卡行官網（見 verification.source_refs）"
    },
-   "review": "CardFi 線索導入（未核實）：卡名、發行方、卡組織、類型為線索站所列，尚未回發卡行官網核實；規格、等級與發行狀態待核實階段確認後重寫。",
+   "review": "官網產品頁/列表頁現行在發，卡名、組織、類型已按官網定版，核心規格按官網以自有文字重寫，判 A。",
    "keywords": [
-    "U.S. Bank",
-    "Usbank Shield"
+    "U.S. Bank Shield™ Visa® Card",
+    "U.S. Bank National Association"
    ],
-   "url": "",
+   "url": "https://www.usbank.com/credit-cards.html",
    "funding_modes": [
     "credit"
    ],
@@ -14161,46 +14858,65 @@
    "region_code": "US",
    "added": "2026-10-08",
    "verification": {
-    "status": "lead_unverified",
-    "missing_fields": [
-     "org",
-     "card_level",
-     "eligibility",
-     "annual_fee_status",
-     "foreign_transaction_fee_pct",
-     "supported_currency_codes"
-    ],
-    "conflicts": [],
+    "status": "core_verified",
+    "evidence_level_overall": "A",
     "source_refs": [
      {
-      "role": "lead",
+      "role": "官方產品專頁",
+      "title": "Credit Cards | U.S. Bank",
+      "url": "https://www.usbank.com/credit-cards.html",
+      "publisher": "www.usbank.com",
+      "accessed_at": "2026-10-08",
+      "evidence_grade": "A",
+      "facts_supported": [
+       "官網信用卡列表頁在列",
+       "Visa 組織",
+       "年費 $0",
+       "核心賣點"
+      ]
+     },
+     {
+      "role": "lead_original",
       "url": "https://card.lengziyu.cn/card/usbank-shield",
       "publisher": "CardFi（線索站，未核實）",
       "accessed_at": "2026-10-08"
      }
-    ]
+    ],
+    "verified_at": "2026-10-08",
+    "last_checked_at": "2026-10-08",
+    "next_review_at": "2026-11-07",
+    "review_cadence_days": 30,
+    "missing_fields": [
+     "intro APR 確切期數（官網兩頁不一致）",
+     "APR 具體數字"
+    ],
+    "conflicts": [],
+    "manual_questions": []
    }
   },
   {
    "id": "fxus-038",
-   "name": "Usbank Shopper Cash",
-   "name_en": "",
-   "bank": "U.S. Bank",
-   "org": "unknown_pending",
+   "name": "U.S. Bank Shopper Cash Rewards® Visa Signature® Card",
+   "name_en": "U.S. Bank Shopper Cash Rewards® Visa Signature® Card",
+   "bank": "U.S. Bank National Association",
+   "org": "visa",
    "type": "credit",
-   "card_level": null,
+   "card_level": "Visa Signature",
    "issue_status": "active",
    "status": "在發",
    "specs": {
-    "數據狀態": "待核：CardFi 線索未經發卡行官網核實，目前僅錄卡名／發行方／卡組織／借還類型等身份信息，全部規格待核實階段回官網確認後重寫",
-    "數據來源": "CardFi 線索（card.lengziyu.cn，未核實）"
+    "主要權益": "自選兩家零售商每季首 $1,500 享 6% 返現；自選一日常類別每季首 $1,500 享 3%；其餘消費 1.5%；旅行中心預付 5.5%",
+    "年費": "首年 $0，其後 $95/年",
+    "發行情況": "現行在發",
+    "數據狀態": "核心字段已回發卡行官網核實（2026-10-08）；未核項見 verification.missing_fields",
+    "數據來源": "發卡行官網（見 verification.source_refs）"
    },
-   "review": "CardFi 線索導入（未核實）：卡名、發行方、卡組織、類型為線索站所列，尚未回發卡行官網核實；規格、等級與發行狀態待核實階段確認後重寫。",
+   "review": "官網產品頁/列表頁現行在發，卡名、組織、類型已按官網定版，核心規格按官網以自有文字重寫，判 A。",
    "keywords": [
-    "U.S. Bank",
-    "Usbank Shopper Cash"
+    "U.S. Bank Shopper Cash Rewards® Visa Signature® Card",
+    "U.S. Bank National Association"
    ],
-   "url": "",
+   "url": "https://www.usbank.com/credit-cards/offers/shopper-cash-rewards-visa-signature-credit-card.html?sourcecode=83158&ecid=AF_49604&irgwc=1&irclickid=R0p1zkVfnxyKWm3UaPQO8TjdUkszyQV4iypnX40&PID=170911",
    "funding_modes": [
     "credit"
    ],
@@ -14209,46 +14925,63 @@
    "region_code": "US",
    "added": "2026-10-08",
    "verification": {
-    "status": "lead_unverified",
-    "missing_fields": [
-     "org",
-     "card_level",
-     "eligibility",
-     "annual_fee_status",
-     "foreign_transaction_fee_pct",
-     "supported_currency_codes"
-    ],
-    "conflicts": [],
+    "status": "core_verified",
+    "evidence_level_overall": "A",
     "source_refs": [
      {
-      "role": "lead",
+      "role": "官方產品專頁",
+      "title": "U.S. Bank Shopper Cash Rewards Card: Up to 6% Back",
+      "url": "https://www.usbank.com/credit-cards/offers/shopper-cash-rewards-visa-signature-credit-card.html?sourcecode=83158&ecid=AF_49604&irgwc=1&irclickid=R0p1zkVfnxyKWm3UaPQO8TjdUkszyQV4iypnX40&PID=170911",
+      "publisher": "www.usbank.com",
+      "accessed_at": "2026-10-08",
+      "evidence_grade": "A",
+      "facts_supported": [
+       "官網產品頁在發",
+       "Visa Signature 等級",
+       "年費原載",
+       "返現結構"
+      ]
+     },
+     {
+      "role": "lead_original",
       "url": "https://card.lengziyu.cn/card/usbank-shopper-cash",
       "publisher": "CardFi（線索站，未核實）",
       "accessed_at": "2026-10-08"
      }
-    ]
+    ],
+    "verified_at": "2026-10-08",
+    "last_checked_at": "2026-10-08",
+    "next_review_at": "2026-11-07",
+    "review_cadence_days": 30,
+    "missing_fields": [
+     "APR 具體數字（官網抓取未顯）"
+    ],
+    "conflicts": [],
+    "manual_questions": []
    }
   },
   {
    "id": "fxus-039",
-   "name": "Usbank Smartly",
-   "name_en": "",
-   "bank": "U.S. Bank",
-   "org": "unknown_pending",
+   "name": "U.S. Bank Smartly™ Visa Signature® Card",
+   "name_en": "U.S. Bank Smartly™ Visa Signature® Card",
+   "bank": "U.S. Bank National Association",
+   "org": "visa",
    "type": "credit",
-   "card_level": null,
+   "card_level": "Visa Signature",
    "issue_status": "active",
    "status": "在發",
    "specs": {
-    "數據狀態": "待核：CardFi 線索未經發卡行官網核實，目前僅錄卡名／發行方／卡組織／借還類型等身份信息，全部規格待核實階段回官網確認後重寫",
-    "數據來源": "CardFi 線索（card.lengziyu.cn，未核實）"
+    "主要權益": "全部消費無上限 2% 返現；搭配 Smartly® 儲蓄及合資格餘額階梯可升至最高 4%（每賬單期首 $10,000 合資格消費）；受理狀態以官網申請頁即時為準",
+    "發行情況": "現行在發",
+    "數據狀態": "核心字段已回發卡行官網核實（2026-10-08）；未核項見 verification.missing_fields",
+    "數據來源": "發卡行官網（見 verification.source_refs）"
    },
-   "review": "CardFi 線索導入（未核實）：卡名、發行方、卡組織、類型為線索站所列，尚未回發卡行官網核實；規格、等級與發行狀態待核實階段確認後重寫。",
+   "review": "官網產品頁/列表頁現行在發，卡名、組織、類型已按官網定版，核心規格按官網以自有文字重寫，判 A。主會話終審補記：判 A 存疑待復核，不升核。",
    "keywords": [
-    "U.S. Bank",
-    "Usbank Smartly"
+    "U.S. Bank Smartly™ Visa Signature® Card",
+    "U.S. Bank National Association"
    ],
-   "url": "",
+   "url": "https://www.usbank.com/credit-cards.html",
    "funding_modes": [
     "credit"
    ],
@@ -14258,45 +14991,63 @@
    "added": "2026-10-08",
    "verification": {
     "status": "lead_unverified",
-    "missing_fields": [
-     "org",
-     "card_level",
-     "eligibility",
-     "annual_fee_status",
-     "foreign_transaction_fee_pct",
-     "supported_currency_codes"
-    ],
-    "conflicts": [],
+    "evidence_level_overall": "A",
     "source_refs": [
      {
-      "role": "lead",
+      "role": "官方產品專頁",
+      "title": "Credit Cards | U.S. Bank",
+      "url": "https://www.usbank.com/credit-cards.html",
+      "publisher": "www.usbank.com",
+      "accessed_at": "2026-10-08",
+      "evidence_grade": "A",
+      "facts_supported": [
+       "官網現行信用卡列表在列",
+       "Visa Signature 等級",
+       "返現分層結構"
+      ]
+     },
+     {
+      "role": "lead_original",
       "url": "https://card.lengziyu.cn/card/usbank-smartly",
       "publisher": "CardFi（線索站，未核實）",
       "accessed_at": "2026-10-08"
      }
-    ]
+    ],
+    "verified_at": "2026-10-08",
+    "last_checked_at": "2026-10-08",
+    "next_review_at": "2026-11-07",
+    "review_cadence_days": 30,
+    "missing_fields": [
+     "年費具體數字（官網列表頁佔位未顯）",
+     "APR 具體數字"
+    ],
+    "conflicts": [],
+    "manual_questions": []
    }
   },
   {
    "id": "fxus-040",
-   "name": "Usbank Split",
-   "name_en": "",
-   "bank": "U.S. Bank",
-   "org": "unknown_pending",
+   "name": "U.S. Bank Split™ World Mastercard®",
+   "name_en": "U.S. Bank Split™ World Mastercard®",
+   "bank": "U.S. Bank National Association",
+   "org": "mastercard",
    "type": "credit",
-   "card_level": null,
+   "card_level": "World",
    "issue_status": "active",
    "status": "在發",
    "specs": {
-    "數據狀態": "待核：CardFi 線索未經發卡行官網核實，目前僅錄卡名／發行方／卡組織／借還類型等身份信息，全部規格待核實階段回官網確認後重寫",
-    "數據來源": "CardFi 線索（card.lengziyu.cn，未核實）"
+    "主要權益": "每筆消費自動拆為 3 個月等額分期、免息免計劃費；$100 以上可延至 6 或 12 個月（收小額固定月計劃費）；App/網銀計劃看板管理",
+    "年費": "無年費、無利息（自動分期模型）",
+    "發行情況": "現行在發",
+    "數據狀態": "核心字段已回發卡行官網核實（2026-10-08）；未核項見 verification.missing_fields",
+    "數據來源": "發卡行官網（見 verification.source_refs）"
    },
-   "review": "CardFi 線索導入（未核實）：卡名、發行方、卡組織、類型為線索站所列，尚未回發卡行官網核實；規格、等級與發行狀態待核實階段確認後重寫。",
+   "review": "官網產品頁/列表頁現行在發，卡名、組織、類型已按官網定版，核心規格按官網以自有文字重寫，判 A。",
    "keywords": [
-    "U.S. Bank",
-    "Usbank Split"
+    "U.S. Bank Split™ World Mastercard®",
+    "U.S. Bank National Association"
    ],
-   "url": "",
+   "url": "https://www.usbank.com/about-us-bank/news-and-stories/article-library/us-bank-launches-split-world-mastercard.html",
    "funding_modes": [
     "credit"
    ],
@@ -14305,46 +15056,64 @@
    "region_code": "US",
    "added": "2026-10-08",
    "verification": {
-    "status": "lead_unverified",
-    "missing_fields": [
-     "org",
-     "card_level",
-     "eligibility",
-     "annual_fee_status",
-     "foreign_transaction_fee_pct",
-     "supported_currency_codes"
-    ],
-    "conflicts": [],
+    "status": "core_verified",
+    "evidence_level_overall": "A",
     "source_refs": [
      {
-      "role": "lead",
+      "role": "官方產品專頁",
+      "title": "U.S. Bank launches Split™ World Mastercard®",
+      "url": "https://www.usbank.com/about-us-bank/news-and-stories/article-library/us-bank-launches-split-world-mastercard.html",
+      "publisher": "www.usbank.com",
+      "accessed_at": "2026-10-08",
+      "evidence_grade": "A",
+      "facts_supported": [
+       "官網新聞稿與列表頁在列",
+       "Mastercard World 等級（本組唯一萬事達）",
+       "無年費/無 APR 定位",
+       "自動 3 期機制"
+      ]
+     },
+     {
+      "role": "lead_original",
       "url": "https://card.lengziyu.cn/card/usbank-split",
       "publisher": "CardFi（線索站，未核實）",
       "accessed_at": "2026-10-08"
      }
-    ]
+    ],
+    "verified_at": "2026-10-08",
+    "last_checked_at": "2026-10-08",
+    "next_review_at": "2026-11-07",
+    "review_cadence_days": 30,
+    "missing_fields": [
+     "6/12 期計劃費具體金額（須產品條款頁補）"
+    ],
+    "conflicts": [],
+    "manual_questions": []
    }
   },
   {
    "id": "fxus-041",
-   "name": "Wells Fargo Active Cash",
-   "name_en": "",
+   "name": "Wells Fargo Active Cash® Card",
+   "name_en": "Wells Fargo Active Cash® Card",
    "bank": "Wells Fargo",
-   "org": "unknown_pending",
+   "org": "visa",
    "type": "credit",
    "card_level": null,
    "issue_status": "active",
    "status": "在發",
    "specs": {
-    "數據狀態": "待核：CardFi 線索未經發卡行官網核實，目前僅錄卡名／發行方／卡組織／借還類型等身份信息，全部規格待核實階段回官網確認後重寫",
-    "數據來源": "CardFi 線索（card.lengziyu.cn，未核實）"
+    "主要權益": "全部消費無上限 2% 現金獎勵，不分類別、免激活；開卡享 intro APR 期",
+    "年費": "無年費",
+    "發行情況": "現行在發",
+    "數據狀態": "核心字段已回發卡行官網核實（2026-10-08）；未核項見 verification.missing_fields",
+    "數據來源": "發卡行官網（見 verification.source_refs）"
    },
-   "review": "CardFi 線索導入（未核實）：卡名、發行方、卡組織、類型為線索站所列，尚未回發卡行官網核實；規格、等級與發行狀態待核實階段確認後重寫。",
+   "review": "官網產品頁/列表頁現行在發，卡名、組織、類型已按官網定版，核心規格按官網以自有文字重寫，判 A。",
    "keywords": [
-    "Wells Fargo",
-    "Wells Fargo Active Cash"
+    "Wells Fargo Active Cash® Card",
+    "Wells Fargo"
    ],
-   "url": "",
+   "url": "https://creditcards.wellsfargo.com/?sub_channel=WEB&vendor_code=WF",
    "funding_modes": [
     "credit"
    ],
@@ -14353,46 +15122,64 @@
    "region_code": "US",
    "added": "2026-10-08",
    "verification": {
-    "status": "lead_unverified",
-    "missing_fields": [
-     "org",
-     "card_level",
-     "eligibility",
-     "annual_fee_status",
-     "foreign_transaction_fee_pct",
-     "supported_currency_codes"
-    ],
-    "conflicts": [],
+    "status": "core_verified",
+    "evidence_level_overall": "A",
     "source_refs": [
      {
-      "role": "lead",
+      "role": "官方產品專頁",
+      "title": "Wells Fargo Visa® Credit Cards and Mastercard® | Wells Fargo",
+      "url": "https://creditcards.wellsfargo.com/?sub_channel=WEB&vendor_code=WF",
+      "publisher": "creditcards.wellsfargo.com",
+      "accessed_at": "2026-10-08",
+      "evidence_grade": "A",
+      "facts_supported": [
+       "官網總覽頁在列",
+       "2% 無上限返現",
+       "年費 $0"
+      ]
+     },
+     {
+      "role": "lead_original",
       "url": "https://card.lengziyu.cn/card/wells-fargo-active-cash",
       "publisher": "CardFi（線索站，未核實）",
       "accessed_at": "2026-10-08"
      }
-    ]
+    ],
+    "verified_at": "2026-10-08",
+    "last_checked_at": "2026-10-08",
+    "next_review_at": "2026-11-07",
+    "review_cadence_days": 30,
+    "missing_fields": [
+     "卡等級未在已打開官網正文坐實（詳情頁遇限流未開）",
+     "開卡獎勵金額隨渠道浮動"
+    ],
+    "conflicts": [],
+    "manual_questions": []
    }
   },
   {
    "id": "fxus-042",
-   "name": "Wells Fargo Autograph",
-   "name_en": "",
+   "name": "Wells Fargo Autograph® Card",
+   "name_en": "Wells Fargo Autograph® Card",
    "bank": "Wells Fargo",
    "org": "visa",
    "type": "credit",
-   "card_level": null,
+   "card_level": "Visa Signature",
    "issue_status": "active",
    "status": "在發",
    "specs": {
-    "數據狀態": "待核：CardFi 線索未經發卡行官網核實，目前僅錄卡名／發行方／卡組織／借還類型等身份信息，全部規格待核實階段回官網確認後重寫",
-    "數據來源": "CardFi 線索（card.lengziyu.cn，未核實）"
+    "主要權益": "餐飲/旅行/加油/交通/流媒體/話費 6 類無上限 3X 積分，其餘 1X；無境外交易費；開卡享 intro APR 期",
+    "年費": "無年費",
+    "發行情況": "現行在發",
+    "數據狀態": "核心字段已回發卡行官網核實（2026-10-08）；未核項見 verification.missing_fields",
+    "數據來源": "發卡行官網（見 verification.source_refs）"
    },
-   "review": "CardFi 線索導入（未核實）：卡名、發行方、卡組織、類型為線索站所列，尚未回發卡行官網核實；規格、等級與發行狀態待核實階段確認後重寫。",
+   "review": "官網產品頁/列表頁現行在發，卡名、組織、類型已按官網定版，核心規格按官網以自有文字重寫，判 A。",
    "keywords": [
-    "Wells Fargo",
-    "Wells Fargo Autograph"
+    "Wells Fargo Autograph® Card",
+    "Wells Fargo"
    ],
-   "url": "",
+   "url": "https://creditcards.wellsfargo.com/autograph-visa-credit-card",
    "funding_modes": [
     "credit"
    ],
@@ -14401,45 +15188,62 @@
    "region_code": "US",
    "added": "2026-10-08",
    "verification": {
-    "status": "lead_unverified",
-    "missing_fields": [
-     "card_level",
-     "eligibility",
-     "annual_fee_status",
-     "foreign_transaction_fee_pct",
-     "supported_currency_codes"
-    ],
-    "conflicts": [],
+    "status": "core_verified",
+    "evidence_level_overall": "A",
     "source_refs": [
      {
-      "role": "lead",
+      "role": "官方產品專頁",
+      "title": "Our Best Rewards Credit Card | Wells Fargo Autograph℠",
+      "url": "https://creditcards.wellsfargo.com/autograph-visa-credit-card",
+      "publisher": "creditcards.wellsfargo.com",
+      "accessed_at": "2026-10-08",
+      "evidence_grade": "A",
+      "facts_supported": [
+       "官網詳情頁在發",
+       "Visa Signature 等級",
+       "3X 類別清單",
+       "無年費、無境外交易費"
+      ]
+     },
+     {
+      "role": "lead_original",
       "url": "https://card.lengziyu.cn/card/wells-fargo-autograph",
       "publisher": "CardFi（線索站，未核實）",
       "accessed_at": "2026-10-08"
      }
-    ]
+    ],
+    "verified_at": "2026-10-08",
+    "last_checked_at": "2026-10-08",
+    "next_review_at": "2026-11-07",
+    "review_cadence_days": 30,
+    "missing_fields": [],
+    "conflicts": [],
+    "manual_questions": []
    }
   },
   {
    "id": "fxus-043",
-   "name": "Wells Fargo Autograph Journey",
-   "name_en": "",
+   "name": "Wells Fargo Autograph Journey® Card",
+   "name_en": "Wells Fargo Autograph Journey® Card",
    "bank": "Wells Fargo",
    "org": "visa",
    "type": "credit",
-   "card_level": null,
+   "card_level": "Visa Signature",
    "issue_status": "active",
    "status": "在發",
    "specs": {
-    "數據狀態": "待核：CardFi 線索未經發卡行官網核實，目前僅錄卡名／發行方／卡組織／借還類型等身份信息，全部規格待核實階段回官網確認後重寫",
-    "數據來源": "CardFi 線索（card.lengziyu.cn，未核實）"
+    "主要權益": "酒店 5X、航空 4X、其他旅行與餐飲 3X、其餘 1X 積分；每年 $50 航空消費賬單抵扣；含行程取消/中斷與行李保障；無境外交易費",
+    "年費": "年費 $95",
+    "發行情況": "現行在發",
+    "數據狀態": "核心字段已回發卡行官網核實（2026-10-08）；未核項見 verification.missing_fields",
+    "數據來源": "發卡行官網（見 verification.source_refs）"
    },
-   "review": "CardFi 線索導入（未核實）：卡名、發行方、卡組織、類型為線索站所列，尚未回發卡行官網核實；規格、等級與發行狀態待核實階段確認後重寫。",
+   "review": "官網產品頁/列表頁現行在發，卡名、組織、類型已按官網定版，核心規格按官網以自有文字重寫，判 A。",
    "keywords": [
-    "Wells Fargo",
-    "Wells Fargo Autograph Journey"
+    "Wells Fargo Autograph Journey® Card",
+    "Wells Fargo"
    ],
-   "url": "",
+   "url": "https://creditcards.wellsfargo.com/autograph-journey-visa-credit-card/?sub_channel=WEB&vendor_code=WF",
    "funding_modes": [
     "credit"
    ],
@@ -14448,29 +15252,43 @@
    "region_code": "US",
    "added": "2026-10-08",
    "verification": {
-    "status": "lead_unverified",
-    "missing_fields": [
-     "card_level",
-     "eligibility",
-     "annual_fee_status",
-     "foreign_transaction_fee_pct",
-     "supported_currency_codes"
-    ],
-    "conflicts": [],
+    "status": "core_verified",
+    "evidence_level_overall": "A",
     "source_refs": [
      {
-      "role": "lead",
+      "role": "官方產品專頁",
+      "title": "Our Best Travel Credit Card | Wells Fargo Autograph Journey",
+      "url": "https://creditcards.wellsfargo.com/autograph-journey-visa-credit-card/?sub_channel=WEB&vendor_code=WF",
+      "publisher": "creditcards.wellsfargo.com",
+      "accessed_at": "2026-10-08",
+      "evidence_grade": "A",
+      "facts_supported": [
+       "官網詳情頁在發",
+       "Visa Signature 等級",
+       "年費 $95（官網對比 FAQ）",
+       "旅行倍率與 $50 航空抵扣"
+      ]
+     },
+     {
+      "role": "lead_original",
       "url": "https://card.lengziyu.cn/card/wells-fargo-autograph-journey",
       "publisher": "CardFi（線索站，未核實）",
       "accessed_at": "2026-10-08"
      }
-    ]
+    ],
+    "verified_at": "2026-10-08",
+    "last_checked_at": "2026-10-08",
+    "next_review_at": "2026-11-07",
+    "review_cadence_days": 30,
+    "missing_fields": [],
+    "conflicts": [],
+    "manual_questions": []
    }
   },
   {
    "id": "fxus-044",
-   "name": "Wells Fargo Choice Privileges",
-   "name_en": "",
+   "name": "Wells Fargo Choice Privileges® Mastercard®",
+   "name_en": "Wells Fargo Choice Privileges® Mastercard®",
    "bank": "Wells Fargo",
    "org": "mastercard",
    "type": "credit",
@@ -14478,15 +15296,18 @@
    "issue_status": "active",
    "status": "在發",
    "specs": {
-    "數據狀態": "待核：CardFi 線索未經發卡行官網核實，目前僅錄卡名／發行方／卡組織／借還類型等身份信息，全部規格待核實階段回官網確認後重寫",
-    "數據來源": "CardFi 線索（card.lengziyu.cn，未核實）"
+    "主要權益": "Choice 酒店住宿 5X 積分；加油/超市/家居改善/話費 3X；其餘 1X",
+    "年費": "無年費",
+    "發行情況": "現行在發",
+    "數據狀態": "核心字段已回發卡行官網核實（2026-10-08）；未核項見 verification.missing_fields",
+    "數據來源": "發卡行官網（見 verification.source_refs）"
    },
-   "review": "CardFi 線索導入（未核實）：卡名、發行方、卡組織、類型為線索站所列，尚未回發卡行官網核實；規格、等級與發行狀態待核實階段確認後重寫。",
+   "review": "官網產品頁/列表頁現行在發，卡名、組織、類型已按官網定版，核心規格按官網以自有文字重寫，判 A。",
    "keywords": [
-    "Wells Fargo",
-    "Wells Fargo Choice Privileges"
+    "Wells Fargo Choice Privileges® Mastercard®",
+    "Wells Fargo"
    ],
-   "url": "",
+   "url": "https://creditcards.wellsfargo.com/?sub_channel=WEB&vendor_code=WF",
    "funding_modes": [
     "credit"
    ],
@@ -14495,77 +15316,45 @@
    "region_code": "US",
    "added": "2026-10-08",
    "verification": {
-    "status": "lead_unverified",
-    "missing_fields": [
-     "card_level",
-     "eligibility",
-     "annual_fee_status",
-     "foreign_transaction_fee_pct",
-     "supported_currency_codes"
-    ],
-    "conflicts": [],
+    "status": "core_verified",
+    "evidence_level_overall": "A",
     "source_refs": [
      {
-      "role": "lead",
+      "role": "官方產品專頁",
+      "title": "Wells Fargo Visa® Credit Cards and Mastercard® | Wells Fargo",
+      "url": "https://creditcards.wellsfargo.com/?sub_channel=WEB&vendor_code=WF",
+      "publisher": "creditcards.wellsfargo.com",
+      "accessed_at": "2026-10-08",
+      "evidence_grade": "A",
+      "facts_supported": [
+       "官網總覽頁在列",
+       "萬事達組織（官網正名自帶）",
+       "5X/3X/1X 倍率",
+       "年費 $0"
+      ]
+     },
+     {
+      "role": "lead_original",
       "url": "https://card.lengziyu.cn/card/wells-fargo-choice-privileges",
       "publisher": "CardFi（線索站，未核實）",
       "accessed_at": "2026-10-08"
      }
-    ]
+    ],
+    "verified_at": "2026-10-08",
+    "last_checked_at": "2026-10-08",
+    "next_review_at": "2026-11-07",
+    "review_cadence_days": 30,
+    "missing_fields": [
+     "卡等級未在已打開官網正文坐實（詳情頁遇限流未開）"
+    ],
+    "conflicts": [],
+    "manual_questions": []
    }
   },
   {
    "id": "fxus-045",
-   "name": "Wells Fargo Choice Privileges Select",
-   "name_en": "",
-   "bank": "Wells Fargo",
-   "org": "unknown_pending",
-   "type": "credit",
-   "card_level": null,
-   "issue_status": "active",
-   "status": "在發",
-   "specs": {
-    "數據狀態": "待核：CardFi 線索未經發卡行官網核實，目前僅錄卡名／發行方／卡組織／借還類型等身份信息，全部規格待核實階段回官網確認後重寫",
-    "數據來源": "CardFi 線索（card.lengziyu.cn，未核實）"
-   },
-   "review": "CardFi 線索導入（未核實）：卡名、發行方、卡組織、類型為線索站所列，尚未回發卡行官網核實；規格、等級與發行狀態待核實階段確認後重寫。",
-   "keywords": [
-    "Wells Fargo",
-    "Wells Fargo Choice Privileges Select"
-   ],
-   "url": "",
-   "funding_modes": [
-    "credit"
-   ],
-   "image": null,
-   "region": "美国",
-   "region_code": "US",
-   "added": "2026-10-08",
-   "verification": {
-    "status": "lead_unverified",
-    "missing_fields": [
-     "org",
-     "card_level",
-     "eligibility",
-     "annual_fee_status",
-     "foreign_transaction_fee_pct",
-     "supported_currency_codes"
-    ],
-    "conflicts": [],
-    "source_refs": [
-     {
-      "role": "lead",
-      "url": "https://card.lengziyu.cn/card/wells-fargo-choice-privileges-select",
-      "publisher": "CardFi（線索站，未核實）",
-      "accessed_at": "2026-10-08"
-     }
-    ]
-   }
-  },
-  {
-   "id": "fxus-046",
-   "name": "Wells Fargo One Key",
-   "name_en": "",
+   "name": "Wells Fargo Choice Privileges® Select Mastercard®",
+   "name_en": "Wells Fargo Choice Privileges® Select Mastercard®",
    "bank": "Wells Fargo",
    "org": "mastercard",
    "type": "credit",
@@ -14573,15 +15362,18 @@
    "issue_status": "active",
    "status": "在發",
    "specs": {
-    "數據狀態": "待核：CardFi 線索未經發卡行官網核實，目前僅錄卡名／發行方／卡組織／借還類型等身份信息，全部規格待核實階段回官網確認後重寫",
-    "數據來源": "CardFi 線索（card.lengziyu.cn，未核實）"
+    "主要權益": "Choice 酒店住宿 10X 積分；加油/超市/家居改善/話費 5X；其餘 1X（與基礎版分層，勿合併）",
+    "年費": "年費 $95",
+    "發行情況": "現行在發",
+    "數據狀態": "核心字段已回發卡行官網核實（2026-10-08）；未核項見 verification.missing_fields",
+    "數據來源": "發卡行官網（見 verification.source_refs）"
    },
-   "review": "CardFi 線索導入（未核實）：卡名、發行方、卡組織、類型為線索站所列，尚未回發卡行官網核實；規格、等級與發行狀態待核實階段確認後重寫。",
+   "review": "官網產品頁/列表頁現行在發，卡名、組織、類型已按官網定版，核心規格按官網以自有文字重寫，判 A。",
    "keywords": [
-    "Wells Fargo",
-    "Wells Fargo One Key"
+    "Wells Fargo Choice Privileges® Select Mastercard®",
+    "Wells Fargo"
    ],
-   "url": "",
+   "url": "https://creditcards.wellsfargo.com/?sub_channel=WEB&vendor_code=WF",
    "funding_modes": [
     "credit"
    ],
@@ -14590,45 +15382,64 @@
    "region_code": "US",
    "added": "2026-10-08",
    "verification": {
-    "status": "lead_unverified",
-    "missing_fields": [
-     "card_level",
-     "eligibility",
-     "annual_fee_status",
-     "foreign_transaction_fee_pct",
-     "supported_currency_codes"
-    ],
-    "conflicts": [],
+    "status": "core_verified",
+    "evidence_level_overall": "A",
     "source_refs": [
      {
-      "role": "lead",
-      "url": "https://card.lengziyu.cn/card/wells-fargo-one-key",
+      "role": "官方產品專頁",
+      "title": "Wells Fargo Visa® Credit Cards and Mastercard® | Wells Fargo",
+      "url": "https://creditcards.wellsfargo.com/?sub_channel=WEB&vendor_code=WF",
+      "publisher": "creditcards.wellsfargo.com",
+      "accessed_at": "2026-10-08",
+      "evidence_grade": "A",
+      "facts_supported": [
+       "官網總覽頁在列",
+       "組織按官網坐實為 Mastercard（糾正線索未定）",
+       "10X/5X/1X 倍率",
+       "年費 $95"
+      ]
+     },
+     {
+      "role": "lead_original",
+      "url": "https://card.lengziyu.cn/card/wells-fargo-choice-privileges-select",
       "publisher": "CardFi（線索站，未核實）",
       "accessed_at": "2026-10-08"
      }
-    ]
+    ],
+    "verified_at": "2026-10-08",
+    "last_checked_at": "2026-10-08",
+    "next_review_at": "2026-11-07",
+    "review_cadence_days": 30,
+    "missing_fields": [
+     "卡等級未在已打開官網正文坐實（詳情頁遇限流未開）"
+    ],
+    "conflicts": [],
+    "manual_questions": []
    }
   },
   {
-   "id": "fxus-047",
-   "name": "Wells Fargo One Key Plus",
-   "name_en": "",
+   "id": "fxus-046",
+   "name": "Wells Fargo One Key™ Card",
+   "name_en": "Wells Fargo One Key™ Card",
    "bank": "Wells Fargo",
-   "org": "unknown_pending",
+   "org": "mastercard",
    "type": "credit",
    "card_level": null,
    "issue_status": "active",
    "status": "在發",
    "specs": {
-    "數據狀態": "待核：CardFi 線索未經發卡行官網核實，目前僅錄卡名／發行方／卡組織／借還類型等身份信息，全部規格待核實階段回官網確認後重寫",
-    "數據來源": "CardFi 線索（card.lengziyu.cn，未核實）"
+    "主要權益": "Expedia/Hotels.com/Vrbo 及加油/超市/餐飲 3% OneKeyCash，其餘 1.5%；自帶 Silver 檔酒店會員價（與 One Key+ 分層，勿合併）",
+    "年費": "無年費",
+    "發行情況": "現行在發",
+    "數據狀態": "核心字段已回發卡行官網核實（2026-10-08）；未核項見 verification.missing_fields",
+    "數據來源": "發卡行官網（見 verification.source_refs）"
    },
-   "review": "CardFi 線索導入（未核實）：卡名、發行方、卡組織、類型為線索站所列，尚未回發卡行官網核實；規格、等級與發行狀態待核實階段確認後重寫。",
+   "review": "官網產品頁/列表頁現行在發，卡名、組織、類型已按官網定版，核心規格按官網以自有文字重寫，判 A。",
    "keywords": [
-    "Wells Fargo",
-    "Wells Fargo One Key Plus"
+    "Wells Fargo One Key™ Card",
+    "Wells Fargo"
    ],
-   "url": "",
+   "url": "https://creditcards.wellsfargo.com/?sub_channel=WEB&vendor_code=WF",
    "funding_modes": [
     "credit"
    ],
@@ -14637,30 +15448,112 @@
    "region_code": "US",
    "added": "2026-10-08",
    "verification": {
-    "status": "lead_unverified",
-    "missing_fields": [
-     "org",
-     "card_level",
-     "eligibility",
-     "annual_fee_status",
-     "foreign_transaction_fee_pct",
-     "supported_currency_codes"
-    ],
-    "conflicts": [],
+    "status": "core_verified",
+    "evidence_level_overall": "A",
     "source_refs": [
      {
-      "role": "lead",
+      "role": "官方產品專頁",
+      "title": "Wells Fargo Visa® Credit Cards and Mastercard® | Wells Fargo",
+      "url": "https://creditcards.wellsfargo.com/?sub_channel=WEB&vendor_code=WF",
+      "publisher": "creditcards.wellsfargo.com",
+      "accessed_at": "2026-10-08",
+      "evidence_grade": "A",
+      "facts_supported": [
+       "官網總覽頁在列",
+       "萬事達組織（官網卡圖文案）",
+       "3%/1.5% 結構",
+       "年費 $0"
+      ]
+     },
+     {
+      "role": "lead_original",
+      "url": "https://card.lengziyu.cn/card/wells-fargo-one-key",
+      "publisher": "CardFi（線索站，未核實）",
+      "accessed_at": "2026-10-08"
+     }
+    ],
+    "verified_at": "2026-10-08",
+    "last_checked_at": "2026-10-08",
+    "next_review_at": "2026-11-07",
+    "review_cadence_days": 30,
+    "missing_fields": [
+     "卡等級未在已打開官網正文坐實（詳情頁遇限流未開）",
+     "開卡門檻隨渠道浮動"
+    ],
+    "conflicts": [],
+    "manual_questions": []
+   }
+  },
+  {
+   "id": "fxus-047",
+   "name": "Wells Fargo One Key+™ Card",
+   "name_en": "Wells Fargo One Key+™ Card",
+   "bank": "Wells Fargo",
+   "org": "mastercard",
+   "type": "credit",
+   "card_level": null,
+   "issue_status": "active",
+   "status": "在發",
+   "specs": {
+    "主要權益": "三平台與加油/超市/餐飲 3% OneKeyCash、其餘 2%；自帶 Gold 檔；每年週年 $100 OneKeyCash；含 Global Entry/TSA PreCheck 抵扣；無境外交易費",
+    "年費": "年費 $99",
+    "發行情況": "現行在發",
+    "數據狀態": "核心字段已回發卡行官網核實（2026-10-08）；未核項見 verification.missing_fields",
+    "數據來源": "發卡行官網（見 verification.source_refs）"
+   },
+   "review": "官網產品頁/列表頁現行在發，卡名、組織、類型已按官網定版，核心規格按官網以自有文字重寫，判 A。",
+   "keywords": [
+    "Wells Fargo One Key+™ Card",
+    "Wells Fargo"
+   ],
+   "url": "https://creditcards.wellsfargo.com/one-key-plus-credit-card/?sub_channel=WEB&vendor_code=WF",
+   "funding_modes": [
+    "credit"
+   ],
+   "image": null,
+   "region": "美国",
+   "region_code": "US",
+   "added": "2026-10-08",
+   "verification": {
+    "status": "core_verified",
+    "evidence_level_overall": "A",
+    "source_refs": [
+     {
+      "role": "官方產品專頁",
+      "title": "The One Key+™ Card Mastercard | Wells Fargo",
+      "url": "https://creditcards.wellsfargo.com/one-key-plus-credit-card/?sub_channel=WEB&vendor_code=WF",
+      "publisher": "creditcards.wellsfargo.com",
+      "accessed_at": "2026-10-08",
+      "evidence_grade": "A",
+      "facts_supported": [
+       "官網詳情頁在發",
+       "組織按官網坐實為 Mastercard",
+       "年費 $99",
+       "Gold 起始檔與週年權益"
+      ]
+     },
+     {
+      "role": "lead_original",
       "url": "https://card.lengziyu.cn/card/wells-fargo-one-key-plus",
       "publisher": "CardFi（線索站，未核實）",
       "accessed_at": "2026-10-08"
      }
-    ]
+    ],
+    "verified_at": "2026-10-08",
+    "last_checked_at": "2026-10-08",
+    "next_review_at": "2026-11-07",
+    "review_cadence_days": 30,
+    "missing_fields": [
+     "卡等級未在詳情頁正文出現"
+    ],
+    "conflicts": [],
+    "manual_questions": []
    }
   },
   {
    "id": "fxus-048",
-   "name": "Wells Fargo Reflect",
-   "name_en": "",
+   "name": "Wells Fargo Reflect® Card",
+   "name_en": "Wells Fargo Reflect® Card",
    "bank": "Wells Fargo",
    "org": "visa",
    "type": "credit",
@@ -14668,15 +15561,18 @@
    "issue_status": "active",
    "status": "在發",
    "specs": {
-    "數據狀態": "待核：CardFi 線索未經發卡行官網核實，目前僅錄卡名／發行方／卡組織／借還類型等身份信息，全部規格待核實階段回官網確認後重寫",
-    "數據來源": "CardFi 線索（card.lengziyu.cn，未核實）"
+    "主要權益": "開卡 21 個月 0% intro APR（消費及合資格餘額轉賬）；無消費獎勵，定位低息還款；含手機保障",
+    "年費": "無年費",
+    "發行情況": "現行在發",
+    "數據狀態": "核心字段已回發卡行官網核實（2026-10-08）；未核項見 verification.missing_fields",
+    "數據來源": "發卡行官網（見 verification.source_refs）"
    },
-   "review": "CardFi 線索導入（未核實）：卡名、發行方、卡組織、類型為線索站所列，尚未回發卡行官網核實；規格、等級與發行狀態待核實階段確認後重寫。",
+   "review": "官網產品頁/列表頁現行在發，卡名、組織、類型已按官網定版，核心規格按官網以自有文字重寫，判 A。",
    "keywords": [
-    "Wells Fargo",
-    "Wells Fargo Reflect"
+    "Wells Fargo Reflect® Card",
+    "Wells Fargo"
    ],
-   "url": "",
+   "url": "https://creditcards.wellsfargo.com/reflect-visa-credit-card/?FPID=013000IGF80000&product_code=CC&subproduct_code=VV&cx_nm=CXNAME_CSMPD_MC&sub_channel=WEB&vendor_code=WF&linkloc=fncb&lang=en",
    "funding_modes": [
     "credit"
    ],
@@ -14685,29 +15581,45 @@
    "region_code": "US",
    "added": "2026-10-08",
    "verification": {
-    "status": "lead_unverified",
-    "missing_fields": [
-     "card_level",
-     "eligibility",
-     "annual_fee_status",
-     "foreign_transaction_fee_pct",
-     "supported_currency_codes"
-    ],
-    "conflicts": [],
+    "status": "core_verified",
+    "evidence_level_overall": "A",
     "source_refs": [
      {
-      "role": "lead",
+      "role": "官方產品專頁",
+      "title": "Reflect Visa® Credit Card With 0% Intro APR | Wells Fargo",
+      "url": "https://creditcards.wellsfargo.com/reflect-visa-credit-card/?FPID=013000IGF80000&product_code=CC&subproduct_code=VV&cx_nm=CXNAME_CSMPD_MC&sub_channel=WEB&vendor_code=WF&linkloc=fncb&lang=en",
+      "publisher": "creditcards.wellsfargo.com",
+      "accessed_at": "2026-10-08",
+      "evidence_grade": "A",
+      "facts_supported": [
+       "官網詳情頁在發",
+       "Visa 組織（詳情頁標題）",
+       "21 個月 intro APR",
+       "無年費（官網 FAQ）"
+      ]
+     },
+     {
+      "role": "lead_original",
       "url": "https://card.lengziyu.cn/card/wells-fargo-reflect",
       "publisher": "CardFi（線索站，未核實）",
       "accessed_at": "2026-10-08"
      }
-    ]
+    ],
+    "verified_at": "2026-10-08",
+    "last_checked_at": "2026-10-08",
+    "next_review_at": "2026-11-07",
+    "review_cadence_days": 30,
+    "missing_fields": [
+     "卡等級未在詳情頁正文出現"
+    ],
+    "conflicts": [],
+    "manual_questions": []
    }
   },
   {
    "id": "fxus-049",
-   "name": "Wells Fargo Signify Business Cash",
-   "name_en": "",
+   "name": "Wells Fargo Signify Business Cash® Card",
+   "name_en": "Wells Fargo Signify Business Cash® Card",
    "bank": "Wells Fargo",
    "org": "mastercard",
    "type": "credit",
@@ -14715,15 +15627,18 @@
    "issue_status": "active",
    "status": "在發",
    "specs": {
-    "數據狀態": "待核：CardFi 線索未經發卡行官網核實，目前僅錄卡名／發行方／卡組織／借還類型等身份信息，全部規格待核實階段回官網確認後重寫",
-    "數據來源": "CardFi 線索（card.lengziyu.cn，未核實）"
+    "主要權益": "企業消費無上限 2% 現金獎勵；員工附屬卡免費；開卡享 intro APR 期（消費）",
+    "年費": "無年費",
+    "發行情況": "現行在發",
+    "數據狀態": "核心字段已回發卡行官網核實（2026-10-08）；未核項見 verification.missing_fields",
+    "數據來源": "發卡行官網（見 verification.source_refs）"
    },
-   "review": "CardFi 線索導入（未核實）：卡名、發行方、卡組織、類型為線索站所列，尚未回發卡行官網核實；規格、等級與發行狀態待核實階段確認後重寫。",
+   "review": "官網產品頁/列表頁現行在發，卡名、組織、類型已按官網定版，核心規格按官網以自有文字重寫，判 A。",
    "keywords": [
-    "Wells Fargo",
-    "Wells Fargo Signify Business Cash"
+    "Wells Fargo Signify Business Cash® Card",
+    "Wells Fargo"
    ],
-   "url": "",
+   "url": "https://creditcards.wellsfargo.com/?sub_channel=WEB&vendor_code=WF",
    "funding_modes": [
     "credit"
    ],
@@ -14732,45 +15647,64 @@
    "region_code": "US",
    "added": "2026-10-08",
    "verification": {
-    "status": "lead_unverified",
-    "missing_fields": [
-     "card_level",
-     "eligibility",
-     "annual_fee_status",
-     "foreign_transaction_fee_pct",
-     "supported_currency_codes"
-    ],
-    "conflicts": [],
+    "status": "core_verified",
+    "evidence_level_overall": "A",
     "source_refs": [
      {
-      "role": "lead",
+      "role": "官方產品專頁",
+      "title": "Wells Fargo Visa® Credit Cards and Mastercard® | Wells Fargo",
+      "url": "https://creditcards.wellsfargo.com/?sub_channel=WEB&vendor_code=WF",
+      "publisher": "creditcards.wellsfargo.com",
+      "accessed_at": "2026-10-08",
+      "evidence_grade": "A",
+      "facts_supported": [
+       "官網總覽頁與商業卡分類頁在列",
+       "商務卡屬性",
+       "2% 企業返現",
+       "年費 $0"
+      ]
+     },
+     {
+      "role": "lead_original",
       "url": "https://card.lengziyu.cn/card/wells-fargo-signify-business-cash",
       "publisher": "CardFi（線索站，未核實）",
       "accessed_at": "2026-10-08"
      }
-    ]
+    ],
+    "verified_at": "2026-10-08",
+    "last_checked_at": "2026-10-08",
+    "next_review_at": "2026-11-07",
+    "review_cadence_days": 30,
+    "missing_fields": [
+     "卡等級（官網新聞稿稱 World Elite，詳情頁待複核後再寫死）"
+    ],
+    "conflicts": [],
+    "manual_questions": []
    }
   },
   {
    "id": "fxus-050",
-   "name": "Amex Platinum",
-   "name_en": "",
-   "bank": "美国运通（美国）",
+   "name": "Platinum Card®",
+   "name_en": "Platinum Card®",
+   "bank": "American Express",
    "org": "amex",
    "type": "credit",
    "card_level": null,
    "issue_status": "active",
    "status": "在發",
    "specs": {
-    "數據狀態": "待核：CardFi 線索未經發卡行官網核實，目前僅錄卡名／發行方／卡組織／借還類型等身份信息，全部規格待核實階段回官網確認後重寫",
-    "數據來源": "CardFi 線索（card.lengziyu.cn，未核實）"
+    "主要權益": "航司直訂/Amex Travel 機票與預付酒店 5X 積分（設年度上限）；全球 1,550+ 機場貴賓室網絡；多項年度旅行與生活抵扣權益",
+    "年費": "年費 $895",
+    "發行情況": "現行在發",
+    "數據狀態": "核心字段已回發卡行官網核實（2026-10-08）；未核項見 verification.missing_fields",
+    "數據來源": "發卡行官網（見 verification.source_refs）"
    },
-   "review": "CardFi 線索導入（未核實）：卡名、發行方、卡組織、類型為線索站所列，尚未回發卡行官網核實；規格、等級與發行狀態待核實階段確認後重寫。",
+   "review": "官網產品頁/列表頁現行在發，卡名、組織、類型已按官網定版，核心規格按官網以自有文字重寫，判 A。",
    "keywords": [
-    "美国运通（美国）",
-    "Amex Platinum"
+    "Platinum Card®",
+    "American Express"
    ],
-   "url": "",
+   "url": "https://www.americanexpress.com/us/credit-cards/card/platinum/?inav=en_us_menu_cards_personal_cards_platinum_card",
    "funding_modes": [
     "credit"
    ],
@@ -14779,23 +15713,40 @@
    "region_code": "US",
    "added": "2026-10-08",
    "verification": {
-    "status": "lead_unverified",
-    "missing_fields": [
-     "card_level",
-     "eligibility",
-     "annual_fee_status",
-     "foreign_transaction_fee_pct",
-     "supported_currency_codes"
-    ],
-    "conflicts": [],
+    "status": "core_verified",
+    "evidence_level_overall": "A",
     "source_refs": [
      {
-      "role": "lead",
+      "role": "官方產品專頁",
+      "title": "Platinum Card®",
+      "url": "https://www.americanexpress.com/us/credit-cards/card/platinum/?inav=en_us_menu_cards_personal_cards_platinum_card",
+      "publisher": "www.americanexpress.com",
+      "accessed_at": "2026-10-08",
+      "evidence_grade": "A",
+      "facts_supported": [
+       "官網產品頁在發",
+       "年費 $895",
+       "5X 機票/酒店積分",
+       "全球貴賓室網絡"
+      ]
+     },
+     {
+      "role": "lead_original",
       "url": "https://card.lengziyu.cn/card/amex-platinum",
       "publisher": "CardFi（線索站，未核實）",
       "accessed_at": "2026-10-08"
      }
-    ]
+    ],
+    "verified_at": "2026-10-08",
+    "last_checked_at": "2026-10-08",
+    "next_review_at": "2026-11-07",
+    "review_cadence_days": 30,
+    "missing_fields": [
+     "卡等級官網未設字段",
+     "完整權益清單見官網子頁"
+    ],
+    "conflicts": [],
+    "manual_questions": []
    }
   }
  ]
