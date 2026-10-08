@@ -750,7 +750,7 @@ public class MainActivity extends Activity {
             cv.drawRoundRect(barRect, rad, rad, barBdP);
             float inset2 = dp(getContext(), 2);
             barCoreP.setStyle(Paint.Style.FILL);
-            barCoreP.setColor(Color.argb(dragging ? 120 : 80, 10, 92, 214));
+            barCoreP.setColor(styleMoyao() ? Color.argb(dragging ? 120 : 80, 0x3F, 0xD0, 0xC9) : Color.argb(dragging ? 120 : 80, 10, 92, 214)); // Q175：滚动胶囊芯蓝收青（同 alpha 双档；气泡字色其下行 cyan 口径不动）
             barRect.set(left + inset2, top + inset2, right - inset2, top + th - inset2);
             cv.drawRoundRect(barRect, Math.max(1, rad - inset2), Math.max(1, rad - inset2), barCoreP);
             if (dragging) {
@@ -5396,7 +5396,7 @@ public class MainActivity extends Activity {
                 // ＋上下拉开间距，与卡面行拉开层级（旧 15sp 一行纯文字被用户判
                 // 「没有区分出很明显」）。EN 词条同步（地区名/计数）。
                 TextView zh152 = tvW(this, String.format(S("fx_zone_count_fmt"), fxRegionLabel153(zone152), zones152.get(zone152).size()), 16.5f, colText(), 800);
-                zh152.setBackground(roundRect(darkEff() ? Color.rgb(0x2A, 0x2A, 0x30) : Color.rgb(0xE9, 0xEC, 0xF2), 8, this));
+                zh152.setBackground(roundRect(styleMoyao() ? MY_SURFACE2 : (darkEff() ? Color.rgb(0x2A, 0x2A, 0x30) : Color.rgb(0xE9, 0xEC, 0xF2)), 8, this)); // Q175：区标题带收面二（扁平双档逐位不动）
                 zh152.setPadding(dp(this, 10), dp(this, 6), dp(this, 10), dp(this, 6));
                 LinearLayout.LayoutParams zhLp152 = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
                 zhLp152.topMargin = dp(this, firstZone152 ? 12 : 26);
@@ -5410,7 +5410,7 @@ public class MainActivity extends Activity {
             cardBox.setBackground(rippleBg(colSurface(), 18));
             softShadow(cardBox, 5);
             cardBox.setClipToOutline(true);
-            cardBox.setPadding(dp(this, 12), dp(this, 10), dp(this, 12), dp(this, 12));
+            cardBox.setPadding(dp(this, styleMoyao() ? 16 : 12), dp(this, styleMoyao() ? 14 : 10), dp(this, styleMoyao() ? 16 : 12), dp(this, styleMoyao() ? 14 : 12)); // Q175（B4③）：外卡整宽列表卡同瓷砖/学生卡族收冻结 16/14（扁平 12/10/12/12 逐字原值；与学生卡落点同式同值）
             LinearLayout.LayoutParams clp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
             clp.topMargin = dp(this, 10);
             fxListBox.addView(cardBox, clp);
@@ -5465,7 +5465,7 @@ public class MainActivity extends Activity {
             LinearLayout.LayoutParams mlp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
             mlp.topMargin = dp(this, 8);
             cardBox.addView(metaRow, mlp);
-            if (f.tier != null && !f.tier.isEmpty()) metaRow.addView(chip(f.tier, darkEff() ? Color.rgb(0x2E, 0x2E, 0x33) : Color.rgb(0xEF, 0xF1, 0xF6), colText2(), 10.5f));
+            if (f.tier != null && !f.tier.isEmpty()) metaRow.addView(infoChip175(f.tier, darkEff() ? Color.rgb(0x2E, 0x2E, 0x33) : Color.rgb(0xEF, 0xF1, 0xF6), colText2(), MY_TEXT2, 10.5f)); // Q175
             if (f.status != null && !f.status.isEmpty()) {
                 TextView st = tv(this, f.status, 11, colText2(), false);
                 LinearLayout.LayoutParams slp2 = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
@@ -5726,17 +5726,17 @@ public class MainActivity extends Activity {
         LinearLayout.LayoutParams cr1lp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         cr1lp.topMargin = dp(this, 10);
         body.addView(chipScrollRow164(cr1), cr1lp); // Q164：片行通则——横滑+渐隐+禁父拦截
-        cr1.addView(chip(fxOrgLabel164(f), chipBg, colText(), 11.5f));
-        addChipGap(cr1); cr1.addView(chip(fxTypeLabel164(f), chipBg, colText(), 11.5f));
-        if (f.level != null && !f.level.isEmpty()) { addChipGap(cr1); cr1.addView(chip(f.level, chipBg, colText(), 11.5f)); }
-        if (f.status != null && !f.status.isEmpty()) { addChipGap(cr1); cr1.addView(chip(f.status, chipBg, colText(), 11.5f)); }
+        cr1.addView(infoChip175(fxOrgLabel164(f), chipBg, colText(), MY_TEXT1, 11.5f)); // Q175
+        addChipGap(cr1); cr1.addView(infoChip175(fxTypeLabel164(f), chipBg, colText(), MY_TEXT1, 11.5f)); // Q175
+        if (f.level != null && !f.level.isEmpty()) { addChipGap(cr1); cr1.addView(infoChip175(f.level, chipBg, colText(), MY_TEXT1, 11.5f)); } // Q175
+        if (f.status != null && !f.status.isEmpty()) { addChipGap(cr1); cr1.addView(infoChip175(f.status, chipBg, colText(), MY_TEXT1, 11.5f)); } // Q175
         LinearLayout cr2 = new LinearLayout(this);
         cr2.setOrientation(LinearLayout.HORIZONTAL);
         LinearLayout.LayoutParams cr2lp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         cr2lp.topMargin = dp(this, 6);
         body.addView(chipScrollRow164(cr2), cr2lp); // Q164：片行通则
-        cr2.addView(chip(f.bank, chipBg, colText(), 11.5f));
-        if (f.tier != null && !f.tier.isEmpty()) { addChipGap(cr2); cr2.addView(chip(f.tier, chipBg, colText(), 11.5f)); }
+        cr2.addView(infoChip175(f.bank, chipBg, colText(), MY_TEXT1, 11.5f)); // Q175
+        if (f.tier != null && !f.tier.isEmpty()) { addChipGap(cr2); cr2.addView(infoChip175(f.tier, chipBg, colText(), MY_TEXT1, 11.5f)); } // Q175
         addChipGap(cr2);
         cr2.addView(chip(fxVerifyLabel164(f), f.coreVerified() ? accentColor() : chipBg, f.coreVerified() ? onAccentInk() : colText2(), 11.5f));
 
@@ -7600,8 +7600,8 @@ public class MainActivity extends Activity {
         TextView cb = tv(this, S("cancel"), 15, colText(), false); cb.setGravity(Gravity.CENTER);
         cb.setBackground(rippleBg(darkEff() ? colChipOff() : Color.rgb(0xF2, 0xF3, 0xF7), 14));
         btns.addView(cb, new LinearLayout.LayoutParams(0, dp(this, 48), 1f));
-        TextView ob = tv(this, S("mine_dup_ok168"), 15, Color.WHITE, true); ob.setGravity(Gravity.CENTER);
-        ob.setBackground(rippleBg(Color.rgb(0x0A, 0x5C, 0xD6), 14));
+        TextView ob = tv(this, S("mine_dup_ok168"), 15, onAccentInk(), true); ob.setGravity(Gravity.CENTER); // Q175：字色走主色面字口（扁平恒白逐位同）
+        ob.setBackground(rippleBg(styleMoyao() ? MY_PRIMARY : Color.rgb(0x0A, 0x5C, 0xD6), 14)); // Q175：写死蓝收主色
         LinearLayout.LayoutParams olp = new LinearLayout.LayoutParams(0, dp(this, 48), 1f); olp.leftMargin = dp(this, 10);
         btns.addView(ob, olp);
         pinFixedText125(cb); pinFixedText125(ob);
@@ -7968,7 +7968,7 @@ public class MainActivity extends Activity {
         final View selFrame126 = new View(this);
         GradientDrawable frameBg126 = new GradientDrawable();
         frameBg126.setColor(Color.TRANSPARENT);
-        frameBg126.setStroke(dp(this, 3), Color.rgb(0x0A, 0x5C, 0xD6));
+        frameBg126.setStroke(dp(this, 3), styleMoyao() ? MY_PRIMARY : Color.rgb(0x0A, 0x5C, 0xD6)); // Q175：占位选框蓝收主色
         frameBg126.setCornerRadius(dp(this, panelR143(15f))); // Q143：面板类收口
         selFrame126.setBackground(frameBg126);
         selFrame126.setVisibility(View.INVISIBLE);
@@ -7990,8 +7990,8 @@ public class MainActivity extends Activity {
                 sw.setCornerRadius(dp(this, panelR143(12f))); // Q143：面板类收口
                 boolean sel = curCustom != null && curCustom == idx;
                 boolean isAuto = curCustom == null && autoIdx == idx;
-                if (sel) sw.setStroke(dp(this, 3), Color.rgb(0x0A, 0x5C, 0xD6));
-                else if (isAuto) sw.setStroke(dp(this, 2), Color.argb(160, 10, 92, 214));
+                if (sel) sw.setStroke(dp(this, 3), styleMoyao() ? MY_PRIMARY : Color.rgb(0x0A, 0x5C, 0xD6)); // Q175：同选框口
+                else if (isAuto) sw.setStroke(dp(this, 2), styleMoyao() ? Color.argb(160, 0x3F, 0xD0, 0xC9) : Color.argb(160, 10, 92, 214)); // Q175：自动档蓝收青（同 alpha）
                 View cell = new View(this);
                 cell.setBackground(sw);
                 LinearLayout.LayoutParams clp = new LinearLayout.LayoutParams(0, dp(this, 48), 1f);
@@ -9544,7 +9544,7 @@ public class MainActivity extends Activity {
         fab.addView(icon, new FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         // 角标：对照混合版 .qf-badge（#007AFF 蓝、右上 -4 外探、min 18×18、字 .68rem）
-        TextView badge = tv(this, "", 10, Color.WHITE, true);
+        TextView badge = tv(this, "", 10, styleMoyao() ? MY_ON_PRIMARY : Color.WHITE, true); // Q175：角标字走主色面字口（扁平恒白）
         badge.setGravity(Gravity.CENTER);
         // Q114（2.27）：角标数字被切根因＝18dp 定死方框装不下粗体字形度量（真机图 268400「1」缺角）；
         // 改自适应盒：最小 18×18、横向留 5dp 内距，数字完整居中、永不裁切。
@@ -9553,7 +9553,7 @@ public class MainActivity extends Activity {
         badge.setPadding(dp(this, 5), 0, dp(this, 5), 0);
         GradientDrawable bbg = new GradientDrawable();
         bbg.setShape(GradientDrawable.OVAL);
-        bbg.setColor(Color.rgb(0x00, 0x7A, 0xFF));
+        bbg.setColor(styleMoyao() ? MY_PRIMARY : Color.rgb(0x00, 0x7A, 0xFF)); // Q175：角标填充蓝收主色
         badge.setBackground(bbg);
         FrameLayout.LayoutParams blp = new FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         blp.gravity = Gravity.END | Gravity.TOP;
@@ -10232,7 +10232,7 @@ public class MainActivity extends Activity {
             p.setColor(Color.argb(38, 16, 26, 48));
             cv.drawCircle(cx, cy + r * 0.07f, r * 0.99f, p);
             // 固定半透面：未加透白、已加透蓝（不再采样身后图，有图/无图同脸）
-            p.setColor(on ? Color.argb(150, 0, 122, 255) : Color.argb(140, 255, 255, 255));
+            p.setColor(on ? (styleMoyao() ? Color.argb(150, 0x3F, 0xD0, 0xC9) : Color.argb(150, 0, 122, 255)) : Color.argb(140, 255, 255, 255)); // Q175：已加态蓝面收青（图上半透面，未加透白与白勾两风格同脸不动）
             cv.drawCircle(cx, cy, r, p);
             // 1dp 细描边（白色半透，玻璃边缘口径）
             p.setStyle(Paint.Style.STROKE);
@@ -10366,6 +10366,10 @@ public class MainActivity extends Activity {
         int padH = nc >= 4 ? 6 : 8;
         int padT = nc >= 3 ? 6 : 7;
         int padB = nc >= 4 ? 8 : 10;
+        // Q175（B4③）：墨曜正文内边距向冻结基线收（§2 卡内边距 横16/纵14）；
+        // 四列瓷砖仅约 77dp 宽，两侧 16dp 只剩约 45dp 字列（约 3 字/行）必伤
+        // 信息，普查裁定 6/6/8 原档保留。扁平三元原值逐字不动（本支不入）。
+        if (styleMoyao() && nc < 4) { padH = 16; padT = 14; padB = 14; }
         body.setPadding(dp(this, padH), dp(this, padT), dp(this, padH), dp(this, padB));
         box.addView(body, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
 
@@ -10399,9 +10403,11 @@ public class MainActivity extends Activity {
                 c.hasScore ? scoreBandColor143(c.score) : Color.rgb(0xEE, 0xF0, 0xF3),
                 c.hasScore ? Color.WHITE : Color.rgb(0x63, 0x63, 0x66), c.hasScore, c.score, chipSp)); // Q171：评分 pill 单源（同上）
         }
-        chips.addView(chip("已停发".equals(c.status) ? "已停发" : "在发",
-            "已停发".equals(c.status) ? Color.rgb(0xF3, 0xE8, 0xE8) : Color.rgb(0xE6, 0xF6, 0xEC),
-            "已停发".equals(c.status) ? Color.rgb(0xB0, 0x23, 0x2B) : Color.rgb(0x1D, 0x8A, 0x49), chipSp));
+        boolean stopped175 = "已停发".equals(c.status);
+        chips.addView(infoChip175(stopped175 ? "已停发" : "在发",
+            stopped175 ? Color.rgb(0xF3, 0xE8, 0xE8) : Color.rgb(0xE6, 0xF6, 0xEC),
+            stopped175 ? Color.rgb(0xB0, 0x23, 0x2B) : Color.rgb(0x1D, 0x8A, 0x49),
+            stopped175 ? Color.rgb(0xB0, 0x23, 0x2B) : Color.rgb(0x1D, 0x8A, 0x49), chipSp)); // Q175：状态字色两风格同值直传（语义色保留），仅面改空心发丝
         // Q124（2.36，件一）：状态 chip 钉单行——英文 "Discontinued" 在窄瓷砖里曾折成
         // 两行把 chips 行撑高一行（用户 02:38 图证英文瓷砖过高）；中文「已停发/在发」
         // 本就单行，此钉对中文像素零影响。评分 chip 同钉防长文案同病。
@@ -10412,13 +10418,13 @@ public class MainActivity extends Activity {
                 cv2.setEllipsize(android.text.TextUtils.TruncateAt.END);
             }
         }
-        final TextView addedChip = chip("已添加", Color.rgb(0xE6, 0xF6, 0xEC), Color.rgb(0x1D, 0x8A, 0x49), chipSp);
+        final TextView addedChip = infoChip175("已添加", Color.rgb(0xE6, 0xF6, 0xEC), Color.rgb(0x1D, 0x8A, 0x49), Color.rgb(0x1D, 0x8A, 0x49), chipSp); // Q175：绿字保留同上
         addedChip.setTag("added133"); // Q133（2.45，件六）：就地同步认件（syncAddedChip133 按 tag 找、不按文案）
         // 我的卡片瓷砖不重复「已添加」（页面本身即自有条目），把同一格位留给类别标签，未标则不占位
         if (!mineTile && mine.contains(c.id)) chips.addView(addedChip);
         // Q65：类别标签只在用户自有条目瓷砖出现（我的卡片传入 acctClass），未标完全不占位；样式同现行 chips
         if (acctClass != null && !acctClass.isEmpty())
-            chips.addView(chip(acctClass, Color.rgb(0xF0, 0xF7, 0xFF), Color.rgb(0x2F, 0x6F, 0xD0), chipSp));
+            chips.addView(infoChip175(acctClass, Color.rgb(0xF0, 0xF7, 0xFF), Color.rgb(0x2F, 0x6F, 0xD0), MY_PRIMARY, chipSp)); // Q175：蓝字收主色
 
         // Q75：四列下评分/状态/已添加三胶囊同行易溢出，统一收紧内边距与间隔防裁断到读不出
         if (nc >= 4) {
@@ -10598,14 +10604,14 @@ public class MainActivity extends Activity {
         row.setGravity(Gravity.CENTER_VERTICAL);
         row.setPadding(dp(this, 10), dp(this, 11), dp(this, 10), dp(this, 11));
         row.addView(icon, new LinearLayout.LayoutParams(dp(this, 20), dp(this, 20)));
-        TextView t = tv(this, text, 15, Color.rgb(0x1C, 0x1C, 0x1E), false);
+        TextView t = tv(this, text, 15, styleMoyao() ? MY_TEXT1 : Color.rgb(0x1C, 0x1C, 0x1E), false); // Q175：菜单行字收 text1（菜单面已哑光，扁平白板恒原值）
         LinearLayout.LayoutParams tlp = new LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         tlp.leftMargin = dp(this, 10);
         row.addView(t, tlp);
         // 按下底色 rgba(0,122,255,.10)（对照 .cp-row:active）
         row.setOnTouchListener((v, e) -> {
-            if (e.getAction() == MotionEvent.ACTION_DOWN) v.setBackground(roundRect(Color.argb(26, 0, 122, 255), 10, MainActivity.this));
+            if (e.getAction() == MotionEvent.ACTION_DOWN) v.setBackground(roundRect(styleMoyao() ? Color.argb(26, 0x3F, 0xD0, 0xC9) : Color.argb(26, 0, 122, 255), 10, MainActivity.this)); // Q175：按下蓝收青（同 alpha）
             else if (e.getAction() == MotionEvent.ACTION_UP || e.getAction() == MotionEvent.ACTION_CANCEL) v.setBackground(null);
             return false;
         });
@@ -10656,7 +10662,7 @@ public class MainActivity extends Activity {
         GradientDrawable border = new GradientDrawable();
         border.setColor(Color.TRANSPARENT);
         border.setCornerRadius(dp(this, cloneR));
-        border.setStroke(dp(this, 2.5f), Color.argb(179, 0, 122, 255));
+        border.setStroke(dp(this, 2.5f), styleMoyao() ? Color.argb(179, 0x3F, 0xD0, 0xC9) : Color.argb(179, 0, 122, 255)); // Q175：克隆框蓝收青（同 alpha/线宽）
         View borderV = new View(this);
         borderV.setBackground(border);
         borderV.setClickable(false);
@@ -10678,7 +10684,7 @@ public class MainActivity extends Activity {
         pop.setPadding(dp(this, 6), dp(this, 6), dp(this, 6), dp(this, 6));
         pop.setClickable(true);
 
-        TextView title = tv(this, c.name, 12.5f, Color.rgb(0x8E, 0x8E, 0x93), false);
+        TextView title = tv(this, c.name, 12.5f, styleMoyao() ? MY_TEXT2 : Color.rgb(0x8E, 0x8E, 0x93), false); // Q175：菜单题走 text2
         title.setSingleLine(true);
         title.setEllipsize(android.text.TextUtils.TruncateAt.END);
         title.setPadding(dp(this, 10), dp(this, 7), dp(this, 10), dp(this, 5));
@@ -10686,13 +10692,14 @@ public class MainActivity extends Activity {
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
 
         SearchIconView detailIcon = new SearchIconView(this);
-        detailIcon.iconColor = Color.rgb(0x1C, 0x1C, 0x1E);
+        detailIcon.iconColor = styleMoyao() ? MY_TEXT1 : Color.rgb(0x1C, 0x1C, 0x1E); // Q175：菜单图标同行字口
         pop.addView(cardMenuRow(detailIcon, "查看详情", () -> {
             suppressNextChromeRestore = true;
             dismissCardMenu();
             openDetail(c, fromWiz);
         }));
         StarIconView starIcon = new StarIconView(this);
+        starIcon.iconColor = styleMoyao() ? MY_TEXT1 : Color.rgb(0x1C, 0x1C, 0x1E); // Q175：星标同口（StarIconView 字段默认值不动、扁平显式回原值）
         pop.addView(cardMenuRow(starIcon, mine.contains(c.id) ? "从我的卡片移除" : "添加到我的卡片", () -> {
             closeCardMenu();
             toggleMineWithToast(c, () -> {
@@ -10824,7 +10831,7 @@ public class MainActivity extends Activity {
                 wrap.addView(row);
                 rowW = 0; rows++;
             }
-            TextView t = chip(label, Color.rgb(0xF0, 0xF7, 0xFF), Color.rgb(0x2F, 0x6F, 0xD0), sp);
+            TextView t = infoChip175(label, Color.rgb(0xF0, 0xF7, 0xFF), Color.rgb(0x2F, 0x6F, 0xD0), MY_PRIMARY, sp); // Q175
             t.setSingleLine(true); t.setMaxLines(1); t.setEllipsize(android.text.TextUtils.TruncateAt.END); if (availPx > 0) t.setMaxWidth(availPx); // Q114：单枚标签不许撑出瓷砖
             if (nc >= 4) t.setPadding(dp(this, 4), dp(this, 2), dp(this, 4), dp(this, 2)); // Q75：与宽度测算同档收紧
             LinearLayout.LayoutParams clp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
@@ -10864,8 +10871,8 @@ public class MainActivity extends Activity {
                 rowW = 0; rows++;
             }
             TextView t = v == null
-                ? chip(label, Color.rgb(0xEE, 0xF0, 0xF3), Color.rgb(0x8E, 0x8E, 0x93), sp)
-                : chip(label, Color.rgb(0xE8, 0xF1, 0xFD), Color.rgb(0x0A, 0x5C, 0xD6), sp);
+                ? infoChip175(label, Color.rgb(0xEE, 0xF0, 0xF3), Color.rgb(0x8E, 0x8E, 0x93), MY_TEXT3, sp) // Q175：未下发分走 text3
+                : infoChip175(label, Color.rgb(0xE8, 0xF1, 0xFD), Color.rgb(0x0A, 0x5C, 0xD6), MY_PRIMARY, sp); // Q175
             t.setSingleLine(true); t.setMaxLines(1); t.setEllipsize(android.text.TextUtils.TruncateAt.END); if (availPx > 0) t.setMaxWidth(availPx); // Q114：单枚标签不许撑出瓷砖
             if (nc >= 4) t.setPadding(dp(this, 4), dp(this, 2), dp(this, 4), dp(this, 2)); // Q75 同上
             LinearLayout.LayoutParams clp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
@@ -11129,7 +11136,7 @@ public class MainActivity extends Activity {
         // glass white rgba(255,255,255,.78)+blur20, thin magnifier, clear-X circle appears once typing.
         FrameLayout inlineWrap = new FrameLayout(this);
         inlineWrap.setBackground(softSearchTint()); // Q94：内嵌搜索胶囊玻璃收淡（近白低饱和，不再一团蓝）
-        if (Build.VERSION.SDK_INT >= 21) inlineWrap.setElevation(dp(this, 6));
+        if (Build.VERSION.SDK_INT >= 21) inlineWrap.setElevation(styleMoyao() ? 0 : dp(this, 6)); // Q175（B4⑤，B1 留）：墨曜哑光面去 elevation——哑光语言无投影、灰晕在近黑底上读作脏边；扁平 6dp 逐字原值
         if (!styleMoyao()) inlineWrap.addView(glassLayer(inlineWrap, floatR129(28f), true), new FrameLayout.LayoutParams( // Q146：糊层裁切随悬浮类收口（标准档 28 逐位不变）；Q169：墨曜哑光面下不垫玻璃糊层（垫了会浮在实面之上发灰）
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         LinearLayout inlineRow = new LinearLayout(this);
@@ -11192,7 +11199,7 @@ public class MainActivity extends Activity {
         // thin magnifier, 28dp X circle; only shown mid-page via the search fab, list never moves for it.
         FrameLayout floatWrap = new FrameLayout(this);
         floatWrap.setBackground(softSearchTint()); // Q94：悬浮搜索胶囊同口径收淡
-        if (Build.VERSION.SDK_INT >= 21) floatWrap.setElevation(dp(this, 14));
+        if (Build.VERSION.SDK_INT >= 21) floatWrap.setElevation(styleMoyao() ? 0 : dp(this, 14)); // Q175：悬浮搜索同口去影（扁平 14dp 原值）
         if (!styleMoyao()) floatWrap.addView(glassLayer(floatWrap, floatR129(28f), true), new FrameLayout.LayoutParams( // Q146：同 inlineWrap 口径；Q169：墨曜不垫糊层（同上）
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         LinearLayout floatRow = new LinearLayout(this);
@@ -11615,7 +11622,7 @@ public class MainActivity extends Activity {
         if (in && found == null) {
             // 与 cardTile 建砖同口径新建一枚（字号按当前列数档，结构签已保证列数没变）
             float sp133 = cols >= 4 ? 8f : cols == 3 ? 8.5f : 10f;
-            TextView nc133 = chip("已添加", Color.rgb(0xE6, 0xF6, 0xEC), Color.rgb(0x1D, 0x8A, 0x49), sp133);
+            TextView nc133 = infoChip175("已添加", Color.rgb(0xE6, 0xF6, 0xEC), Color.rgb(0x1D, 0x8A, 0x49), Color.rgb(0x1D, 0x8A, 0x49), sp133); // Q175：与 cardTile 建砖同一口（同类同逻辑）
             nc133.setTag("added133");
             nc133.setSingleLine(true); nc133.setMaxLines(1);
             nc133.setEllipsize(android.text.TextUtils.TruncateAt.END);
@@ -11725,7 +11732,7 @@ public class MainActivity extends Activity {
                 TextView goExt = tv(this, String.format(S("search_go_ext_fmt"), query.trim()), 13.5f, inkLink(), true); // Q164
                 goExt.setGravity(Gravity.CENTER);
                 goExt.setPadding(dp(this, 14), dp(this, 10), dp(this, 14), dp(this, 10));
-                goExt.setBackground(rippleBg(Color.rgb(0xE8, 0xF1, 0xFD), 999));
+                goExt.setBackground(rippleBg(styleMoyao() ? accentSoftBg() : Color.rgb(0xE8, 0xF1, 0xFD), 999)); // Q175：浅蓝钮收语义软底（字已走 inkLink 语义口；accentSoftBg 浅档==E8F1FD 但深档不同值，故门控三元保扁平逐位）
                 LinearLayout.LayoutParams glp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
                 glp.gravity = Gravity.CENTER_HORIZONTAL;
                 glp.topMargin = dp(this, 10);
@@ -12227,8 +12234,8 @@ public class MainActivity extends Activity {
     }
 
     TextView afPill(String label, final Runnable onRemove) {
-        TextView t = tv(this, label + "  ✕", 11.5f, Color.rgb(0x0A, 0x5C, 0xD6), true);
-        t.setBackground(roundRect(Color.rgb(0xE8, 0xF1, 0xFD), 999, this));
+        TextView t = tv(this, label + "  ✕", 11.5f, styleMoyao() ? MY_PRIMARY : Color.rgb(0x0A, 0x5C, 0xD6), true); // Q175：蓝签字收主色
+        t.setBackground(styleMoyao() ? scorePillBg171(999f) : roundRect(Color.rgb(0xE8, 0xF1, 0xFD), 999, this)); // Q175：蓝签底改空心发丝（与评分 pill 同族）
         t.setPadding(dp(this, 10), dp(this, 5), dp(this, 10), dp(this, 5));
         LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         lp.rightMargin = dp(this, 7);
@@ -12248,7 +12255,7 @@ public class MainActivity extends Activity {
         hideChrome(); // Q12
         // Q153（件三）：旧 prepareFrozenBackdrop131 窗前同步预抓退役——背板改由 glassLayerHw 挂载后的统一管线首帧后补（内容先行）。
         final FrameLayout sheet = new FrameLayout(this);
-        sheet.setBackgroundColor(Color.argb(102, 15, 20, 40)); // Q77b：窗外再压暗一档（对齐混合版 .dlg-backdrop rgba(0,0,0,.4)），与玻璃窗体明暗分明
+        sheet.setBackgroundColor(styleMoyao() ? shadeColor171() : Color.argb(102, 15, 20, 40)); // Q77b：窗外再压暗一档（对齐混合版 .dlg-backdrop rgba(0,0,0,.4)），与玻璃窗体明暗分明；Q175：墨曜走弹窗遮罩单源 #CC000000（shadeColor171 扁平支为 102 黑、与本行藏青值不同，故门控三元保扁平逐位）
         sheet.setOnClickListener(v -> { haptic(); closeFilterSheet(); }); // Q152（追加C）：关闭钮/遮罩点按补触感
         // Q77 定版：B 真玻璃悬浮窗（与卡面 +/✓ 钮、底栏同一套 Q73 玻璃语言）——冻结模糊垫底 +
         // 薄染色 tint + 提亮 wash，禁止实白板；窗放大、排版放呼吸，chips 点选仍即时 refreshHome。
@@ -12440,9 +12447,9 @@ public class MainActivity extends Activity {
         TextView m = tv(this, String.format(S("cols_lag_msg_fmt166"), cnt166), 13.5f, inkBody(), false);
         LinearLayout.LayoutParams mlp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         mlp.topMargin = dp(this, 8); card.addView(m, mlp);
-        TextView ob = tv(this, S("cols_lag_ok166"), 15, Color.WHITE, true);
+        TextView ob = tv(this, S("cols_lag_ok166"), 15, onAccentInk(), true); // Q175：同 minedup 窗主钮口
         ob.setGravity(Gravity.CENTER);
-        ob.setBackground(rippleBg(Color.rgb(0x0A, 0x5C, 0xD6), 14));
+        ob.setBackground(rippleBg(styleMoyao() ? MY_PRIMARY : Color.rgb(0x0A, 0x5C, 0xD6), 14)); // Q175
         LinearLayout.LayoutParams olp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(this, 48));
         olp.topMargin = dp(this, 18); card.addView(ob, olp);
         FrameLayout.LayoutParams clp = new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
@@ -12719,15 +12726,19 @@ public class MainActivity extends Activity {
             // Q148（2.59，深色批）：禁用态补深色档——旧三色全写死浅档（#D9E4F2/
             // #E8EAEF 底＋灰字），深色下整排浅底灰字（用户图证筛选列数行）；浅色
             // 三值逐位不变，深色改哑光蓝灰同族。
-            t.setTextColor(darkEff()
+            t.setTextColor(styleMoyao()
+                ? (on ? MY_TEXT2 : MY_TEXT3) // Q175：墨曜禁用片走分段片同族灰阶（选中 text2、未选 text3）；扁平 Q148 三值逐位不动
+                : (darkEff()
                 ? (on ? Color.rgb(0x93, 0xA9, 0xC9) : Color.rgb(0x6E, 0x76, 0x84))
-                : (on ? Color.rgb(0x6B, 0x7D, 0x94) : Color.rgb(0x9A, 0x9A, 0xA0)));
+                : (on ? Color.rgb(0x6B, 0x7D, 0x94) : Color.rgb(0x9A, 0x9A, 0xA0))));
             GradientDrawable dg = new GradientDrawable();
-            dg.setColor(darkEff()
+            dg.setColor(styleMoyao()
+                ? (on ? accentSoftBg() : MY_SURFACE1) // Q175：选中走语义软底单源（墨曜=主色 12% 晕）、未选面一
+                : (darkEff()
                 ? (on ? Color.rgb(0x31, 0x40, 0x5C) : Color.rgb(0x26, 0x2B, 0x36))
-                : (on ? Color.rgb(0xD9, 0xE4, 0xF2) : Color.rgb(0xE8, 0xEA, 0xEF)));
+                : (on ? Color.rgb(0xD9, 0xE4, 0xF2) : Color.rgb(0xE8, 0xEA, 0xEF))));
             dg.setCornerRadius(dp(this, pillR143())); // Q143：整圆药丸类收口
-            dg.setStroke(dp(this, 1), Color.argb(10, 20, 30, 60));
+            dg.setStroke(dp(this, 1), styleMoyao() ? MY_BORDER_DEFAULT : Color.argb(10, 20, 30, 60)); // Q175：描边收默认档
             t.setBackground(dg);
             t.setAlpha(0.75f);
             t.setEnabled(false);
@@ -13098,7 +13109,7 @@ public class MainActivity extends Activity {
         }
         final FrameLayout sheet = new FrameLayout(this);
         View shade = new View(this);
-        shade.setBackgroundColor(Color.argb(117, 15, 20, 40));
+        shade.setBackgroundColor(styleMoyao() ? shadeColor171() : Color.argb(117, 15, 20, 40)); // Q175：同筛选窗遮罩口
         shade.setOnClickListener(v -> { haptic(); closeWizard(); }); // Q152（追加C）：关闭钮/遮罩点按补触感
         sheet.addView(shade, new FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
@@ -13292,7 +13303,7 @@ public class MainActivity extends Activity {
         LinearLayout col = new LinearLayout(this);
         col.setOrientation(LinearLayout.VERTICAL);
         View grab = new View(this);
-        grab.setBackground(roundRect(Color.rgb(0xD9, 0xD9, 0xDE), 3, this));
+        grab.setBackground(roundRect(styleMoyao() ? MY_BORDER_DEFAULT : Color.rgb(0xD9, 0xD9, 0xDE), 3, this)); // Q175：抓手收描边默认档（MY_ 色不被 roundRect 拦截）
         LinearLayout.LayoutParams glp = new LinearLayout.LayoutParams(dp(this, 38), dp(this, 5));
         glp.gravity = Gravity.CENTER_HORIZONTAL;
         glp.topMargin = dp(this, 10);
@@ -13323,8 +13334,8 @@ public class MainActivity extends Activity {
         // Q14 头部照混合版 .wiz-head/.wiz-nav/.wiz-title：返回/关闭同为 34dp 圆钮 #F0F0F4、
         // 返回仅细线 ‹（废 84dp 大药丸）、标题 flex 居中 1.02rem/700、✕ 走 CloseIconView 细线自绘
         FrameLayout back = new FrameLayout(this);
-        back.setBackground(roundRect(Color.rgb(0xF0, 0xF0, 0xF4), 999, this));
-        TextView backGlyph = tv(this, "‹", 24, Color.rgb(0x1C, 0x1C, 0x1E), false);
+        back.setBackground(styleMoyao() ? moyaoCardFace171(MY_SURFACE1, 999f) : roundRect(Color.rgb(0xF0, 0xF0, 0xF4), 999, this)); // Q175：圆钮走哑光面+发丝边（窗面 SURFACE2 上落一档）
+        TextView backGlyph = tv(this, "‹", 24, styleMoyao() ? MY_TEXT1 : Color.rgb(0x1C, 0x1C, 0x1E), false); // Q175
         backGlyph.setGravity(Gravity.CENTER);
         back.addView(backGlyph, new FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
@@ -13338,9 +13349,9 @@ public class MainActivity extends Activity {
         ttlp.rightMargin = dp(this, 8);
         top.addView(ttl, ttlp);
         FrameLayout close = new FrameLayout(this);
-        close.setBackground(roundRect(Color.rgb(0xF0, 0xF0, 0xF4), 999, this));
+        close.setBackground(styleMoyao() ? moyaoCardFace171(MY_SURFACE1, 999f) : roundRect(Color.rgb(0xF0, 0xF0, 0xF4), 999, this)); // Q175：同 back 圆钮口
         CloseIconView closeIc = new CloseIconView(this);
-        closeIc.iconColor = Color.rgb(0x1C, 0x1C, 0x1E);
+        closeIc.iconColor = styleMoyao() ? MY_TEXT1 : Color.rgb(0x1C, 0x1C, 0x1E); // Q175
         closeIc.lineDp = 1.6f;
         closeIc.setPadding(dp(this, 10), dp(this, 10), dp(this, 10), dp(this, 10));
         close.addView(closeIc, new FrameLayout.LayoutParams(
@@ -13425,8 +13436,8 @@ public class MainActivity extends Activity {
             LinearLayout.LayoutParams qhLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
             qhLp.topMargin = dp(this, 14);
             page.addView(qHead, qhLp);
-            TextView tag = tv(this, isEn() ? "Question " + wizStep + " of " + qs.size() : "第 " + wizStep + " 题 · 共 " + qs.size() + " 题", 11, Color.rgb(0x0A, 0x5C, 0xD6), true);
-            tag.setBackground(roundRect(Color.rgb(0xE8, 0xF1, 0xFD), 999, this));
+            TextView tag = tv(this, isEn() ? "Question " + wizStep + " of " + qs.size() : "第 " + wizStep + " 题 · 共 " + qs.size() + " 题", 11, styleMoyao() ? MY_PRIMARY : Color.rgb(0x0A, 0x5C, 0xD6), true); // Q175：同 afPill 蓝签口
+            tag.setBackground(styleMoyao() ? scorePillBg171(999f) : roundRect(Color.rgb(0xE8, 0xF1, 0xFD), 999, this)); // Q175
             tag.setPadding(dp(this, 8), dp(this, 3), dp(this, 8), dp(this, 3));
             LinearLayout tagWrap = new LinearLayout(this);
             tagWrap.setOrientation(LinearLayout.HORIZONTAL);
@@ -13444,7 +13455,7 @@ public class MainActivity extends Activity {
                 optBgBase.setCornerRadius(dp(this, panelR143(14f))); // Q143：面板类收口
                 optBgBase.setStroke(Math.max(1, dp(this, 1)), darkEff() ? Color.argb(38, 255, 255, 255) : Color.argb(15, 20, 30, 60));
                 opt.setBackground(new RippleDrawable(
-                    android.content.res.ColorStateList.valueOf(Color.argb(38, 10, 92, 214)), optBgBase, null));
+                    android.content.res.ColorStateList.valueOf(styleMoyao() ? Color.argb(38, 0x3F, 0xD0, 0xC9) : Color.argb(38, 10, 92, 214)), optBgBase, null)); // Q175：选项涟漪蓝收青（基底 darkEff 白透档两风格同脸不动）
                 opt.setClipToOutline(true);
                 opt.setPadding(dp(this, 14), dp(this, 13), dp(this, 14), dp(this, 13));
                 LinearLayout.LayoutParams olp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
@@ -13562,7 +13573,7 @@ public class MainActivity extends Activity {
                     wrap.addView(crow);
                     crowW = 0;
                 }
-                TextView t = chip(reason, Color.rgb(0xF0, 0xF7, 0xFF), Color.rgb(0x2F, 0x6F, 0xD0), 10.5f);
+                TextView t = infoChip175(reason, Color.rgb(0xF0, 0xF7, 0xFF), Color.rgb(0x2F, 0x6F, 0xD0), MY_PRIMARY, 10.5f); // Q175
                 LinearLayout.LayoutParams clp2 = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
                 if (crowW > 0) clp2.leftMargin = gap;
                 clp2.rightMargin = 0;
@@ -13595,6 +13606,17 @@ public class MainActivity extends Activity {
             11, scoreFg, true);
         score.setBackground(roundRect(scoreBg, 999, this));
         score.setPadding(dp(this, 9), dp(this, 4), dp(this, 9), dp(this, 4));
+        if (styleMoyao()) {
+            // Q175（B4①②）：向导评分胶囊与 scorePill171 同族——空心发丝＋Josefin
+            // 细字＋同色细线星；高分界与 pill 单源对齐 8.5，中档走窗内既有暗警
+            // 告橙 FFB26B（本页仅限提示同值），未评分 text3。三色带 scoreBg/
+            // scoreFg 扁平产出逐位不动（上方原式保留、本支不入）。
+            int inkW175 = !c.hasScore ? MY_TEXT3 : (c.score >= 8.5 ? MY_PRIMARY : (c.score >= 6 ? Color.rgb(0xFF, 0xB2, 0x6B) : MY_TEXT1));
+            score.setBackground(scorePillBg171(999f));
+            score.setTextColor(inkW175);
+            score.setTypeface(displayTf169(this, 300));
+            attachScoreStar175(score, inkW175);
+        }
         side.addView(score);
         // Q14：加卡钮照 .wiz-add——30dp 浅色圆（未加 #EEF4FF 蓝字＋、已加 #0A84FF 白字 ✓），废 38dp 大实心蓝圆
         final boolean inMine = mine.contains(c.id);
@@ -14085,7 +14107,7 @@ public class MainActivity extends Activity {
             View d = detailDots.get(i);
             boolean on = i == idx;
             GradientDrawable g = new GradientDrawable();
-            g.setColor(on ? colText() : (darkEff() ? Color.rgb(0x48, 0x48, 0x4C) : Color.rgb(0xD8, 0xD8, 0xDE)));
+            g.setColor(on ? colText() : (styleMoyao() ? MY_BORDER_DEFAULT : (darkEff() ? Color.rgb(0x48, 0x48, 0x4C) : Color.rgb(0xD8, 0xD8, 0xDE)))); // Q175：未选点收描边默认档（on 态 colText 语义口不动）
             g.setCornerRadius(dp(this, 3));
             d.setBackground(g);
         }
@@ -14166,7 +14188,7 @@ public class MainActivity extends Activity {
             else if (mineOfCard.size() > 1) {
                 LinearLayout box = new LinearLayout(this);
                 box.setOrientation(LinearLayout.VERTICAL);
-                box.setBackground(roundRect(darkEff() ? Color.argb(38, 255, 255, 255) : Color.rgb(0xF6, 0xF6, 0xF8), 12, this));
+                box.setBackground(roundRect(styleMoyao() ? MY_SURFACE2 : (darkEff() ? Color.argb(38, 255, 255, 255) : Color.rgb(0xF6, 0xF6, 0xF8)), 12, this)); // Q175：嵌套盒收面二（MY_ 色不被 roundRect 拦截）
                 box.setPadding(dp(this, 12), dp(this, 10), dp(this, 12), dp(this, 10));
                 box.addView(tv(this, "我的标记", 13, colText(), true));
                 StringBuilder sb = new StringBuilder("这张卡在我的卡片里有 " + mineOfCard.size() + " 张：");
@@ -14187,7 +14209,7 @@ public class MainActivity extends Activity {
         final MineEntry tgt = target;
         LinearLayout box = new LinearLayout(this);
         box.setOrientation(LinearLayout.VERTICAL);
-        box.setBackground(roundRect(darkEff() ? Color.argb(38, 255, 255, 255) : Color.rgb(0xF6, 0xF6, 0xF8), 12, this));
+        box.setBackground(roundRect(styleMoyao() ? MY_SURFACE2 : (darkEff() ? Color.argb(38, 255, 255, 255) : Color.rgb(0xF6, 0xF6, 0xF8)), 12, this)); // Q175：同上嵌套盒口
         box.setPadding(dp(this, 12), dp(this, 10), dp(this, 12), dp(this, 10));
         box.addView(tv(this, S("detail_my_label"), 13, colText(), true)); // Q164
         LinearLayout chipsRow = new LinearLayout(this);
@@ -14237,7 +14259,7 @@ public class MainActivity extends Activity {
         TextView addMore = tv(this, "再加一张", 12.5f, inkLink(), true);
         addMore.setGravity(Gravity.CENTER);
         addMore.setPadding(dp(this, 12), dp(this, 7), dp(this, 12), dp(this, 7));
-        addMore.setBackground(rippleBg(Color.rgb(0xE8, 0xF1, 0xFD), 999));
+        addMore.setBackground(rippleBg(styleMoyao() ? accentSoftBg() : Color.rgb(0xE8, 0xF1, 0xFD), 999)); // Q175：同 goExt 浅蓝钮口
         acts.addView(addMore, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT));
         addMore.setOnClickListener(vv -> { haptic(); openAcctClassPicker(c, "再加一张", false, null); });
         TextView rmOne = tv(this, "移除这张", 12.5f, Color.rgb(0xE0, 0x31, 0x31), true);
@@ -14634,7 +14656,10 @@ public class MainActivity extends Activity {
         LinearLayout box = new LinearLayout(this);
         box.setOrientation(LinearLayout.VERTICAL);
         box.setBackground(roundRect(colSurface(), 16, this));
-        box.setPadding(dp(this, 14), dp(this, 12), dp(this, 14), dp(this, 12));
+        // Q175（B4④，B3a 留）：内边距向冻结 16/14 收（旧 14/12 差 2dp）；面已走
+        // softFaceBg 拦截同源（墨曜 SURFACE1＋发丝边），仅补内边距一处。
+        if (styleMoyao()) box.setPadding(dp(this, 16), dp(this, 14), dp(this, 16), dp(this, 14));
+        else box.setPadding(dp(this, 14), dp(this, 12), dp(this, 14), dp(this, 12));
         return box;
     }
 
@@ -14644,12 +14669,12 @@ public class MainActivity extends Activity {
         wrap.setOrientation(LinearLayout.VERTICAL);
         java.util.List<TextView> chips = new java.util.ArrayList<>();
         int chipBg = darkEff() ? Color.rgb(0x2E, 0x2E, 0x33) : Color.rgb(0xEF, 0xF1, 0xF6);
-        chips.add(chip(orgLabel(c.org), chipBg, colText(), 12f));
-        chips.add(chip(c.isCredit() ? "信用卡" : "借记卡", chipBg, colText(), 12f));
-        if (c.status != null && !c.status.isEmpty()) chips.add(chip(c.status, chipBg, colText(), 12f));
-        if (c.bank != null && !c.bank.isEmpty()) chips.add(chip(c.bank, chipBg, colText(), 12f));
+        chips.add(infoChip175(orgLabel(c.org), chipBg, colText(), MY_TEXT1, 12f)); // Q175
+        chips.add(infoChip175(c.isCredit() ? "信用卡" : "借记卡", chipBg, colText(), MY_TEXT1, 12f)); // Q175
+        if (c.status != null && !c.status.isEmpty()) chips.add(infoChip175(c.status, chipBg, colText(), MY_TEXT1, 12f)); // Q175
+        if (c.bank != null && !c.bank.isEmpty()) chips.add(infoChip175(c.bank, chipBg, colText(), MY_TEXT1, 12f)); // Q175
         if (c.hasScore && !styleMoyao()) chips.add(chip((isEn() ? "Score " : "评分 ") + String.format(java.util.Locale.US, "%.1f", c.score), scoreBandColor143(c.score), Color.WHITE, 12f)); // Q143：评分档色脱钩主题色（旧 accentColor 误染：换主题后高低分同色）；Q173：墨曜评分由头部标本牌 pill 单源出，片行不重复
-        for (String[] f : FEATS) if (featMatch(c, f[0])) chips.add(chip(EN_MODE ? featLabelEn(f[0]) : f[1], chipBg, colText(), 12f)); // Q114：英文缩略表，与瓷砖同口径
+        for (String[] f : FEATS) if (featMatch(c, f[0])) chips.add(infoChip175(EN_MODE ? featLabelEn(f[0]) : f[1], chipBg, colText(), MY_TEXT1, 12f)); // Q114：英文缩略表，与瓷砖同口径；Q175：墨曜收编
         if (c.studentPick) chips.add(chip("学生推荐", accentColor(), onAccentInk(), 12f));
         // Q133（2.45，件四）：AI 重绘小标原与本行胶囊同档一枚；Q136（2.48）用户点名挪走，
         // Q138（2.49）维持：标在详情大卡图左上角与「存疑」竖排（见 buildDetailSheetBody
@@ -14706,9 +14731,10 @@ public class MainActivity extends Activity {
             // 246/238 半透坐在 pillWrap 玻璃层之上仍透出身后正文（用户 02:11 图证
             // 数据状态行被半透白钮盖住）；同色系压满 alpha、深档同理，两态都不透字。
             GradientDrawable joinedBg = new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
-                darkEff() ? new int[]{Color.rgb(30, 39, 56), Color.rgb(22, 30, 45)}
-                          : new int[]{Color.rgb(253, 254, 255), Color.rgb(240, 246, 252)});
-            joinedBg.setStroke(dp(this, 1), darkEff() ? Color.argb(80, 255, 255, 255) : Color.argb(170, 255, 255, 255));
+                styleMoyao() ? new int[]{MY_SURFACE2, MY_SURFACE2} // Q175：已加入态深蓝梯度收面二纯面（未加入态主色梯度 Q165 已收，本态补齐）
+                          : (darkEff() ? new int[]{Color.rgb(30, 39, 56), Color.rgb(22, 30, 45)}
+                          : new int[]{Color.rgb(253, 254, 255), Color.rgb(240, 246, 252)}));
+            joinedBg.setStroke(dp(this, 1), styleMoyao() ? MY_BORDER_DEFAULT : (darkEff() ? Color.argb(80, 255, 255, 255) : Color.argb(170, 255, 255, 255))); // Q175：描边收默认档
             joinedBg.setCornerRadius(dp(this, pillR143())); // Q143：整圆药丸类收口（详情主钮已加入态）
             detailPrimaryBtn.setBackground(joinedBg);
         } else {
@@ -14906,8 +14932,8 @@ public class MainActivity extends Activity {
                 + stu.size() + " picks were filtered from all " + Store.all.size() + " cards by exactly that standard."
             : "挑卡只看三件事：别交年费、境外别被收转换费、网购能过 3DS。这 "
                 + stu.size() + " 张就是按这个标准从 " + Store.all.size() + " 张里筛出来的。",
-            12.5f, Color.rgb(0x3A, 0x3A, 0x3C), false);
-        quote.setBackground(roundRect(Color.rgb(0xE8, 0xF1, 0xFD), 12, this));
+            12.5f, styleMoyao() ? MY_TEXT1 : Color.rgb(0x3A, 0x3A, 0x3C), false); // Q175：引言字收 text1
+        quote.setBackground(roundRect(styleMoyao() ? MY_SURFACE2 : Color.rgb(0xE8, 0xF1, 0xFD), 12, this)); // Q175：引言浅蓝盒收面二（框非签，不走空心）
         quote.setPadding(dp(this, 12), dp(this, 10), dp(this, 12), dp(this, 10));
         LinearLayout.LayoutParams qlp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         qlp.topMargin = dp(this, 10);
@@ -14991,7 +15017,7 @@ public class MainActivity extends Activity {
             cardBox.setBackground(styleMoyao() ? moyaoCardRipple171(MY_SURFACE1, 16f) : rippleBg(Color.WHITE, 18)); // Q94 铺开：学生卡柔面（roundRect 收口）＋圆角收向 18
             if (!styleMoyao()) softShadow(cardBox, 5);
             cardBox.setClipToOutline(true);
-            cardBox.setPadding(dp(this, 12), dp(this, 10), dp(this, 12), dp(this, 12));
+            cardBox.setPadding(dp(this, styleMoyao() ? 16 : 12), dp(this, styleMoyao() ? 14 : 10), dp(this, styleMoyao() ? 16 : 12), dp(this, styleMoyao() ? 14 : 12)); // Q175（B4③）：整宽列表卡收冻结 16/14（扁平 12/10/12/12 逐字原值）
             LinearLayout.LayoutParams clp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
             clp.topMargin = dp(this, 10);
             box.addView(cardBox, clp);
@@ -15039,8 +15065,10 @@ public class MainActivity extends Activity {
             if (styleMoyao()) {
                 // Q171：学生卡评分同走 scorePill 口径（空心＋细字＋高分染青），不另起一套
                 sc.setBackground(scorePillBg171(999f));
-                sc.setTextColor(c.score > 0 ? (c.score >= 8.5 ? MY_PRIMARY : MY_TEXT1) : MY_TEXT3);
+                int inkS175 = c.score > 0 ? (c.score >= 8.5 ? MY_PRIMARY : MY_TEXT1) : MY_TEXT3;
+                sc.setTextColor(inkS175);
                 sc.setTypeface(displayTf169(this, 300));
+                attachScoreStar175(sc, inkS175); // Q175（B4②）：同 pill 单源挂星（此落点自建 pill 未走 scorePill171，故就地同口径补挂）
             }
             top.addView(sc);
 
@@ -15059,7 +15087,7 @@ public class MainActivity extends Activity {
                 cardBox.addView(fitRow, flp);
                 TextView fl = tv(this, S("stu_fit") + " ", 11.5f, colText2(), true); // Q164
                 fitRow.addView(fl);
-                for (String f : fit) fitRow.addView(chip(f, Color.rgb(0xF5, 0xF6, 0xF8), Color.rgb(0x3A, 0x3A, 0x3C)));
+                for (String f : fit) fitRow.addView(infoChip175(f, Color.rgb(0xF5, 0xF6, 0xF8), Color.rgb(0x3A, 0x3A, 0x3C), MY_TEXT2, 10f)); // Q175：适合签走 text2（sp 与 chip 三参原口 10f 同值）
             }
         }
 
@@ -15282,15 +15310,15 @@ public class MainActivity extends Activity {
             brow.setOnClickListener(v -> openDetail(bestF));
         }
         if (!gaps.isEmpty()) {
-            TextView g = tv(this, S("gap_prefix") + gaps.get(0), 13, Color.rgb(0xB2, 0x6A, 0x00), false); // Q164：gaps 本身已按 S 表取文，此处只拼前缀
-            g.setBackground(roundRect(Color.rgb(0xFF, 0xF8, 0xEC), 10, this));
+            TextView g = tv(this, S("gap_prefix") + gaps.get(0), 13, styleMoyao() ? Color.rgb(0xFF, 0xB2, 0x6B) : Color.rgb(0xB2, 0x6A, 0x00), false); // Q164：gaps 本身已按 S 表取文，此处只拼前缀；Q175：警告字走暗档同值橙 FFB26B（向导仅限提示同值）、浅档原值
+            g.setBackground(roundRect(styleMoyao() ? MY_SURFACE2 : Color.rgb(0xFF, 0xF8, 0xEC), 10, this)); // Q175：警告浅盒收面二
             g.setPadding(dp(this, 12), dp(this, 10), dp(this, 12), dp(this, 10));
             g.setLineSpacing(0, 1.5f);
             LinearLayout.LayoutParams glp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
             glp.topMargin = dp(this, 10);
             card.addView(g, glp);
         }
-        TextView note = tv(this, "按卡库资料粗算，仅供参考", 11, Color.rgb(0xAE, 0xAE, 0xB2), false);
+        TextView note = tv(this, "按卡库资料粗算，仅供参考", 11, styleMoyao() ? MY_TEXT3 : Color.rgb(0xAE, 0xAE, 0xB2), false); // Q175：脚注收 text3
         LinearLayout.LayoutParams nlp2 = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         nlp2.topMargin = dp(this, 10);
         card.addView(note, nlp2);
@@ -15395,13 +15423,14 @@ public class MainActivity extends Activity {
         LinearLayout bar = new LinearLayout(this);
         bar.setOrientation(LinearLayout.HORIZONTAL);
         bar.setMinimumWidth(dp(this, 24));
-        bar.setBackground(roundRect(Color.rgb(0xEE, 0xF0, 0xF3), 999, this));
+        bar.setBackground(roundRect(styleMoyao() ? MY_SURFACE2 : Color.rgb(0xEE, 0xF0, 0xF3), 999, this)); // Q175：能力条槽收面二
         LinearLayout.LayoutParams barLp = new LinearLayout.LayoutParams(0, dp(this, 6), 1f);
         barLp.leftMargin = dp(this, 10);
         row.addView(bar, barLp);
         View fill = new View(this);
         GradientDrawable fg = new GradientDrawable(GradientDrawable.Orientation.LEFT_RIGHT,
-            new int[]{Color.rgb(0x0A, 0x84, 0xFF), Color.rgb(0x00, 0xA3, 0xC8)});
+            styleMoyao() ? new int[]{MY_PRIMARY, Color.rgb(0x2F, 0xA8, 0xA3)} // Q175：填充蓝梯度收主色→深青（与 filterChip 选中梯度 Q165 同对值）
+                         : new int[]{Color.rgb(0x0A, 0x84, 0xFF), Color.rgb(0x00, 0xA3, 0xC8)});
         fg.setCornerRadius(dp(this, pillR143())); // Q158（件四普查）：药丸填充随圆角杆收口（t==0.5 逐位 999 不变）
         fill.setBackground(fg);
         bar.addView(fill, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, (float) Math.max(0, n)));
@@ -15425,7 +15454,7 @@ public class MainActivity extends Activity {
             p.setStrokeCap(Paint.Cap.ROUND);
             styleIconPaint129(p); // Q129：图标包风格层（现行包空转）
             p.setStrokeJoin(Paint.Join.ROUND);
-            p.setColor(Color.rgb(0x0A, 0x5C, 0xFF));
+            p.setColor(styleMoyao() ? MY_PRIMARY : Color.rgb(0x0A, 0x5C, 0xFF)); // Q175：能力细线图标蓝收主色
             float sx = getWidth() / 24f, sy = getHeight() / 24f;
             p.setStrokeWidth(1.7f * sx);
             if ("shield".equals(kind)) {
@@ -15782,7 +15811,7 @@ public class MainActivity extends Activity {
         // Q148（2.59，深色批）：工具格图标垫深色单独提亮一档蓝灰——旧 colChipOff
         // 深档 #2A2A2E 压 #1E1E1E 卡面发闷（用户图证）；colChipOff 本体是全 App
         // 共用 token 不动，只此点名落点分支。浅色 colChipOff 逐位不变。
-        chip.setBackground(roundRect(darkEff() ? Color.rgb(0x2E, 0x3A, 0x4E) : colChipOff(), 14, this));
+        chip.setBackground(roundRect(styleMoyao() ? MY_SURFACE2 : (darkEff() ? Color.rgb(0x2E, 0x3A, 0x4E) : colChipOff()), 14, this)); // Q175：工具格图标垫收面二（Q148 深档提亮值扁平逐位不动；面二压面一的层级差真机再验）
         ToolIconView iv = new ToolIconView(this);
         iv.kind = kind; iv.iconColor = colText();
         chip.addView(iv, new FrameLayout.LayoutParams(dp(this, 24), dp(this, 24), Gravity.CENTER));
@@ -16371,6 +16400,11 @@ public class MainActivity extends Activity {
             // Q82：非银行卡种 chip（电话卡/其他卡）与类别 chip 同语言；Q65 类别仅银行卡
             if (!isBankKind(c.kind)) {
                 TextView kChip = chip(cardKindLabel(c.kind), Color.rgb(0xF0, 0xF7, 0xFF), Color.rgb(0x2F, 0x6F, 0xD0), 9.5f);
+                if (styleMoyao()) { // Q175：此签压在用户自选渐变卡面上——infoChip175 的空心透底会随渐变明暗乱读，此落点改实面二＋text1＋细字（与页内空心口径分岔，理由即承载面不同）
+                    kChip.setBackground(moyaoCardFace171(MY_SURFACE2, 7f));
+                    kChip.setTextColor(MY_TEXT1);
+                    kChip.setTypeface(displayTf169(this, 300));
+                }
                 LinearLayout.LayoutParams kclp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
                 kclp.topMargin = dp(this, 5);
                 kChip.setLayoutParams(kclp);
@@ -16379,6 +16413,11 @@ public class MainActivity extends Activity {
             // Q65：自建卡类别 chip 与瓷砖同语言（浅底小字），未标不占位
             if (isBankKind(c.kind) && c.acctClass != null && !c.acctClass.isEmpty()) {
                 TextView clsChip = chip(c.acctClass, Color.rgb(0xF0, 0xF7, 0xFF), Color.rgb(0x2F, 0x6F, 0xD0), 9.5f);
+                if (styleMoyao()) { // Q175：同 kChip 落点口（渐变卡面实面签）
+                    clsChip.setBackground(moyaoCardFace171(MY_SURFACE2, 7f));
+                    clsChip.setTextColor(MY_TEXT1);
+                    clsChip.setTypeface(displayTf169(this, 300));
+                }
                 LinearLayout.LayoutParams cclp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
                 cclp.topMargin = dp(this, 5);
                 clsChip.setLayoutParams(cclp);
@@ -16506,7 +16545,7 @@ public class MainActivity extends Activity {
         if (on) {
             GradientDrawable fg152 = new GradientDrawable();
             fg152.setColor(Color.TRANSPARENT);
-            fg152.setStroke(dp(this, 2), Color.argb(178, 0, 122, 255));
+            fg152.setStroke(dp(this, 2), styleMoyao() ? Color.argb(178, 0x3F, 0xD0, 0xC9) : Color.argb(178, 0, 122, 255)); // Q175：拖动态框蓝收青（与长按菜单克隆框同族、同 alpha）
             fg152.setCornerRadius(dp(this, cardR129(14f)));
             tile.setForeground(fg152);
         } else {
@@ -17332,9 +17371,9 @@ public class MainActivity extends Activity {
             specBox.addView(row126);
             if (i < rows.length - 1) {
                 View div = new View(this);
-                div.setBackgroundColor(Color.rgb(0xF0, 0xF0, 0xF5)); // .spec border-bottom #f0f0f5
+                div.setBackgroundColor(styleMoyao() ? colHairline169() : Color.rgb(0xF0, 0xF0, 0xF5)); // .spec border-bottom #f0f0f5；Q175：墨曜走发丝单源（与 B3a 规格行同口）
                 specBox.addView(div, new LinearLayout.LayoutParams(
-                    ViewGroup.LayoutParams.MATCH_PARENT, Math.max(1, dp(this, 1) / 2)));
+                    ViewGroup.LayoutParams.MATCH_PARENT, styleMoyao() ? 1 : Math.max(1, dp(this, 1) / 2))); // Q175：发丝=1 物理像素（禁 dp 凑整）
             }
         }
         // Q79 PAN eye row (per-open reset closed)
@@ -17409,7 +17448,7 @@ public class MainActivity extends Activity {
         alp.topMargin = dp(this, 16);
         inner.addView(acts, alp);
         if (c.bank != null && !c.bank.isEmpty()) {
-            TextView find = customDetailAction("在卡库里搜这家银行", Color.rgb(0x00, 0x7A, 0xFF));
+            TextView find = customDetailAction("在卡库里搜这家银行", styleMoyao() ? MY_PRIMARY : Color.rgb(0x00, 0x7A, 0xFF)); // Q175：蓝字收主色（删除红 17462 同函数另一调用保留）
             find.setOnClickListener(v -> {
                 haptic();
                 suppressNextChromeRestore = true; // 随即切首页，跳过一次恢复防闪烁
@@ -17443,9 +17482,9 @@ public class MainActivity extends Activity {
         t.setSingleLine(true);
         t.setEllipsize(android.text.TextUtils.TruncateAt.END);
         GradientDrawable g = new GradientDrawable();
-        g.setColor(Color.rgb(0xF7, 0xF8, 0xFA));
+        g.setColor(styleMoyao() ? MY_SURFACE2 : Color.rgb(0xF7, 0xF8, 0xFA)); // Q175：幽灵钮浅面收面二
         g.setCornerRadius(dp(this, btnR143(14f))); // Q143：按钮类收口
-        g.setStroke(dp(this, 1), Color.rgb(0xE8, 0xE8, 0xEE));
+        g.setStroke(dp(this, 1), styleMoyao() ? MY_BORDER_DEFAULT : Color.rgb(0xE8, 0xE8, 0xEE)); // Q175：描边收默认档
         t.setBackground(g);
         t.setOnTouchListener((v, e) -> {
             if (e.getAction() == MotionEvent.ACTION_DOWN) pressBounce(v, true);
@@ -17599,7 +17638,7 @@ public class MainActivity extends Activity {
 
     // Q8 对照混合版 .dlg label/.dlg-label：.85rem #555 非粗，组标签上距 12 下距 6（废原 12sp 粗灰）
     TextView customFormLabel(String s) {
-        TextView t = tv(this, s, 13, Color.rgb(0x55, 0x55, 0x55), false);
+        TextView t = tv(this, s, 13, styleMoyao() ? MY_TEXT2 : Color.rgb(0x55, 0x55, 0x55), false); // Q175：表单标收 text2（扁平 #555 与 colText2 浅档同值族、原字面保留）
         LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         lp.topMargin = dp(this, 12);
         lp.bottomMargin = dp(this, 6);
@@ -18059,8 +18098,8 @@ public class MainActivity extends Activity {
         row.addView(dv, dvLp);
         wrap.addView(row, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
         View line = new View(this);
-        line.setBackgroundColor(Color.rgb(0xF0, 0xF0, 0xF5));
-        wrap.addView(line, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, Math.max(1, dp(this, 1))));
+        line.setBackgroundColor(styleMoyao() ? colHairline169() : Color.rgb(0xF0, 0xF0, 0xF5)); // Q175：同规格行发丝口
+        wrap.addView(line, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, styleMoyao() ? 1 : Math.max(1, dp(this, 1)))); // Q175
         return wrap;
     }
 
@@ -18144,10 +18183,10 @@ public class MainActivity extends Activity {
         box.setOrientation(LinearLayout.HORIZONTAL);
         box.setGravity(Gravity.CENTER_VERTICAL);
         box.setPadding(dp(this, 12), dp(this, 10), dp(this, 12), dp(this, 10));
-        box.setBackground(roundRect(Color.rgb(0xF0, 0xF7, 0xFF), 12, this));
+        box.setBackground(roundRect(styleMoyao() ? MY_SURFACE2 : Color.rgb(0xF0, 0xF7, 0xFF), 12, this)); // Q175：命中行浅蓝面收面二
         LinearLayout texts = new LinearLayout(this);
         texts.setOrientation(LinearLayout.VERTICAL);
-        texts.addView(tvW(this, "卡库里有这张卡", 13, Color.rgb(0x0A, 0x5C, 0xD6), 700));
+        texts.addView(tvW(this, "卡库里有这张卡", 13, styleMoyao() ? MY_PRIMARY : Color.rgb(0x0A, 0x5C, 0xD6), 700)); // Q175：蓝字收主色
         String ftf = c.spec("货币转换费（FTF）");
         if (ftf == null || ftf.length() == 0) ftf = c.spec("货币转换费");
         StringBuilder meta = new StringBuilder();
@@ -18155,13 +18194,13 @@ public class MainActivity extends Activity {
         meta.append(" · ").append(c.bank == null ? "" : c.bank).append(" · ").append(orgLabel(c.org));
         if (c.hasScore) meta.append(" · ").append(fmtScore(c.score));
         if (ftf != null && ftf.length() > 0) meta.append(" · 转换费 ").append(ftf);
-        TextView mv = tv(this, meta.toString(), 12, Color.rgb(0x5A, 0x6B, 0x8A), false);
+        TextView mv = tv(this, meta.toString(), 12, styleMoyao() ? MY_TEXT2 : Color.rgb(0x5A, 0x6B, 0x8A), false); // Q175：蓝灰字收 text2
         mv.setSingleLine(false);
         LinearLayout.LayoutParams mvLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         mvLp.topMargin = dp(this, 3);
         texts.addView(mv, mvLp);
         box.addView(texts, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
-        box.addView(new ChevronView(this, Color.rgb(0x0A, 0x5C, 0xD6)), new LinearLayout.LayoutParams(dp(this, 20), dp(this, 20))); // Q161：同源自绘箭头替文本字（原 20sp 非粗体同病）
+        box.addView(new ChevronView(this, styleMoyao() ? MY_PRIMARY : Color.rgb(0x0A, 0x5C, 0xD6)), new LinearLayout.LayoutParams(dp(this, 20), dp(this, 20))); // Q161：同源自绘箭头替文本字（原 20sp 非粗体同病）；Q175：蓝收主色
         box.setOnClickListener(v -> {
             haptic();
             final Card target = c;
@@ -18674,7 +18713,7 @@ public class MainActivity extends Activity {
             acctRow.addView(b);
         }
         paintAcct[0].run();
-        TextView acctHint = tv(this, S("acct_hint"), 11.5f, Color.rgb(0x8E, 0x8E, 0x93), false);
+        TextView acctHint = tv(this, S("acct_hint"), 11.5f, styleMoyao() ? MY_TEXT3 : Color.rgb(0x8E, 0x8E, 0x93), false); // Q175：提示灰收 text3
         acctHint.setLineSpacing(0, 1.45f);
         LinearLayout.LayoutParams ahLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         ahLp.topMargin = dp(this, 6);
@@ -18700,10 +18739,10 @@ public class MainActivity extends Activity {
                 boolean on = i == styleSel[0];
                 GradientDrawable g = customGradient(i);
                 g.setCornerRadius(dp(this, panelR143(12f))); // Q94：色块圆角 8→12 随柔面语言（基准）；Q143：面板类收口
-                g.setStroke(dp(this, 2), on ? Color.rgb(0x00, 0x7A, 0xFF) : Color.TRANSPARENT);
+                g.setStroke(dp(this, 2), on ? (styleMoyao() ? MY_PRIMARY : Color.rgb(0x00, 0x7A, 0xFF)) : Color.TRANSPARENT); // Q175：选中边蓝收主色
                 swatchInners.get(i).setBackground(g);
                 GradientDrawable ring = new GradientDrawable();
-                ring.setColor(on ? Color.argb(64, 0, 122, 255) : Color.TRANSPARENT);
+                ring.setColor(on ? (styleMoyao() ? Color.argb(64, 0x3F, 0xD0, 0xC9) : Color.argb(64, 0, 122, 255)) : Color.TRANSPARENT); // Q175：外圈蓝收青（同 alpha）
                 ring.setCornerRadius(dp(this, panelR143(14f))); // Q143：面板类收口（与内块同歩）
                 swatchCells.get(i).setBackground(ring);
             }
@@ -18740,13 +18779,13 @@ public class MainActivity extends Activity {
         final EditText inNote = customInput(S("hint_cc_note"), draft.note, 60); // Q164
         // Q9 NFC 贴卡按钮（对照混合版 index.html #ccNfc：全宽、浅蓝底、蓝字，禁用 emoji 改纯文字细线语言）：
         // 点它起 NFC 读卡，回填组织/银行/备注；无 NFC 或未开启给明确提示，不静默失败。
-        TextView nfcBtn = tv(this, "NFC 贴卡识别（自动填卡组织 / 类型）", 14, Color.rgb(0x2C, 0x5F, 0x9E), true); // Q94：蓝字降饱和随柔面
+        TextView nfcBtn = tv(this, "NFC 贴卡识别（自动填卡组织 / 类型）", 14, styleMoyao() ? MY_PRIMARY : Color.rgb(0x2C, 0x5F, 0x9E), true); // Q94：蓝字降饱和随柔面；Q175：墨曜收主色
         nfcBtn.setGravity(Gravity.CENTER);
         nfcBtn.setPadding(0, dp(this, 12), 0, dp(this, 12));
         GradientDrawable nfcBg = new GradientDrawable();
-        nfcBg.setColor(darkEff() ? Color.rgb(0x24, 0x34, 0x4E) : Color.rgb(0xE9, 0xF2, 0xFD)); // Q94：浅雾蓝面
+        nfcBg.setColor(styleMoyao() ? MY_SURFACE2 : (darkEff() ? Color.rgb(0x24, 0x34, 0x4E) : Color.rgb(0xE9, 0xF2, 0xFD))); // Q94：浅雾蓝面；Q175：墨曜收面二（门控在 darkEff 前，扁平两档逐位不动）
         nfcBg.setCornerRadius(dp(this, btnR143(14f))); // Q143：按钮类收口
-        nfcBg.setStroke(dp(this, 1), darkEff() ? Color.argb(70, 255, 255, 255) : Color.rgb(0xC9, 0xDF, 0xFA));
+        nfcBg.setStroke(dp(this, 1), styleMoyao() ? MY_BORDER_DEFAULT : (darkEff() ? Color.argb(70, 255, 255, 255) : Color.rgb(0xC9, 0xDF, 0xFA))); // Q175：描边收默认档
         nfcBtn.setBackground(nfcBg);
         LinearLayout.LayoutParams nfcLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         nfcLp.topMargin = dp(this, 14);
@@ -19166,7 +19205,7 @@ public class MainActivity extends Activity {
         LinearLayout btns=new LinearLayout(this); btns.setOrientation(LinearLayout.HORIZONTAL); LinearLayout.LayoutParams blp=new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,ViewGroup.LayoutParams.WRAP_CONTENT); blp.topMargin=dp(this,18); card.addView(btns,blp);
         TextView cb=tv(this,cancelTxt,15,colText(),false); cb.setGravity(Gravity.CENTER); cb.setBackground(rippleBg(darkEff() ? colChipOff() : Color.rgb(0xF2,0xF3,0xF7),14));
         btns.addView(cb,new LinearLayout.LayoutParams(0,dp(this,48),1f));
-        TextView ob=tv(this,okTxt,15,Color.WHITE,true); ob.setGravity(Gravity.CENTER); ob.setBackground(rippleBg(Color.rgb(0x0A,0x5C,0xD6),14));
+        TextView ob=tv(this,okTxt,15,onAccentInk(),true); ob.setGravity(Gravity.CENTER); ob.setBackground(rippleBg(styleMoyao() ? MY_PRIMARY : Color.rgb(0x0A,0x5C,0xD6),14)); // Q175：通用确认窗主钮同口（字口扁平恒白）
         LinearLayout.LayoutParams olp=new LinearLayout.LayoutParams(0,dp(this,48),1f); olp.leftMargin=dp(this,10); btns.addView(ob,olp);
         FrameLayout.LayoutParams clp=new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,ViewGroup.LayoutParams.WRAP_CONTENT); clp.gravity=Gravity.BOTTOM; clp.leftMargin=dp(this,12); clp.rightMargin=dp(this,12); clp.bottomMargin=dp(this,10)+navBarH(); // Q125（审计二类 1·A）：全站独此窗缺底距、贴死屏底，补 dp(10)+手势区
         FrameLayout wrap=new FrameLayout(this); View glass=glassLayerHw(card,sheetR129(22f),false, "updatewin"); roundClip(glass,sheetR129(22f),this); // Q126（件三）玻璃与窗体同改全圆角
@@ -19241,9 +19280,9 @@ public class MainActivity extends Activity {
         cancelB.setBackground(rippleBg(darkEff() ? colChipOff() : Color.rgb(0xF2, 0xF3, 0xF7), 14));
         cancelB.setOnClickListener(v -> { haptic(); closeExitSheet151(); });
         btns.addView(cancelB, new LinearLayout.LayoutParams(0, dp(this, 48), 1f));
-        TextView exitB = tv(this, isEn() ? "Exit" : "退出", 14.5f, Color.WHITE, true);
+        TextView exitB = tv(this, isEn() ? "Exit" : "退出", 14.5f, onAccentInk(), true); // Q175：同窗主钮口
         exitB.setGravity(Gravity.CENTER);
-        exitB.setBackground(rippleBg(Color.rgb(0x0A, 0x5C, 0xD6), 14));
+        exitB.setBackground(rippleBg(styleMoyao() ? MY_PRIMARY : Color.rgb(0x0A, 0x5C, 0xD6), 14)); // Q175
         LinearLayout.LayoutParams ebLp = new LinearLayout.LayoutParams(0, dp(this, 48), 1f);
         ebLp.leftMargin = dp(this, 8);
         exitB.setLayoutParams(ebLp);
@@ -19701,9 +19740,9 @@ public class MainActivity extends Activity {
         buttons.addView(cancel, cancelLp);
         appUpdateCancel159 = cancel;
 
-        TextView ok = tvW(this, S("software_download_update"), 14.5f, Color.WHITE, 800);
+        TextView ok = tvW(this, S("software_download_update"), 14.5f, onAccentInk(), 800); // Q175：同窗主钮口
         ok.setGravity(Gravity.CENTER);
-        ok.setBackground(rippleBg(Color.rgb(0x0A, 0x5C, 0xD6), 14));
+        ok.setBackground(rippleBg(styleMoyao() ? MY_PRIMARY : Color.rgb(0x0A, 0x5C, 0xD6), 14)); // Q175
         buttons.addView(ok, new LinearLayout.LayoutParams(0, dp(this, 48), 1f));
         appUpdateOk159 = ok;
 
@@ -20229,8 +20268,8 @@ public class MainActivity extends Activity {
         }
         String rawCat = g.dCategory();
         String cat = rawCat.isEmpty() ? (isEn() ? "Basics" : "常识") : rawCat;
-        TextView cg2 = tv(this, cat, 10.5f, Color.rgb(0x0A, 0x5C, 0xD6), true);
-        cg2.setBackground(roundRect(Color.rgb(0xE8, 0xF1, 0xFD), 999, this));
+        TextView cg2 = tv(this, cat, 10.5f, styleMoyao() ? MY_PRIMARY : Color.rgb(0x0A, 0x5C, 0xD6), true); // Q175：同蓝签口
+        cg2.setBackground(styleMoyao() ? scorePillBg171(999f) : roundRect(Color.rgb(0xE8, 0xF1, 0xFD), 999, this)); // Q175
         cg2.setPadding(dp(this, 8), dp(this, 3), dp(this, 8), dp(this, 3));
         LinearLayout catRow = new LinearLayout(this);
         catRow.setOrientation(LinearLayout.HORIZONTAL);
@@ -20562,11 +20601,11 @@ public class MainActivity extends Activity {
             card.addView(meta);
             String rawCat = g.dCategory(); // Q114：按界面语言取词条（英文缺字段回落中文）
             String cat = rawCat.isEmpty() ? (isEn() ? "Basics" : "常识") : rawCat;
-            TextView cg = tv(this, cat, 10.5f, Color.rgb(0x0A, 0x5C, 0xD6), true);
-            cg.setBackground(roundRect(Color.rgb(0xE8, 0xF1, 0xFD), 999, this));
+            TextView cg = tv(this, cat, 10.5f, styleMoyao() ? MY_PRIMARY : Color.rgb(0x0A, 0x5C, 0xD6), true); // Q175：同蓝签口
+            cg.setBackground(styleMoyao() ? scorePillBg171(999f) : roundRect(Color.rgb(0xE8, 0xF1, 0xFD), 999, this)); // Q175
             cg.setPadding(dp(this, 8), dp(this, 3), dp(this, 8), dp(this, 3));
             meta.addView(cg);
-            TextView arrow = tv(this, open ? S("news_collapse_arrow") : S("news_expand_arrow"), 11, Color.rgb(0x0A, 0x5C, 0xD6), true); // Q164
+            TextView arrow = tv(this, open ? S("news_collapse_arrow") : S("news_expand_arrow"), 11, styleMoyao() ? MY_PRIMARY : Color.rgb(0x0A, 0x5C, 0xD6), true); // Q164；Q175：折展箭头随蓝签同收主色（与资讯同类同逻辑）
             arrow.setGravity(Gravity.RIGHT);
             meta.addView(arrow, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
 
@@ -21216,12 +21255,12 @@ public class MainActivity extends Activity {
                 });
             }
             final boolean added = isExtAdded(e);
-            TextView addBtn = tv(this, added ? "已加入" : "加入", 13, added ? Color.rgb(0x8E, 0x8E, 0x93) : Color.WHITE, true);
+            TextView addBtn = tv(this, added ? "已加入" : "加入", 13, added ? (styleMoyao() ? MY_TEXT3 : Color.rgb(0x8E, 0x8E, 0x93)) : onAccentInk(), true); // Q175：已加灰收 text3、未加字走主色面字口（扁平恒白）
             addBtn.setGravity(Gravity.CENTER);
             addBtn.setPadding(dp(this, 12), dp(this, 7), dp(this, 12), dp(this, 7));
-            if (added) addBtn.setBackground(roundRect(Color.rgb(0xE9, 0xE9, 0xED), 999, this));
+            if (added) addBtn.setBackground(roundRect(styleMoyao() ? MY_SURFACE2 : Color.rgb(0xE9, 0xE9, 0xED), 999, this)); // Q175：已加底收面二
             else {
-                GradientDrawable g = new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM, new int[]{Color.rgb(0x0A, 0x84, 0xFF), Color.rgb(0x00, 0x66, 0xE6)});
+                GradientDrawable g = new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM, styleMoyao() ? new int[]{MY_PRIMARY, MY_PRIMARY} : new int[]{Color.rgb(0x0A, 0x84, 0xFF), Color.rgb(0x00, 0x66, 0xE6)}); // Q175：蓝梯度收主色纯面（双 stop 同值）
                 g.setCornerRadius(dp(this, pillR143())); // Q143：整圆药丸类收口（扩展库加入钮）
                 addBtn.setBackground(g);
             }
@@ -21289,10 +21328,10 @@ public class MainActivity extends Activity {
                     catch (Throwable ex) { showFloatToast("打不开这个链接"); }
                 });
             }
-            TextView pendChip154 = tv(this, S("verify_pending"), 12, Color.rgb(0x8E, 0x8E, 0x93), true); // Q164
+            TextView pendChip154 = tv(this, S("verify_pending"), 12, styleMoyao() ? MY_TEXT3 : Color.rgb(0x8E, 0x8E, 0x93), true); // Q164；Q175：待核签灰收 text3
             pendChip154.setGravity(Gravity.CENTER);
             pendChip154.setPadding(dp(this, 10), dp(this, 6), dp(this, 10), dp(this, 6));
-            pendChip154.setBackground(roundRect(Color.rgb(0xE9, 0xE9, 0xED), 999, this));
+            pendChip154.setBackground(roundRect(styleMoyao() ? MY_SURFACE2 : Color.rgb(0xE9, 0xE9, 0xED), 999, this)); // Q175：待核签底收面二（同 addBtn 已加态口）
             LinearLayout.LayoutParams pcp154 = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
             pcp154.leftMargin = dp(this, 8);
             row.addView(pendChip154, pcp154);
@@ -24869,8 +24908,8 @@ public class MainActivity extends Activity {
             meta.setGravity(Gravity.CENTER_VERTICAL);
             card.addView(meta);
             String tag = n.tag == null || n.tag.isEmpty() ? "资讯" : n.tag;
-            TextView tg = tv(this, newsTagLabel164(tag), 10.5f, Color.rgb(0x0A, 0x5C, 0xD6), true); // Q164
-            tg.setBackground(roundRect(Color.rgb(0xE8, 0xF1, 0xFD), 999, this));
+            TextView tg = tv(this, newsTagLabel164(tag), 10.5f, styleMoyao() ? MY_PRIMARY : Color.rgb(0x0A, 0x5C, 0xD6), true); // Q164；Q175：同蓝签口
+            tg.setBackground(styleMoyao() ? scorePillBg171(999f) : roundRect(Color.rgb(0xE8, 0xF1, 0xFD), 999, this)); // Q175
             tg.setPadding(dp(this, 8), dp(this, 3), dp(this, 8), dp(this, 3));
             meta.addView(tg);
             TextView dt = tv(this, n.date == null ? "" : n.date, 11, colText2(), false);
@@ -24881,7 +24920,7 @@ public class MainActivity extends Activity {
             LinearLayout.LayoutParams srlp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
             srlp.leftMargin = dp(this, 6);
             meta.addView(sr, srlp);
-            TextView arrow = tv(this, open ? S("news_collapse_arrow") : S("news_expand_arrow"), 11, Color.rgb(0x0A, 0x5C, 0xD6), true); // Q164
+            TextView arrow = tv(this, open ? S("news_collapse_arrow") : S("news_expand_arrow"), 11, styleMoyao() ? MY_PRIMARY : Color.rgb(0x0A, 0x5C, 0xD6), true); // Q164；Q175：同词条箭头口
             arrow.setGravity(Gravity.RIGHT);
             meta.addView(arrow, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
 
@@ -25055,7 +25094,7 @@ public class MainActivity extends Activity {
             p.setStrokeWidth(dp(getContext(), 1.7f));
             float sx = getWidth() / 24f, sy = getHeight() / 24f;
             // 后卡：左上探出的一张，只描上/左边（照原图叠放关系）
-            p.setColor(Color.argb(150, 0x0A, 0x5C, 0xD6));
+            p.setColor(styleMoyao() ? Color.argb(150, 0x3F, 0xD0, 0xC9) : Color.argb(150, 0x0A, 0x5C, 0xD6)); // Q175：关于页细线插画蓝收青（同 alpha；形态/线宽不动）
             Path back = new Path();
             back.moveTo(7.5f * sx, 8.5f * sy);
             back.lineTo(7.5f * sx, 5.2f * sy);
@@ -25065,7 +25104,7 @@ public class MainActivity extends Activity {
             back.lineTo(19.4f * sx, 7.5f * sy);
             cv.drawPath(back, p);
             // 前卡：整卡描边 + 磁条线 + 芯片 + 两道短线（照原图蓝卡元素）
-            p.setColor(Color.rgb(0x0A, 0x5C, 0xD6));
+            p.setColor(styleMoyao() ? MY_PRIMARY : Color.rgb(0x0A, 0x5C, 0xD6)); // Q175：同上
             RectF card = new RectF(4.6f * sx, 8f * sy, 21f * sx, 20.6f * sy);
             cv.drawRoundRect(card, 2.4f * sx, 2.4f * sy, p);
             cv.drawLine(4.6f * sx, 11.6f * sy, 21f * sx, 11.6f * sy, p);
@@ -25085,7 +25124,7 @@ public class MainActivity extends Activity {
             styleIconPaint129(p); // Q129：图标包风格层（现行包空转）
             p.setStrokeJoin(Paint.Join.ROUND);
             p.setStrokeWidth(dp(getContext(), 1.7f));
-            p.setColor(Color.rgb(0x0A, 0x5C, 0xD6));
+            p.setColor(styleMoyao() ? MY_PRIMARY : Color.rgb(0x0A, 0x5C, 0xD6)); // Q175：咖啡插画同口
             float sx = getWidth() / 24f, sy = getHeight() / 24f;
             RectF cup = new RectF(4f * sx, 10f * sy, 17f * sx, 15.5f * sy);
             cv.drawRoundRect(cup, 2.2f * sx, 2.2f * sy, p);
@@ -25173,13 +25212,13 @@ public class MainActivity extends Activity {
         if (crashLogText == null || crashLogText.trim().isEmpty()) return null;
             LinearLayout crashBox = new LinearLayout(this);
             crashBox.setOrientation(LinearLayout.VERTICAL);
-            crashBox.setBackground(roundRect(Color.rgb(0xFF, 0xF1, 0xF0), 12, this));
+            crashBox.setBackground(roundRect(styleMoyao() ? MY_SURFACE2 : Color.rgb(0xFF, 0xF1, 0xF0), 12, this)); // Q175：崩溃浅红盒收面二（标题红字保留作警示）
             crashBox.setPadding(dp(this, 14), dp(this, 10), dp(this, 14), dp(this, 12));
             LinearLayout.LayoutParams cbp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
             cbp.topMargin = dp(this, 8);
             crashBox.setLayoutParams(cbp);
             crashBox.addView(tv(this, "最近一次崩溃记录", 14, Color.rgb(0xB0, 0x2A, 0x20), true));
-            TextView crashTv = tv(this, crashLogText, 11, Color.rgb(0x5A, 0x2A, 0x24), false);
+            TextView crashTv = tv(this, crashLogText, 11, styleMoyao() ? MY_TEXT2 : Color.rgb(0x5A, 0x2A, 0x24), false); // Q175：正文收 text2
             crashTv.setTextIsSelectable(true);
             LinearLayout.LayoutParams clp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
             clp.topMargin = dp(this, 6);
@@ -25326,7 +25365,7 @@ public class MainActivity extends Activity {
         GradientDrawable tg = new GradientDrawable();
         tg.setColor(colSurface()); tg.setCornerRadius(dp(this, panelR143(14f))); // Q143：面板类收口
         tg.setStroke(dp(this, 1), colDivider());
-        toggle.setBackground(new RippleDrawable(ColorStateList.valueOf(Color.argb(38, 10, 92, 214)), tg, null));
+        toggle.setBackground(new RippleDrawable(ColorStateList.valueOf(styleMoyao() ? Color.argb(38, 0x3F, 0xD0, 0xC9) : Color.argb(38, 10, 92, 214)), tg, null)); // Q175：赞助行涟漪蓝收青（面 colSurface/边 colDivider 语义口不动）
         toggle.setPadding(dp(this, 16), dp(this, 13), dp(this, 16), dp(this, 13));
         LinearLayout.LayoutParams tolp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         tolp.topMargin = dp(this, 10);
@@ -27774,7 +27813,64 @@ public class MainActivity extends Activity {
         TextView t = chip(label, flatBg, flatFg, sp);
         if (styleMoyao()) {
             t.setBackground(scorePillBg171(7f));
-            t.setTextColor(!scored ? MY_TEXT3 : (score >= 8.5 ? MY_PRIMARY : MY_TEXT1));
+            int ink175 = !scored ? MY_TEXT3 : (score >= 8.5 ? MY_PRIMARY : MY_TEXT1);
+            t.setTextColor(ink175);
+            t.setTypeface(displayTf169(this, 300));
+            // Q175（B4②）：细线星标与字同色挂左侧（未评分 text3 同挂，作徽标身份
+            // 标记）；sp<8.5 的四列窄瓷砖不出星——77dp 宽再塞 14dp 星标会把同行
+            // 状态/已添加 chip 挤出砖面，属②有界取舍（报告登记、真机可裁）。
+            if (sp >= 8.5f) attachScoreStar175(t, ink175);
+        }
+        return t;
+    }
+
+    // ================= Q175（2.89）墨曜重构 B4：长尾扫尾 =================
+    // 销项自 moyao-refactor-plan §4-B4 与 B1–B3b 四份施工报告的遗留登记；数字
+    // 仍只引 §2 冻结基元与 MY_* 令牌，不新发明。本段助手与各调用点墨曜支，
+    // 扁平支一律在三元/门内内嵌原式逐字（源码级断言见 B4 施工报告）。
+    // —— ②细线星标：与 StarIconView（Q1 菜单星）同一 24 格星形点阵、描边
+    // 1.1dp 绘 11dp 位图挂 TextView compound 左侧（TextView 无 Canvas 钩子
+    // 故走位图；路径即 Q1 原阵逐点复刻，不另画第二套星形）。
+    Drawable scoreStar175(int color) {
+        int px = Math.max(1, dp(this, 11));
+        Bitmap bmp = Bitmap.createBitmap(px, px, Bitmap.Config.ARGB_8888);
+        Canvas cv = new Canvas(bmp);
+        Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);
+        p.setStyle(Paint.Style.STROKE);
+        p.setStrokeCap(Paint.Cap.ROUND);
+        p.setStrokeJoin(Paint.Join.ROUND);
+        p.setStrokeWidth(dp(this, 1.1f));
+        p.setColor(color);
+        float s = px / 24f;
+        float[][] pts = {
+            {12f, 3f}, {14.23f, 8.93f}, {20.56f, 9.22f}, {15.61f, 13.17f}, {17.29f, 19.28f},
+            {12f, 15.8f}, {6.71f, 19.28f}, {8.39f, 13.17f}, {3.44f, 9.22f}, {9.77f, 8.93f}
+        };
+        android.graphics.Path path = new android.graphics.Path();
+        for (int i = 0; i < pts.length; i++) {
+            if (i == 0) path.moveTo(pts[i][0] * s, pts[i][1] * s);
+            else path.lineTo(pts[i][0] * s, pts[i][1] * s);
+        }
+        path.close();
+        cv.drawPath(path, p);
+        android.graphics.drawable.BitmapDrawable d175 =
+            new android.graphics.drawable.BitmapDrawable(getResources(), bmp);
+        d175.setBounds(0, 0, px, px);
+        return d175;
+    }
+    void attachScoreStar175(TextView t, int color) {
+        t.setCompoundDrawables(scoreStar175(color), null, null, null);
+        t.setCompoundDrawablePadding(dp(this, 3));
+    }
+    // —— ①信息类小 chip 收编口（单源）：扁平 chip() 原色逐位透传；墨曜改空心
+    // 发丝面（scorePillBg171 7f 与评分 pill 同族）＋Josefin 细字 300＋调用点
+    // 给的墨曜字色。状态语义色（在发绿/停发红）由调用点以 moyaoFg=原字色
+    // 直传保留，不在此洗掉；字号/内边距仍由 chip() 通则承接、两风格同值。
+    TextView infoChip175(String s, int flatBg, int flatFg, int moyaoFg, float sp) {
+        TextView t = chip(s, flatBg, flatFg, sp);
+        if (styleMoyao()) {
+            t.setBackground(scorePillBg171(7f));
+            t.setTextColor(moyaoFg);
             t.setTypeface(displayTf169(this, 300));
         }
         return t;
