@@ -1348,7 +1348,13 @@ public class MainActivity extends Activity {
         STR.put("gap_no_3ds", new String[]{"没有支持 3DS 的卡，部分境外网站付款可能过不了验证","No 3DS card — some overseas checkouts may fail verification"});
         STR.put("gap_prefix", new String[]{"短板：","Gap: "});
         STR.put("mine_missing_fmt", new String[]{"还差 %s","Missing %s"});
+// Q179（2.92，资讯分区按类出 STR）：tag 数据值不动、仅展示映射（DeepSeek 回函 ①：数据枚举键进 STR、值 Industry/Benefits/Card Replacement）
+        STR.put("news_cat_industry", new String[]{"行业动态","Industry"});
+        STR.put("news_cat_benefit", new String[]{"权益动态","Benefits"});
+        STR.put("news_cat_exchange", new String[]{"换卡提醒","Card Replacement"});
         STR.put("news_cat_new", new String[]{"新卡上市","New Cards"});
+        STR.put("tool_search_online", new String[]{"在线搜卡","Search Online"}); // Q179
+        STR.put("tool_search_sub", new String[]{"扩展卡库","Extended Library"}); // Q179
         STR.put("news_source", new String[]{"来源：","Source: "});
         STR.put("news_date", new String[]{"日期：","Date: "});
         STR.put("news_collapse", new String[]{"收起","Collapse"});
@@ -1807,6 +1813,35 @@ public class MainActivity extends Activity {
             TextView e = navLabels.get("settings"); if (e != null) e.setText(my169 ? S("nav_settings").toUpperCase(java.util.Locale.US) : S("nav_settings"));
         } catch (Throwable ignored) {}
         refreshNavFonts125(); // Q125：文字之外重套当前 Typeface（见下）
+        fitNavLabels179(); // Q179：单行自适配（实测超宽才缩、中文恒原样）
+    }
+
+    // Q179（2.92）：底栏五签单行自适配——按生效文案在基准字号下实测宽，超宽等比
+    // 缩至放下（下限 7dp）；中文签实测恒放下、字号不变，观感零差。与 Q128 字号
+    // 重设同链（refreshNavLabels 尾跑），字距按 letterSpacing 现值估入宽。
+    void fitNavLabels179() {
+        if (navRow == null || navLabels == null || navLabels.isEmpty()) return;
+        navRow.post(() -> {
+            try {
+                int rowW179 = navRow.getWidth();
+                if (rowW179 <= 0) return;
+                int avail179 = rowW179 / 5 - dp(MainActivity.this, 8);
+                float basePx179 = (navBaseTextPx128 > 0 && navBaseComp128 > 0) ? navBaseTextPx128 / navBaseComp128 * fontComp128(MainActivity.this) : 0f;
+                if (basePx179 <= 0) return;
+                for (TextView lb179 : navLabels.values()) {
+                    if (lb179 == null) continue;
+                    lb179.setSingleLine(true);
+                    String t179 = String.valueOf(lb179.getText());
+                    android.graphics.Paint p179 = lb179.getPaint();
+                    p179.setTextSize(basePx179);
+                    float w179 = p179.measureText(t179) + t179.length() * lb179.getLetterSpacing() * basePx179;
+                    float target179 = basePx179;
+                    if (w179 > avail179 && w179 > 0) target179 = Math.max(dp(MainActivity.this, 7), basePx179 * avail179 / w179);
+                    if (Math.abs(target179 - lb179.getTextSize()) > 0.5f) lb179.setTextSize(android.util.TypedValue.COMPLEX_UNIT_PX, target179);
+                    pinFixedText125(lb179);
+                }
+            } catch (Throwable t179) { logErr("nav.fit179", t179); }
+        });
     }
 
     // Q125（2.37，字体件，研报 A1）：底栏是长寿命视图、切字体走 rebuildPages
@@ -6733,7 +6768,7 @@ public class MainActivity extends Activity {
         if ("score-asc".equals(v)) return "评分由低到高";
         if ("name".equals(v)) return "名称";
         if ("bank".equals(v)) return "银行";
-        if (v != null && v.startsWith("dim:")) return "按" + scoreDimShort(v.substring(4)) + "评分";
+        if (v != null && v.startsWith("dim:")) return EN_MODE ? String.format("By %s score", scoreDimShortEn(v.substring(4))) : ("按" + scoreDimShort(v.substring(4)) + "评分"); // Q179：同口补英文分支（数据键 dim: 不动；static 上下文用 EN_MODE 镜像）
         return v;
     }
 
@@ -7302,6 +7337,7 @@ public class MainActivity extends Activity {
         // Q151（N16）：数据备好、首页已成形——摘加载层，再 idle 分帧预建其余页
         // （news 除外：其构建含 fetchNewsUpdate/fetchGlossaryUpdate 联网拉取，属
         // 「用户进页才触发」口径，预建等于开机自动联网、触禁止自动加载红线）。
+        loadBankDict179(false); // Q179：银行词典装载（assets 兜底＋OTA 覆盖）
         dismissBootLayer151();
         schedulePrebuild152(); // Q152：命名任务句柄＋前台/数据守卫＋onPause 可撤（见 ensureBuiltPage152）
     }
@@ -12670,7 +12706,7 @@ public class MainActivity extends Activity {
         } else {
             List<View> dimChips = new ArrayList<>();
             for (final String dim : dims) {
-                dimChips.add(filterChip(scoreDimShort(dim), scoreDimsSel.contains(dim), () -> {
+                dimChips.add(filterChip(isEn() ? scoreDimShortEn(dim) : scoreDimShort(dim), scoreDimsSel.contains(dim), () -> { // Q179：与同窗 sort 片/已选条 pill 同口（旧直出中文短名英文漏译）
                     if (scoreDimsSel.contains(dim)) {
                         scoreDimsSel.remove(dim);
                         if (("dim:" + dim).equals(sortMode)) sortMode = null; // 维度已不展示时，不再按它隐形排序
@@ -12787,7 +12823,8 @@ public class MainActivity extends Activity {
 
     // Q13 置灰禁用态：哑光灰底灰字、无点击无按压无震动；若为当前所选则以哑光蓝灰保留勾与选中可辨
     TextView filterChip(String label, boolean on, final Runnable act, boolean disabled) {
-        TextView t = tv(this, (on ? "\u2713 " : "") + label, 13, on ? onAccentInk() : colText(), on); // Q165：选中字走主色面字口（flat 恒白）
+        String shown179 = isEn() ? EN_TXT.getOrDefault(label, label) : label; // Q179：先译标签再拼 ✓ 前缀（tvW 整串精确匹配，带前缀必断译——筛选窗全部/状态类选中态英文漏中文根因）
+        TextView t = tv(this, (on ? "\u2713 " : "") + shown179, 13, on ? onAccentInk() : colText(), on); // Q165：选中字走主色面字口（flat 恒白）
         t.setSingleLine(true);
         t.setEllipsize(android.text.TextUtils.TruncateAt.END);
         t.setGravity(Gravity.CENTER);
@@ -12892,7 +12929,7 @@ public class MainActivity extends Activity {
                 if (j > 0) clp.leftMargin = dp(this, 8);
                 if (idx < banks.size()) {
                     final String bankName = banks.get(idx);
-                    View chip = filterChip(bankName, bankName.equals(filterBank), () -> {
+                    String bl179 = bankEn179(bankName); View chip = filterChip(isEn() && !bl179.isEmpty() ? bl179 : bankName, bankName.equals(filterBank), () -> { // Q179：英文模式显词典拉丁名（未命中回退原名）、filterBank 存值仍中文原名
                         filterBank = bankName.equals(filterBank) ? null : bankName;
                         rebuildFilterPanel(panel); refreshHome();
                     });
@@ -14574,7 +14611,7 @@ public class MainActivity extends Activity {
             name173.setLineSpacing(0, 1.15f);
             plate173.addView(name173);
             String orgSp173 = orgSpecimen171(c.org);
-            TextView spec173 = specimenTv169((orgSp173.isEmpty() ? "" : orgSp173 + " \u00B7 ") + (c.isCredit() ? "CREDIT" : "DEBIT"));
+            String bkEn173 = bankEn179(c.bank); TextView spec173 = specimenTv169((bkEn173.isEmpty() ? "" : bkEn173.toUpperCase(java.util.Locale.US) + " \u00B7 ") + (orgSp173.isEmpty() ? "" : orgSp173 + " \u00B7 ") + (c.isCredit() ? "CREDIT" : "DEBIT")); // Q179：银行拉丁段只出词典命中值、查无不编造
             LinearLayout.LayoutParams spp173 = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
             spp173.topMargin = dp(this, 5);
@@ -15122,7 +15159,7 @@ public class MainActivity extends Activity {
             if (styleMoyao()) {
                 // Q171（B2）：specimen 工厂首个消费点——组织拉丁名＋卡种标本微字（数据直出、不造文案）
                 String orgSp171 = orgSpecimen171(c.org);
-                TextView spec171 = specimenTv169((orgSp171.isEmpty() ? "" : orgSp171 + " · ") + (c.isCredit() ? "CREDIT" : "DEBIT"));
+                String bkEn171 = bankEn179(c.bank); TextView spec171 = specimenTv169((bkEn171.isEmpty() ? "" : bkEn171.toUpperCase(java.util.Locale.US) + " · ") + (orgSp171.isEmpty() ? "" : orgSp171 + " · ") + (c.isCredit() ? "CREDIT" : "DEBIT")); // Q179：银行拉丁段同口（只出命中值）
                 LinearLayout.LayoutParams spLp171 = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
                 spLp171.topMargin = dp(this, 2);
                 tx.addView(spec171, spLp171);
@@ -15831,7 +15868,7 @@ public class MainActivity extends Activity {
         // 与现有格同图标语言/同尺寸。Q147（2.58，用户 04:35 点名功能重复）追注：
         // 当年「底页三项保留作冗余入口」已撤——添加底页内的同名两行整段删除，
         // 本两格自此为唯一入口（openExtendedSearch/openBinQuery 本体未动）。
-        cells.add(new Object[]{"extsearch", "在线搜卡", "扩展卡库",
+        cells.add(new Object[]{"extsearch", S("tool_search_online"), S("tool_search_sub"), // Q179：宫格名/副进 STR（EN_TXT 无「在线搜卡」整串、L() 调用点冻结不许新增）
             (Runnable) () -> openExtendedSearch()});
         cells.add(new Object[]{"binquery", "在线查询卡信息", S("tool_bin_sub"), // Q164
             (Runnable) () -> openBinQuery()});
@@ -18808,7 +18845,7 @@ public class MainActivity extends Activity {
             acctLabel.setVisibility(vis);
             acctRow.setVisibility(vis);
             acctHint.setVisibility(vis);
-            bankLabel.setText(bank ? "发卡银行" : ("phone".equals(kindSel[0]) ? "运营商" : "发行方"));
+            String bl179 = bank ? "发卡银行" : ("phone".equals(kindSel[0]) ? "运营商" : "发行方"); bankLabel.setText(isEn() ? EN_TXT.getOrDefault(bl179, bl179) : bl179); // Q179：原直写绕开 tvW 译口（EN_TXT 三词已有译文）
         };
         applyKindVisibilityHolder[0] = applyKindVisibilityReal;
         form.addView(customFormLabel("卡面样式"));
@@ -19263,6 +19300,7 @@ public class MainActivity extends Activity {
                 // 下拉同步）都经此收口，不许无变化也报「完成」。
                 showFloatToast(String.format(S("upd_done_fmt"), oldVer151, Store.dataVersion, oldN151, Store.all.size())); // Q164
                 pages.clear();
+                loadBankDict179(true); // Q179：数据更新落地后词典同批刷新（OTA 增量/纠错）
                 if (detailCard == null) rebuildPages();
                 else scheduleDetailRefresh161(detailCard.id); // Q161：详情窗在场——登记待重开，关窗落定按新数据重开（closeDetail finish 消费一次）
             });
@@ -21659,7 +21697,7 @@ public class MainActivity extends Activity {
         // 应 chip 维持 mode 派生不动——自适应逢深色时两钮同亮（一个报模式、
         // 一个报生效色，同事实两维度，接受）。
         boolean chipSel161[] = { m161 == SC_BG_AUTO158, eff161 == SHOWCASE_BGS[SHOWCASE_BGS.length - 1] };
-        if (scModeChips161 != null) for (int i161 = 0; i161 < scModeChips161.length; i161++) { TextView ch161 = scModeChips161[i161]; if (ch161 == null) continue; boolean sel161 = i161 < chipSel161.length && chipSel161[i161]; ch161.setBackground(roundRect(sel161 ? (showcaseDarkBg() ? Color.argb(120, 255, 255, 255) : Color.argb(40, 0, 0, 0)) : (showcaseDarkBg() ? Color.argb(40, 255, 255, 255) : Color.argb(230, 255, 255, 255)), 999, this)); }
+        if (scModeChips161 != null) for (int i161 = 0; i161 < scModeChips161.length; i161++) { TextView ch161 = scModeChips161[i161]; if (ch161 == null) continue; boolean sel161 = i161 < chipSel161.length && chipSel161[i161]; ch161.setBackground(roundRect(sel161 ? (showcaseDarkBg() ? Color.argb(120, 255, 255, 255) : Color.argb(40, 0, 0, 0)) : (showcaseDarkBg() ? Color.argb(40, 255, 255, 255) : scUnselFace179()), 999, this)); }
         if (scPresetDots161 != null) for (int i161 = 0; i161 < scPresetDots161.length; i161++) { View d161 = scPresetDots161[i161]; if (d161 == null) continue; boolean sel161 = SHOWCASE_BGS[i161] == eff161; GradientDrawable dg161 = new GradientDrawable(); dg161.setShape(GradientDrawable.OVAL); dg161.setColor(SHOWCASE_BGS[i161]); dg161.setStroke(dp(this, sel161 ? 2 : 1), showcaseDotStroke122(sel161)); d161.setBackground(dg161); }
         if (scPalView161 != null) scPalView161.invalidate(); // 环在 onDraw 按生效色现算
         if (showcasePaletteIcon152 != null) showcasePaletteIcon152.invalidate(); // Q163（2.78）：盘钮参考色孔随生效色重绘（同口、不新造刷新）
@@ -21790,7 +21828,7 @@ public class MainActivity extends Activity {
         plate174.addView(tn174, nlp174);
         String orgSp174 = orgSpecimen171(showcaseOrgCode(it));
         String type174 = it.card != null ? (it.card.isCredit() ? "CREDIT" : "DEBIT") : "";
-        TextView ts174 = specimenTv169("SPECIMEN" + (orgSp174.isEmpty() ? "" : " · " + orgSp174) + (type174.isEmpty() ? "" : " · " + type174));
+        String bkEn174 = bankEn179(bk174); TextView ts174 = specimenTv169("SPECIMEN" + (bkEn174.isEmpty() ? "" : " · " + bkEn174.toUpperCase(java.util.Locale.US)) + (orgSp174.isEmpty() ? "" : " · " + orgSp174) + (type174.isEmpty() ? "" : " · " + type174)); // Q179：银行拉丁段同口（只出命中值；细字行 bk174 保持中文原样）
         ts174.setSingleLine(true); ts174.setEllipsize(android.text.TextUtils.TruncateAt.END);
         LinearLayout.LayoutParams slp174 = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         slp174.topMargin = dp(this, 5);
@@ -22049,7 +22087,7 @@ public class MainActivity extends Activity {
             boolean sel158 = showcaseBgMode158() == mm158;
             chip158.setBackground(roundRect(sel158
                 ? (showcaseDarkBg() ? Color.argb(120, 255, 255, 255) : Color.argb(40, 0, 0, 0))
-                : (showcaseDarkBg() ? Color.argb(40, 255, 255, 255) : Color.argb(230, 255, 255, 255)), 999, this));
+                : (showcaseDarkBg() ? Color.argb(40, 255, 255, 255) : scUnselFace179()), 999, this));
             LinearLayout.LayoutParams cLp158 = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
             if (mi158 > 0) cLp158.leftMargin = dp(this, 8);
             chip158.setLayoutParams(cLp158);
@@ -22191,7 +22229,7 @@ public class MainActivity extends Activity {
         TextView rst152 = tv(this, S("sc_reset_layout"), 12, showcaseOnBg(), true);
         rst152.setGravity(Gravity.CENTER);
         rst152.setPadding(dp(this, 10), dp(this, 5), dp(this, 10), dp(this, 5));
-        rst152.setBackground(roundRect(showcaseDarkBg() ? Color.argb(70, 255, 255, 255) : Color.argb(220, 255, 255, 255), 999, this));
+        rst152.setBackground(roundRect(showcaseDarkBg() ? Color.argb(70, 255, 255, 255) : scUnselFace179(), 999, this)); // Q179：Default 钮未选语义同改
         rst152.setOnClickListener(v -> { haptic(); resetShowcaseDefault151(); });
         row2_154.addView(rst152); // Q154（件十③）：落第二行（见上）
         // Q163（2.78 热修）：构建（含点钮/点点后的就地重建）初绘只是占位——先
@@ -22389,12 +22427,14 @@ public class MainActivity extends Activity {
         showcaseSegBox152 = seg152;
         showcaseStackChip = tv(this, "堆叠", 12.5f, showcaseOnBg(), true);
         showcaseStackChip.setGravity(Gravity.CENTER);
-        showcaseStackChip.setPadding(dp(this, 11), dp(this, 5), dp(this, 11), dp(this, 5));
+        showcaseStackChip.setSingleLine(true); // Q179：顶栏片防裁三件套（单行＋13dp 内距，子项 wrap_content 不被 fillViewport 压缩）
+        showcaseStackChip.setPadding(dp(this, 13), dp(this, 5), dp(this, 13), dp(this, 5));
         showcaseStackChip.setOnClickListener(v -> { haptic(); if (prefs != null) prefs.edit().putString("showcase_mode", "stack").apply(); closeShowcasePanel152(); updateShowcaseChips(); buildShowcaseBody(true); });
         seg152.addView(showcaseStackChip);
         showcaseCanvasChip = tv(this, "平放", 12.5f, showcaseOnBg(), true);
         showcaseCanvasChip.setGravity(Gravity.CENTER);
-        showcaseCanvasChip.setPadding(dp(this, 11), dp(this, 5), dp(this, 11), dp(this, 5));
+        showcaseCanvasChip.setSingleLine(true); // Q179：同口
+        showcaseCanvasChip.setPadding(dp(this, 13), dp(this, 5), dp(this, 13), dp(this, 5));
         showcaseCanvasChip.setOnClickListener(v -> { haptic(); if (prefs != null) prefs.edit().putString("showcase_mode", "canvas").apply(); closeShowcasePanel152(); updateShowcaseChips(); buildShowcaseBody(true); });
         seg152.addView(showcaseCanvasChip);
         // 中间弹性空当（滑条内：塞得下摊开同现状、塞不下收为 0 让位滚动）
@@ -22402,7 +22442,8 @@ public class MainActivity extends Activity {
         // 密度钮（点开密度面板：自绘横滑杆，就地改卡尺寸不闪、松手落盘）
         showcaseDensityBtnTv152 = tv(this, "密度", 12.5f, showcaseOnBg(), true);
         showcaseDensityBtnTv152.setGravity(Gravity.CENTER);
-        showcaseDensityBtnTv152.setPadding(dp(this, 11), dp(this, 7), dp(this, 11), dp(this, 7));
+        showcaseDensityBtnTv152.setSingleLine(true); // Q179：同口
+        showcaseDensityBtnTv152.setPadding(dp(this, 13), dp(this, 7), dp(this, 13), dp(this, 7));
         showcaseDensityBtnTv152.setBackground(roundRect(showcaseBarBtnBg162(), 999, this));
         showcaseDensityBtnTv152.setOnClickListener(v -> { haptic(); toggleShowcasePanel152("density"); }); // Q163（2.78）：两模式同开密度面板——堆叠调露条紧凑、平放调卡尺寸（03:25 改判，拦截已撤）
         barRow163.addView(showcaseDensityBtnTv152);
@@ -22410,7 +22451,8 @@ public class MainActivity extends Activity {
         // 分组钮（点开分组面板二选；选中态兼示当前开关）
         showcaseGroupChip = tv(this, S("sc_group"), 12.5f, showcaseOnBg(), true);
         showcaseGroupChip.setGravity(Gravity.CENTER);
-        showcaseGroupChip.setPadding(dp(this, 11), dp(this, 7), dp(this, 11), dp(this, 7));
+        showcaseGroupChip.setSingleLine(true); // Q179：同口
+        showcaseGroupChip.setPadding(dp(this, 13), dp(this, 7), dp(this, 13), dp(this, 7));
         LinearLayout.LayoutParams grpLp152 = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         grpLp152.leftMargin = dp(this, 8);
         showcaseGroupChip.setLayoutParams(grpLp152);
@@ -22590,7 +22632,16 @@ public class MainActivity extends Activity {
     // Q162（2.77）：栏内钮面唯一派生口——段选盒/密度钮/分组钮的面只许走
     // 这一处现算（按 showcaseDarkBg 与栏底同口），不许再各写 argb 字面量；
     // 字色绑 showcaseOnBg() 于各刷新口，与栏面同批换刷。
-    int showcaseBarBtnBg162() { return showcaseDarkBg() ? Color.argb(70, 255, 255, 255) : Color.argb(220, 255, 255, 255); }
+    int showcaseBarBtnBg162() { return showcaseDarkBg() ? Color.argb(70, 255, 255, 255) : scUnselFace179(); }
+
+    // Q179（2.92）：浅底未选态面收口——生效色向黑混 MIX（DeepSeek 回函 ④：只改浅底
+    // 支未选面，深底支/选中态/字色/面板 alpha 一律不动；色点阵列描边按回函豁免不动）
+    static final float SC_UNSEL_MIX179 = 0.07f;
+    int scUnselFace179() {
+        int eff179 = showcaseBgColor152();
+        float k179 = 1f - SC_UNSEL_MIX179;
+        return Color.argb(230, Math.round(Color.red(eff179) * k179), Math.round(Color.green(eff179) * k179), Math.round(Color.blue(eff179) * k179));
+    }
 
     // Q151（S2·自绘密度滑杆）：浅轨道＋圆钮，顶=密（1.3）底=疏（0.6）；拖动中
     // 经 densitySink151 就地改卡尺寸（不闪），松手 densityCommit151 落盘。颜色
@@ -24944,7 +24995,9 @@ public class MainActivity extends Activity {
     // 结译表查显示（不新增条目）；分类值本身（分组键/数据）不动。
     String newsTagLabel164(String tag) {
         if (tag == null) return "";
-        if ("新卡上市".equals(tag)) return S("news_cat_new");
+        // Q179（2.92）：分类→STR 键由 STR 表自身反查（中文值即数据枚举，单源；
+        // 新增分类只需在 STR 表加一键、此处零改）。未知分类保持原兜底。
+        for (String k179 : new String[]{"news_cat_new", "news_cat_industry", "news_cat_benefit", "news_cat_exchange"}) { String[] v179 = STR.get(k179); if (v179 != null && v179[0].equals(tag)) return S(k179); }
         return isEn() ? EN_TXT.getOrDefault(tag, tag) : tag;
     }
 
@@ -27972,6 +28025,59 @@ public class MainActivity extends Activity {
     }
     // —— 弹窗遮罩（§3 弹窗行）：墨曜 #CC000000；扁平恒 rgba(0,0,0,.4) 原值。
     int shadeColor171() { return styleMoyao() ? Color.argb(204, 0, 0, 0) : Color.argb(102, 0, 0, 0); }
+    // —— Q179（2.92）：银行拉丁名词典——assets/data/bankdict.json 兜底（打包自动加
+    // 密）＋OTA 同名覆盖（jsDelivr/gh 双线、整表校验拒收）；bankEn179 单出口，未
+    // 命中回空串并按名记账一次（防筛选滚动刷屏），查无不编造。DeepSeek 回函 ②。
+    java.util.Map<String, String> bankDict179Map = null;
+    final java.util.Set<String> bankDict179MissLogged = new java.util.HashSet<>();
+    boolean bankDict179FetchStarted = false;
+
+    String bankEn179(String zh) {
+        if (zh == null) return "";
+        String key179 = zh.trim();
+        if (key179.isEmpty()) return "";
+        java.util.Map<String, String> m179 = bankDict179Map;
+        if (m179 != null) { String en179 = m179.get(key179); if (en179 != null && !en179.trim().isEmpty()) return en179; }
+        if (bankDict179MissLogged.add(key179)) android.util.Log.d("CardBox.bankdict.miss", key179);
+        return "";
+    }
+
+    boolean putBankDict179(java.util.Map<String, String> into179, String json179) {
+        // schema 校验：顶层对象、值皆非空字符串；整表非法拒收（坏字典比没字典更糟）
+        if (json179 == null) return false;
+        try {
+            JSONObject o179 = new JSONObject(json179);
+            java.util.Iterator<String> it179 = o179.keys();
+            java.util.Map<String, String> tmp179 = new java.util.HashMap<>();
+            while (it179.hasNext()) { String k179 = it179.next(); Object v179 = o179.opt(k179); if (!(v179 instanceof String) || ((String) v179).trim().isEmpty()) return false; tmp179.put(k179, (String) v179); }
+            if (tmp179.isEmpty()) return false;
+            into179.putAll(tmp179);
+            return true;
+        } catch (Throwable t179) { logErr("bankdict.parse", t179); return false; }
+    }
+
+    void loadBankDict179(boolean force179) {
+        if (bankDict179FetchStarted && !force179) return;
+        bankDict179FetchStarted = true;
+        new Thread(() -> {
+            java.util.Map<String, String> merged179 = new java.util.HashMap<>();
+            putBankDict179(merged179, readAssetText("data/bankdict.json")); // 包内兜底先行（离线首启即有）
+            String base179 = "https://cdn.jsdelivr.net/gh/dimlogue/cardbox-data@main/bankdict.json";
+            final String[] urls179 = { base179, base179.replace("cdn.jsdelivr.net/gh/", "raw.githubusercontent.com/").replace("@main/", "/main/") }; // 双线同口（与 fetchExtended/news 一致）
+            for (String u179 : urls179) {
+                try {
+                    HttpURLConnection conn179 = (HttpURLConnection) new URL(u179 + "?t=" + System.currentTimeMillis()).openConnection();
+                    conn179.setConnectTimeout(8000); conn179.setReadTimeout(8000);
+                    conn179.setRequestProperty("Cache-Control", "no-cache");
+                    if (conn179.getResponseCode() != 200) { conn179.disconnect(); continue; }
+                    String json179 = Store.readAll(conn179.getInputStream()); conn179.disconnect();
+                    if (putBankDict179(merged179, json179)) break; // OTA 覆盖兜底、双线取一即收
+                } catch (Throwable t179) { logErr("bankdict.ota", t179); }
+            }
+            if (!merged179.isEmpty()) bankDict179Map = merged179; // 空表不覆盖（整表拒收口径）
+        }).start();
+    }
+
     // —— 组织标本字：org 键本身的拉丁名（数据直出、不造文案）；空组织只留卡种。
     String orgSpecimen171(String org) {
         if (org == null) return "";
