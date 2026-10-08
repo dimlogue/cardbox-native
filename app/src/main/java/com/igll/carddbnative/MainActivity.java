@@ -21288,13 +21288,51 @@ public class MainActivity extends Activity {
                 iv.setImageBitmap(b); if (darkEff()) iv.setAlpha(0.92f);
             }
             face.addView(iv, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+            if (b == null) addShowcaseFaceLabel168(face, it.card.name, it.bank, placeholderDarkFor(it.card.id)); // Q168①（2.82）：无图占位终态补卡名+银行标签（与占位判定同源，真图不加）
             // Q104/2.18：卡面组织小标全撤（展柜库内卡同口径）
         } else {
             face.setBackground(customGradient(it.custom.style));
+            addShowcaseFaceLabel168(face, it.custom.name, it.custom.bank, customStyleDark(it.custom.style)); // Q168①（2.82）：自定义卡恒纯渐变面，同补卡名+银行标签
             // Q104/2.18：卡面组织小标全撤（展柜自定义卡同口径）
         }
         face.setTag(it.key);
         return face;
+    }
+
+    // Q168①（2.82，用户图三点名）：占位/纯色面看不出是哪张——左上补「卡名（主）＋
+    // 银行名（次）」两行标签。落左上是展柜物理约束：堆叠收起态每卡只露顶部
+    // 40–72dp 条、左下必被下一卡压住，左上即卡面品牌位；平放/放大整面可见同位
+    // 不变。两行恒定不缩字号，堆叠时次行允许被压小半（扒开即见，DeepSeek 审定）。
+    // 深浅字色走占位同源口：库卡 placeholderDarkFor、自定义 customStyleDark（均
+    // 与面渐变同色板对、两端平均亮度二值），不另造色；再配轻阴影兜中亮度渐变
+    // 中段（二值字色只保方向、阴影保局部对比，DeepSeek 审定）。标签子视图恒
+    // 非可点，face 既有点击/拖拽手势一字不受影响；有真实卡图的面不进本函数。
+    void addShowcaseFaceLabel168(FrameLayout face, String name, String bank, boolean darkFace) {
+        String nm168 = name == null ? "" : name.trim();
+        String bk168 = bank == null ? "" : bank.trim();
+        if (nm168.isEmpty()) { nm168 = bk168; bk168 = ""; }
+        if (nm168.isEmpty()) return;
+        LinearLayout lab168 = new LinearLayout(this);
+        lab168.setOrientation(LinearLayout.VERTICAL);
+        lab168.setPadding(dp(this, 10), dp(this, 8), dp(this, 10), 0);
+        int ink168 = darkFace ? Color.WHITE : Color.rgb(0x1C, 0x1C, 0x1E);
+        int ink2_168 = darkFace ? Color.argb(178, 255, 255, 255) : Color.argb(165, 0x1C, 0x1C, 0x1E);
+        int sh168 = darkFace ? Color.argb(102, 0, 0, 0) : Color.argb(64, 255, 255, 255);
+        TextView t1_168 = tv(this, nm168, 13, ink168, true);
+        t1_168.setSingleLine(true); t1_168.setEllipsize(android.text.TextUtils.TruncateAt.END);
+        t1_168.setShadowLayer(2f, 0f, dp(this, 1), sh168);
+        lab168.addView(t1_168, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        if (!bk168.isEmpty()) {
+            TextView t2_168 = tv(this, bk168, 10.5f, ink2_168, false);
+            t2_168.setSingleLine(true); t2_168.setEllipsize(android.text.TextUtils.TruncateAt.END);
+            t2_168.setShadowLayer(2f, 0f, dp(this, 1), sh168);
+            LinearLayout.LayoutParams lp2_168 = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            lp2_168.topMargin = dp(this, 1);
+            lab168.addView(t2_168, lp2_168);
+        }
+        FrameLayout.LayoutParams flp168 = new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        flp168.gravity = Gravity.TOP | Gravity.LEFT;
+        face.addView(lab168, flp168);
     }
 
     void updateShowcaseChips() {

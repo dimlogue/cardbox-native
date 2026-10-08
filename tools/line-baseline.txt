@@ -1,4 +1,12 @@
-27228
+27266
+# 2026-10-08 2.82 第一件（Q168①，净增 +38 相对 2.81 基线 27228）：展柜
+# 占位/纯色面左上补卡名+银行名标签——addShowcaseFaceLabel168 helper +36
+# （两行恒定不缩字号、次行允许堆叠被压小半；深浅走 placeholderDarkFor/
+# customStyleDark 占位同源口+轻阴影兜中亮度渐变，DeepSeek 审定）、
+# buildShowcaseFace 库卡 b==null 与自定义两落点 +2。判定与占位同源
+# （b==null 即占位终态、自定义恒渐变）、有真图零改动。施工前 DeepSeek
+# 审（hidden_files/batch-2.82-deepseek-consult-2026-10-08.md），FlowBee
+# 额度不足待补审。此后只许减不许增。
 # 2026-10-08 2.81 亲验收口（Q167 收尾，主会话亲审点名）：我的卡片页行内提示
 # 判定由全库数 lagMany166 改走页头数 lagManyCount167(minePageCount167)，与
 # 同页弹窗同源；声明自列数行块内提升至块前共用，净增 +3（27225→27228，
