@@ -1,4 +1,18 @@
-28196
+28229
+# 2026-10-08 2.93 横排行让位通则＋语言镜像同步批（Q180，基线 2.92/vc292，
+# DeepSeek 已审 deepseek-293-reply.md（hidden_files，含主会话取舍）、FlowBee
+# 额度不足待补审，净增 +33 相对 2.92 基线 28196）：①让位通则助手块
+# rowGuardRight180/rowGuardMain180（段头注释＋二式）+17；②资讯 meta 行钮
+# 改固有宽＋spacer 弹性吸收（净）+2；③外卡行卡名/银行行/组织行守卫调用与
+# 拆行 +6、核实签 40% 屏宽上限同行 +1、metaRow 状态/待核单行化 +2；④学生
+# 行卡名/银行行/评分 pill 同族守卫 +4；⑤语言切换 lambda 同行同步静态
+# 镜像 appLangPrefStatic158（资讯标题语言冻结根治，NewsItem 只读镜像与
+# EN_MODE 同源同值、镜像口径不变）+0。
+# 红线守恒：DataCipher、OTA app.json、Q176 单列真确认、Q178 提示条锚点、
+# 2.92 的 fitNavLabels179/scUnselFace179/bankdict 一字未动；底栏与展柜顶
+# 栏 2.92 已修件只复核未回改；中文/英文、扁平/墨曜、深/浅观感除修窄条
+# 外零差异；L() 37/EN_TXT 482/候选 1409、空吞 208、出口 87/弹层 43 全
+# 冻。此后只许减不许增。
 # 2026-10-08 2.92 英文漏译全修＋bankdict 落库＋展柜防挤/对比批（Q179，基线
 # 2.91/vc291，DeepSeek 已审 deepseek-292-reply.md（hidden_files，含主会话取
 # 舍定稿；本轮复跑回函同调）、FlowBee 额度不足待补审，净增 +106 相对 2.91

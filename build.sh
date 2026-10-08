@@ -3,8 +3,8 @@
 set -e
 cd "$(dirname "$0")"
 
-VER_CODE=292
-VER_NAME="2.92-native"
+VER_CODE=293
+VER_NAME="2.93-native"
 PKG="com.igll.carddbnative"
 
 SDK=~/workspace/android-sdk
