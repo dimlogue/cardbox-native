@@ -405,3 +405,11 @@ bash build.sh 通过，aapt 复验 versionCode=271/versionName=2.71-native；产
   - 顶栏/色点/密度/分组：经审其面色字色全由 showcaseBgColor152/showcaseDarkBg/accentColor 单源派生（墨曜下 accent 恒金属青已同源）、密度杆 accent 走 accentColor、图标 ink 走 showcaseOnBg，无写死旧色可换；按任务书「不重排、只许跟随基元换色换线」零行改动，顶栏横滑边缘渐隐小修不在本批。
   - 扁平零差异自证：git diff 全量走读——两落点扁平支为原 label168 调用逐字（参数 placeholderDarkFor/customStyleDark 不变），新方法仅墨曜门内被调用、扁平不建牌；面底色/取图/圆角/组织标处理零改。真机 Paint/截图对表点列报告验收表。
   - 门禁：MainActivity 27862→27913（净增 51，基线已登记缘由：两落点墨曜门净 +5＋标本牌助手与段头注释 +46）；check-arch 警告＋STRICT 双模通过（行数 27913、空吞 208、i18n 37/482/1411、出口 87/弹层 43 全冻）；构建 verify-apk 190 条全 CBX1 绿。真机验收点见施工报告，未真机不记通过。
+- [x] Q175 2.89 墨曜重构 B4 长尾扫尾（2026-10-08 完成，2.89-native vc289，基线 06c445d=2.88；方案 moyao-refactor-plan-2026-10-08.md §4-B4 与 B1–B3b 四份施工报告遗留登记销项，DeepSeek 裁量已回写方案、本批未重问，FlowBee 额度不足待补审。只改 MainActivity.java＋版本号＋门禁基线，玻璃骨架、DataCipher、OTA、数据仓一字未动；施工报告 hidden_files/moyao-refactor-b4-2026-10-08.md）：
+  - ①写死小色收编（约 70 处）：新 infoChip175 单源（扁平 chip() 原色透传、墨曜空心发丝＋Josefin 细字）转信息类 chips 21 处（瓷砖状态/已添加/类别、特点/维度流、详情/外卡胶囊行、向导理由、学生适合、fx tier、syncAddedChip133 同步重建同口）；蓝胶囊签 5 处与折展箭头 2 处走 scorePillBg171(999)＋主色字；窗内主钮 5 处 bg 收 MY_PRIMARY＋字色 onAccentInk()（扁平恒白）；长按卡菜单 6 处、滚动胶囊芯、加卡钮已加态、外卡加入钮与已加入态、筛选角标、占位选色框、向导抓手/圆钮/题签/选项涟漪/遮罩、筛选禁用片、详情小圆点、嵌套盒/警告盒/崩溃盒/引言框、BIN 命中行、NFC 钮、能力条与细线图标、工具格垫、区标题带、关于页插画等逐处三元收语义口/令牌。状态语义色（在发绿/停发红/警告橙黄/删除红/状态色函数）与数据色（组织标 paint、主题色板、占位色板、展柜色系、图例三色点）一律保留并在报告列明。
+  - ②评分 pill 细线星标：scoreStar175（Q1 星形点阵 1.1dp 描边绘 11dp 位图）＋attachScoreStar175，挂 scorePill171 墨曜支（与字同色、未评分 text3 同挂作身份标记；sp<8.5 四列窄瓷砖不出星防挤兑）、学生自建评分 pill、向导评分胶囊（高分界对齐 8.5 单源、中档 FFB26B）。分组头计数 pill 只借 bg 不挂星（B2 口径）。
+  - ③瓷砖内边距：墨曜 1–3 列向冻结 横16/纵14 收（四列 77dp 宽保留 6/6/8 并附算式）；学生/外卡整宽列表卡同族同式收 16/14（扁平 12/10/12/12 原值）。
+  - ④detailInfoCard 内边距 14/12→墨曜 16/14（面 softFaceBg 拦截同源不动）。
+  - ⑤搜索 inline/float 两胶囊墨曜 elevation 归 0；设置 loose 行描边经普查确认已由 roundRect→softFaceBg 单源承接（墨曜 SURFACE1＋#23282F、B2 已落）零行改动销项——硬换 moyaoCardRipple171 反会脱开圆角杆（rippleBg 走 autoR143），报告注明口径差。
+  - 扁平零差异自证：git diff 全量走读——全部改动为 styleMoyao() 三元（扁平支内嵌原表达式逐字）或 styleMoyao() 门内块（扁平不入）；accentSoftBg 类深档异值点一律门控三元、未裸替换；新助手仅墨曜调用。真机对表点列报告验收表（墨曜逐页看收编面、扁平抽查回归）。
+  - 门禁：MainActivity 27913→28009（净增 96，基线已登记缘由）；check-arch 警告＋STRICT 双模通过（空吞 208、i18n 37/482/1409——候选随状态 chip 字面量消重 -2 已同步调低、出口 87/弹层 43 全冻）；构建 verify-apk 190 条全 CBX1 绿。真机验收点见施工报告，未真机不记通过。
