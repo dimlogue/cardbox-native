@@ -1,4 +1,18 @@
-27356
+27607
+# 2026-10-08 2.83 墨曜重构 B1 地基批（Q169，基线 2.82/vc282，用户 11:56 点定
+# 图二 CARD ARCHIVE 风、方案 moyao-refactor-plan-2026-10-08.md §2/§4 经
+# DeepSeek 审定，净增 +251）：字体地基（Josefin Sans 300/100 两档打包
+# assets/fonts/display-light|thin.ttf 共 55KB＋OFL 文本、displayTf169 统一
+# 取字口＋加载字段）约 +35；字阶/发丝线/表面/输入/页眉/底栏标签/置灰整套
+# Q169 助手块（kicker/specimen 工厂＋尾距补偿、hairline 双档＋snap、
+# panelBg169/segChipBg169、styleInput169、pageHeader169 单源、
+# segInnerLocked169/themeColorLocked169/lockNote169 独立置灰子项）约 +178；
+# 各处接线（五页页眉换单源、dock 墨曜哑光分支、ToggleView/NavIconView/
+# tintNavTo 墨曜档、segInner/segRow 片、customInput 与搜索墨曜档、设置标题
+# 行搬运泛化、STR kicker 五键＋锁定说明一键、主题色说明抽 THEME_DESC169
+# 单源常量）净增约 +38。全部新视觉只经 styleMoyao() 派生、扁平分支原值
+# 逐位内嵌；玻璃链与弹窗骨架未动（金丝雀默认关维持）。build＋check-arch
+# 双模把关。此后只许减不许增。
 # 2026-10-08 2.82 第二件（Q168②，净增 +90 相对第一件后基线 27266）：我的
 # 卡片同 id 重复添加改软提示——addMineEntry 落库口拦截 +10（确认直入
 # addMineEntryDirect168、原落库逻辑一字未动）、showMineDupConfirm168/

@@ -368,7 +368,7 @@ public class MainActivity extends Activity {
             float w = getWidth(), h = getHeight();
             float trackH = Math.min(h, dp(getContext(), 28));
             float top = (h - trackH) / 2f;
-            int trackCol = on ? accentColor() : (darkEff() ? Color.rgb(0x3A, 0x3A, 0x3E) : Color.rgb(0xD8, 0xDC, 0xE4));
+            int trackCol = on ? accentColor() : (styleMoyao() ? MY_BORDER_DEFAULT : (darkEff() ? Color.rgb(0x3A, 0x3A, 0x3E) : Color.rgb(0xD8, 0xDC, 0xE4))); // Q169：墨曜关态轨道 #2E353D；开态只染轨道一处（拇指恒白），不双染
             GradientDrawable track = new GradientDrawable();
             track.setColor(trackCol);
             track.setCornerRadius(Math.min(trackH / 2f, dp(getContext(), pillR143()))); // Q158（件四普查）：开关轨道随圆角杆（t==0.5 时 pillR143 恒 999、上限不触发、逐位不变；方形档轨道随之变方）
@@ -1159,6 +1159,13 @@ public class MainActivity extends Activity {
         STR.put("ui_style", new String[]{"界面风格","UI Style"}); // Q165：风格包段选（扁平/墨曜）
         STR.put("style_flat", new String[]{"扁平","Flat"});
         STR.put("style_moyao", new String[]{"墨曜","Moyao"});
+        // Q169（2.83，墨曜重构 B1）：页眉拉丁 kicker——图二档案式固定拉丁微字，双语同值（非译文，是标本牌铭牌）；只在墨曜页眉出现，扁平不读此五键。
+        STR.put("kicker_home", new String[]{"CARD LIBRARY","CARD LIBRARY"});
+        STR.put("kicker_student", new String[]{"STUDENT PICKS","STUDENT PICKS"});
+        STR.put("kicker_mine", new String[]{"MY COLLECTION","MY COLLECTION"});
+        STR.put("kicker_news", new String[]{"NEWS","NEWS"});
+        STR.put("kicker_settings", new String[]{"SETTINGS","SETTINGS"});
+        STR.put("moyao_lock_note", new String[]{"墨曜下固定深色 + 金属青：深色模式与主题色暂不可调，切回「扁平」即恢复（已存的偏好不会丢）。","Under Moyao the app stays dark with metallic teal: Dark Mode and Theme Color are locked for now. Switch back to Flat to change them (your saved choices are kept)."});
         STR.put("card_color", new String[]{"卡面配色","Card Face Colors"}); // Q114（2.27）：英文润色（旧 "Placeholder Color" 不成话），待用户终审可否决
         STR.put("page_bg", new String[]{"页面底色","Page Background"}); // Q148（2.59）：页底柔和档（原样＝Q94 现行梯度逐位不变）
         STR.put("page_bg_orig", new String[]{"原样","Original"});
@@ -1790,11 +1797,13 @@ public class MainActivity extends Activity {
     }
     void refreshNavLabels() {
         try {
-            TextView a = navLabels.get("home"); if (a != null) a.setText(S("nav_home"));
-            TextView b = navLabels.get("student"); if (b != null) b.setText(S("nav_student"));
-            TextView c = navLabels.get("mine"); if (c != null) c.setText(S("nav_mine"));
-            TextView d = navLabels.get("news"); if (d != null) d.setText(S("nav_news"));
-            TextView e = navLabels.get("settings"); if (e != null) e.setText(S("nav_settings"));
+            // Q169：墨曜标签走大写（拉丁才有大小写）；扁平取 S() 原值逐位不变。
+            boolean my169 = styleMoyao();
+            TextView a = navLabels.get("home"); if (a != null) a.setText(my169 ? S("nav_home").toUpperCase(java.util.Locale.US) : S("nav_home"));
+            TextView b = navLabels.get("student"); if (b != null) b.setText(my169 ? S("nav_student").toUpperCase(java.util.Locale.US) : S("nav_student"));
+            TextView c = navLabels.get("mine"); if (c != null) c.setText(my169 ? S("nav_mine").toUpperCase(java.util.Locale.US) : S("nav_mine"));
+            TextView d = navLabels.get("news"); if (d != null) d.setText(my169 ? S("nav_news").toUpperCase(java.util.Locale.US) : S("nav_news"));
+            TextView e = navLabels.get("settings"); if (e != null) e.setText(my169 ? S("nav_settings").toUpperCase(java.util.Locale.US) : S("nav_settings"));
         } catch (Throwable ignored) {}
         refreshNavFonts125(); // Q125：文字之外重套当前 Typeface（见下）
     }
@@ -1825,6 +1834,7 @@ public class MainActivity extends Activity {
                 }
                 pinFixedText125(lb);
             }
+            styleNavLabels169(); // Q169：字号重设后尾距补偿按新字号重算（扁平恒清零）
             tintNavTo(Math.max(0, navTintIdx));
         } catch (Throwable ignored) {}
     }
@@ -2256,10 +2266,14 @@ public class MainActivity extends Activity {
     GradientDrawable softSearchTint() {
         GradientDrawable g;
         if (styleMoyao()) {
-            // Q165：墨曜搜索胶囊墨染色（机制不动，只换染色值；MY_ELEVATED 近实薄染）。
+            // Q169（2.83，B1）：墨曜搜索改哑光实面——surface_1＋1dp 发丝边 #23282F＋
+            // 12dp 圆角（方案 §2 输入/搜索档，走 inputR143 与圆角杆同源）；下方的玻璃
+            // 糊层在构建处（inlineWrap/floatWrap）墨曜下不再垫。扁平两路原值不变。
             g = new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
-                new int[]{Color.argb(205, Color.red(MY_ELEVATED), Color.green(MY_ELEVATED), Color.blue(MY_ELEVATED)), Color.argb(195, Color.red(MY_ELEVATED), Color.green(MY_ELEVATED), Color.blue(MY_ELEVATED))});
-            g.setStroke(dp(this, 1), Color.argb(26, 255, 255, 255));
+                new int[]{MY_SURFACE1, MY_SURFACE1});
+            g.setStroke(dp(this, 1), MY_BORDER_SUBTLE);
+            g.setCornerRadius(dp(this, inputR143(12f)));
+            return g;
         } else if (darkEff()) {
             g = new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
                 new int[]{Color.argb(150, 44, 54, 72), Color.argb(138, 34, 42, 58)});
@@ -2276,12 +2290,12 @@ public class MainActivity extends Activity {
     GradientDrawable dockBarBg() {
         GradientDrawable g;
         if (styleMoyao()) {
-            // Q165：墨曜 dock 只换染色不动机制——玻璃开态薄墨染、关态近实墨面兜底（同 Q117 口径）。
-            int er = Color.red(MY_ELEVATED), eg = Color.green(MY_ELEVATED), eb = Color.blue(MY_ELEVATED);
+            // Q169（2.83，B1）：墨曜底栏＝哑光实面 #12151A＋1 物理像素发丝框（实色
+            // #23282F，禁 alpha 冒充；全周描边在悬浮 dock 上即方案的栏面发丝线）。
+            // 玻璃层在栏下不再透出（哑光口径，玻璃链本身一字不动）；扁平两路原值不变。
             g = new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
-                glassDisabled ? new int[]{Color.argb(242, er, eg, eb), Color.argb(242, er, eg, eb)}
-                              : new int[]{Color.argb(205, er, eg, eb), Color.argb(195, er, eg, eb)});
-            g.setStroke(dp(this, 1), Color.argb(26, 255, 255, 255));
+                new int[]{MY_ELEVATED, MY_ELEVATED});
+            g.setStroke(1, MY_BORDER_SUBTLE);
             g.setCornerRadius(dp(this, dockR129())); // Q129：dock 类收口
             return g;
         }
@@ -2408,6 +2422,8 @@ public class MainActivity extends Activity {
             // 19:37 验收项「切深色」：dock 与药丸底色在 buildNav 只套过一次，深浅切换时
             // 一并按当前档重套，并按当前页签实测重钉药丸几何（四种验收姿势之一）。
             if (navBar != null) navBar.setBackground(dockBarBg());
+            refreshNavIcons129(); // Q169：NavIconView 每次 onDraw 现读 styleMoyao 派生线宽，切风格须主动重绘（扁平重绘同值、无视觉变化）
+            styleNavLabels169(); // Q169：墨曜标签字距/补偿与扁平清零在此一处随风格切换收口
             if (navIndicator != null) {
                 navIndicator.setBackground(navPillBg());
                 layoutNavIndicator(Math.max(0, navOrder == null ? 0 : navOrder.indexOf(tab)), false);
@@ -4186,6 +4202,12 @@ public class MainActivity extends Activity {
     // assets/fonts/serif-regular.ttf + serif-bold.ttf，合计约 3.16MB；来源/子集细节记 PROGRESS Q104）
     static android.graphics.Typeface serifRegularTf = null, serifBoldTf = null;
     static boolean serifLoadTried = false;
+    // Q169（2.83，墨曜重构 B1 地基）：图二档案风拉丁细字 Josefin Sans（SIL OFL，授权文本
+    // assets/fonts/OFL-josefinsans.txt；display-light.ttf=300 Light、display-thin.ttf=100 Thin，
+    // gwfh 拉丁子集，源见 hidden_files/fonts-refactor-2026-10-08）。只供墨曜展示字
+    // （kicker/specimen/大展示数字），中文永不走此口；取字单源 displayTf169。
+    static android.graphics.Typeface displayLightTf169 = null, displayThinTf169 = null;
+    static boolean displayLoadTried169 = false;
     // Q55 自定义字体：用户导入的单文件 .ttf/.otf 存私有目录，字重由系统合成；异常回退链 自定义→软件字体→系统无衬线
     static android.graphics.Typeface customTf = null;
     static boolean customLoadTried = false;
@@ -4235,6 +4257,26 @@ public class MainActivity extends Activity {
         serifLoadTried = true;
         try { serifRegularTf = android.graphics.Typeface.createFromAsset(c.getAssets(), "fonts/serif-regular.ttf"); } catch (Throwable e) { serifRegularTf = null; }
         try { serifBoldTf = android.graphics.Typeface.createFromAsset(c.getAssets(), "fonts/serif-bold.ttf"); } catch (Throwable e) { serifBoldTf = null; }
+    }
+
+    static void ensureDisplayLoaded169(Context c) {
+        if (displayLoadTried169) return;
+        displayLoadTried169 = true;
+        try { displayLightTf169 = android.graphics.Typeface.createFromAsset(c.getAssets(), "fonts/display-light.ttf"); } catch (Throwable e) { displayLightTf169 = null; }
+        try { displayThinTf169 = android.graphics.Typeface.createFromAsset(c.getAssets(), "fonts/display-thin.ttf"); } catch (Throwable e) { displayThinTf169 = null; }
+    }
+
+    // Q169（2.83）：墨曜展示字统一取字口——后批只许经此口拿拉丁细字，不许各处自建 Typeface。
+    // 口径（B1 定版）：仅墨曜且 fontMode=builtin 时用打包 Josefin（≥250 取 300 Light、
+    // 其余取 100 Thin；Thin 的适用面由调用方守方案 §2：只给 ≥11sp 数字与 ≥18sp 大写展示字）；
+    // system/custom/serif 三档回退 weightTypeface 的既有字重映射（系统字没有 100/300 真字重
+    // 时由系统合成/就近档承接），扁平恒走 weightTypeface 原路——本口不改变任何扁平取字结果。
+    android.graphics.Typeface displayTf169(Context c, int weight) {
+        if (!styleMoyao() || !"builtin".equals(fontMode)) return weightTypeface(c, weight);
+        ensureDisplayLoaded169(c);
+        android.graphics.Typeface base = weight >= 250 ? displayLightTf169 : displayThinTf169;
+        if (base == null) base = displayLightTf169 != null ? displayLightTf169 : displayThinTf169;
+        return base != null ? base : weightTypeface(c, weight);
     }
 
     // Q104（2.18）：内置宋体取字（与 builtinSansTypeface 同构：≥600 走 bold 档、450+ 以 regular 为基
@@ -8242,7 +8284,7 @@ public class MainActivity extends Activity {
             p.setStyle(Paint.Style.STROKE);
             p.setStrokeCap(Paint.Cap.ROUND);
             p.setStrokeJoin(Paint.Join.ROUND);
-            p.setStrokeWidth(dp(getContext(), 1.7f));
+            p.setStrokeWidth(dp(getContext(), ((MainActivity) getContext()).styleMoyao() ? 1.5f : 1.7f)); // Q169：墨曜图标线宽 1.5dp/24 框（选中靠染色不靠加粗）；扁平 1.7 原值
             // Q4：未选色对照混合版 .dock-glass button 的 #3A3A3C（旧 #636366 在亮玻璃+花背景上发飘读不清），选中仍 #1C1C1E
             p.setColor(on ? ((MainActivity) getContext()).navOnColor() : ((MainActivity) getContext()).navOffColor());
             styleIconPaint129(p); // Q129：图标包风格层（现行包空转）
@@ -8390,6 +8432,7 @@ public class MainActivity extends Activity {
             item.addView(icon, new LinearLayout.LayoutParams(dp(this, 23), dp(this, 23)));
             TextView label = tv(this, t[1], 10f, navOffColor(), false);
             label.setGravity(Gravity.CENTER);
+            styleNavLabel169(label); // Q169：墨曜标签字距/尾距补偿（扁平清零＝原样）
             pinFixedText125(label); // Q125：底栏标签钉角色行高（字体件）
             // Q128（2.40）：记首签的像素字号与建签当时系数作重设基准（五签同 10sp 同口径）
             if (navBaseTextPx128 <= 0) { navBaseTextPx128 = label.getTextSize(); navBaseComp128 = fontComp128(this); }
@@ -8532,7 +8575,7 @@ public class MainActivity extends Activity {
             if (lb != null) {
                 lb.setTextColor(on ? navOnColor() : navOffColor());
                 android.graphics.Typeface cur = lb.getTypeface();
-                if (cur != null) lb.setTypeface(cur, on ? android.graphics.Typeface.BOLD : android.graphics.Typeface.NORMAL);
+                if (cur != null) lb.setTypeface(cur, (on && !styleMoyao()) ? android.graphics.Typeface.BOLD : android.graphics.Typeface.NORMAL); // Q169：墨曜选中只染青不加粗
             }
         }
     }
@@ -9139,7 +9182,7 @@ public class MainActivity extends Activity {
             if (lb != null) {
                 lb.setTextColor(on ? navOnColor() : navOffColor());
                 android.graphics.Typeface cur = lb.getTypeface();
-                if (cur != null) lb.setTypeface(cur, on ? android.graphics.Typeface.BOLD : android.graphics.Typeface.NORMAL);
+                if (cur != null) lb.setTypeface(cur, (on && !styleMoyao()) ? android.graphics.Typeface.BOLD : android.graphics.Typeface.NORMAL); // Q169：与 tintNavTo 同口——墨曜选中只染青不加粗
             }
         }
         navTintIdx = navOrder.indexOf(key); // Q38: settled tint matches the page; lens tint rides during flight
@@ -10937,9 +10980,7 @@ public class MainActivity extends Activity {
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
 
         // Q39: .title-row h1 1.45rem/800/.02em
-        TextView homeTitle = tvW(this, "卡盒", 24, colText(), 800); // Q94：走语义主字色（深色档不再黑字黑底）
-        homeTitle.setLetterSpacing(0.02f); homeTitle.setLineSpacing(0, 1.15f);
-        col.addView(homeTitle);
+        col.addView(pageHeader169("kicker_home", "卡盒", 24f, 0.02f)); // Q169：页眉单源（扁平＝原 24sp/800 标题逐位；墨曜＝kicker＋中文标题）
 
         Set<String> banks = new HashSet<>();
         for (Card c : Store.all) banks.add(c.bank);
@@ -11031,7 +11072,7 @@ public class MainActivity extends Activity {
         FrameLayout inlineWrap = new FrameLayout(this);
         inlineWrap.setBackground(softSearchTint()); // Q94：内嵌搜索胶囊玻璃收淡（近白低饱和，不再一团蓝）
         if (Build.VERSION.SDK_INT >= 21) inlineWrap.setElevation(dp(this, 6));
-        inlineWrap.addView(glassLayer(inlineWrap, floatR129(28f), true), new FrameLayout.LayoutParams( // Q146：糊层裁切随悬浮类收口（标准档 28 逐位不变）
+        if (!styleMoyao()) inlineWrap.addView(glassLayer(inlineWrap, floatR129(28f), true), new FrameLayout.LayoutParams( // Q146：糊层裁切随悬浮类收口（标准档 28 逐位不变）；Q169：墨曜哑光面下不垫玻璃糊层（垫了会浮在实面之上发灰）
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         LinearLayout inlineRow = new LinearLayout(this);
         inlineRow.setOrientation(LinearLayout.HORIZONTAL);
@@ -11050,6 +11091,7 @@ public class MainActivity extends Activity {
         searchBox.setBackground(null);
         if (darkEff()) { searchBox.setTextColor(colText()); searchBox.setHintTextColor(colText2()); } searchBox.setShadowLayer(0, 0, 0, 0); // Q103
         searchBox.setPadding(dp(this, 8), dp(this, 7), dp(this, 4), dp(this, 7));
+        styleInput169(searchBox); // Q169：墨曜光标/选区染色（内部门控，扁平无操作）
         pinInputRole125(searchBox); // Q125：输入框角色度量（字体件）
         if (query != null && !query.isEmpty()) searchBox.setText(query);
         inlineRow.addView(searchBox, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
@@ -11093,7 +11135,7 @@ public class MainActivity extends Activity {
         FrameLayout floatWrap = new FrameLayout(this);
         floatWrap.setBackground(softSearchTint()); // Q94：悬浮搜索胶囊同口径收淡
         if (Build.VERSION.SDK_INT >= 21) floatWrap.setElevation(dp(this, 14));
-        floatWrap.addView(glassLayer(floatWrap, floatR129(28f), true), new FrameLayout.LayoutParams( // Q146：同 inlineWrap 口径
+        if (!styleMoyao()) floatWrap.addView(glassLayer(floatWrap, floatR129(28f), true), new FrameLayout.LayoutParams( // Q146：同 inlineWrap 口径；Q169：墨曜不垫糊层（同上）
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         LinearLayout floatRow = new LinearLayout(this);
         floatRow.setOrientation(LinearLayout.HORIZONTAL);
@@ -11111,6 +11153,7 @@ public class MainActivity extends Activity {
         floatSearchBox.setSingleLine(true);
         floatSearchBox.setBackground(null);
         floatSearchBox.setPadding(dp(this, 8), dp(this, 7), dp(this, 4), dp(this, 7));
+        styleInput169(floatSearchBox); // Q169：同 inline 搜索口径
         pinInputRole125(floatSearchBox); // Q125：输入框角色度量（字体件）
         floatRow.addView(floatSearchBox, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
         if (darkEff()) { floatSearchBox.setTextColor(colText()); floatSearchBox.setHintTextColor(colText2()); } floatSearchBox.setShadowLayer(0, 0, 0, 0); // Q103
@@ -14709,9 +14752,7 @@ public class MainActivity extends Activity {
         col.setOrientation(LinearLayout.VERTICAL);
         col.setPadding(dp(this, 14), pageTopPad(), dp(this, 14), dockPad());
         sv.addView(col, new ScrollView.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
-        TextView stuTitle = tvW(this, "学生推荐", 24, colText(), 800);
-        stuTitle.setLetterSpacing(0.02f); stuTitle.setLineSpacing(0, 1.15f);
-        col.addView(stuTitle);
+        col.addView(pageHeader169("kicker_student", "学生推荐", 24f, 0.02f)); // Q169：页眉单源
         List<Card> stu = new ArrayList<>();
         for (Card c : Store.all) if (c.studentPick) stu.add(c);
         stu.sort((a, b2) -> {
@@ -15709,8 +15750,8 @@ public class MainActivity extends Activity {
         inner.setPadding(dp(this, 14), pageTopPad(), dp(this, 14), dockPad());
         sv.addView(inner, new ScrollView.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
         // Q39: .mine-pagetitle 1.7rem/800/-.01em，与通用 .page-title 区分（Q94 起在流内）
-        TextView mineTitle = tvW(this, S("mine_title"), 27, colText(), 800);
-        mineTitle.setLetterSpacing(-0.01f); mineTitle.setLineSpacing(0, 1.15f);
+        // Q169：页眉走单源（扁平传原值 27sp/-0.01 逐位不动；墨曜＝kicker＋16sp 中文标题）
+        View mineTitle = pageHeader169("kicker_mine", S("mine_title"), 27f, -0.01f);
         LinearLayout.LayoutParams mineTitleLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         mineTitleLp.bottomMargin = dp(this, 10);
         inner.addView(mineTitle, mineTitleLp);
@@ -17394,6 +17435,15 @@ public class MainActivity extends Activity {
         Runnable paint = () -> {
             boolean foc = e.hasFocus();
             GradientDrawable g = new GradientDrawable();
+            // Q169（2.83，B1）：墨曜输入——哑光 surface_1 实面、未聚焦 1dp #23282F、
+            // 聚焦环 1.2dp #2E353D、圆角 12dp（方案 §2 输入档）；扁平走下方原式逐位。
+            if (styleMoyao()) {
+                g.setColor(MY_SURFACE1);
+                g.setCornerRadius(dp(this, inputR143(12f)));
+                g.setStroke(foc ? Math.max(1, dp(this, 1.2f)) : dp(this, 1), foc ? MY_BORDER_DEFAULT : MY_BORDER_SUBTLE);
+                e.setBackground(g);
+                return;
+            }
             // Q92/Q123：未聚焦也留 1dp 本色描边（浅档 #C2CDDA、深档 argb115 白）圈出框体，
             // 填充仍走语义柔色；聚焦描边转主色（输入大圆角 16dp 不变）。
             g.setColor(foc ? colSurface() : colChipOff());
@@ -17401,6 +17451,7 @@ public class MainActivity extends Activity {
             g.setStroke(dp(this, 1), foc ? accentColor() : (darkEff() ? Color.argb(115, 255, 255, 255) : Color.rgb(0xC2, 0xCD, 0xDA)));
             e.setBackground(g);
         };
+        styleInput169(e); // Q169：墨曜光标/选区染色（内部门控，扁平无操作）
         paint.run();
         // Q94 铺开（19:29 同批）：聚焦后等键盘升起落定，把输入框滚进窗内可见区
         // （窗体已由 registerImeLift 抬到键盘之上，内部 ScrollView 再把焦点行送到位）；并补量两次 IME 高度。
@@ -24740,9 +24791,7 @@ public class MainActivity extends Activity {
         scrollContent.setOrientation(LinearLayout.VERTICAL);
         scrollContent.setPadding(dp(this, 14), pageTopPad(), dp(this, 14), dockPad());
         sv.addView(scrollContent, new ScrollView.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
-        TextView newsTitle = tvW(this, S("news_title"), 24, colText(), 800);
-        newsTitle.setLetterSpacing(0.02f); newsTitle.setLineSpacing(0, 1.15f);
-        scrollContent.addView(newsTitle);
+        scrollContent.addView(pageHeader169("kicker_news", S("news_title"), 24f, 0.02f)); // Q169：页眉单源
         TextView sub = tv(this, "新卡发布、权益调整、停发换卡——公开信息整理，仅供参考", 12.5f, colText2(), false);
         LinearLayout.LayoutParams subLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         subLp.topMargin = dp(this, 4);
@@ -25950,8 +25999,10 @@ public class MainActivity extends Activity {
         LinearLayout page = basePage(S("settings_title"));
         // Q58：标题行右上角 ⋯ 菜单钮（细线三点自绘，禁用 emoji；菜单从此钮角长出）
         try {
-            if (page.getChildCount() > 0 && page.getChildAt(0) instanceof TextView) {
-                TextView titleTv = (TextView) page.getChildAt(0);
+            if (page.getChildCount() > 0) {
+                // Q169：页眉在墨曜下是 kicker＋标题的纵排盒（非单个 TextView），故取首子
+                // 视图整体搬进标题行；扁平下首子仍是原标题 TextView，搬运结果逐位不变。
+                View titleTv = page.getChildAt(0);
                 page.removeViewAt(0);
                 LinearLayout titleRow = new LinearLayout(this);
                 titleRow.setOrientation(LinearLayout.HORIZONTAL);
@@ -26164,13 +26215,13 @@ public class MainActivity extends Activity {
     void themeColorRow(LinearLayout page) {
         LinearLayout box = new LinearLayout(this);
         box.setOrientation(LinearLayout.VERTICAL);
-        box.setBackground(roundRect(colSurface(), 18, this)); // Q94 铺开：设置卡圆角收向 Soft 档
+        box.setBackground(panelBg169()); // Q94 铺开：设置卡圆角收向 Soft 档；Q169：墨曜走哑光实面＋发丝边
         box.setPadding(dp(this, 14), dp(this, 10), dp(this, 14), dp(this, 12));
         LinearLayout.LayoutParams blp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         blp.topMargin = dp(this, 8);
         box.setLayoutParams(blp);
         box.addView(tv(this, S("theme_color"), 14, colText(), true));
-        box.addView(tv(this, "只改选中态、开关、链接与强调色，不改卡面颜色", 11.5f, colText2(), false));
+        box.addView(tv(this, THEME_DESC169, 11.5f, colText2(), false)); // Q169：文案抽单源常量（值逐字不变）
         LinearLayout row = new LinearLayout(this);
         row.setOrientation(LinearLayout.HORIZONTAL);
         LinearLayout.LayoutParams rlp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
@@ -26220,7 +26271,7 @@ public class MainActivity extends Activity {
     void segRow(LinearLayout page, String label, String[][] opts, String cur, final SegPick pick) {
         LinearLayout box = new LinearLayout(this);
         box.setOrientation(LinearLayout.VERTICAL);
-        box.setBackground(roundRect(colSurface(), 18, this)); // Q94 铺开：设置卡圆角收向 Soft 档
+        box.setBackground(panelBg169()); // Q94 铺开：设置卡圆角收向 Soft 档；Q169：墨曜走哑光实面＋发丝边
         box.setPadding(dp(this, 14), dp(this, 10), dp(this, 14), dp(this, 12));
         LinearLayout.LayoutParams blp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         blp.topMargin = dp(this, 8);
@@ -26233,10 +26284,11 @@ public class MainActivity extends Activity {
         box.addView(row, rlp);
         for (final String[] o : opts) {
             final boolean on = segOn(o[0], cur);
-            TextView t = tv(this, o[1], 12.5f, on ? accentColor() : colText(), on);
+            TextView t = tv(this, o[1], 12.5f, on ? accentColor() : (styleMoyao() ? colText2() : colText()), on);
             t.setGravity(Gravity.CENTER);
             // Q94 铺开：选中改浅雾蓝胶囊＋强调色字（试点选片同语言），废原整坨实心蓝
-            t.setBackground(on ? softCapsuleBg(9) : roundRect(colChipOff(), 9f, this));
+            // Q169：墨曜改空心发丝片（与 segInner 同口，见 segChipBg169）；扁平上式逐位
+            t.setBackground(styleMoyao() ? segChipBg169(on) : (on ? softCapsuleBg(9) : roundRect(colChipOff(), 9f, this)));
             t.setSingleLine(true); t.setMaxLines(1); t.setEllipsize(android.text.TextUtils.TruncateAt.END); // Q114：分段钮单行钉死，等分行内不许折行突出（用户 22:17 点名）
             pinFixedText125(t); // Q125：分段钮钉角色行高（字体件）
             t.setPadding(dp(this, 4), dp(this, 8), dp(this, 4), dp(this, 8));
@@ -26319,7 +26371,7 @@ public class MainActivity extends Activity {
         final boolean enabled = !glassDisabled;
         LinearLayout box = new LinearLayout(this);
         box.setOrientation(LinearLayout.VERTICAL);
-        box.setBackground(roundRect(colSurface(), 18, this)); // Q94 铺开：设置卡圆角收向 Soft 档
+        box.setBackground(panelBg169()); // Q94 铺开：设置卡圆角收向 Soft 档；Q169：墨曜走哑光实面＋发丝边
         box.setPadding(dp(this, 14), dp(this, 10), dp(this, 14), dp(this, 12));
         LinearLayout.LayoutParams blp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         blp.topMargin = dp(this, 8);
@@ -26528,8 +26580,10 @@ public class MainActivity extends Activity {
     // 逐字一致，只摘掉各自的卡背景与 topMargin——融合成一整块面板后不再卡中卡，分隔走发丝线。
     void addHair(LinearLayout panel) {
         View v = new View(this);
-        v.setBackgroundColor(colDivider());
-        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, Math.max(1, dp(this, 0.7f)));
+        // Q169（2.83）：墨曜分线走 hairline 档——1 物理像素、实色 #23282F（高度在下方
+        // LayoutParams 处按墨曜取 1px）；扁平仍 colDivider 原口径逐位不动。
+        v.setBackgroundColor(colHairline169());
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, styleMoyao() ? 1 : Math.max(1, dp(this, 0.7f))); // Q169：墨曜 hairline 恒 1 物理像素
         lp.topMargin = dp(this, 4); lp.bottomMargin = dp(this, 4);
         v.setLayoutParams(lp);
         panel.addView(v);
@@ -26537,7 +26591,7 @@ public class MainActivity extends Activity {
 
     void panelSubHead(LinearLayout panel, String s, boolean first) {
         TextView t = tvW(this, s, 12, colText2(), 600);
-        t.setLetterSpacing(0.02f);
+        t.setLetterSpacing(styleMoyao() ? 0.06f : 0.02f); // Q169：墨曜分区小题字距（中文 ≤0.06em 口径内）；扁平 0.02 原值
         LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         lp.topMargin = first ? dp(this, 2) : dp(this, 14);
         lp.bottomMargin = dp(this, 4);
@@ -26557,9 +26611,9 @@ public class MainActivity extends Activity {
         box.addView(row, rlp);
         for (final String[] o : opts) {
             final boolean on = segOn(o[0], cur);
-            TextView t = tv(this, o[1], 12.5f, on ? accentColor() : colText(), on);
+            TextView t = tv(this, o[1], 12.5f, on ? accentColor() : (styleMoyao() ? colText2() : colText()), on);
             t.setGravity(Gravity.CENTER);
-            t.setBackground(on ? softCapsuleBg(9) : roundRect(colChipOff(), 9f, this));
+            t.setBackground(styleMoyao() ? segChipBg169(on) : (on ? softCapsuleBg(9) : roundRect(colChipOff(), 9f, this))); // Q169：墨曜空心发丝片；扁平原式逐位
             t.setSingleLine(true); t.setMaxLines(1); t.setEllipsize(android.text.TextUtils.TruncateAt.END); // Q114：分段钮单行钉死，等分行内不许折行突出（用户 22:17 点名）
             pinFixedText125(t); // Q125：分段钮钉角色行高（字体件）
             t.setPadding(dp(this, 4), dp(this, 8), dp(this, 4), dp(this, 8));
@@ -26709,7 +26763,7 @@ public class MainActivity extends Activity {
     void buildFeaturePanel(LinearLayout page) {
         LinearLayout wrap = new LinearLayout(this);
         wrap.setOrientation(LinearLayout.VERTICAL);
-        wrap.setBackground(roundRect(colSurface(), 18, this));
+        wrap.setBackground(panelBg169()); // Q169：同 buildAppearancePanel 面单源
         wrap.setClipToOutline(true);
         wrap.setPadding(dp(this, 14), dp(this, 10), dp(this, 14), dp(this, 12));
         LinearLayout.LayoutParams wlp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
@@ -27093,7 +27147,7 @@ public class MainActivity extends Activity {
     void buildAppearancePanel(LinearLayout page) {
         LinearLayout panel = new LinearLayout(this);
         panel.setOrientation(LinearLayout.VERTICAL);
-        panel.setBackground(roundRect(colSurface(), 18, this));
+        panel.setBackground(panelBg169()); // Q169：扁平＝原 roundRect 柔面；墨曜＝surface_1＋rule 发丝＋16dp
         panel.setClipToOutline(true);
         panel.setPadding(dp(this, 14), dp(this, 12), dp(this, 14), dp(this, 12));
         LinearLayout.LayoutParams plp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
@@ -27101,7 +27155,10 @@ public class MainActivity extends Activity {
         panel.setLayoutParams(plp);
 
         panelSubHead(panel, S("sec_appearance"), true);
-        segInner(panel, S("dark_mode"), new String[][]{{"system",S("dark_system")},{"light",S("dark_light")},{"dark",S("dark_dark")}}, darkModePref, v -> {
+        // Q169（置灰独立子项）：墨曜下深色模式为死控件（darkEff 恒深）——置灰不可点版，
+        // 偏好值不动；切回扁平自动恢复下面这行原 segInner。单独回归，不并入换新逻辑。
+        if (styleMoyao()) segInnerLocked169(panel, S("dark_mode"), new String[][]{{"system",S("dark_system")},{"light",S("dark_light")},{"dark",S("dark_dark")}}, darkModePref);
+        else segInner(panel, S("dark_mode"), new String[][]{{"system",S("dark_system")},{"light",S("dark_light")},{"dark",S("dark_dark")}}, darkModePref, v -> {
             darkModePref = v; prefs.edit().putString("dark_mode", v).apply(); haptic(); applyAppearanceChrome(); applyAppearanceSoft130(); // Q135（件三普查）：深色解冻同治，改走无闪换入
         });
         addHair(panel);
@@ -27115,7 +27172,10 @@ public class MainActivity extends Activity {
             appLangPref = v; if (prefs != null) prefs.edit().putString("app_lang", v).apply(); EN_MODE = isEn(); haptic(); refreshNavLabels(); applyAppearanceSoft130(); // Q135（件三普查）：语言解冻同治，改走无闪换入
         });
         addHair(panel);
-        themeColorInner(panel);
+        // Q169（置灰独立子项）：墨曜下主题色为死控件（accentColor 恒金属青）——置灰
+        // 不可点版＋锁定说明一行；切回扁平自动恢复原 themeColorInner。
+        if (styleMoyao()) { themeColorLocked169(panel); lockNote169(panel); }
+        else themeColorInner(panel);
         addHair(panel);
         // Q148（2.59）：页面底色（原样/柔和）——切换走无闪换入（与深色/语言同路），
         // 页底经 softPageBg 一处收口全 App 生效；默认原样、渲染逐位不变。
@@ -27292,14 +27352,205 @@ public class MainActivity extends Activity {
         public int update(Uri uri, ContentValues values, String selection, String[] selectionArgs) { return 0; }
     }
 
+    // ================= Q169（2.83）墨曜重构 B1 地基：字阶口 / 发丝线 / 页眉 / 置灰件 =================
+    // 数字全部冻结自 moyao-refactor-plan-2026-10-08.md §2（DeepSeek 已审）；后批（B2+）
+    // 只许调用本段与 displayTf169，不许再发明字号/字距/线宽。全部助手墨曜外不改现行值。
+    // —— 字阶口 ——
+    // kicker：10sp 拉丁 Light、字距 0.28em、text_tertiary；specimen：10sp、0.14em、text2。
+    // 字距尾距补偿（方案 §6 样板）：TextView/Paint 的 letterSpacing 在末字之后也加一份
+    // advance，居中件的字形视觉中心会左偏 spacing/2——居中时须以 translationX 补回
+    // (字距em × 字号px)/2（trackedShift169）；Canvas 量宽走 trackedWidth169＝
+    // measureText＋字距·字号·(n−1)，混排须分段测。左/右对齐件不需要补偿。
+    TextView kickerTv169(String s) {
+        TextView t = tvW(this, s == null ? "" : s.toUpperCase(java.util.Locale.US), 10, colText3(), 400);
+        t.setTypeface(displayTf169(this, 300));
+        t.setLetterSpacing(0.28f);
+        return t;
+    }
+    TextView specimenTv169(String s) {
+        TextView t = tvW(this, s == null ? "" : s.toUpperCase(java.util.Locale.US), 10, colText2(), 400);
+        t.setTypeface(displayTf169(this, 300));
+        t.setLetterSpacing(0.14f);
+        return t;
+    }
+    static float trackedShift169(TextView t, float em) { return t == null ? 0f : em * t.getTextSize() / 2f; }
+    static float trackedWidth169(Paint p, String s, float em) {
+        if (p == null || s == null) return 0f;
+        return p.measureText(s) + em * p.getTextSize() * Math.max(0, s.length() - 1);
+    }
+    // —— 发丝线双档（方案 §2）——
+    // hairline（分线）：1 物理像素、实色、坐标 snap 到像素中心（snapCenter169：floor+0.5，
+    // 以物理 px 计）；rule（容器/pill 描边）：1dp 实线。两档禁 alpha 冒充。扁平不走此口。
+    int colHairline169() { return styleMoyao() ? MY_BORDER_SUBTLE : colDivider(); }
+    int colRule169() { return styleMoyao() ? MY_BORDER_DEFAULT : colDivider(); }
+    static float snapCenter169(float px) { return (float) (Math.floor(px) + 0.5); }
+    // —— 表面 ——
+    // 设置大面板面单源：扁平＝原 roundRect 柔面逐位不动；墨曜＝surface_1 实面＋rule
+    // 发丝描边（容器档 1dp #23282F）＋16dp 圆角（走 cardR129 与全站圆角杆同源）、去阴影。
+    Drawable panelBg169() {
+        if (!styleMoyao()) return roundRect(colSurface(), 18, this);
+        GradientDrawable g = new GradientDrawable();
+        g.setColor(MY_SURFACE1);
+        g.setStroke(dp(this, 1), MY_BORDER_SUBTLE);
+        g.setCornerRadius(dp(this, cardR129(16f)));
+        return g;
+    }
+    // 墨曜分段片：空心发丝框＋细字；选中以金属青 @12% 薄染＋青字示意（字色在调用处走
+    // accentColor 墨曜分支），描边走 pill 档 #2E353D。扁平不走此口。
+    GradientDrawable segChipBg169(boolean on) {
+        GradientDrawable g = new GradientDrawable();
+        g.setColor(on ? Color.argb(31, Color.red(MY_PRIMARY), Color.green(MY_PRIMARY), Color.blue(MY_PRIMARY)) : Color.TRANSPARENT);
+        g.setStroke(dp(this, 1), MY_BORDER_DEFAULT);
+        g.setCornerRadius(dp(this, capsuleR129(9f)));
+        return g;
+    }
+    // —— 输入件 ——
+    // 墨曜输入：光标金属青、选区高亮金属青 @24%（方案 §2）。光标 Drawable 口 API 29 起，
+    // 低版跳过不崩。扁平不调用（调用处与本口内双重墨曜门）。
+    void styleInput169(EditText e) {
+        if (e == null || !styleMoyao()) return;
+        try {
+            e.setHighlightColor(Color.argb(61, Color.red(MY_PRIMARY), Color.green(MY_PRIMARY), Color.blue(MY_PRIMARY)));
+            if (Build.VERSION.SDK_INT >= 29) {
+                GradientDrawable cur = new GradientDrawable();
+                cur.setColor(MY_PRIMARY);
+                cur.setSize(dp(this, 2), dp(this, 1));
+                e.setTextCursorDrawable(cur);
+            }
+        } catch (Throwable t) { logErr("styleInput169", t); }
+    }
+    // —— 页眉 ——
+    // 页标题区单源：扁平＝原 24sp（我的卡片 27sp）/800 大标题＋原字距逐位不动（flatSp/
+    // flatSpacing 由各页传原值）；墨曜＝上行拉丁 kicker＋下行中文标题 16sp Medium、
+    // 字距 0.04em（§2 硬上限 0.08 内），中英分行免基线对齐。各页只许经此口建页眉。
+    View pageHeader169(String kickerKey, String title, float flatSp, float flatSpacing) {
+        if (!styleMoyao()) {
+            TextView t = tvW(this, title, flatSp, colText(), 800);
+            t.setLetterSpacing(flatSpacing); t.setLineSpacing(0, 1.15f);
+            return t;
+        }
+        LinearLayout box = new LinearLayout(this);
+        box.setOrientation(LinearLayout.VERTICAL);
+        TextView kick = kickerTv169(S(kickerKey));
+        LinearLayout.LayoutParams klp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        klp.bottomMargin = dp(this, 3);
+        box.addView(kick, klp);
+        TextView t = tvW(this, title, 16, colText(), 500);
+        t.setLetterSpacing(0.04f); t.setLineSpacing(0, 1.15f);
+        box.addView(t);
+        return box;
+    }
+    // —— 底栏标签 ——
+    // 墨曜：10sp、大写（refreshNavLabels 处变换，拉丁才有大小写、中文字形不受影响）、
+    // 字距 0.12em＋尾距居中补偿；选中只染青不加粗（tintNavTo 处守）。扁平：字距/位移
+    // 清零＝与改前逐位一致。字体仍走当前 fontMode（refreshNavFonts125），不抢展示字口。
+    void styleNavLabel169(TextView lb) {
+        if (lb == null) return;
+        if (styleMoyao()) { lb.setLetterSpacing(0.12f); lb.setTranslationX(trackedShift169(lb, 0.12f)); }
+        else { lb.setLetterSpacing(0f); lb.setTranslationX(0f); }
+    }
+    void styleNavLabels169() {
+        try { if (navLabels != null) for (TextView lb : navLabels.values()) styleNavLabel169(lb); } catch (Throwable ignored) { /* swallow-ok: 底栏标签样式刷新是纯视觉收口，失败保持当前样式不拦路 */ }
+    }
+    // —— 置灰子项（独立回归，不并入换新逻辑）——
+    // 墨曜下 darkEff 恒深、accentColor 恒金属青，「深色模式/主题色」是死控件：照原段选/
+    // 色点形态渲染但整体置灰、不可点（不挂任何监听），偏好值一字不动；切回扁平后
+    // buildAppearancePanel 走原 segInner/themeColorInner 自动恢复可点生效。
+    GradientDrawable segChipLockedBg169(boolean on) {
+        GradientDrawable g = new GradientDrawable();
+        g.setColor(on ? MY_SURFACE2 : Color.TRANSPARENT);
+        g.setStroke(1, MY_BORDER_SUBTLE);
+        g.setCornerRadius(dp(this, capsuleR129(9f)));
+        return g;
+    }
+    void segInnerLocked169(LinearLayout panel, String label, String[][] opts, String cur) {
+        LinearLayout box = new LinearLayout(this);
+        box.setOrientation(LinearLayout.VERTICAL);
+        box.setPadding(0, dp(this, 8), 0, dp(this, 10));
+        box.addView(tv(this, label, 14, colText3(), true));
+        LinearLayout row = new LinearLayout(this);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        LinearLayout.LayoutParams rlp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        rlp.topMargin = dp(this, 9);
+        box.addView(row, rlp);
+        for (final String[] o : opts) {
+            final boolean on = segOn(o[0], cur);
+            TextView t = tv(this, o[1], 12.5f, colText3(), on);
+            t.setGravity(Gravity.CENTER);
+            t.setBackground(segChipLockedBg169(on));
+            t.setSingleLine(true); t.setMaxLines(1); t.setEllipsize(android.text.TextUtils.TruncateAt.END);
+            pinFixedText125(t);
+            t.setPadding(dp(this, 4), dp(this, 8), dp(this, 4), dp(this, 8));
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+            lp.rightMargin = dp(this, 8);
+            t.setLayoutParams(lp);
+            row.addView(t); // 不挂 OnClickListener＝不可点；当前值仍按 segOn 形态示意
+        }
+        panel.addView(box);
+    }
+    // 主题色说明文案单源（themeColorInner 与置灰版共用一字，不许两处各写一份漂移；
+    // 值与旧 themeColorInner 内的字面量逐字相同，EN_TXT 命中行为不变）。
+    static final String THEME_DESC169 = "只改选中态、开关、链接与强调色，不改卡面颜色";
+    void themeColorLocked169(LinearLayout panel) {
+        LinearLayout box = new LinearLayout(this);
+        box.setOrientation(LinearLayout.VERTICAL);
+        box.setPadding(0, dp(this, 8), 0, dp(this, 10));
+        box.addView(tv(this, S("theme_color"), 14, colText3(), true));
+        box.addView(tv(this, THEME_DESC169, 11.5f, colText3(), false));
+        LinearLayout row = new LinearLayout(this);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        LinearLayout.LayoutParams rlp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        rlp.topMargin = dp(this, 10);
+        box.addView(row, rlp);
+        final int[] sw = {Color.rgb(0x0A,0x5C,0xD6), Color.rgb(0x0E,0x7C,0x7B), Color.rgb(0x6C,0x4B,0xD8), Color.rgb(0x1D,0x8A,0x49), Color.rgb(0xC7,0x5A,0x00)};
+        for (int i = 0; i < THEME_OPTS.length; i++) {
+            final String key = THEME_OPTS[i][0];
+            final boolean on = key.equals(themeColorKey);
+            LinearLayout cell = new LinearLayout(this);
+            cell.setOrientation(LinearLayout.VERTICAL);
+            cell.setGravity(Gravity.CENTER_HORIZONTAL);
+            cell.setAlpha(0.38f); // 整格置灰（含当前值环也一并压暗，只示意不可调）
+            FrameLayout dotWrap = new FrameLayout(this);
+            View dot = new View(this);
+            GradientDrawable dg = new GradientDrawable();
+            dg.setShape(GradientDrawable.OVAL);
+            dg.setColor(sw[i]);
+            dot.setBackground(dg);
+            dotWrap.addView(dot, new FrameLayout.LayoutParams(dp(this, 30), dp(this, 30), Gravity.CENTER));
+            if (on) {
+                GradientDrawable ring = new GradientDrawable();
+                ring.setShape(GradientDrawable.OVAL);
+                ring.setColor(Color.TRANSPARENT);
+                ring.setStroke(dp(this, 2), colText3());
+                FrameLayout ringV = new FrameLayout(this);
+                ringV.setBackground(ring);
+                dotWrap.addView(ringV, new FrameLayout.LayoutParams(dp(this, 38), dp(this, 38), Gravity.CENTER));
+            }
+            cell.addView(dotWrap, new LinearLayout.LayoutParams(dp(this, 38), dp(this, 38)));
+            TextView nm = tv(this, isEn() ? THEME_NAME_EN[i] : THEME_OPTS[i][1], 11, colText3(), on);
+            nm.setGravity(Gravity.CENTER);
+            LinearLayout.LayoutParams nlp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            nlp.topMargin = dp(this, 3);
+            cell.addView(nm, nlp);
+            row.addView(cell, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)); // 不挂监听＝不可点
+        }
+        panel.addView(box);
+    }
+    void lockNote169(LinearLayout panel) {
+        TextView n = tv(this, S("moyao_lock_note"), 11, colText3(), false);
+        bodyLH(n);
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        lp.topMargin = dp(this, 2);
+        panel.addView(n, lp);
+    }
+
     LinearLayout basePage(String title) {
         LinearLayout page = new LinearLayout(this);
         page.setOrientation(LinearLayout.VERTICAL);
         page.setPadding(dp(this, 14), pageTopPad(), dp(this, 14), 0);
         // Q39: .page-title 1.4rem/800/.02em、行高收紧
-        TextView pt = tvW(this, title, 24, colText(), 800);
-        pt.setLetterSpacing(0.02f); pt.setLineSpacing(0, 1.15f);
-        page.addView(pt);
+        // Q169：页眉走单源（扁平＝原 24sp/800 逐位；墨曜＝kicker＋中文标题）
+        page.addView(pageHeader169("kicker_settings", title, 24f, 0.02f));
         return page;
     }
 
