@@ -444,3 +444,7 @@ bash build.sh 通过，aapt 复验 versionCode=271/versionName=2.71-native；产
 - [x] Q181 2.94 CardFi A 类落库稿并入外卡专区（2026-10-08 完成，2.94-native vc294，基线 5301207=2.93；纯数据并入、零代码逻辑改动）：
   - 并入：assets/data/foreign.json 以 hidden_files/cardfi-ingest-staging/foreign.json 整文件覆盖（覆盖前备份 hidden_files/foreign-before-2.94-2026-10-08.json，234,303B/83 张）；新文件 421,070B，外卡专区 83→214 张。主会话亲验：现行 83 条逐字保留在前、新增 131 条＝fxhk 68/fxus 50/fxeu 6/fxuk 2/fxsg 2/fxgl 2/fxca 1；新增条目无 score、无 image、全部 verification.status=lead_unverified，与现有 354（主库）＋83 铁证重复 0、id 零碰撞。主库 cards.json 零改动。
   - 版本：build.sh VER_CODE 293→294、VER_NAME→2.94-native；AndroidManifest versionCode/Name 同步（设置页版本读 appVersion() 包信息，无写死字面量）。foreign.json 在包内走既有 CBX1 加密（build.sh verify-apk 终检覆盖）。
+- [x] Q182 2.95 港卡核实结果并入外卡专区（2026-10-08 完成，2.95-native vc295，基线 0e1806c=2.94；纯数据应用、零代码逻辑改动）：
+  - 并入：assets/data/foreign.json 以 hidden_files/cardfi-verify-staging/foreign-hk-verified.json 删 12 条 B 类后整文件覆盖（覆盖前备份 hidden_files/foreign-before-2.95-2026-10-08.json，421,070B/214 张）；新文件 488,721B，外卡专区 214→202 张。删除 12 条（官网查无/已停办/非卡/误挂，证据见 staging 同目录 verify-hk-report.md）：fxhk-110、fxhk-132、fxhk-134、fxhk-135、fxhk-136、fxhk-140、fxhk-141、fxhk-148、fxhk-159、fxhk-160、fxhk-170、fxhk-172。其余条目一字不动：港卡 46 条升 verification.status=core_verified（带官网链接）、C 类 10 条与港卡余 22 条保留 lead_unverified、非港卡条目与现行逐字一致。
+  - 自验：总条数 202、id 零碰撞、相对并入前新增 core_verified 恰 46 条（全 fxhk）、无新增 id。主库 cards.json 零改动。
+  - 版本：build.sh VER_CODE 294→295、VER_NAME→2.95-native；AndroidManifest versionCode/Name 同步（设置页版本读 appVersion() 包信息，无写死字面量）。foreign.json 在包内走既有 CBX1 加密（build.sh verify-apk 终检覆盖）。
