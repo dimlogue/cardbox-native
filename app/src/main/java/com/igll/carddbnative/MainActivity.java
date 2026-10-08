@@ -12205,17 +12205,29 @@ public class MainActivity extends Activity {
     View lagWarnSheet166 = null;
     boolean lagWarnAcked166 = false;
     boolean lagWarnThenClose166 = false;
+    // Q167（2.81，用户点定「我的卡片页也加同款弹窗」）：本页警告的来源标记与
+    // 进程级确认——我的卡片页是常驻页、没有筛选窗的会话边界，确认进程内只认
+    // 一次，新进程随实例重建自然重置（冷启动重置，用户既定口径）；筛选窗的会
+    // 话级 lagWarnAcked166 随开窗重置、与本标记互不相干，不许互相污染。
+    boolean lagWarnFromMine167 = false;
+    boolean lagWarnMineAcked167 = false;
 
     // Q166：卡顿判定唯一口——与行内提示（筛选窗/我的卡片两处）同一 count 同一阈值
-    boolean lagMany166() { return Store.all != null && Store.all.size() > 30; }
+    boolean lagMany166() { return lagManyCount167(Store.all == null ? 0 : Store.all.size()); }
+
+    // Q167（2.81）：计数判定口——>30 阈值字面量全 App 只许此一处。筛选窗与两处
+    // 行内提示传全库数（lagMany166 行为零变化）；我的卡片页传页头卡数（库卡＋
+    // 自定义，与页头「我的卡片 N 张」同口径，DeepSeek 审三问采纳其计数结论）。
+    boolean lagManyCount167(int n) { return n > 30; }
 
     // Q166：警告窗——走既有玻璃窗工厂同款式（冻结玻璃垫＋boostWindowFace 面＋
     // sheetR129(22f) 全圆角＋统一进出场曲线），只留「确定」一钮；遮罩点击无
     // 反应（DeepSeek 审：遮罩≠确定）、系统返回键按确定处理（见 onBackPressed）。
-    void showLagWarn166(boolean thenCloseFilter) {
+    void showLagWarn166(boolean thenCloseFilter, int cnt, boolean fromMine) {
         if (lagWarnSheet166 != null) return;
         lagWarnThenClose166 = thenCloseFilter;
-        final int cnt166 = Store.all == null ? 0 : Store.all.size(); // 判定瞬间快照（DeepSeek 审）
+        lagWarnFromMine167 = fromMine;
+        final int cnt166 = cnt; // 判定瞬间快照（DeepSeek 审），张数由触发方按各自口径传入
         hideChrome();
         final FrameLayout sheet = new FrameLayout(this);
         View shade = new View(this); shade.setBackgroundColor(Color.argb(102, 0, 0, 0)); shade.setAlpha(0f);
@@ -12261,11 +12273,16 @@ public class MainActivity extends Activity {
         final View sheet = lagWarnSheet166;
         if (sheet == null) return;
         lagWarnSheet166 = null;
-        lagWarnAcked166 = true;
+        // Q167：确认落点按来源分流——筛选窗来源记会话级、我的卡片来源记进程级
+        final boolean fromMine167 = lagWarnFromMine167;
+        lagWarnFromMine167 = false;
+        if (fromMine167) lagWarnMineAcked167 = true; else lagWarnAcked166 = true;
         Object[] t = sheet.getTag() instanceof Object[] ? (Object[]) sheet.getTag() : null;
         final View wrap = t != null ? (View) t[0] : null;
         final boolean[] doneRan = {false};
-        Runnable done = () -> { if (doneRan[0]) return; doneRan[0] = true; if (sheet.getParent() != null) ((ViewGroup) sheet.getParent()).removeView(sheet); };
+        // Q167：我的卡片来源没有宿主窗关闭事件接管 chrome，窗摘除后必须自己恢复
+        // （restoreChrome 自带覆盖守卫，警告窗不在其名单内，摘除后调用安全）
+        Runnable done = () -> { if (doneRan[0]) return; doneRan[0] = true; if (sheet.getParent() != null) ((ViewGroup) sheet.getParent()).removeView(sheet); if (fromMine167) restoreChrome(); };
         if (wrap != null) {
             wrap.animate().translationY(dp(this, 42)).alpha(0f).setDuration(ANIM_DUR_SHEET_OUT).setInterpolator(ANIM_EXIT).withEndAction(done).start();
             sheet.animate().alpha(0f).setDuration(ANIM_DUR_SHADE_OUT).setInterpolator(ANIM_EXIT).start();
@@ -12284,7 +12301,7 @@ public class MainActivity extends Activity {
         // 调用方仅此三处用户出口（openFilterSheet 走 closeFilterSheetNow 不经此），
         // 程序化关窗不会误伤（DeepSeek 审边界三）。
         if (filterSheet != null && lagWarnSheet166 == null && !lagWarnAcked166 && cols == 1 && lagMany166()) {
-            showLagWarn166(true);
+            showLagWarn166(true, Store.all == null ? 0 : Store.all.size(), false);
             return;
         }
         final View sheet = filterSheet;
@@ -12462,7 +12479,7 @@ public class MainActivity extends Activity {
                 Runnable apply154 = () -> { cols = nCols; persistViewPrefs(); rebuildFilterPanel(panel); refreshHome(); };
                 if (groupBank || homeList == null || homeScroll == null) apply154.run();
                 else beginColsFlip154(homeList, homeScroll, oldCols154, nCols, false, false, apply154);
-                if (warn166) mainHandler.post(() -> { if (filterSheet != null && lagWarnSheet166 == null) showLagWarn166(false); });
+                if (warn166) mainHandler.post(() -> { if (filterSheet != null && lagWarnSheet166 == null) showLagWarn166(false, Store.all == null ? 0 : Store.all.size(), false); });
             }, groupBank));
         }
         addChipFlow(panel, colChips);
@@ -15663,6 +15680,9 @@ public class MainActivity extends Activity {
             crLp127.bottomMargin = dp(this, 2);
             zoneBox.addView(colsRow127, crLp127);
             mineColsRow152 = colsRow127; // Q152：列数钮重涂把手
+            // Q167（2.81）：页头口径卡数（库卡＋自定义，与页头「N 张」同数）——
+            // 单列警告的判定与正文张数共用，计数判定走唯一口 lagManyCount167。
+            final int minePageCount167 = mineRows.size() + customCards.size();
             String[][] colOpts127 = {{"1", "单列"}, {"2", "双列"}, {"3", "三列"}, {"4", "四列"}};
             for (final String[] co127 : colOpts127) {
                 final int nCols127 = Integer.parseInt(co127[0]);
@@ -15706,6 +15726,13 @@ public class MainActivity extends Activity {
                     };
                     if (mineGridBox152 == null || mineScrollRef152 == null) apply127.run();
                     else beginColsFlip154(mineGridBox152, mineScrollRef152, oldCols154, nCols127, false, false, apply127);
+                    // Q167（2.81，用户点定）：点到单列且页头卡数 >30、本进程未
+                    // 确认过 → 照常先生效（与筛选窗触发点一同口径），下一帧升同款
+                    // ⚠ 玻璃窗（showLagWarn166 的 fromMine 分支）；本页确认进程级
+                    // 一次，切走切回不重弹。升窗守卫：窗未在场且仍在本页。
+                    if (nCols127 == 1 && lagManyCount167(minePageCount167) && !lagWarnMineAcked167) {
+                        mainHandler.post(() -> { if (lagWarnSheet166 == null && "mine".equals(tab)) showLagWarn166(false, minePageCount167, true); });
+                    }
                 });
             }
         }
