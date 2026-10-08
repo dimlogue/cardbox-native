@@ -4642,10 +4642,12 @@ public class MainActivity extends Activity {
             try { assetJson = new String(DataCipher.decryptedBytes(c.getAssets().open("data/cards.json")), "UTF-8"); } catch (Exception e) { logErr("store.load.asset", e); /* 读不到/认证失败走空（Q170 E1：包内资产已加密） */ }
             if (assetJson != null) bundledVersion = versionOf(assetJson); // Q105：包内资产版本落定（Img 取源优先级依据）
             // OTA 文件（filesDir/cards-ota.json）比内置新才优先用它（对照混合版 boot 的 OTA 优先逻辑）
+            // Q172（E2）：盘上已密文化——经 DataCipher.decryptedText 统一读回（有头解密、
+            // 无头旧明文宽容接续）；解密/认证失败抛入此 catch、otaJson 留空走资产回落，等同坏文件。
             String otaJson = null;
             try {
                 File f = new File(c.getFilesDir(), "cards-ota.json");
-                if (f.exists()) otaJson = readAll(new FileInputStream(f));
+                if (f.exists()) otaJson = DataCipher.decryptedText(new FileInputStream(f));
             } catch (Exception e) { logErr("store.load.otaFile", e); otaJson = null; }
             // Q98 双保险：OTA 文件只有「经确认窗应用成功后落下的标记 ota_applied_version 与文件
             // 版本一致」才认——系统备份/克隆把文件单独带回新装时标记对不上，一律回落包内资产，
@@ -4808,10 +4810,18 @@ public class MainActivity extends Activity {
         // 大小合则 sha 后台单线程串行补验「先给图后纠错」，同 path 去重，不符
         // 同样删＋重拉（fetchRemote 落盘再验、失败有 30s 退避，不成循环）。无
         // 清单项（老数据/未收录图）直接跳过，行为与旧版逐字一致。
+        // Q172（E2）：盘上图已密文化——大小快检改 magic 感知双支（有头期望明文
+        // size＋33、无头期望明文 size），sha 改解密后验明文；解密失败（密文被改/
+        // 截断）不按普通补验失败吞，分流删＋重拉进同一自愈漏斗（方案 §三-5）。
         static final java.util.Set<String> shaPending161 = java.util.Collections.synchronizedSet(new java.util.HashSet<>());
         static volatile long lastVerifyFetch161 = 0; // 大小不符重拉节流时戳（复审二轮：防一次 apply 后齐发）
         static final java.util.concurrent.ExecutorService shaPool161 = java.util.concurrent.Executors.newSingleThreadExecutor(r -> { Thread t = new Thread(r, "cardimg-sha"); t.setDaemon(true); return t; });
-        static String sha256Of161(File f) { try { java.security.MessageDigest md = java.security.MessageDigest.getInstance("SHA-256"); java.io.FileInputStream in = new java.io.FileInputStream(f); byte[] b = new byte[8192]; int n; while ((n = in.read(b)) > 0) md.update(b, 0, n); in.close(); StringBuilder sb = new StringBuilder(); for (byte x : md.digest()) sb.append(String.format("%02x", x & 0xff)); return sb.toString(); } catch (Exception e) { logErr("img.sha256", e); return null; } }
+        // Q172（E2）：sha 统一按明文字节算——调用方先过 DataCipher（盘上密文解密后验、
+        // 下载明文直验，清单明文 sha 语义不变）；旧 File 版随 fetch/verify 两口改造删除不留死代码。
+        static String sha256Bytes161(byte[] data161) { try { byte[] d161 = java.security.MessageDigest.getInstance("SHA-256").digest(data161); StringBuilder sb = new StringBuilder(); for (byte x : d161) sb.append(String.format("%02x", x & 0xff)); return sb.toString(); } catch (Exception e) { logErr("img.sha256", e); return null; } }
+        // Q172（E2）：盘上图 magic 探头——大小快检与拷贝前进的「有头（明文 size＋33）／
+        // 无头（明文 size）」双支判据共用此一口；读头失败按无头论（后续大小/sha 判定自会分流自愈）。
+        static boolean isDiskEncrypted161(File f161) { java.io.FileInputStream in161 = null; try { in161 = new java.io.FileInputStream(f161); byte[] head161 = new byte[DataCipher.OVERHEAD]; int got161 = 0, n161; while (got161 < head161.length && (n161 = in161.read(head161, got161, head161.length - got161)) > 0) got161 += n161; return DataCipher.isEncrypted(java.util.Arrays.copyOf(head161, got161)); } catch (Exception e) { logErr("img.diskMagic", e); return false; } finally { if (in161 != null) { try { in161.close(); } catch (Exception ignored) { /* swallow-ok: 关流失败无可挽回、探头结论已得 */ } } } }
         static void verifyDiskImage161(final Context c, final String path) {
             final String name161 = new File(path).getName();
             final String wantSha161 = Store.imgSha161.get(name161); final Long wantSize161 = Store.imgSize161.get(name161);
@@ -4819,7 +4829,7 @@ public class MainActivity extends Activity {
             final File f161 = new File(remoteCacheDir(c), name161);
             try {
                 if (!f161.exists()) return;
-                if (wantSize161 != null && f161.length() != wantSize161.longValue()) {
+                if (wantSize161 != null && f161.length() != wantSize161.longValue() + (isDiskEncrypted161(f161) ? DataCipher.OVERHEAD : 0)) {
                     // 复审二轮：300ms 滑动窗口节流——大小快检是同步判定、无 sha 串
                     // 行器的天然间隔，一次 apply 后 verifyDir 遍历可齐发 O(N) 入队；
                     // 窗口内跳过纠错（坏文件留下，下次命中过窗再删重拉，仍自愈）。
@@ -4831,7 +4841,7 @@ public class MainActivity extends Activity {
             } catch (Throwable ignored) { return; }
             if (wantSha161 == null || !shaPending161.add(path)) return;
             final Context app161 = c.getApplicationContext();
-            try { shaPool161.execute(() -> { try { String got161 = sha256Of161(f161); if (got161 != null && !got161.equalsIgnoreCase(wantSha161) && f161.exists() && f161.delete()) fetchRemote(app161, path, f161); } catch (Throwable ignored) { /* 补验失败下次命中再验 */ } finally { shaPending161.remove(path); } }); }
+            try { shaPool161.execute(() -> { try { java.io.FileInputStream in161 = new java.io.FileInputStream(f161); byte[] raw161; try { raw161 = DataCipher.readStreamBytes(in161); } finally { try { in161.close(); } catch (Exception ignored) { /* swallow-ok: 关流失败无可挽回、字节已读全 */ } } String got161 = sha256Bytes161(DataCipher.decryptIfNeeded(raw161)); if (got161 != null && !got161.equalsIgnoreCase(wantSha161) && f161.exists() && f161.delete()) fetchRemote(app161, path, f161); } catch (Throwable bad161) { logErr("img.verify.decrypt", bad161); try { if (f161.exists() && f161.delete()) fetchRemote(app161, path, f161); } catch (Throwable ignored) { /* swallow-ok: 删/重拉失败下次命中再试 */ } } finally { shaPending161.remove(path); } }); }
             catch (Throwable t161) { shaPending161.remove(path); }
         }
         // Q161：当前版本目录落盘图逐张补验（数据应用拷贝前进后于预热线程跑）。
@@ -4988,16 +4998,20 @@ public class MainActivity extends Activity {
                                     // Q151（N17）：先写临时文件、成完再原子改名——旧实现直写
                                     // 目标文件，断网半截文件留在盘上会被 exists() 当好图、解码
                                     // 恒失败又永不重拉（单次抖动即永久毒化该图，06:36 病灶之一）。
-                                    FileOutputStream fos = new FileOutputStream(tmp151);
+                                    // Q172（E2）：下载改内存中转（单图 ≤1MB 已实测）——先按清单
+                                    // 验明文 size+sha（Q161 落盘指纹校验：CDN 窗口期回旧图也是
+                                    // 200，字节对不上本线作废换下一线、两线皆错进 30s 退避，
+                                    // 绝不把旧字节冻进盘，回函第 5 条；线上仍明文语义不变），
+                                    // 过验才加密写 tmp→改名，盘上只存 CBX1 密文、明文不落盘。
                                     InputStream in = conn.getInputStream();
-                                    byte[] buf = new byte[8192]; int n;
-                                    while ((n = in.read(buf)) > 0) fos.write(buf, 0, n);
-                                    in.close(); fos.close();
-                                    if (tmp151.length() > 0 && tmp151.renameTo(dest)) { ok151 = true; }
-                                    // Q161：落盘指纹校验——CDN 窗口期回旧图也是 200，字节
-                                    // 与清单对不上即删、本图不算下到、换下一线再试；两线
-                                    // 皆错判失败进 30s 退避，绝不把旧字节冻进盘（回函第 5 条）。
-                                    if (ok151) { Long ws161 = Store.imgSize161.get(name); String wh161 = Store.imgSha161.get(name); boolean bad161 = (ws161 != null && dest.length() != ws161.longValue()) || (wh161 != null && !wh161.equalsIgnoreCase(String.valueOf(sha256Of161(dest)))); if (bad161) { try { dest.delete(); } catch (Throwable ignored) { /* 删不掉下次校验再删 */ } ok151 = false; } }
+                                    byte[] plain171; try { plain171 = DataCipher.readStreamBytes(in); } finally { try { in.close(); } catch (Exception ignored) { /* swallow-ok: 关流失败无可挽回、字节已读全 */ } }
+                                    Long ws161 = Store.imgSize161.get(name); String wh161 = Store.imgSha161.get(name);
+                                    boolean bad161 = plain171.length == 0 || (ws161 != null && plain171.length != ws161.longValue()) || (wh161 != null && !wh161.equalsIgnoreCase(String.valueOf(sha256Bytes161(plain171))));
+                                    if (!bad161) {
+                                        FileOutputStream fos = new FileOutputStream(tmp151);
+                                        try { fos.write(DataCipher.encrypt(plain171)); } finally { fos.close(); }
+                                        if (tmp151.length() > 0 && tmp151.renameTo(dest)) { ok151 = true; }
+                                    }
                                     if (ok151) break;
                                 }
                             } catch (Exception e151) { logErr("img.fetch.line", e151); /* 换下一条线 */ }
@@ -18982,6 +18996,7 @@ public class MainActivity extends Activity {
     // 目录，免数据更新后全量重下；大小对不上不搬（留在旧目录由 prune 收尾、
     // 新目录按需重拉且落盘再验）。同在本 filesDir 卷内，renameTo 直改名；
     // 失败（目标已存/跨挂载）回退拷贝＋字节对齐才删源，不静默丢图（回函第 4 条）。
+    // Q172（E2）：判据改 magic 感知双支（密文 size＋33／明文 size），存量明文搬迁顺手加密（见循环内注）。
     void carryForwardImages161(int oldVer161) {
         try {
             if (oldVer161 <= 0 || oldVer161 == Store.dataVersion) return;
@@ -18995,10 +19010,20 @@ public class MainActivity extends Activity {
             for (File f161 : fs161) {
                 if (f161 == null || !f161.isFile()) continue;
                 Long ws161 = Store.imgSize161.get(f161.getName());
-                if (ws161 == null || f161.length() != ws161.longValue()) continue;
+                if (ws161 == null) continue;
+                // Q172（E2）：搬迁判据改 magic 感知（方案 §三-4）——有头密文按明文
+                // size＋33 判、直搬；无头存量明文（2.84/2.85 落盘）按明文 size 判、
+                // 搬迁顺手加密。不许按单一＋33 判据把存量明文全判坏重下。
+                boolean enc161 = Img.isDiskEncrypted161(f161);
+                if (f161.length() != ws161.longValue() + (enc161 ? DataCipher.OVERHEAD : 0)) continue;
                 File to161 = new File(newDir161, f161.getName());
-                // 复审 #5：新目录已有同名残留且大小与新清单不符（上版毒图）先删，免跨版本累积
-                if (to161.exists()) { if (to161.length() == ws161.longValue()) continue; to161.delete(); }
+                // 复审 #5：新目录已有同名残留且大小对不上其自身形态判据（上版毒图）先删，免跨版本累积
+                if (to161.exists()) { if (to161.length() == ws161.longValue() + (Img.isDiskEncrypted161(to161) ? DataCipher.OVERHEAD : 0)) continue; to161.delete(); }
+                if (!enc161) {
+                    // 明文迁移：读明文→加密→写新目录→长度对齐（明文 size＋33）才删源；失败留在旧目录，缺图按需重拉
+                    try { java.io.FileInputStream in161 = new java.io.FileInputStream(f161); byte[] plain161; try { plain161 = DataCipher.readStreamBytes(in161); } finally { try { in161.close(); } catch (Exception ignored) { /* swallow-ok: 关流失败无可挽回、字节已读全 */ } } if (plain161.length != ws161.longValue()) continue; java.io.FileOutputStream out161 = new java.io.FileOutputStream(to161); try { out161.write(DataCipher.encrypt(plain161)); } finally { out161.close(); } if (to161.length() == ws161.longValue() + DataCipher.OVERHEAD) f161.delete(); else to161.delete(); } catch (Throwable t161) { logErr("ota.carryForward.encrypt", t161); }
+                    continue;
+                }
                 if (f161.renameTo(to161)) continue;
                 try { java.io.FileInputStream in161 = new java.io.FileInputStream(f161); java.io.FileOutputStream out161 = new java.io.FileOutputStream(to161); byte[] b161 = new byte[8192]; int n161; while ((n161 = in161.read(b161)) > 0) out161.write(b161, 0, n161); in161.close(); out161.close(); if (to161.length() == f161.length()) f161.delete(); } catch (Throwable ignored) { /* 拷贝失败留在旧目录 */ }
             }
@@ -19024,14 +19049,15 @@ public class MainActivity extends Activity {
             File tmp151 = new File(getFilesDir(), "cards-ota.json.tmp151");
             try {
                 FileOutputStream fos = new FileOutputStream(tmp151);
-                fos.write(json.getBytes("UTF-8")); fos.flush(); fos.close();
+                fos.write(DataCipher.encrypt(json.getBytes("UTF-8"))); fos.flush(); fos.close(); // Q172（E2）：落盘只存 CBX1 密文，明文不落盘
                 File dst151 = new File(getFilesDir(), "cards-ota.json");
                 if (dst151.exists()) dst151.delete();
                 if (!tmp151.renameTo(dst151)) throw new Exception("rename failed");
                 // Q152（2.63，更新链c）：落盘后重读校验——不信内存态：磁盘文件须能
                 // 独立读回、parse 出 JSONObject 且版本号与待应用版一致才算成功
                 // （与 Store.load 的标记对账同口径）；校验不过按失败收口、标记不写。
-                String diskJson152 = Store.readAll(new java.io.FileInputStream(dst151));
+                // Q172（E2）：读回经 DataCipher.decryptedText 先解密再 versionOf，与 Store.load 同一读回口。
+                String diskJson152 = DataCipher.decryptedText(new java.io.FileInputStream(dst151));
                 int diskVer152 = Store.versionOf(diskJson152);
                 if (diskVer152 != ver) throw new Exception("disk verify failed");
                 ok = Store.parseInto(json);

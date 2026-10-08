@@ -110,4 +110,12 @@ public final class DataCipher {
     public static byte[] decryptedBytes(InputStream in) throws Exception {
         return decryptIfNeeded(readStreamBytes(in));
     }
+
+    // 盘上 JSON 统一读回口（Q172 E2，#2 Store.load OTA 读／#6 Q152 落盘重读共用一口，
+    // 不许两处各写一份）：读全字节→magic 嗅探（有头解密/无头旧明文宽容）→UTF-8 串，
+    // 关流在此收口。认证失败照常抛 AEADBadTagException，由调用方分流既有回落/自愈。
+    public static String decryptedText(InputStream in) throws Exception {
+        try { return new String(decryptedBytes(in), "UTF-8"); }
+        finally { try { in.close(); } catch (Exception ignored) { /* swallow-ok: 关流失败无可挽回、字节已读全 */ } }
+    }
 }
