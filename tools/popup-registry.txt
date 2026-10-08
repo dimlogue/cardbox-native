@@ -6,11 +6,12 @@
 # （冻结可用、不新增） · D=数据驱动非 chrome · 残=已知残留（条目注明）。
 # 纪律：新增弹层必须先在本册登记并注明销项口径；check-arch 第 5 段
 # 以本册登记数＋渲染出口计数双基线防回归。计数只防回归、不证全覆盖。
-POPUP_POINTS=42
+POPUP_POINTS=43
 
 L5079	整页挂载 fullScreenPage（页面非弹层，册内备查）	openFxZone	content.addView(fullScreenPage);	销：EN/S（随所在页销项）
 L5441	贴屏挂载 overlay	openFxDetail	content.addView(overlay, new FrameLayout.LayoutParams(	销：S（批2 外卡详情全量落串 fx_*/verify_*/缺字段）
 L7350	贴屏挂载 toastWrap	showFloatToast	rootView.addView(toastWrap, lp);	销：EN/S（随所在页销项）
+L7526	贴屏挂载 sheet	showMineDupConfirm168	content.addView(sheet);	销：S（mine_dup_title168/mine_dup_msg_fmt168/mine_dup_ok168＋cancel 既有键，Q168/2.82 第二件：同 id 重复添加真玻璃确认，取消/遮罩/返回＝不添加、唯继续添加落第二张，落库口 addMineEntry 拦截）
 L7602	贴屏挂载 overlay	openAcctClassPicker	rootView.addView(overlay, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGrou	销：S/EN（acct_hint S、移除 fmt S、标题/取消 EN）
 L7833	贴屏挂载 overlay	openPlaceholderColorPicker	rootView.addView(overlay, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGrou	销：EN（卡面颜色 EN_TXT）
 L10362	贴屏挂载 backdrop	openCardMenu	rootView.addView(backdrop, new FrameLayout.LayoutParams(	销：EN/S（随所在页销项）

@@ -559,6 +559,7 @@ public class MainActivity extends Activity {
             || fxSheetView150 != null // Q150（2.61）：外卡详情窗升起同列覆盖（与 Q122 补挂口径一致，防回顶钮/底栏在窗在场时被召回压窗）
             || delConfirmSheet != null || updateTipSheet != null || updateConfirmSheet != null
             || appUpdateSheet159 != null // Q159：软件更新窗同列覆盖（防底栏/悬浮件在窗在场时被召回压窗）
+            || mineDupSheet168 != null // Q168（2.82）：重复添加确认窗在场同列覆盖（关窗先清字段、restoreChrome 后读真值）
             || exitSheet151 != null; // Q151（N15）：退出确认窗在场同列覆盖（防悬浮件被召回压窗）
     }
     void hideFabsNow() {
@@ -1280,6 +1281,9 @@ public class MainActivity extends Activity {
         STR.put("cols_lag_title166", new String[]{"单列卡顿提醒","Single-Column Lag Warning"});
         STR.put("cols_lag_msg_fmt166", new String[]{"当前共 %1$d 张卡，单列大图滑动可能卡顿，建议切换为多列。","You have %1$d cards. Single-column large images may scroll with lag — consider switching to more columns."});
         STR.put("cols_lag_ok166", new String[]{"确定","OK"});
+        STR.put("mine_dup_title168", new String[]{"再添加一张？","Add another one?"});
+        STR.put("mine_dup_msg_fmt168", new String[]{"你的卡片里已经有一张「%s」了，是否还要再添加一张？","You already have %s in My Cards. Add another one?"});
+        STR.put("mine_dup_ok168", new String[]{"继续添加","Add Another"});
         STR.put("stu_fit", new String[]{"适合","Good for"});
         STR.put("act_done_suffix", new String[]{" · 已完成"," · Done"});
         STR.put("custom_del_msg_fmt", new String[]{"「%s」删了就没了，备注也会一起清掉。","\"%s\" will be deleted for good, together with its note."});
@@ -7458,13 +7462,95 @@ public class MainActivity extends Activity {
     }
 
     // Q65 加入：弹一类/二类选择（可不标），选完才落条目；同一库卡可再加第二条分别标记
+    // Q168（2.82 第二件，用户 11:59 改判软提示，硬去重/自愈合并方案已撤）：库卡
+    // 入列唯一口在此先拦——已存同 id 条目且界面在场，先弹真玻璃确认窗（见
+    // showMineDupConfirm168），只有明确点「继续添加」才落第二张，取消/遮罩/返回
+    // 一律不落；存量已有重复不动、不合并。自定义卡有自有创建口、永不经本函
+    // 数（形参 Card 即库卡），天然不拦；rootView 为空的兜底直落不弹（无处可弹）。
     void addMineEntry(final Card c, final String cls, final Runnable uiRefresh) {
         if (c == null) return;
+        if (rootView != null && mineDupSheet168 == null && !entriesForCard(c.id).isEmpty()) { showMineDupConfirm168(c, cls, uiRefresh); return; }
+        addMineEntryDirect168(c, cls, uiRefresh);
+    }
+
+    // Q168：确认过（或本无重复时）的实际落库体——原 addMineEntry 逻辑一字未动
+    void addMineEntryDirect168(final Card c, final String cls, final Runnable uiRefresh) {
         mineEntries.add(new MineEntry(newMineEntryKey(c.id), c.id, normAcctClass(cls)));
         saveMineEntries();
         pages.remove("mine");
         if (uiRefresh != null) uiRefresh.run();
         showFloatToast((isEn() ? "Added to My Cards: " : "已加入我的卡片：") + c.name);
+    }
+
+    // Q168：重复添加确认窗——与单列警告窗 showLagWarn166 同款玻璃骨架（真玻璃
+    // 糊层 glassLayerHw＋glassWindowTint 面＋统一进出场曲线）改双钮：取消（chip
+    // 面）/继续添加（主色）；与警告窗的差别只在语义：本窗遮罩点按＝取消（取消
+    // 是安全出口，不添加），系统返回同走取消（见 onBackPressed 链）。
+    void showMineDupConfirm168(final Card c, final String cls, final Runnable uiRefresh) {
+        if (mineDupSheet168 != null) return;
+        hideChrome();
+        final FrameLayout sheet = new FrameLayout(this);
+        View shade = new View(this); shade.setBackgroundColor(Color.argb(102, 0, 0, 0)); shade.setAlpha(0f);
+        sheet.addView(shade, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        shade.setOnClickListener(v -> { haptic(); closeMineDupConfirm168(); }); // Q168：遮罩=取消，不添加
+        LinearLayout card = new LinearLayout(this); card.setOrientation(LinearLayout.VERTICAL);
+        GradientDrawable cg = glassWindowTint(sheetR129(22f), false); boostWindowFace(cg); card.setBackground(cg);
+        if (Build.VERSION.SDK_INT >= 21) { softShadow(card, 24); roundClip(card, sheetR129(22f), this); }
+        card.setOnClickListener(v -> {});
+        card.setPadding(dp(this, 18), dp(this, 18), dp(this, 18), dp(this, 14) + navBarH());
+        card.addView(tv(this, S("mine_dup_title168"), 17, colText(), true));
+        TextView m = tv(this, S("mine_dup_msg_fmt168").replace("%s", c.name == null ? "" : c.name), 13.5f, inkBody(), false);
+        LinearLayout.LayoutParams mlp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        mlp.topMargin = dp(this, 8); card.addView(m, mlp);
+        LinearLayout btns = new LinearLayout(this); btns.setOrientation(LinearLayout.HORIZONTAL);
+        LinearLayout.LayoutParams blp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        blp.topMargin = dp(this, 18); card.addView(btns, blp);
+        TextView cb = tv(this, S("cancel"), 15, colText(), false); cb.setGravity(Gravity.CENTER);
+        cb.setBackground(rippleBg(darkEff() ? colChipOff() : Color.rgb(0xF2, 0xF3, 0xF7), 14));
+        btns.addView(cb, new LinearLayout.LayoutParams(0, dp(this, 48), 1f));
+        TextView ob = tv(this, S("mine_dup_ok168"), 15, Color.WHITE, true); ob.setGravity(Gravity.CENTER);
+        ob.setBackground(rippleBg(Color.rgb(0x0A, 0x5C, 0xD6), 14));
+        LinearLayout.LayoutParams olp = new LinearLayout.LayoutParams(0, dp(this, 48), 1f); olp.leftMargin = dp(this, 10);
+        btns.addView(ob, olp);
+        pinFixedText125(cb); pinFixedText125(ob);
+        FrameLayout.LayoutParams clp = new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        clp.gravity = Gravity.BOTTOM; clp.leftMargin = dp(this, 12); clp.rightMargin = dp(this, 12); clp.bottomMargin = dp(this, 10) + navBarH();
+        FrameLayout wrap = new FrameLayout(this);
+        View glass = glassLayerHw(card, sheetR129(22f), false, "minedup168"); roundClip(glass, sheetR129(22f), this);
+        wrap.addView(glass, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        wrap.addView(card, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        sheet.addView(wrap, clp);
+        sheet.setTag(new Object[]{wrap});
+        cb.setOnClickListener(v -> { haptic(); closeMineDupConfirm168(); });
+        ob.setOnClickListener(v -> confirmMineDup168(c, cls, uiRefresh));
+        content.addView(sheet);
+        mineDupSheet168 = sheet;
+        animateUpdateSheetIn(sheet);
+    }
+
+    // Q168：「继续添加」唯一落点——先清字段关窗（字段自检防连点双落），再直入落库体
+    void confirmMineDup168(final Card c, final String cls, final Runnable uiRefresh) {
+        if (mineDupSheet168 == null) return;
+        haptic();
+        closeMineDupConfirm168();
+        addMineEntryDirect168(c, cls, uiRefresh);
+    }
+
+    // Q168：取消唯一出口——取消钮/遮罩/系统返回共用；先清字段再摘窗，摘净才
+    // restoreChrome（覆盖名单已含本窗，清字段后覆盖判定读真值；全程幂等）。
+    void closeMineDupConfirm168() {
+        final View sheet = mineDupSheet168;
+        if (sheet == null) return;
+        mineDupSheet168 = null;
+        Object[] t = sheet.getTag() instanceof Object[] ? (Object[]) sheet.getTag() : null;
+        final View wrap = t != null ? (View) t[0] : null;
+        final boolean[] doneRan = {false};
+        Runnable done = () -> { if (doneRan[0]) return; doneRan[0] = true; if (sheet.getParent() != null) ((ViewGroup) sheet.getParent()).removeView(sheet); restoreChrome(); };
+        if (wrap != null) {
+            wrap.animate().translationY(dp(this, 42)).alpha(0f).setDuration(ANIM_DUR_SHEET_OUT).setInterpolator(ANIM_EXIT).withEndAction(done).start();
+            sheet.animate().alpha(0f).setDuration(ANIM_DUR_SHADE_OUT).setInterpolator(ANIM_EXIT).start();
+            mainHandler.postDelayed(done, ANIM_DUR_SHEET_OUT + 130); // Q98 同款兜底：endAction 不达强制收尾
+        } else done.run();
     }
 
     void removeMineEntriesForCard(final Card c, final Runnable uiRefresh) {
@@ -12211,6 +12297,9 @@ public class MainActivity extends Activity {
     // 话级 lagWarnAcked166 随开窗重置、与本标记互不相干，不许互相污染。
     boolean lagWarnFromMine167 = false;
     boolean lagWarnMineAcked167 = false;
+    // Q168（2.82 第二件，用户 11:59 改判软提示）：重复添加确认窗字段——非空即
+    // 在场；关窗/确认全路径先清此字段再 restoreChrome（防覆盖判定读脏值）。
+    View mineDupSheet168 = null;
 
     // Q166：卡顿判定唯一口——与行内提示（筛选窗/我的卡片两处）同一 count 同一阈值
     boolean lagMany166() { return lagManyCount167(Store.all == null ? 0 : Store.all.size()); }
@@ -27220,6 +27309,7 @@ public class MainActivity extends Activity {
         if (footprintView != null) { closeFootprint(); return; }
         if (subfollowFormSheet != null) { closeSubFollowForm(); return; }
         if (subfollowView != null) { closeSubFollow(); return; }
+        if (mineDupSheet168 != null) { closeMineDupConfirm168(); return; } // Q168：重复添加确认窗在最上层，返回＝取消（不添加），不许下传
         if (acctPickerView != null) { closeAcctClassPicker(); return; }
         if (simkeepFormSheet != null) { closeSimKeepForm(); return; }
         if (simkeepView != null) { closeSimKeep(); return; }

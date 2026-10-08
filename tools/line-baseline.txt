@@ -1,4 +1,14 @@
-27266
+27356
+# 2026-10-08 2.82 第二件（Q168②，净增 +90 相对第一件后基线 27266）：我的
+# 卡片同 id 重复添加改软提示——addMineEntry 落库口拦截 +10（确认直入
+# addMineEntryDirect168、原落库逻辑一字未动）、showMineDupConfirm168/
+# confirmMineDup168/closeMineDupConfirm168 玻璃确认窗三件 +69（与单列警
+# 告窗同款玻璃骨架改双钮、取消/遮罩/返回＝不添加、字段先清再 restore-
+# Chrome、全路径幂等）、字段 mineDupSheet168 +3、STR 双语三键 +3、返回
+# 链与 isChromeCovered 各 +1、注释余量。硬去重/自愈合并经用户 11:59 澄
+# 清取消、从未落码；存量重复不动、自定义卡不经此口天然不拦。施工前
+# DeepSeek 审（hidden_files/batch-2.82-deepseek-consult-2026-10-08.md），
+# FlowBee 额度不足待补审。此后只许减不许增。
 # 2026-10-08 2.82 第一件（Q168①，净增 +38 相对 2.81 基线 27228）：展柜
 # 占位/纯色面左上补卡名+银行名标签——addShowcaseFaceLabel168 helper +36
 # （两行恒定不缩字号、次行允许堆叠被压小半；深浅走 placeholderDarkFor/
