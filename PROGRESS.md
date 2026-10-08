@@ -397,3 +397,11 @@ bash build.sh 通过，aapt 复验 versionCode=271/versionName=2.71-native；产
   - 外卡详情（buildFxDetailBody150）同构：英雄图下发丝线、卡名 16sp Medium 字阶支、specimen 微字行（orgSpecimen171 补 amex 外卡 org 原值支，主卡 amex-cn 不受影响）；外卡不出评分、无 pill。nameEn 行、胶囊行、核实卡、官方链接与按钮行未动。
   - 扁平零差异自证：git diff 全量走读——每处改动的非墨曜分支均原表达式逐字内嵌（name/meta 整段进 else、fx nm 三元扁平支、规格行三元扁平值、分隔线三元扁平色/高、chips 仅加墨曜门）；新增件（发丝线/标本牌/specimen/pill）全部 styleMoyao 门内建，扁平不建。真机 Paint/截图对表点列报告验收表。
   - 门禁：MainActivity 27796→27862（净增 66，基线已登记缘由）；check-arch 警告＋STRICT 双模通过（空吞 208、i18n 37/482/1411、出口 87/弹层 43 全冻）；构建 verify-apk 190 条全 CBX1 绿。真机验收点见施工报告，未真机不记通过。
+- [x] Q174 2.88 墨曜重构 B3b 展柜标本牌（2026-10-08 完成，2.88-native vc288，基线 de7a3ff=2.87；方案 goals/debit-card-database-rebuild/hidden_files/moyao-refactor-plan-2026-10-08.md §3/§4-B3b 定案，DeepSeek 裁量已回写方案、本批未重问，FlowBee 额度不足待补审。只改 MainActivity.java＋版本号＋门禁基线，玻璃骨架、DataCipher、OTA、数据仓、展柜判定/手势/数据一字未动；施工报告 hidden_files/moyao-refactor-b3b-2026-10-08.md）：
+  - 合并口径（同类同逻辑）：Q168①（2.82）占位/纯色面左上标签与本批标本牌合并为一套——墨曜走标本牌、扁平恒走 168 标签原式，同一张无图卡的识别信息只许一处出；真图面两风格均不加（Q78/Q104 面自带信息原则不变）。buildShowcaseFace 两落点（库卡解码 b==null、自定义卡恒纯渐变）加 styleMoyao 门分流，一处落码、堆叠/平放/放大三态同得。
+  - 标本牌（addShowcaseSpecimenPlate174）：牌体与 B3a 详情标本牌同源——panelBg169 哑光面＋发丝边（surface_1＋#23282F、16dp）、内边距 §2 冻结横 16/纵 14；行序按方案 §3：银行名细字（10sp colText2）→卡名（16sp Medium、tvW 中文字体常规路、字距 0.04 与 B3a 中文标题同口）→SPECIMEN 微字（specimenTv169 工厂：10sp/0.14em/text2/Josefin Light；拼法 SPECIMEN·orgSpecimen171·CREDIT/DEBIT 与 B3a 一套，组织经 showcaseOrgCode 归一入 orgSpecimen171）。自定义卡无卡种字段，只出组织段、不编造 CREDIT/DEBIT。
+  - 编号：方案 §3「青只染序列字」未定编号口径——按任务书不编造序号，本批只出微字行、牌内无染青件；编号定案后在同牌同口补一段即可。
+  - 落位与手势：左上（左 10dp/上 8dp，与 168 同物理约束：堆叠露条只见牌首、扒开/平放/放大整牌可见），子视图恒非可点，不挡面既有点击/拖拽/缩放；长名三行均单行尾省略、牌宽 WRAP_CONTENT 受面宽减边距夹取。
+  - 顶栏/色点/密度/分组：经审其面色字色全由 showcaseBgColor152/showcaseDarkBg/accentColor 单源派生（墨曜下 accent 恒金属青已同源）、密度杆 accent 走 accentColor、图标 ink 走 showcaseOnBg，无写死旧色可换；按任务书「不重排、只许跟随基元换色换线」零行改动，顶栏横滑边缘渐隐小修不在本批。
+  - 扁平零差异自证：git diff 全量走读——两落点扁平支为原 label168 调用逐字（参数 placeholderDarkFor/customStyleDark 不变），新方法仅墨曜门内被调用、扁平不建牌；面底色/取图/圆角/组织标处理零改。真机 Paint/截图对表点列报告验收表。
+  - 门禁：MainActivity 27862→27913（净增 51，基线已登记缘由：两落点墨曜门净 +5＋标本牌助手与段头注释 +46）；check-arch 警告＋STRICT 双模通过（行数 27913、空吞 208、i18n 37/482/1411、出口 87/弹层 43 全冻）；构建 verify-apk 190 条全 CBX1 绿。真机验收点见施工报告，未真机不记通过。
