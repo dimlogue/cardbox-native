@@ -1,4 +1,18 @@
-28069
+28090
+# 2026-10-08 2.91 设置页更新结果提示条压行修复（Q178，基线 2.90/vc290，
+# 用户 13:34 真机截图点名——软件更新检查结果提示压「退出前再次确认」行；
+# 施工前 DeepSeek 审 deepseek-float-toast-anchor-2026-10-08.md，FlowBee
+# 额度不足待补审，净增 +21 相对 2.90 基线 28069）：showFloatToast 锚点三
+# 支并两支 +9——顶档（默认）原 else 误抄底挂 BOTTOM 106dp、与底档同落位、
+# 顶部自 Q130 设档以来从未生效，现顶档一律窗顶 statusBarH+8dp（与 Q125
+# 详情顶挂同值同口、详情判据并入顶档），底档原值未动；dismissFloatToast
+# 退出强制摘除兜底 +11（字段 floatToastExitFallback、每件 per-instance
+# 兜底以 parent 为判据、withEndAction 先摘兜底，与 closeMineDupConfirm168
+# 的 Q98 式兜底同源）＋字段声明同行 +1。检查逻辑、版本号口径、提示文案
+# （零新 STR 键）、动画曲线、玻璃背板、DataCipher、OTA、数据仓一字未动。
+# 全 App 提示只经 showFloatToast 一口（106 调用点共用同一锚点块），设置
+# 页数据/软件更新与清除类回执同批同修、无第二处可漏。空吞 208、i18n
+# 37/482/1409、出口 87/弹层 43 全冻。此后只许减不许增。
 # 2026-10-08 2.90 插队修复批（Q176 单列弹窗改真确认＋Q177 筛选钮角标裁切，
 # 基线 2.89/vc289，DeepSeek 已审 single-col-confirm-deepseek-reply-2026-10-08
 # .md、FlowBee 额度不足待补审，净增 +60 相对 2.89 基线 28009）：Q176——
