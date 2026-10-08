@@ -1,4 +1,18 @@
-27607
+27600
+# 2026-10-08 2.84 加密批 E1 包内资产加密（Q170，基线 2.83/vc283，方案
+# datapack-encryption-plan-2026-10-08.md §四 E1 行定案、DeepSeek 裁量已回写
+# 方案不再重问，净减 -7 相对 2.83 基线 27607）：解密本体进新文件
+# core.data 层 DataCipher.java（CBX1 头＝magic＋密钥代 ver＋随机 IV、
+# AES-256-GCM、密钥多段常量 SHA-256 派生）不占本基线；MainActivity 只动
+# 六个读取点且净减——Store.load 资产读/FxStore 种子读换 DataCipher 解密口
+# （同行替换 ×2）、readAssetText 换解密口（-5）、loadChangelog 换解密口
+# （-4）、Img.decode 改 decodeBytes＋新增 imageBytes 统一解密口（+6）、
+# decodeSized/probeBounds151 改字节探/解（-4），另两处既有 catch 同行补
+# logErr。E2（OTA 落盘五点）未碰：Store OTA 读/applyPendingUpdate 写盘/
+# fetchRemote/verifyDiskImage161/carryForwardImages161 一字未动。构建侧
+# build.sh staging 加密＋全量 verify-tree 回源＋终检 verify-apk（全量 CBX1
+#＋抽样解密比对），源码树 assets 仍明文、发布流水线不动。空吞基线随本批
+# 实测 212→208 同步调低（删旧流式关流空 catch 四处）。此后只许减不许增。
 # 2026-10-08 2.83 墨曜重构 B1 地基批（Q169，基线 2.82/vc282，用户 11:56 点定
 # 图二 CARD ARCHIVE 风、方案 moyao-refactor-plan-2026-10-08.md §2/§4 经
 # DeepSeek 审定，净增 +251）：字体地基（Josefin Sans 300/100 两档打包

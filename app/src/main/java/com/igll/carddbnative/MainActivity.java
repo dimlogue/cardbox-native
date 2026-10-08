@@ -4622,7 +4622,7 @@ public class MainActivity extends Activity {
         static void load(Context c) {
             if (!all.isEmpty()) return;
             String assetJson = null;
-            try { assetJson = readAll(c.getAssets().open("data/cards.json")); } catch (Exception e) { logErr("store.load.asset", e); /* 读不到走空 */ }
+            try { assetJson = new String(DataCipher.decryptedBytes(c.getAssets().open("data/cards.json")), "UTF-8"); } catch (Exception e) { logErr("store.load.asset", e); /* 读不到/认证失败走空（Q170 E1：包内资产已加密） */ }
             if (assetJson != null) bundledVersion = versionOf(assetJson); // Q105：包内资产版本落定（Img 取源优先级依据）
             // OTA 文件（filesDir/cards-ota.json）比内置新才优先用它（对照混合版 boot 的 OTA 优先逻辑）
             String otaJson = null;
@@ -4699,12 +4699,18 @@ public class MainActivity extends Activity {
         // 前的过渡图，要等下一次整表重搭才换上。
         static volatile java.util.function.Consumer<String> remoteFetchedHook = null;
 
-        static Bitmap decode(InputStream in) {
+        // Q170（E1）：包内图为 CBX1 密文，解码入参改明文字节（imageBytes 内存解密收口）。
+        static Bitmap decodeBytes(byte[] data) {
             BitmapFactory.Options op = new BitmapFactory.Options();
             op.inSampleSize = 2;
-            Bitmap b = BitmapFactory.decodeStream(in, null, op);
-            try { in.close(); } catch (Exception e) {}
+            Bitmap b = BitmapFactory.decodeByteArray(data, 0, data.length, op);
             return insetFaceCrop(b);
+        }
+        // Q170（E1）：取源字节统一解密口——有头解密、无头原样（远程明文图），明文不落盘；
+        // 认证失败抛异常走既有双源兜底/自愈漏斗。
+        static byte[] imageBytes(Context c, String path, boolean remoteFirst) throws Exception {
+            InputStream in = openImageStream(c, path, remoteFirst);
+            try { return DataCipher.decryptedBytes(in); } finally { try { in.close(); } catch (Exception ignored) { /* swallow-ok: 关流失败无可挽回、字节已读全 */ } }
         }
 
         // Q93：卡面图黑边治理（用户 15:14 定法「把图片放大，填充四个角」，有图处全改）。
@@ -4847,9 +4853,9 @@ public class MainActivity extends Activity {
             // 远程优先但新图未落盘时包内图只是过渡帧，不入缓存——免得刚下到的新图被它顶住
             boolean provisional = remoteFirst && !remoteFileExists(c, path);
             Bitmap b = null;
-            try { b = decode(openImageStream(c, path, remoteFirst)); } catch (Exception e) { logErr("img.get.primary", e); /* 换另一源再试 */ }
+            try { b = decodeBytes(imageBytes(c, path, remoteFirst)); } catch (Exception e) { logErr("img.get.primary", e); /* 换另一源再试 */ }
             if (b == null) {
-                try { b = decode(openImageStream(c, path, !remoteFirst)); } catch (Exception e) { logErr("img.get.fallback", e); /* 拿不到图就占位，不崩 */ }
+                try { b = decodeBytes(imageBytes(c, path, !remoteFirst)); } catch (Exception e) { logErr("img.get.fallback", e); /* 拿不到图就占位，不崩 */ }
             }
             if (b != null) { if (!provisional) cachePut(path, b); verifyDiskImage161(c, path); return b; }
             healRemoteFile151(c, path); // Q151（N17）：两源皆坏→坏文件自愈（删毒文件+退避重拉）
@@ -4885,11 +4891,10 @@ public class MainActivity extends Activity {
         static Bitmap decodeSized(Context c, String path, int bucket, boolean remoteFirst) {
             Bitmap b = null;
             try {
+                byte[] imgBytes = imageBytes(c, path, remoteFirst); // Q170（E1）：探尺寸也须先解密（整图一次入内存，与 decodeByteArray 同量级）
                 BitmapFactory.Options bo = new BitmapFactory.Options();
                 bo.inJustDecodeBounds = true;
-                InputStream probe = openImageStream(c, path, remoteFirst);
-                BitmapFactory.decodeStream(probe, null, bo);
-                try { probe.close(); } catch (Exception ignored) {}
+                BitmapFactory.decodeByteArray(imgBytes, 0, imgBytes.length, bo);
                 if (bo.outWidth <= 0) return null;
                 int ss = 1;
                 while (ss < 16 && bo.outWidth / (ss * 2) >= bucket) ss *= 2;
@@ -4901,9 +4906,7 @@ public class MainActivity extends Activity {
                     op.inDensity = sampledW;
                     op.inTargetDensity = bucket;
                 }
-                InputStream in2 = openImageStream(c, path, remoteFirst);
-                b = BitmapFactory.decodeStream(in2, null, op);
-                try { in2.close(); } catch (Exception ignored) {}
+                b = BitmapFactory.decodeByteArray(imgBytes, 0, imgBytes.length, op);
             } catch (Exception e) { logErr("img.decodeSized", e); /* 解码失败回落占位 */ }
             return insetFaceCrop(b);
         }
@@ -5021,9 +5024,8 @@ public class MainActivity extends Activity {
             try {
                 BitmapFactory.Options bo = new BitmapFactory.Options();
                 bo.inJustDecodeBounds = true;
-                InputStream in = openImageStream(c, path, remoteFirst);
-                BitmapFactory.decodeStream(in, null, bo);
-                try { in.close(); } catch (Exception ignored) {}
+                byte[] imgBytes = imageBytes(c, path, remoteFirst); // Q170（E1）
+                BitmapFactory.decodeByteArray(imgBytes, 0, imgBytes.length, bo);
                 return bo.outWidth > 0 && bo.outHeight > 0;
             } catch (Exception e) { logErr("img.probeBounds", e); return false; }
         }
@@ -5066,7 +5068,7 @@ public class MainActivity extends Activity {
             if (all != null) return;
             all = new ArrayList<>();
             try {
-                JSONObject root = new JSONObject(Store.readAll(c.getAssets().open("data/foreign.json")));
+                JSONObject root = new JSONObject(new String(DataCipher.decryptedBytes(c.getAssets().open("data/foreign.json")), "UTF-8")); // Q170（E1）
                 JSONArray arr = root.getJSONArray("cards");
                 for (int i = 0; i < arr.length(); i++) {
                     JSONObject o = arr.getJSONObject(i);
@@ -5093,7 +5095,7 @@ public class MainActivity extends Activity {
                     f.specs = o.optJSONObject("specs");
                     all.add(f);
                 }
-            } catch (Exception e) { /* 读不到走空列表，专区页会如实提示 */ }
+            } catch (Exception e) { logErr("fxstore.load", e); /* 读不到走空列表，专区页会如实提示 */ }
         }
     }
 
@@ -24164,14 +24166,9 @@ public class MainActivity extends Activity {
     }
 
     String readAssetText(String path) {
-        try {
-            InputStream in = getAssets().open(path);
-            ByteArrayOutputStream bos = new ByteArrayOutputStream();
-            byte[] buf = new byte[8192]; int n;
-            while ((n = in.read(buf)) > 0) bos.write(buf, 0, n);
-            in.close();
-            return new String(bos.toByteArray(), "UTF-8");
-        } catch (Exception e) { return null; }
+        // Q170（E1）：种子 JSON 随 data/** 加密，经 DataCipher 解密口读（内存解密、明文不落盘）。
+        try { return new String(DataCipher.decryptedBytes(getAssets().open(path)), "UTF-8"); }
+        catch (Exception e) { logErr("asset.text", e); return null; }
     }
 
     void ensureNews() {
@@ -25550,12 +25547,8 @@ public class MainActivity extends Activity {
     List<LogEntry> loadChangelog() {
         List<LogEntry> out = new ArrayList<>();
         try {
-            InputStream in = getAssets().open("data/changelog.json");
-            ByteArrayOutputStream bos = new ByteArrayOutputStream();
-            byte[] buf = new byte[8192]; int r;
-            while ((r = in.read(buf)) > 0) bos.write(buf, 0, r);
-            in.close();
-            JSONArray arr = new JSONArray(new String(bos.toByteArray(), "UTF-8"));
+            byte[] raw = DataCipher.decryptedBytes(getAssets().open("data/changelog.json")); // Q170（E1）
+            JSONArray arr = new JSONArray(new String(raw, "UTF-8"));
             for (int i = 0; i < arr.length(); i++) {
                 JSONObject o = arr.getJSONObject(i);
                 LogEntry e = new LogEntry();
@@ -25564,7 +25557,7 @@ public class MainActivity extends Activity {
                 if (ns != null) for (int j = 0; j < ns.length(); j++) e.notes.add(ns.optString(j));
                 out.add(e);
             }
-        } catch (Exception e) { /* 读不到就空列表，页面会提示 */ }
+        } catch (Exception e) { logErr("changelog.load", e); /* 读不到就空列表，页面会提示 */ }
         return out;
     }
 

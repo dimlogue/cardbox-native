@@ -32,7 +32,7 @@ STRICT = "--strict" in sys.argv
 # Step1（2026-10-08）空吞 catch 基线：当日实测写死，只许减不许增。
 # 空吞数下降时人工把本值同步调低；上升即 problem（--strict 失败）。
 # 确需空吞的 catch 在体内写 `// swallow-ok: 理由` 即归白名单豁免，不计空吞。
-CATCH_EMPTY_BASELINE = 212
+CATCH_EMPTY_BASELINE = 208
 SWALLOW_OK_MARKER = "swallow-ok"
 
 # i18n 批1（2026-10-08）基线：字符串三套机制冻结 + 未收编字面量盘点。
