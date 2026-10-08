@@ -1355,6 +1355,7 @@ public class MainActivity extends Activity {
         STR.put("news_expand", new String[]{"展开","Expand"});
         STR.put("sub_monthly_zero", new String[]{"填上金额后这里会折算每月约花多少 · 只存本机、不做记账流水","Add amounts to see your monthly total here · Stored on this device only, no ledger"});
         STR.put("chip_score_pending", new String[]{"总分待评分","Not Rated"});
+        STR.put("chip_score_total", new String[]{"总分 %s","Score %s"}); // Q173（B3a）：详情头评分 pill 文案走 STR 落串
         STR.put("news_meta_fmt", new String[]{"共 %d 条 · 公开信息整理，仅供参考","%d items · Compiled from public sources, for reference only"});
         STR.put("hero_orgs_full", new String[]{"组织全覆盖了","All networks covered"});
         // Q164 批2-C：在搜卡分区/注释、SIM·订阅徽记与元信息、数据更新 toast、表单 hint、详情亮点模板
@@ -5691,10 +5692,25 @@ public class MainActivity extends Activity {
         heroLp133.gravity = Gravity.CENTER_HORIZONTAL;
         body.addView(hero, heroLp133);
 
-        TextView nm = tvW(this, f.name, 19, colText(), 800);
+        if (styleMoyao()) {
+            // Q173（B3a）：外卡头与主卡同构——英雄图下 hairline 发丝线（1 物理像素档）
+            LinearLayout.LayoutParams hlp173 = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 1);
+            hlp173.topMargin = dp(this, 14);
+            body.addView(hairlineView173(), hlp173);
+        }
+        TextView nm = styleMoyao() ? tvW(this, f.name, 16, colText(), 500) : tvW(this, f.name, 19, colText(), 800); // Q173：墨曜卡名走中文字阶冻结档（16sp Medium），扁平 19/800 逐字
+        if (styleMoyao()) { nm.setLetterSpacing(0.04f); nm.setLineSpacing(0, 1.15f); }
         LinearLayout.LayoutParams nlp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        nlp.topMargin = dp(this, 14);
+        nlp.topMargin = dp(this, styleMoyao() ? 10 : 14);
         body.addView(nm, nlp);
+        if (styleMoyao()) {
+            // Q173：外卡 specimen 微字行（组织拉丁名＋卡种；外卡不出评分、无 pill，与主卡同构对齐）
+            String fxOrgSp173 = orgSpecimen171(f.org);
+            TextView fxSpec173 = specimenTv169((fxOrgSp173.isEmpty() ? "" : fxOrgSp173 + " \u00B7 ") + ("credit".equals(f.type) ? "CREDIT" : "DEBIT"));
+            LinearLayout.LayoutParams fsp173 = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            fsp173.topMargin = dp(this, 4);
+            body.addView(fxSpec173, fsp173);
+        }
         if (f.nameEn != null && !f.nameEn.isEmpty()) body.addView(tv(this, f.nameEn, 12, colText2(), false));
         if (f.aiRedraw) { // Q152：与主卡同口径的 AI 重绘说明灰字（有标才出，无标不显）
             TextView aiNote152 = tv(this, S("ai_redraw_note"), 12f, colText3(), false);
@@ -5772,15 +5788,15 @@ public class MainActivity extends Activity {
                 row.setGravity(Gravity.TOP);
                 row.setPadding(0, dp(this, 8), 0, dp(this, 8));
                 specBox.addView(row);
-                row.addView(tv(this, rows.get(i)[0], 12.5f, colText3(), false),
+                row.addView(tv(this, rows.get(i)[0], styleMoyao() ? 11f : 12.5f, colText3(), false),
                     new LinearLayout.LayoutParams(dp(this, 108), ViewGroup.LayoutParams.WRAP_CONTENT));
-                TextView vt = tv(this, rows.get(i)[1], 12.5f, colText(), false);
+                TextView vt = tv(this, rows.get(i)[1], styleMoyao() ? 13.5f : 12.5f, colText(), false);
                 vt.setGravity(Gravity.END);
                 row.addView(vt, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
                 if (i < rows.size() - 1) {
                     View div = new View(this);
-                    div.setBackgroundColor(darkEff() ? Color.rgb(0x3A, 0x3A, 0x3C) : Color.rgb(0xE6, 0xE6, 0xEB));
-                    specBox.addView(div, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, Math.max(1, dp(this, 1) / 2)));
+                    div.setBackgroundColor(styleMoyao() ? colHairline169() : (darkEff() ? Color.rgb(0x3A, 0x3A, 0x3C) : Color.rgb(0xE6, 0xE6, 0xEB))); // Q173：墨曜规格区发丝分线（hairline 档），扁平原色原高逐字
+                    specBox.addView(div, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, styleMoyao() ? 1 : Math.max(1, dp(this, 1) / 2)));
                 }
             }
         }
@@ -14438,6 +14454,12 @@ public class MainActivity extends Activity {
             });
         }
 
+        // Q173（B3a）：墨曜在图廊与正文头之间落一道 hairline 发丝分线（1 物理像素档）；扁平不建此件
+        if (styleMoyao()) {
+            page.addView(hairlineView173(), new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, 1));
+        }
+
         // ---- 正文（.p-body）：卡名 + 元信息行 ----
         LinearLayout bodyInner = new LinearLayout(this);
         bodyInner.setOrientation(LinearLayout.VERTICAL);
@@ -14445,18 +14467,48 @@ public class MainActivity extends Activity {
         page.addView(bodyInner);
 
         // Q83：标题放大到 22sp/800 做英雄区落点（原 Q39 的 .p-title 19sp 保留字重口径）
-        TextView name = tvW(this, c.name, 22, colText(), 800);
-        name.setLineSpacing(0, 1.15f);
-        bodyInner.addView(name);
-        // 状态直接取记录自身（与规格同源 specs 外的 status 字段），不二次加工
-        String metaTxt = c.bank + " \u00B7 " + orgLabel(c.org) + " \u00B7 " + c.status
-            + " \u00B7 " + (c.hasScore ? fmtScore(c.score) : "\u5F85\u8BC4\u5206");
-        // Q39: .p-sub .88rem 次级行
-        TextView meta = tv(this, metaTxt, 13.5f, colText3(), false); bodyLH(meta);
-        LinearLayout.LayoutParams mep = new LinearLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        mep.topMargin = dp(this, 2);
-        bodyInner.addView(meta, mep);
+        // Q173（B3a）：墨曜改标本头——卡名走中文字阶冻结档（16sp Medium＋字距 0.04em，
+        // 中文字体常规路 tvW 不走展示细字）、组织/卡种 specimen 微字行、评分走
+        // scorePill171 单源，三件收进 panelBg169 哑光标本牌（发丝边）；银行拉丁名
+        // 暂无数据源（bankdict 未落库），微字行只出组织＋卡种两段。扁平支原样逐字。
+        if (styleMoyao()) {
+            LinearLayout plate173 = new LinearLayout(this);
+            plate173.setOrientation(LinearLayout.VERTICAL);
+            plate173.setBackground(panelBg169());
+            plate173.setPadding(dp(this, 16), dp(this, 14), dp(this, 16), dp(this, 14));
+            bodyInner.addView(plate173, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+            TextView name173 = tvW(this, c.name, 16, colText(), 500);
+            name173.setLetterSpacing(0.04f);
+            name173.setLineSpacing(0, 1.15f);
+            plate173.addView(name173);
+            String orgSp173 = orgSpecimen171(c.org);
+            TextView spec173 = specimenTv169((orgSp173.isEmpty() ? "" : orgSp173 + " \u00B7 ") + (c.isCredit() ? "CREDIT" : "DEBIT"));
+            LinearLayout.LayoutParams spp173 = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            spp173.topMargin = dp(this, 5);
+            plate173.addView(spec173, spp173);
+            TextView pill173 = scorePill171(c.hasScore ? String.format(S("chip_score_total"), fmtScore(c.score)) : S("chip_score_pending"),
+                c.hasScore ? scoreBandColor143(c.score) : Color.rgb(0xEE, 0xF0, 0xF3),
+                c.hasScore ? Color.WHITE : Color.rgb(0x63, 0x63, 0x66), c.hasScore, c.score, 12f);
+            LinearLayout.LayoutParams plp173 = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            plp173.topMargin = dp(this, 9);
+            plate173.addView(pill173, plp173);
+        } else {
+            TextView name = tvW(this, c.name, 22, colText(), 800);
+            name.setLineSpacing(0, 1.15f);
+            bodyInner.addView(name);
+            // 状态直接取记录自身（与规格同源 specs 外的 status 字段），不二次加工
+            String metaTxt = c.bank + " \u00B7 " + orgLabel(c.org) + " \u00B7 " + c.status
+                + " \u00B7 " + (c.hasScore ? fmtScore(c.score) : "\u5F85\u8BC4\u5206");
+            // Q39: .p-sub .88rem 次级行
+            TextView meta = tv(this, metaTxt, 13.5f, colText3(), false); bodyLH(meta);
+            LinearLayout.LayoutParams mep = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            mep.topMargin = dp(this, 2);
+            bodyInner.addView(meta, mep);
+        }
 
         // Q83 标题下标签流：组织/卡种/状态/银行/评分/特点/学生推荐，身份一眼扫完
         bodyInner.addView(buildDetailChips(c));
@@ -14548,17 +14600,17 @@ public class MainActivity extends Activity {
                 row.setGravity(Gravity.TOP);
                 row.setPadding(0, dp(this, 8), 0, dp(this, 8));
                 specBox.addView(row);
-                TextView kt = tv(this, isEn() ? specKeyEn(rows.get(i)[0]) : rows.get(i)[0], 12.5f, colText3(), false); // Q114：英文显示名，原始键仅作数据匹配不动
+                TextView kt = tv(this, isEn() ? specKeyEn(rows.get(i)[0]) : rows.get(i)[0], styleMoyao() ? 11f : 12.5f, colText3(), false); // Q114：英文显示名，原始键仅作数据匹配不动；Q173：墨曜标签细字 11sp、值回正文档 13.5sp，扁平原值逐字
                 row.addView(kt, new LinearLayout.LayoutParams(dp(this, 108), ViewGroup.LayoutParams.WRAP_CONTENT));
-                TextView vt = tv(this, rows.get(i)[1], 12.5f, colText(), false);
+                TextView vt = tv(this, rows.get(i)[1], styleMoyao() ? 13.5f : 12.5f, colText(), false);
                 vt.setGravity(Gravity.END);
                 if ("BIN".equals(rows.get(i)[0]) && hasVar) detailBinView = vt;
                 row.addView(vt, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
                 if (i < rows.size() - 1) {
                     View div = new View(this);
-                    div.setBackgroundColor(darkEff() ? Color.rgb(0x3A, 0x3A, 0x3C) : Color.rgb(0xE6, 0xE6, 0xEB));
+                    div.setBackgroundColor(styleMoyao() ? colHairline169() : (darkEff() ? Color.rgb(0x3A, 0x3A, 0x3C) : Color.rgb(0xE6, 0xE6, 0xEB))); // Q173：墨曜规格区发丝分线（hairline 档），扁平原色原高逐字
                     specBox.addView(div, new LinearLayout.LayoutParams(
-                        ViewGroup.LayoutParams.MATCH_PARENT, Math.max(1, dp(this, 1) / 2)));
+                        ViewGroup.LayoutParams.MATCH_PARENT, styleMoyao() ? 1 : Math.max(1, dp(this, 1) / 2)));
                 }
             }
         }
@@ -14567,6 +14619,9 @@ public class MainActivity extends Activity {
 
     TextView detailSectionTitle(String s) {
         TextView t = tv(this, s, 15, colText(), true);
+        // Q173（B3a）：墨曜章节题收中文字阶冻结档（15sp Medium＋字距 0.04em，与页眉
+        // pageHeader169 同口）；扁平 700 原式不动。主/外卡/自定义三处详情共用本口同受益。
+        if (styleMoyao()) { t.setTypeface(weightTypeface(this, 500)); t.setLetterSpacing(0.04f); }
         LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         lp.topMargin = dp(this, 16); lp.bottomMargin = dp(this, 8);
@@ -14593,7 +14648,7 @@ public class MainActivity extends Activity {
         chips.add(chip(c.isCredit() ? "信用卡" : "借记卡", chipBg, colText(), 12f));
         if (c.status != null && !c.status.isEmpty()) chips.add(chip(c.status, chipBg, colText(), 12f));
         if (c.bank != null && !c.bank.isEmpty()) chips.add(chip(c.bank, chipBg, colText(), 12f));
-        if (c.hasScore) chips.add(chip((isEn() ? "Score " : "评分 ") + String.format(java.util.Locale.US, "%.1f", c.score), scoreBandColor143(c.score), Color.WHITE, 12f)); // Q143：评分档色脱钩主题色（旧 accentColor 误染：换主题后高低分同色）
+        if (c.hasScore && !styleMoyao()) chips.add(chip((isEn() ? "Score " : "评分 ") + String.format(java.util.Locale.US, "%.1f", c.score), scoreBandColor143(c.score), Color.WHITE, 12f)); // Q143：评分档色脱钩主题色（旧 accentColor 误染：换主题后高低分同色）；Q173：墨曜评分由头部标本牌 pill 单源出，片行不重复
         for (String[] f : FEATS) if (featMatch(c, f[0])) chips.add(chip(EN_MODE ? featLabelEn(f[0]) : f[1], chipBg, colText(), 12f)); // Q114：英文缩略表，与瓷砖同口径
         if (c.studentPick) chips.add(chip("学生推荐", accentColor(), onAccentInk(), 12f));
         // Q133（2.45，件四）：AI 重绘小标原与本行胶囊同档一枚；Q136（2.48）用户点名挪走，
@@ -27695,7 +27750,7 @@ public class MainActivity extends Activity {
         switch (org) {
             case "visa": return "VISA";
             case "mastercard": case "mastercard-nucc": return "MASTERCARD";
-            case "amex-cn": return "AMEX";
+            case "amex-cn": case "amex": return "AMEX"; // Q173：外卡 org 原值 amex 同名（主卡 amex-cn 支不受影响）
             case "unionpay": return "UNIONPAY";
             case "jcb": return "JCB";
             default: return "";
@@ -27731,6 +27786,17 @@ public class MainActivity extends Activity {
             ViewGroup g = (ViewGroup) v;
             for (int i = 0; i < g.getChildCount(); i++) moyaoFineType171(g.getChildAt(i));
         }
+    }
+
+    // ================= Q173（2.87）墨曜重构 B3a：详情页标本头 =================
+    // 数字全承 Q169/Q171 冻结口（specimenTv169/scorePill171/panelBg169/colHairline169），
+    // 本段不新发明字号/线宽；全部改动墨曜门内，扁平支在各调用点内嵌原式逐字。
+    // —— 详情头发丝分线：hairline 档（1 物理像素、实色 colHairline169），仅墨曜建此件，
+    // 高度恒 1px、边距由调用点 LayoutParams 给。
+    View hairlineView173() {
+        View v = new View(this);
+        v.setBackgroundColor(colHairline169());
+        return v;
     }
 
     LinearLayout basePage(String title) {
