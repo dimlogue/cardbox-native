@@ -4516,6 +4516,24 @@ public class MainActivity extends Activity {
         t.setIncludeFontPadding(false);
         return t;
     }
+    // Q180（2.93）：横排行让位通则一处收口（用户真机截图点名资讯钮/外卡行同族窄条病）——
+    // ①rowGuardRight：行右件（钮/签/pill）单行永不竖排，宽归其固有宽；②rowGuardMain：
+    // 主文字列宁省略不竖排——CJK 可逐字、Latin 长词整词下行（SIMPLE＋不连字断词），
+    // 超行数末尾省略。右件让位顺序靠布局侧 spacer/权重表达（见 renderNews/fillFxZone/
+    // fillStuList152 三处消费），本二式只管文字本体，参数值列等正文区不入。
+    static void rowGuardRight180(TextView t) {
+        if (t == null) return;
+        t.setSingleLine(true);
+        t.setEllipsize(android.text.TextUtils.TruncateAt.END);
+    }
+    static void rowGuardMain180(TextView t) {
+        if (t == null) return;
+        t.setEllipsize(android.text.TextUtils.TruncateAt.END);
+        if (android.os.Build.VERSION.SDK_INT >= 23) {
+            t.setBreakStrategy(android.text.Layout.BREAK_STRATEGY_SIMPLE);
+            t.setHyphenationFrequency(android.text.Layout.HYPHENATION_FREQUENCY_NONE);
+        }
+    }
     // 正文行高：混合版 body line-height 1.5；原生多行正文统一走此助手，不在单行标签上套
     static void bodyLH(TextView t) {
         t.setLineSpacing(0, 1.45f);
@@ -5484,14 +5502,20 @@ public class MainActivity extends Activity {
             top.addView(tx, txLp);
             TextView nm = tv(this, f.name, 14, colText(), true);
             nm.setMaxLines(2);
+            rowGuardMain180(nm); // Q180（2.93）：长卡名整词下行/末尾省略，不许词中硬断或逐字竖排
             tx.addView(nm);
-            tx.addView(tv(this, f.bank, 11, colText2(), false));
+            TextView bk180 = tv(this, f.bank, 11, colText2(), false);
+            rowGuardRight180(bk180); // Q180：银行行单行省略（同让位通则，宁省略不竖排）
+            tx.addView(bk180);
             String meta = fxOrgLabel164(f) + " · " + fxTypeLabel164(f);
             if (f.level != null && !f.level.isEmpty()) meta += " · " + f.level;
-            tx.addView(tv(this, meta, 11, colText2(), false));
+            TextView mt180 = tv(this, meta, 11, colText2(), false);
+            rowGuardRight180(mt180); // Q180：组织·卡种行单行省略
+            tx.addView(mt180);
             TextView vc = chip(fxVerifyLabel164(f),
                 f.coreVerified() ? accentColor() : (styleMoyao() ? MY_SURFACE2 : (darkEff() ? Color.rgb(0x2E, 0x2E, 0x33) : Color.rgb(0xEF, 0xF1, 0xF6))),
                 f.coreVerified() ? onAccentInk() : colText2(), 10.5f);
+            vc.setMaxWidth((int) (getResources().getDisplayMetrics().widthPixels * 0.40f)); // Q180（2.93）：核实签宽上限收至屏宽 40%（chip 工厂 62% 原口不动），长签先省略、主区保底
             top.addView(vc);
 
             LinearLayout metaRow = new LinearLayout(this);
@@ -5503,12 +5527,14 @@ public class MainActivity extends Activity {
             if (f.tier != null && !f.tier.isEmpty()) metaRow.addView(infoChip175(f.tier, darkEff() ? Color.rgb(0x2E, 0x2E, 0x33) : Color.rgb(0xEF, 0xF1, 0xF6), colText2(), MY_TEXT2, 10.5f)); // Q175
             if (f.status != null && !f.status.isEmpty()) {
                 TextView st = tv(this, f.status, 11, colText2(), false);
+                rowGuardRight180(st); // Q180（2.93）：状态文单行省略，不与等级签叠行竖排
                 LinearLayout.LayoutParams slp2 = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
                 slp2.leftMargin = dp(this, 8);
                 metaRow.addView(st, slp2);
             }
             if (!f.missing.isEmpty()) {
                 TextView mt = tv(this, String.format(S("fx_pending_fmt"), f.missing.size()), 11, colText3(), false);
+                rowGuardRight180(mt); // Q180：待核计数单行省略
                 LinearLayout.LayoutParams mtlp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
                 mtlp.leftMargin = dp(this, 8);
                 metaRow.addView(mt, mtlp);
@@ -15154,8 +15180,11 @@ public class MainActivity extends Activity {
             top.addView(tx, txLp);
             TextView nm = tv(this, c.name, 14, colText(), true);
             nm.setMaxLines(2);
+            rowGuardMain180(nm); // Q180（2.93）：学生行同族让位通则（长卡名整词下行不竖排）
             tx.addView(nm);
-            tx.addView(tv(this, c.bank + " · " + (c.isCredit() ? "信用卡" : "借记卡"), 11, colText2(), false));
+            TextView sb180 = tv(this, c.bank + " · " + (c.isCredit() ? "信用卡" : "借记卡"), 11, colText2(), false);
+            rowGuardRight180(sb180); // Q180：银行·卡种行单行省略
+            tx.addView(sb180);
             if (styleMoyao()) {
                 // Q171（B2）：specimen 工厂首个消费点——组织拉丁名＋卡种标本微字（数据直出、不造文案）
                 String orgSp171 = orgSpecimen171(c.org);
@@ -15166,6 +15195,7 @@ public class MainActivity extends Activity {
             }
             TextView sc = tv(this, c.score > 0 ? fmtScoreInt(c.score) : "新卡",
                 11, Color.rgb(0x0A, 0x5C, 0xD6), true);
+            rowGuardRight180(sc); // Q180（2.93）：右端评分 pill 单行件（TextView 非 Canvas 自绘，setSingleLine 有效）
             sc.setBackground(roundRect(Color.rgb(0xE8, 0xF1, 0xFD), 999, this));
             sc.setPadding(dp(this, 8), dp(this, 3), dp(this, 8), dp(this, 3));
             if (styleMoyao()) {
@@ -25056,7 +25086,10 @@ public class MainActivity extends Activity {
             meta.addView(sr, srlp);
             TextView arrow = tv(this, open ? S("news_collapse_arrow") : S("news_expand_arrow"), 11, styleMoyao() ? MY_PRIMARY : Color.rgb(0x0A, 0x5C, 0xD6), true); // Q164；Q175：同词条箭头口
             arrow.setGravity(Gravity.RIGHT);
-            meta.addView(arrow, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+            // Q180（2.93）：钮改固有宽＋单行永不竖排，弹性归 spacer（钮在行尾、spacer 在钮左吸收余量）
+            rowGuardRight180(arrow);
+            meta.addView(new View(this), new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+            meta.addView(arrow, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT));
 
             TextView ttl = tv(this, n.dTitle(), 15, colText(), true); // Q158：EN 优先 title_en、无则回落中文
             LinearLayout.LayoutParams ttlp2 = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
@@ -27552,7 +27585,7 @@ public class MainActivity extends Activity {
         });
         addHair(panel);
         segInner(panel, S("language"), new String[][]{{"system",S("lang_system")},{"zh",S("lang_zh")},{"en",S("lang_en")}}, appLangPref, v -> {
-            appLangPref = v; if (prefs != null) prefs.edit().putString("app_lang", v).apply(); EN_MODE = isEn(); haptic(); refreshNavLabels(); applyAppearanceSoft130(); // Q135（件三普查）：语言解冻同治，改走无闪换入
+            appLangPref = v; appLangPrefStatic158 = appLangPref; if (prefs != null) prefs.edit().putString("app_lang", v).apply(); EN_MODE = isEn(); haptic(); refreshNavLabels(); applyAppearanceSoft130(); // Q135（件三普查）：语言解冻同治，改走无闪换入；Q180（2.93）：静态镜像同写（与 loadLangPref 同口径）——NewsItem 静态内类只读镜像，不同步则资讯标题语言冻在冷启值；镜像与 EN_MODE 此刻同源同值（均出 isEn 同口径），镜像留作静态类专用口不改读 EN_MODE，避冷启初始化时机耦合
         });
         addHair(panel);
         // Q169（置灰独立子项）：墨曜下主题色为死控件（accentColor 恒金属青）——置灰
